@@ -6,6 +6,7 @@ require('dotenv').config();
 const express  = require('express');
 const twilio   = require('twilio');
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios    = require('axios');
 
@@ -14,7 +15,9 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // ── CLIENTS ────────────────────────────────────────────────────────────────
-const sb  = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const sb  = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+  realtime: { transport: WebSocket },
+});
 const ai  = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 const twl = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
 const WA_FROM = process.env.TWILIO_WHATSAPP_FROM; // e.g. whatsapp:+14155238886
