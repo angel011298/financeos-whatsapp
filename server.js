@@ -4,6 +4,7 @@
 
 require('dotenv').config();
 const express  = require('express');
+const path     = require('path');
 const twilio   = require('twilio');
 const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
@@ -13,6 +14,7 @@ const axios    = require('axios');
 const app  = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ── CLIENTS ────────────────────────────────────────────────────────────────
 const sb  = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
@@ -324,7 +326,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ── HEALTH CHECK ────────────────────────────────────────────────────────────
-app.get('/', (req, res) => res.json({ status: 'FinanceOS WhatsApp running ✅' }));
+app.get('/api/health', (req, res) => res.json({ status: 'FinanceOS WhatsApp running ✅', ts: new Date().toISOString() }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`FinanceOS WhatsApp listening on port ${PORT}`));
