@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.43.0",
     "axios": "^1.7.2",
     "dotenv": "^16.4.5",
