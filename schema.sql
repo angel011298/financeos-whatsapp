@@ -61,3 +61,53 @@ alter table metas        enable row level security;
 create policy "service_all_movimientos" on movimientos for all using (true);
 create policy "service_all_tdc"         on tdc         for all using (true);
 create policy "service_all_metas"       on metas       for all using (true);
+
+// schema.prisma
+
+enum Role {
+  ADMIN_A // Admin maestro con vista global
+  USER_B  // Usuario regular
+}
+
+enum AIType {
+  GEMINI
+  CLAUDE
+}
+
+model User {
+  id              String        @id @default(uuid())
+  phoneNumber     String        @unique // Clave para vincular con Twilio
+  name            String
+  role            Role          @default(USER_B)
+  aiPreference    AIType        @default(GEMINI)
+  
+  // Relaciones
+  transactions    Transaction[]
+  chatMemory      ChatMemory[]
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Transaction {
+  id              String   @id @default(uuid())
+  amount          Float
+  description     String
+  category        String
+  date            DateTime @default(now())
+  
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+// Tabla para que la IA "recuerde" el contexto financiero
+model ChatMemory {
+  id              String   @id @default(uuid())
+  role            String   // 'user' o 'assistant'
+  content         String   @db.Text
+  
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  createdAt       DateTime @default(now())
+}
