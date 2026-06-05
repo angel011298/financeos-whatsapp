@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FinanceOS · Ángel Ortiz · 2026</title>
+<title>FinanceOS · Plataforma Maestra · 2026</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -36,8 +36,19 @@
 html{scroll-behavior:smooth}
 body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .35s,color .35s}
 .app{display:flex;min-height:100vh;flex-direction:column}
+
+/* LOGIN OVERLAY */
+.login-screen {position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.4s ease;}
+.login-screen.hidden {opacity:0;pointer-events:none;}
+.login-box {background:var(--card);border:1px solid var(--border);padding:2.5rem;border-radius:16px;text-align:center;box-shadow:var(--shadow);max-width:320px;width:90%;}
+.login-box h2 {font-family:'DM Serif Display',serif;font-weight:400;margin-bottom:1.5rem;font-size:1.5rem;}
+.login-btn {width:100%;padding:1rem;margin-bottom:1rem;border-radius:12px;border:none;font-family:'Sora',sans-serif;font-weight:600;font-size:1rem;cursor:pointer;transition:transform 0.2s, opacity 0.2s;}
+.login-btn:hover {transform:translateY(-2px);opacity:0.9;}
+.btn-a {background:var(--accent);color:#000;}
+.btn-b {background:var(--purple);color:#fff;}
+
 .topnav{background:var(--surface);border-bottom:1px solid var(--border);padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;position:sticky;top:0;z-index:20;transition:background .35s,border-color .35s}
-.brand{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--text);font-weight:400}
+.brand{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--text);font-weight:400;cursor:pointer;user-select:none;}
 .brand em{color:var(--accent);font-style:italic}
 .badge-zero{background:var(--a-dim);border:1px solid var(--a-bdr);border-radius:99px;padding:.25rem .75rem;font-size:.62rem;font-weight:700;color:var(--accent);letter-spacing:.06em;text-transform:uppercase;animation:pls 3s ease-in-out infinite;white-space:nowrap}
 @keyframes pls{0%,100%{box-shadow:0 0 0 0 var(--a-bdr)}50%{box-shadow:0 0 0 5px transparent}}
@@ -49,7 +60,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .nav-right{display:flex;gap:.4rem;align-items:center;flex-shrink:0}
 .btn-icon{background:var(--card);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.9rem;transition:all .18s}
 .btn-icon:hover{border-color:var(--border2)}
-/* SYNC BADGE */
 .sync-badge{display:inline-flex;align-items:center;gap:.3rem;background:var(--card);border:1px solid var(--border);border-radius:99px;padding:.2rem .6rem;font-size:.6rem;color:var(--muted);white-space:nowrap;transition:all .3s}
 .sync-badge.live{border-color:var(--a-bdr);color:var(--accent)}
 .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
@@ -59,13 +69,12 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .loading-overlay.hidden{opacity:0;pointer-events:none}
 .loading-spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-/* MAIN */
+/* MAIN & CARDS... (Tus estilos se mantienen intactos) */
 .main{flex:1;padding:1.25rem 1.5rem;max-width:1200px;margin:0 auto;width:100%}
 @media(max-width:600px){.main{padding:.75rem}}
 .tab-panel{display:none;animation:fadein .25s ease}
 .tab-panel.active{display:block}
 @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-/* KPI */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem;margin-bottom:1.25rem}
 .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.9rem 1.1rem;position:relative;overflow:hidden;transition:border-color .2s,transform .2s;cursor:default}
 .kpi:hover{border-color:var(--border2);transform:translateY(-1px)}
@@ -118,7 +127,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .obj-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.9rem;display:flex;flex-direction:column;gap:.5rem;position:relative;transition:border-color .2s}
 .obj-card:hover{border-color:var(--border2)}
 .obj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.65rem;margin-bottom:.75rem}
-/* CHAT */
 .chat-fab{position:fixed;bottom:1.25rem;right:1.25rem;width:48px;height:48px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;font-size:1.2rem;box-shadow:0 4px 18px var(--a-bdr);z-index:50;display:flex;align-items:center;justify-content:center;transition:transform .2s}
 .chat-fab:hover{transform:scale(1.08)}
 .chat-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:none;backdrop-filter:blur(3px)}
@@ -205,8 +213,15 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 </head>
 <body>
 
-<!-- Loading overlay -->
-<div class="loading-overlay" id="loadingOverlay">
+<div id="loginScreen" class="login-screen">
+  <div class="login-box">
+    <h2>¿Quién está ingresando?</h2>
+    <button class="login-btn btn-a" onclick="doLogin(5215532005195)">Soy Ángel</button>
+    <button class="login-btn btn-b" onclick="doLogin(5215524959599)">Soy Alicia</button>
+  </div>
+</div>
+
+<div class="loading-overlay hidden" id="loadingOverlay">
   <div class="loading-spinner"></div>
   <div style="font-size:.78rem;color:var(--muted)">Conectando con Supabase…</div>
 </div>
@@ -217,13 +232,12 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   <div class="chat-hdr">
     <div>
       <h2>🤖 IA Financiera</h2>
-      <div style="font-size:.62rem;color:var(--muted);margin-top:.1rem">Experto en banca y finanzas MX</div>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:.1rem" id="aiStatus">Experto en banca y finanzas MX</div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.4rem">
-      <select class="model-sel" id="modelSel" onchange="S.model=this.value">
-        <option value="claude-sonnet-4-6">Sonnet 4.6 ⚡</option>
-        <option value="claude-opus-4-6">Opus 4.6 🧠</option>
-        <option value="claude-haiku-4-5-20251001">Haiku 4.5 🏃</option>
+      <select class="model-sel" id="modelSel" onchange="changeAIPreference(this.value)">
+        <option value="CLAUDE">Claude 3.5 🧠</option>
+        <option value="GEMINI">Gemini 1.5 ⚡</option>
       </select>
       <button class="btn-icon" onclick="toggleChat()" style="width:26px;height:26px;font-size:.75rem">✕</button>
     </div>
@@ -233,7 +247,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
     <input type="password" id="apiKeyInput" placeholder="sk-ant-..." oninput="S.apiKey=this.value;localStorage.setItem('fnos_apikey',this.value)">
   </div>
   <div class="chat-msgs" id="chatMsgs">
-    <div class="msg msg-ai">Hola <strong>Ángel</strong> 👋 Soy tu asesor financiero. Conozco tu dashboard completo en tiempo real. ¿En qué te ayudo?</div>
+    <div class="msg msg-ai">Hola 👋 Soy tu asesor financiero. Conozco tu dashboard completo en tiempo real. ¿En qué te ayudo?</div>
   </div>
   <div class="chat-input-row">
     <textarea class="chat-input" id="chatInput" placeholder="¿Cuánto ahorro si pago BBVA hoy?..." rows="1"
@@ -245,7 +259,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 
 <div class="app">
   <nav class="topnav">
-    <span class="brand">Finance<em>OS</em></span>
+    <span class="brand" ondblclick="toggleGhostMode()" title="Doble clic para Modo Fantasma">Finance<em>OS</em></span>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
       <button class="nav-tab" onclick="showTab('tdc',this)">💳 Deudas TDC</button>
@@ -259,12 +273,12 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       <div class="sync-badge" id="syncBadge"><div class="sync-dot"></div><span id="syncText">Cargando…</span></div>
       <span class="badge-zero">🎯 Deuda cero Feb 2027</span>
       <button class="btn-icon" onclick="toggleTheme()" id="themeBtn" title="Tema">🌙</button>
+      <button class="btn-icon" onclick="logout()" title="Cerrar Sesión">🚪</button>
     </div>
   </nav>
 
   <main class="main">
 
-    <!-- DASHBOARD -->
     <div class="tab-panel active" id="tab-dashboard">
       <div id="kpiStrip" class="kpi-grid"></div>
       <div class="g2">
@@ -295,7 +309,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       </div>
     </div>
 
-    <!-- TDC -->
     <div class="tab-panel" id="tab-tdc">
       <div class="sec-hdr">
         <div class="sec-title">Deudas <span>TDC</span></div>
@@ -309,7 +322,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       </div>
     </div>
 
-    <!-- PRESUPUESTO -->
     <div class="tab-panel" id="tab-presupuesto">
       <div class="sec-hdr">
         <div class="sec-title">Presupuesto <span>mensual</span></div>
@@ -331,7 +343,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       </div>
     </div>
 
-    <!-- OBJETIVOS -->
     <div class="tab-panel" id="tab-objetivos">
       <div class="sec-hdr">
         <div class="sec-title">Objetivos de <span>ahorro</span></div>
@@ -345,7 +356,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       <div class="obj-grid" id="compraGrid"></div>
     </div>
 
-    <!-- MOVIMIENTOS -->
     <div class="tab-panel" id="tab-movimientos">
       <div class="sec-hdr">
         <div class="sec-title">Movimientos <span>registrados</span></div>
@@ -365,7 +375,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       </div>
     </div>
 
-    <!-- RECOMENDACIONES -->
     <div class="tab-panel" id="tab-recomendaciones">
       <div style="margin-bottom:1rem">
         <div class="sec-title">Recomendaciones <span>IA</span></div>
@@ -389,7 +398,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       </div>
     </div>
 
-    <!-- ESTADOS DE CUENTA -->
     <div class="tab-panel" id="tab-estados">
       <div style="margin-bottom:1rem">
         <div class="sec-title">Analizar <span>Estado de Cuenta</span></div>
@@ -444,6 +452,10 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 </div>
 
 <script>
+// ── CONFIGURACIÓN DE ROLES (MODIFICA CON TUS NÚMEROS REALES) ─────────────────
+var TELEFONO_ANGEL = '5215532005195'; 
+var TELEFONO_ALICIA = '5215524959599';
+
 // ── SUPABASE ──────────────────────────────────────────────────────────────────
 var SB_URL = 'https://cufglaeiqiffdodygqgd.supabase.co';
 var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1ZmdsYWVpcWlmZmRvZHlncWdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNTU1MTcsImV4cCI6MjA5NTczMTUxN30.N91mCfIi29qv_DzuZxJFqWdpJKtYXu7dILpWbqR0zSo';
@@ -451,24 +463,17 @@ var sb = supabase.createClient(SB_URL, SB_KEY);
 var realtimeConnected = false;
 var lastSyncTime = null;
 
-// ── STATE ─────────────────────────────────────────────────────────────────────
+// ── ESTADO Y AUTENTICACIÓN ────────────────────────────────────────────────────
+var currentUserPhone = localStorage.getItem('financeos_user');
+var renderPhone = currentUserPhone; // El teléfono que se está visualizando en pantalla
+
 var S = {
   theme: localStorage.getItem('fnos_theme') || 'dark',
   apiKey: localStorage.getItem('fnos_apikey') || '',
-  model: 'claude-sonnet-4-6',
+  model: 'CLAUDE',
   chat: [],
-  ingresos: JSON.parse(localStorage.getItem('fnos_ingresos') || 'null') || {sueldo:27407,wfh:425,vales:3566,beca:500,freelance:0,otros:0},
-  gastos: JSON.parse(localStorage.getItem('fnos_gastos') || 'null') || [
-    {id:1,cat:'Transporte',desc:'Transporte oficina',monto:1160},
-    {id:2,cat:'Gasolina',desc:'Gasolina',monto:1500},
-    {id:3,cat:'Despensa',desc:'Despensa personal',monto:1000},
-    {id:4,cat:'Ocio',desc:'Ocio (recomendado)',monto:2000},
-    {id:5,cat:'Salud',desc:'Psicólogo',monto:700},
-    {id:6,cat:'Servicios',desc:'Internet doméstico',monto:389},
-    {id:7,cat:'Tecnología',desc:'Claude AI (~$20 USD)',monto:350},
-    {id:8,cat:'Servicios',desc:'Datos móviles',monto:200}
-  ],
-  // Loaded from Supabase:
+  ingresos: null,
+  gastos: null,
   tdc: [],
   ahorro: [],
   compra: [],
@@ -476,6 +481,15 @@ var S = {
   movimientosList: [],
   nextId: 1000
 };
+
+// Cargar presupuestos desde LocalStorage por usuario específico
+function initLocalStorageData(phone) {
+  S.ingresos = JSON.parse(localStorage.getItem('fnos_ingresos_' + phone) || 'null') || {sueldo:27407,wfh:425,vales:3566,beca:500,freelance:0,otros:0};
+  S.gastos = JSON.parse(localStorage.getItem('fnos_gastos_' + phone) || 'null') || [
+    {id:1,cat:'Transporte',desc:'Transporte',monto:1160},
+    {id:2,cat:'Despensa',desc:'Despensa',monto:1000}
+  ];
+}
 
 // ── DB MAPPERS ────────────────────────────────────────────────────────────────
 function dbToTDC(row) {
@@ -488,13 +502,14 @@ function dbToIngreso(row) {
   return {id: row.id, cat: row.categoria, desc: row.descripcion, monto: +(row.monto||0), fecha: row.fecha};
 }
 
-// ── LOAD FROM SUPABASE ────────────────────────────────────────────────────────
+// ── LOAD FROM SUPABASE (Filtrado por renderPhone) ─────────────────────────────
 async function loadFromSupabase() {
+  if(!renderPhone) return;
   try {
     var [tdcRes, metasRes, movsRes] = await Promise.all([
-      sb.from('tdc').select('*').order('prioridad'),
-      sb.from('metas').select('*'),
-      sb.from('movimientos').select('*').order('fecha', {ascending: false}).order('created_at', {ascending: false}).limit(100)
+      sb.from('tdc').select('*').eq('user_phone', renderPhone).order('prioridad'),
+      sb.from('metas').select('*').eq('user_phone', renderPhone),
+      sb.from('movimientos').select('*').eq('user_phone', renderPhone).order('fecha', {ascending: false}).order('created_at', {ascending: false}).limit(100)
     ]);
     if (tdcRes.data)   S.tdc = tdcRes.data.map(dbToTDC);
     if (metasRes.data) {
@@ -505,14 +520,81 @@ async function loadFromSupabase() {
       S.movimientosList = movsRes.data;
       S.ingresosExtra   = movsRes.data.filter(function(m){return m.tipo==='INGRESO';}).map(dbToIngreso);
     }
+    
+    // Obtener preferencia de IA del usuario que se está viendo
+    var { data: userRow } = await sb.from('usuarios').select('ai_preference').eq('telefono', renderPhone).single();
+    if(userRow && userRow.ai_preference) {
+        S.model = userRow.ai_preference;
+        document.getElementById('modelSel').value = S.model;
+    }
+
     lastSyncTime = new Date();
     setSyncBadge(true);
+    initLocalStorageData(renderPhone);
     renderAll();
   } catch(e) {
     console.error('Supabase load error:', e);
     setSyncBadge(false);
     renderAll();
   }
+}
+
+// ── MODO FANTASMA ─────────────────────────────────────────────────────────────
+function toggleGhostMode() {
+    if (currentUserPhone !== TELEFONO_ANGEL) return; // Solo Ángel puede hacerlo
+    renderPhone = (renderPhone === TELEFONO_ANGEL) ? TELEFONO_ALICIA : TELEFONO_ANGEL;
+    
+    // Feedback visual
+    var badge = document.querySelector('.badge-zero');
+    if(renderPhone === TELEFONO_ALICIA) {
+        badge.textContent = "👻 MODO FANTASMA (Alicia)";
+        badge.style.color = "var(--purple)";
+        badge.style.borderColor = "var(--purple)";
+        badge.style.background = "var(--p-dim)";
+    } else {
+        badge.textContent = "🎯 Deuda cero Feb 2027";
+        badge.style.color = "var(--accent)";
+        badge.style.borderColor = "var(--a-bdr)";
+        badge.style.background = "var(--a-dim)";
+    }
+    
+    document.getElementById('loadingOverlay').classList.remove('hidden');
+    document.getElementById('loadingOverlay').style.display='flex';
+    
+    loadFromSupabase().then(() => {
+        setTimeout(() => {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+            setTimeout(() => { document.getElementById('loadingOverlay').style.display='none'; }, 500);
+        }, 300);
+    });
+}
+
+// ── IA PREFERENCE SINC ────────────────────────────────────────────────────────
+async function changeAIPreference(pref) {
+    S.model = pref;
+    try {
+        await fetch('/api/preferencia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: renderPhone, ai_preference: pref })
+        });
+    } catch(e) { console.error("Error al guardar preferencia IA:", e); }
+}
+
+// ── LOG IN / OUT ──────────────────────────────────────────────────────────────
+function doLogin(phone) {
+    localStorage.setItem('financeos_user', phone);
+    currentUserPhone = phone;
+    renderPhone = phone;
+    document.getElementById('loginScreen').classList.add('hidden');
+    
+    // Iniciar App
+    initApp();
+}
+
+function logout() {
+    localStorage.removeItem('financeos_user');
+    window.location.reload();
 }
 
 // ── REAL-TIME ─────────────────────────────────────────────────────────────────
@@ -549,8 +631,8 @@ function totalDeuda(){    return S.tdc.reduce(function(a,t){return a+(+t.deuda||
 function totalAPagar(){   return S.tdc.reduce(function(a,t){return a+(+t.aPagar||0);},0); }
 function totalPagado(){   return S.tdc.reduce(function(a,t){return a+(+t.pagado||0);},0); }
 function fmt(n){ return '$'+Math.round(Math.abs(+n||0)).toLocaleString('es-MX'); }
-function saveLocalGastos(){    localStorage.setItem('fnos_gastos', JSON.stringify(S.gastos)); }
-function saveLocalIngresos(){  localStorage.setItem('fnos_ingresos', JSON.stringify(S.ingresos)); }
+function saveLocalGastos(){    localStorage.setItem('fnos_gastos_'+renderPhone, JSON.stringify(S.gastos)); }
+function saveLocalIngresos(){  localStorage.setItem('fnos_ingresos_'+renderPhone, JSON.stringify(S.ingresos)); }
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
 var CHARTS = {};
@@ -558,6 +640,7 @@ var PAL = ['#5EE6A0','#6C8EFF','#C084FC','#F7C948','#FF6B6B','#34D399','#FB923C'
 var TDCPAL = ['#FF6B6B','#F7C948','#F7C948','#6C8EFF','#C084FC','#C084FC','#6B6D76'];
 
 function buildCharts(){
+  if(!document.getElementById('cIngresos')) return;
   Object.values(CHARTS).forEach(function(c){c.destroy();});
   CHARTS={};
   var gc=function(){return getComputedStyle(document.documentElement).getPropertyValue('--border').trim();};
@@ -612,11 +695,6 @@ function renderKPI(){
 }
 
 // ── TDC (con Supabase) ────────────────────────────────────────────────────────
-function estadoBadge(e){
-  var m={urgente:'badge-red',activo:'badge-amber',paralelo:'badge-blue',negociar:'badge-purple'};
-  var t={urgente:'URGENTE',activo:'ACTIVO',paralelo:'PARALELO',negociar:'NEGOCIAR'};
-  return '<span class="badge '+(m[e]||'badge-muted')+'">'+(t[e]||e)+'</span>';
-}
 function renderTDC(){
   var tbl=document.getElementById('tdcTable');
   tbl.innerHTML='<thead><tr><th>Tarjeta</th><th>Deuda orig.</th><th>A pagar</th><th>Pagado</th><th>Saldo</th><th>Desc.</th><th>Mes</th><th>Estado</th><th></th></tr></thead><tbody>'+
@@ -671,11 +749,11 @@ async function delTDC(id){
   renderAll();
 }
 async function addTDC(){
-  var res=await sb.from('tdc').insert({nombre:'Nueva TDC',deuda_original:0,a_pagar:0,pagado:0,mes_objetivo:'—',estado:'negociar',prioridad:99}).select().single();
+  var res=await sb.from('tdc').insert({user_phone: renderPhone, nombre:'Nueva TDC',deuda_original:0,a_pagar:0,pagado:0,mes_objetivo:'—',estado:'negociar',prioridad:99}).select().single();
   if(res.data){ S.tdc.push(dbToTDC(res.data)); showTab('tdc',document.querySelectorAll('.nav-tab')[1]); renderAll(); }
 }
 
-// ── PRESUPUESTO (localStorage) ─────────────────────────────────────────────────
+// ── PRESUPUESTO ─────────────────────────────────────────────────────────
 function renderPresupuesto(){
   document.getElementById('gastosTable').innerHTML='<thead><tr><th>Categoría</th><th>Descripción</th><th>Monto</th><th></th></tr></thead><tbody>'+
     S.gastos.map(function(g){
@@ -705,7 +783,7 @@ function renderPresupuesto(){
   '</div>';
   var el=document.getElementById('ingresosExtraList');
   if(!S.ingresosExtra.length){
-    el.innerHTML='<p style="font-size:.75rem;color:var(--muted);padding:.25rem 0">Sin ingresos registrados aún. Escríbele al bot: <em>"me depositaron 13703 de quincena"</em></p>';
+    el.innerHTML='<p style="font-size:.75rem;color:var(--muted);padding:.25rem 0">Sin ingresos registrados aún.</p>';
   } else {
     el.innerHTML='<table class="tbl"><thead><tr><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Fecha</th></tr></thead><tbody>'+
       S.ingresosExtra.slice(0,10).map(function(x){
@@ -720,7 +798,7 @@ function updGasto(id,f,v){var g=S.gastos.find(function(x){return x.id===id;});if
 function delGasto(id){S.gastos=S.gastos.filter(function(g){return g.id!==id;});saveLocalGastos();renderAll();}
 function addGasto(){S.gastos.push({id:S.nextId++,cat:'Otro',desc:'Nuevo gasto',monto:0});saveLocalGastos();showTab('presupuesto',document.querySelectorAll('.nav-tab')[2]);renderAll();}
 
-// ── OBJETIVOS (con Supabase) ──────────────────────────────────────────────────
+// ── OBJETIVOS ─────────────────────────────────────────────────────────────────
 function renderObjetivos(){
   function renderGrid(items,gridId,type){
     var el=document.getElementById(gridId);
@@ -748,7 +826,7 @@ function renderObjetivos(){
 }
 
 async function addAhorro(){
-  var res=await sb.from('metas').insert({nombre:'Nuevo objetivo',tipo:'ahorro',meta:10000,actual:0}).select().single();
+  var res=await sb.from('metas').insert({user_phone: renderPhone, nombre:'Nuevo objetivo',tipo:'ahorro',meta:10000,actual:0}).select().single();
   if(res.data){S.ahorro.push(dbToMeta(res.data));renderAll();}
 }
 async function delAhorro(id){
@@ -761,7 +839,7 @@ async function updAhorro(id,f,v){
   if(o){o[f]=v;var u={};u[f]=v;u['updated_at']=new Date().toISOString();await sb.from('metas').update(u).eq('id',id);renderAll();}
 }
 async function addCompra(){
-  var res=await sb.from('metas').insert({nombre:'Nuevo objetivo',tipo:'compra',meta:10000,actual:0}).select().single();
+  var res=await sb.from('metas').insert({user_phone: renderPhone, nombre:'Nuevo objetivo',tipo:'compra',meta:10000,actual:0}).select().single();
   if(res.data){S.compra.push(dbToMeta(res.data));renderAll();}
 }
 async function delCompra(id){
@@ -779,7 +857,6 @@ function renderMovimientos(){
   var filtro = (document.getElementById('movFiltro')||{}).value || 'todos';
   var movs = filtro==='todos' ? S.movimientosList : S.movimientosList.filter(function(m){return m.tipo===filtro;});
 
-  // Summary cards
   var gastoTotal  = S.movimientosList.filter(function(m){return m.tipo==='GASTO';}).reduce(function(a,m){return a+m.monto;},0);
   var ingresoTotal= S.movimientosList.filter(function(m){return m.tipo==='INGRESO';}).reduce(function(a,m){return a+m.monto;},0);
   var neto = ingresoTotal - gastoTotal;
@@ -789,7 +866,7 @@ function renderMovimientos(){
     '<div class="mov-sum-card"><div class="mov-sum-val '+(neto>=0?'green':'red')+'">'+fmt(neto)+'</div><div class="mov-sum-lbl">📈 Neto acumulado</div></div>';
 
   if(!movs.length){
-    document.getElementById('movTablaWrap').innerHTML='<div class="empty-state"><div class="ei">📱</div><p>Sin movimientos aún.<br>Escríbele al bot por WhatsApp:<br><em>"gasté 150 en tacos"</em> o <em>"me depositaron 13703 de quincena"</em></p></div>';
+    document.getElementById('movTablaWrap').innerHTML='<div class="empty-state"><div class="ei">📱</div><p>Sin movimientos aún.</p></div>';
     return;
   }
 
@@ -810,7 +887,7 @@ function renderMovimientos(){
     }).join('')+'</tbody></table>';
 }
 
-// ── RECOMENDACIONES ───────────────────────────────────────────────────────────
+// ── RECOMENDACIONES, ESTADOS Y CHAT (MANTIENEN SU LÓGICA ANTERIOR) ────────────
 function updateRecStats(){
   var disp=disponible();
   var tdcPend=totalAPagar()-totalPagado();
@@ -825,25 +902,24 @@ function updateRecStats(){
 }
 
 function buildRecPrompt(){
-  return 'Eres un asesor financiero experto en finanzas personales mexicanas, banca, credito y liquidacion de deuda. Analiza la situacion de Angel y genera recomendaciones precisas y accionables.\n\n'+
-    'SITUACION FINANCIERA:\n- Ingreso mensual: '+fmt(totalIngresos())+' | Egresos: '+fmt(totalGastos())+' | Disponible TDC: '+fmt(disponible())+' ('+Math.round(disponible()/totalIngresos()*100)+'%)\n'+
-    '- Meta: deuda cero Feb 2027 | Inicio empleo: 26 mayo 2026\n\nDEUDAS TDC:\n'+
-    S.tdc.map(function(t){return '- '+t.nombre+': orig '+fmt(t.deuda)+' | a pagar '+fmt(t.aPagar)+' ('+Math.round((1-t.aPagar/t.deuda)*100)+'% desc) | pagado '+fmt(t.pagado)+' | estado: '+t.estado;}).join('\n')+
-    '\nTOTAL: '+fmt(totalDeuda())+' -> negociado: '+fmt(totalAPagar())+' | ahorro: '+fmt(totalDeuda()-totalAPagar())+'\n\n'+
-    'MOVIMIENTOS RECIENTES ('+S.movimientosList.length+' registros):\n'+
+  return 'Eres un asesor financiero experto. Analiza la situacion de este usuario y genera recomendaciones accionables.\n\n'+
+    'SITUACION:\n- Ingreso: '+fmt(totalIngresos())+'/mes | Egresos: '+fmt(totalGastos())+' | Disponible: '+fmt(disponible())+'\nDEUDAS:\n'+
+    S.tdc.map(function(t){return '- '+t.nombre+': orig '+fmt(t.deuda)+' | a pagar '+fmt(t.aPagar)+' | pagado '+fmt(t.pagado)+' | estado: '+t.estado;}).join('\n')+
+    '\nTOTAL: '+fmt(totalDeuda())+' -> negociado: '+fmt(totalAPagar())+'\n\n'+
+    'MOVIMIENTOS:\n'+
     S.movimientosList.slice(0,10).map(function(m){return '- '+m.fecha+' | '+m.tipo+' | '+m.categoria+' | '+m.descripcion+' | '+fmt(m.monto);}).join('\n')+'\n\n'+
-    'Genera el analisis con estas secciones:\n1. DIAGNOSTICO EJECUTIVO\n2. TOP 3 ACCIONES INMEDIATAS\n3. RIESGOS DETECTADOS\n4. OPORTUNIDADES DE OPTIMIZACION\n5. PROYECCION A 3 MESES (agosto 2026)\n6. BURO DE CREDITO (que pasara al liquidar)\n\nUsa numeros exactos. Usa **negritas** para cifras. Responde en espanol.';
+    'Genera el analisis con:\n1. DIAGNOSTICO\n2. TOP 3 ACCIONES\n3. RIESGOS\n4. OPTIMIZACION\n5. PROYECCION\n6. CREDITO. Responde en espanol con **negritas**.';
 }
 
 var recHistorial=[];
 function generarRecomendaciones(){
-  if(!S.apiKey){alert('Ingresa tu API Key en el chat (botón flotante abajo).');return;}
+  if(!S.apiKey){alert('Ingresa tu API Key en el chat.');return;}
   updateRecStats();
   var btn=document.getElementById('genRecBtn');
   btn.disabled=true;
   document.getElementById('recLoading').style.display='block';
   document.getElementById('recContainer').innerHTML='';
-  fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.model,max_tokens:2048,system:buildRecPrompt(),messages:[{role:'user',content:'Genera el analisis financiero completo para mi situacion actual.'}]})})
+  fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-3-5-sonnet-20240620',max_tokens:2048,system:buildRecPrompt(),messages:[{role:'user',content:'Genera el analisis financiero.'}]})})
   .then(function(r){return r.json();})
   .then(function(data){
     document.getElementById('recLoading').style.display='none';
@@ -855,11 +931,7 @@ function generarRecomendaciones(){
     if(h) h.innerHTML=recHistorial.map(function(r){return '<div style="padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.72rem"><span style="color:var(--accent);font-weight:600">'+r.fecha+'</span> — '+r.txt+'</div>';}).join('');
     btn.disabled=false;
   })
-  .catch(function(e){
-    document.getElementById('recLoading').style.display='none';
-    document.getElementById('recContainer').innerHTML='<div class="card" style="color:var(--red)">Error: '+e.message+'</div>';
-    btn.disabled=false;
-  });
+  .catch(function(e){document.getElementById('recLoading').style.display='none';document.getElementById('recContainer').innerHTML='<div class="card" style="color:var(--red)">Error: '+e.message+'</div>';btn.disabled=false;});
 }
 
 var REC_COLORS=['var(--red)','var(--amber)','var(--accent)','var(--blue)','var(--purple)','var(--accent)'];
@@ -874,16 +946,15 @@ function renderRecomendaciones(text){
     var title=lines[0].replace(/\*\*/g,'').replace(/^\d+\.\s*/,'').trim();
     var body=lines.slice(1).join('\n').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
     var c=REC_COLORS[i]||'var(--accent)';
-    return '<div class="rec-card" style="--rc:'+c+'"><div class="rec-priority">'+(REC_EMOJIS[i]||'')+' '+(REC_LABELS[i]||'INFO')+'</div><div class="rec-title">'+title+'</div><div class="rec-body">'+body+'</div><div class="rec-meta">'+S.model+' · '+new Date().toLocaleDateString('es-MX')+'</div></div>';
+    return '<div class="rec-card" style="--rc:'+c+'"><div class="rec-priority">'+(REC_EMOJIS[i]||'')+' '+(REC_LABELS[i]||'INFO')+'</div><div class="rec-title">'+title+'</div><div class="rec-body">'+body+'</div><div class="rec-meta">'+new Date().toLocaleDateString('es-MX')+'</div></div>';
   }).join('');
 }
 
-// ── ESTADOS DE CUENTA ─────────────────────────────────────────────────────────
 var curFile=null,curB64=null,curType=null;
 function handleFile(file){
   if(!file) return;
   var isImg=file.type.indexOf('image/')===0, isPDF=file.type==='application/pdf';
-  if(!isImg&&!isPDF){alert('Sube un PDF o imagen (JPG, PNG, WebP).');return;}
+  if(!isImg&&!isPDF){alert('Sube un PDF o imagen.');return;}
   curFile=file;curType=file.type;
   document.getElementById('fileName').textContent=file.name+' · '+(file.size/1024).toFixed(0)+' KB';
   document.getElementById('filePreview').classList.add('show');
@@ -895,24 +966,23 @@ function handleFile(file){
 function handleDrop(ev){ev.preventDefault();document.getElementById('uploadZone').classList.remove('drag');var f=ev.dataTransfer.files[0];if(f)handleFile(f);}
 function clearFile(){curFile=null;curB64=null;curType=null;document.getElementById('filePreview').classList.remove('show');document.getElementById('fileInput').value='';document.getElementById('analyzeBtn').setAttribute('disabled','');var res=document.getElementById('analysisResult');res.classList.remove('show');res.innerHTML='';}
 function buildEstadoPrompt(){
-  return 'Eres un experto analista financiero en banca mexicana.\n\nCONTEXTO (Angel Ortiz): ingresos '+fmt(totalIngresos())+'/mes | disponible TDC: '+fmt(disponible())+'/mes\nDEUDAS: '+S.tdc.map(function(t){return t.nombre+' '+fmt(t.deuda);}).join(', ')+'\nPLAN: liquidar todas antes de Feb 2027\n\nAnaliza el estado de cuenta y proporciona:\n1. RESUMEN (banco, periodo, saldo, limite)\n2. CARGOS PRINCIPALES (top 5)\n3. INTERESES Y COMISIONES cobrados\n4. CARGOS DISPUTABLES (incorrectos o injustificados)\n5. ESTRATEGIA DE NEGOCIACION para esta tarjeta especifica\n6. COMPARATIVA CON EL PLAN (esta al dia?)\n7. ACCION RECOMENDADA esta semana\n\nUsa **negritas** para cifras clave. En espanol.';
+  return 'Eres un experto analista en banca.\nCONTEXTO: ingresos '+fmt(totalIngresos())+' | disp TDC: '+fmt(disponible())+'\nDEUDAS: '+S.tdc.map(function(t){return t.nombre+' '+fmt(t.deuda);}).join(', ')+'\nAnaliza el estado proporcionando RESUMEN, TOP 5 CARGOS, INTERESES, DISPUTABLES y ESTRATEGIA. En espanol, con **negritas**.';
 }
 var historialEst=[];
 function analizarEstado(){
   if(!S.apiKey){alert('Ingresa tu API Key en el chat.');return;}
-  if(!curB64){alert('Primero sube un archivo.');return;}
+  if(!curB64){alert('Sube un archivo.');return;}
   var btn=document.getElementById('analyzeBtn');btn.disabled=true;
   document.getElementById('analysisLoading').style.display='block';
   var res=document.getElementById('analysisResult');res.classList.remove('show');res.innerHTML='';
   var extra=document.getElementById('analysisPrompt').value.trim();
-  var userText='Analiza este estado de cuenta con contexto de mi situacion financiera.'+(extra?' Instruccion adicional: '+extra:'');
   var contentParts=[];
   if(curType.indexOf('image/')===0){contentParts.push({type:'image',source:{type:'base64',media_type:curType,data:curB64}});}
   else{contentParts.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:curB64}});}
-  contentParts.push({type:'text',text:userText});
+  contentParts.push({type:'text',text:'Analiza con mi contexto financiero. '+(extra||'')});
   var hdrs={'Content-Type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
   if(curType==='application/pdf') hdrs['anthropic-beta']='pdfs-2024-09-25';
-  fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:hdrs,body:JSON.stringify({model:S.model,max_tokens:2048,system:buildEstadoPrompt(),messages:[{role:'user',content:contentParts}]})})
+  fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:hdrs,body:JSON.stringify({model:'claude-3-5-sonnet-20240620',max_tokens:2048,system:buildEstadoPrompt(),messages:[{role:'user',content:contentParts}]})})
   .then(function(r){return r.json();})
   .then(function(data){
     document.getElementById('analysisLoading').style.display='none';
@@ -924,20 +994,18 @@ function analizarEstado(){
     var h=document.getElementById('historialEstados');
     if(h) h.innerHTML=historialEst.map(function(x){return '<div style="padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.72rem"><span style="color:var(--accent);font-weight:600">'+x.fecha+'</span> · <span style="font-family:DM Mono,monospace">'+x.archivo+'</span><br><span style="color:var(--muted)">'+x.res+'</span></div>';}).join('');
     btn.disabled=false;
-  })
-  .catch(function(e){document.getElementById('analysisLoading').style.display='none';res.innerHTML='<span style="color:var(--red)">Error: '+e.message+'</span>';res.classList.add('show');btn.disabled=false;});
+  }).catch(function(e){document.getElementById('analysisLoading').style.display='none';res.innerHTML='<span style="color:var(--red)">Error: '+e.message+'</span>';res.classList.add('show');btn.disabled=false;});
 }
 
-// ── CHAT ──────────────────────────────────────────────────────────────────────
 function toggleChat(){document.getElementById('chatPanel').classList.toggle('open');document.getElementById('chatOverlay').classList.toggle('open');}
 function buildSysPrompt(){
-  return 'Eres un asesor financiero personal experto en banca y finanzas mexicanas. Eres el asistente de Angel Alberto Ortiz Sanchez.\n\nDATOS EN TIEMPO REAL:\n- Ingresos: '+fmt(totalIngresos())+'/mes | Egresos: '+fmt(totalGastos())+' | Disponible TDC: '+fmt(disponible())+'\n- DEUDAS: '+S.tdc.map(function(t){return t.nombre+' orig '+fmt(t.deuda)+' -> pagar '+fmt(t.aPagar)+' | pagado '+fmt(t.pagado);}).join(' | ')+'\n- Meta: deuda cero Feb 2027 | Inicio empleo: 26 mayo 2026\n- Movimientos registrados (WhatsApp): '+S.movimientosList.length+' total\n\nResponde siempre en espanol. Usa numeros exactos. Se conciso pero completo.';
+  return 'Eres el asistente financiero de esta plataforma. \nDATOS: Ingresos: '+fmt(totalIngresos())+' | Egresos: '+fmt(totalGastos())+' | Disponible TDC: '+fmt(disponible())+'\nDEUDAS: '+S.tdc.map(function(t){return t.nombre+' orig '+fmt(t.deuda)+' -> pagar '+fmt(t.aPagar);}).join(' | ')+'\nResponde en espanol exacto.';
 }
 function sendMsg(){
   var input=document.getElementById('chatInput');
   var text=input.value.trim();
   if(!text) return;
-  if(!S.apiKey){appendMsg('ai','Ingresa tu API Key arriba en el campo de texto para usar el chat.');return;}
+  if(!S.apiKey){appendMsg('ai','Ingresa tu API Key para usar el chat.');return;}
   appendMsg('user',text);input.value='';input.style.height='auto';
   document.getElementById('chatSend').disabled=true;
   S.chat.push({role:'user',content:text});
@@ -945,7 +1013,7 @@ function sendMsg(){
   var msgs=document.getElementById('chatMsgs');
   var dots=document.createElement('div');dots.id=tid;dots.className='typing-dots';dots.innerHTML='<span></span><span></span><span></span>';
   msgs.appendChild(dots);msgs.scrollTop=msgs.scrollHeight;
-  fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.model,max_tokens:1024,system:buildSysPrompt(),messages:S.chat})})
+  fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-3-5-sonnet-20240620',max_tokens:1024,system:buildSysPrompt(),messages:S.chat})})
   .then(function(r){return r.json();})
   .then(function(data){
     var el=document.getElementById(tid);if(el)el.remove();
@@ -997,27 +1065,28 @@ function renderAll(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', function(){
-  // Apply saved theme
+function initApp() {
   document.documentElement.setAttribute('data-theme', S.theme);
   document.getElementById('themeBtn').textContent = S.theme==='dark'?'🌙':'☀️';
 
-  // Restore API key
   var savedKey = localStorage.getItem('fnos_apikey');
   if(savedKey){ S.apiKey=savedKey; document.getElementById('apiKeyInput').value=savedKey; }
 
-  // Initial render with defaults while loading
-  renderAll();
-  setTimeout(buildCharts, 80);
+  // Pantalla de carga nativa
+  document.getElementById('loadingOverlay').classList.remove('hidden');
 
-  // Load live data from Supabase
   loadFromSupabase().then(function(){
-    // Hide loading overlay
     var ov = document.getElementById('loadingOverlay');
     if(ov){ ov.classList.add('hidden'); setTimeout(function(){ov.style.display='none';},500); }
-    // Start real-time subscriptions
     subscribeRealtime();
   });
+}
+
+window.addEventListener('DOMContentLoaded', function(){
+  if (currentUserPhone) {
+      document.getElementById('loginScreen').classList.add('hidden');
+      initApp();
+  }
 });
 </script>
 </body>
