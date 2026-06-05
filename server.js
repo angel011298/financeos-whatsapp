@@ -294,6 +294,11 @@ async function callIA(user, sysPrompt, text, phone) {
 app.get('/api/dashboard/:phone', async (req, res) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
+    // Auto-create usuario si accede por primera vez desde la web
+    const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', phone).single();
+    if (!existing) {
+      await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'CLAUDE' }]);
+    }
     const [tdc, movs, metas, user, cal, pat, presp] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
       sb.from('movimientos').select('*').eq('user_phone', phone).order('fecha', { ascending: false }).limit(500),
@@ -304,6 +309,14 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('presupuesto').select('*').eq('user_phone', phone),
     ]);
     res.json({ success: true, data: { tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data, calendario: cal.data, patrones: pat.data, presupuesto: presp.data } });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Lista todos los usuarios (para ghost mode del admin)
+app.get('/api/usuarios', async (req, res) => {
+  try {
+    const { data } = await sb.from('usuarios').select('telefono, nombre, role, ai_preference');
+    res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
