@@ -5,10 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OnlyUs ♡</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <style>
-:root{--bg:#0f172a;--card:#1e293b;--card2:#162032;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#818cf8;--green:#34d399;--red:#f87171;--yellow:#fbbf24}
+:root{
+  --bg:#0f172a;--card:#1e293b;--card2:#162032;--border:#334155;
+  --text:#e2e8f0;--muted:#94a3b8;--accent:#818cf8;
+  --green:#34d399;--red:#f87171;--yellow:#fbbf24;
+}
+html.light{
+  --bg:#f1f5f9;--card:#ffffff;--card2:#f8fafc;--border:#e2e8f0;
+  --text:#0f172a;--muted:#64748b;--accent:#6366f1;
+  --green:#10b981;--red:#dc2626;--yellow:#d97706;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px;transition:background .2s,color .2s}
 
 /* ── AUTH ─────────────────────────────────────────── */
 .auth-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:radial-gradient(ellipse at 60% 40%,rgba(129,140,248,.08) 0%,transparent 70%)}
@@ -20,45 +30,55 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;fon
 .welcome-ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center}
 .welcome-ovl.open{display:flex}
 .welcome-box{background:var(--card);border:1px solid rgba(129,140,248,.4);border-radius:20px;padding:32px;width:440px;max-width:95vw;text-align:center;position:relative;box-shadow:0 0 60px rgba(129,140,248,.15)}
-.welcome-box .w-heart{font-size:52px;margin-bottom:12px}
+.welcome-box .w-heart{margin-bottom:14px}
 .welcome-box h2{font-size:20px;color:var(--accent);margin-bottom:14px}
 .welcome-box p{color:var(--muted);font-size:13px;line-height:1.7;margin-bottom:20px}
 .welcome-box .w-sig{font-size:12px;color:var(--muted);opacity:.7;font-style:italic}
 
 /* ── APP LAYOUT ──────────────────────────────────── */
 #app{display:none;height:100vh;overflow:hidden}
-.layout{display:grid;grid-template-columns:220px 1fr;height:100vh}
-aside{background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
-.logo{padding:16px;border-bottom:1px solid var(--border)}
-.logo h2{font-size:17px;font-weight:700;color:var(--accent)}
-.logo small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
-nav a{display:flex;align-items:center;gap:8px;padding:10px 16px;color:var(--muted);text-decoration:none;cursor:pointer;font-size:13px;transition:.1s}
+.layout{display:grid;grid-template-columns:220px 1fr;height:100vh;transition:grid-template-columns .22s ease}
+.layout.sb-hidden{grid-template-columns:0px 1fr}
+.layout.sb-hidden aside{opacity:0;pointer-events:none;min-width:0}
+aside{background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:opacity .22s ease;min-width:0}
+.logo{padding:13px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:6px;flex-shrink:0}
+.logo-text h2{font-size:15px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:7px;white-space:nowrap}
+.logo-text small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.icon-btn{background:transparent;border:1px solid transparent;border-radius:7px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:17px;flex-shrink:0;transition:.15s;padding:0}
+.icon-btn:hover{background:var(--card2);color:var(--text);border-color:var(--border)}
+nav{overflow-y:auto;flex:1}
+nav a{display:flex;align-items:center;gap:10px;padding:10px 16px;color:var(--muted);text-decoration:none;cursor:pointer;font-size:13px;transition:.1s;white-space:nowrap}
 nav a:hover{color:var(--text);background:rgba(255,255,255,.03)}
 nav a.active{color:var(--accent);background:rgba(129,140,248,.1);border-right:2px solid var(--accent)}
-.side-ft{margin-top:auto;padding:14px;border-top:1px solid var(--border)}
+nav a .ti{font-size:16px;flex-shrink:0}
+.side-ft{padding:13px;border-top:1px solid var(--border);flex-shrink:0}
 .ai-toggle-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
-main{overflow-y:auto;padding:20px}
+main{overflow-y:auto;padding:20px;transition:padding .22s ease}
 .tab{display:none}.tab.active{display:block}
+
+/* ── FLOATING SIDEBAR BUTTON ──────────────────────── */
+#sb-float{display:none;position:fixed;top:12px;left:12px;z-index:90;background:var(--card);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.3);transition:.15s}
+#sb-float:hover{color:var(--text);background:var(--card2)}
 
 /* ── GHOST BANNER ─────────────────────────────────── */
 #ghost-banner{display:none;background:rgba(76,29,149,.35);border:1px solid rgba(139,92,246,.5);color:#c4b5fd;padding:8px 14px;border-radius:8px;margin-bottom:14px;font-size:12px;align-items:center;justify-content:space-between}
 #ghost-banner.show{display:flex}
-#ghost-banner button{background:transparent;border:none;color:#c4b5fd;cursor:pointer;font-size:16px;line-height:1}
+#ghost-banner button{background:transparent;border:none;color:#c4b5fd;cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center}
 
 /* ── INPUTS / BUTTONS ────────────────────────────── */
-input,select,textarea{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none}
+input,select,textarea{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;transition:background .2s,color .2s,border-color .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 select option{background:var(--card)} textarea{min-height:64px;resize:vertical}
-.btn{padding:9px 18px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500}
+.btn{padding:9px 18px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:5px;transition:.15s}
 .btn-accent{background:var(--accent);color:#fff}.btn-accent:hover{opacity:.88}
-.btn-sm{padding:4px 9px;font-size:12px}.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-sm{padding:5px 10px;font-size:12px}.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
 .btn-ghost:hover{color:var(--text)}.btn-danger{background:#7f1d1d;color:#fca5a5}
 .btn-ghost-purple{background:rgba(124,58,237,.12);color:#a78bfa;border:1px solid rgba(124,58,237,.3);font-size:11px}
 .btn-ghost-purple:hover{background:rgba(124,58,237,.25)}
 
 /* ── CARDS / CHARTS / TABLES ─────────────────────── */
 .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.hdr h2{font-size:18px;font-weight:600}
+.hdr h2{font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:14px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
 .card-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
@@ -74,7 +94,7 @@ select option{background:var(--card)} textarea{min-height:64px;resize:vertical}
 table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden;margin-bottom:14px}
 th{background:var(--card2);padding:9px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:500}
 td{padding:8px 10px;border-top:1px solid var(--border);font-size:12px}
-tr:hover td{background:rgba(255,255,255,.018)}
+tr:hover td{background:rgba(128,128,128,.04)}
 .badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500}
 .b-gasto{background:#7f1d1d;color:#fca5a5}.b-ingreso{background:#064e3b;color:#6ee7b7}
 .b-urgente{background:#7f1d1d;color:#fca5a5}.b-activo{background:#1e3a5f;color:#93c5fd}
@@ -107,52 +127,82 @@ tr:hover td{background:rgba(255,255,255,.018)}
 </head>
 <body>
 
-<!-- ── PANTALLA: REGISTRO DE TELÉFONO (solo 1ª vez) ── -->
+<!-- ── PANTALLA: REGISTRO DE TELÉFONO ── -->
 <div class="auth-wrap" id="auth-phone" style="display:none">
   <div class="auth-box">
-    <div id="auth-ava" style="font-size:48px;margin-bottom:10px"></div>
+    <div id="auth-ava" style="margin-bottom:12px"></div>
     <h1 id="auth-name" style="font-size:21px;margin-bottom:6px;color:var(--accent)"></h1>
     <p id="auth-desc">Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se pide una vez en este dispositivo</span></p>
     <input id="ph-input" placeholder="+52 10 dígitos" style="margin:14px 0 10px">
-    <button class="btn btn-accent" style="width:100%" onclick="confirmPhone()">Entrar ›</button>
+    <button class="btn btn-accent" style="width:100%;justify-content:center" onclick="confirmPhone()">Entrar</button>
   </div>
 </div>
 
-<!-- ── WELCOME MODAL (Alicia, solo 1ª vez) ─────────── -->
+<!-- ── WELCOME MODAL ── -->
 <div class="welcome-ovl" id="welcome-modal">
   <div class="welcome-box">
-    <div class="w-heart">💑</div>
+    <div class="w-heart"><i class="ti ti-heart-handshake" style="font-size:52px;color:#f9a8d4"></i></div>
     <h2>¡Bienvenida a OnlyUs!</h2>
     <p>Este espacio fue creado por el amor de tu vida para que plasmes todas tus ideas, planes, proyectos y cualquier cosa que se te ocurra.<br><br>
-    Velo también como tu <strong>contador personal vía WhatsApp</strong> — envía mensaje de texto o audio diciendo lo que has gastado, lo que has ganado, tus metas, tu lista de deseos… cualquier cosa que se te ocurra.<br><br>
-    Incluye una sección especial <strong>💑 Nidito</strong> donde planearemos y visualizaremos nuestras metas juntos.<br><br>
+    Velo también como tu <strong>contador personal vía WhatsApp</strong> — envía texto o audio con tus gastos, metas, lista de deseos… lo que sea.<br><br>
+    Incluye una sección especial <strong>Nidito</strong> donde planearemos y visualizaremos nuestras metas juntos.<br><br>
     <span style="color:var(--accent)">Todo es confidencial y solo lo puedes ver tú.</span></p>
-    <button class="btn btn-accent" style="width:100%;margin-bottom:10px" onclick="closeWelcome()">Entrar ›</button>
-    <div class="w-sig">Cualquier duda, queja o comentario no dudes en decirle a tu marido 💬</div>
+    <button class="btn btn-accent" style="width:100%;margin-bottom:10px;justify-content:center" onclick="closeWelcome()">Entrar</button>
+    <div class="w-sig">Cualquier duda no dudes en decirle a tu marido 💬</div>
   </div>
 </div>
+
+<!-- ── FLOATING SIDEBAR BUTTON (visible cuando sidebar está oculto) ── -->
+<button id="sb-float" onclick="toggleSidebar()" title="Mostrar sidebar">
+  <i class="ti ti-layout-sidebar-right-expand"></i>
+</button>
 
 <!-- ── APP ────────────────────────────────────────── -->
 <div id="app">
-  <div class="layout">
+  <div class="layout" id="layout">
 
     <!-- SIDEBAR -->
     <aside>
       <div class="logo">
-        <h2>💑 OnlyUs</h2>
-        <small id="id-label"></small>
+        <div class="logo-text">
+          <h2><i class="ti ti-infinity" style="color:var(--accent);font-size:18px"></i> OnlyUs</h2>
+          <small id="id-label"></small>
+        </div>
+        <button class="icon-btn" onclick="toggleSidebar()" title="Ocultar sidebar">
+          <i class="ti ti-layout-sidebar-left-collapse"></i>
+        </button>
       </div>
+
       <nav>
-        <a onclick="go('dashboard')" id="n-dashboard" class="active">📊 Dashboard</a>
-        <a onclick="go('nidito')"    id="n-nidito" style="color:#f9a8d4;border-left:2px solid transparent">💑 Nidito</a>
-        <a onclick="go('deudas')"    id="n-deudas">💳 Deudas TDC</a>
-        <a onclick="go('presupuesto')" id="n-presupuesto">📋 Presupuesto</a>
-        <a onclick="go('objetivos')" id="n-objetivos">🎯 Objetivos</a>
-        <a onclick="go('movimientos')" id="n-movimientos">↕️ Movimientos</a>
-        <a onclick="go('egresos')"   id="n-egresos">💸 Egresos</a>
-        <a onclick="go('ingresos')"  id="n-ingresos">💰 Ingresos</a>
-        <a onclick="go('calendario')" id="n-calendario">📅 Calendario</a>
+        <a onclick="go('dashboard')" id="n-dashboard" class="active">
+          <i class="ti ti-layout-dashboard"></i><span>Dashboard</span>
+        </a>
+        <a onclick="go('nidito')" id="n-nidito" style="color:#f9a8d4;border-left:2px solid transparent">
+          <i class="ti ti-heart-handshake" style="color:#f9a8d4"></i><span>Nidito</span>
+        </a>
+        <a onclick="go('deudas')" id="n-deudas">
+          <i class="ti ti-credit-card"></i><span>Deudas TDC</span>
+        </a>
+        <a onclick="go('presupuesto')" id="n-presupuesto">
+          <i class="ti ti-report-money"></i><span>Presupuesto</span>
+        </a>
+        <a onclick="go('objetivos')" id="n-objetivos">
+          <i class="ti ti-target"></i><span>Objetivos</span>
+        </a>
+        <a onclick="go('movimientos')" id="n-movimientos">
+          <i class="ti ti-arrows-exchange"></i><span>Movimientos</span>
+        </a>
+        <a onclick="go('egresos')" id="n-egresos">
+          <i class="ti ti-trending-down"></i><span>Egresos</span>
+        </a>
+        <a onclick="go('ingresos')" id="n-ingresos">
+          <i class="ti ti-trending-up"></i><span>Ingresos</span>
+        </a>
+        <a onclick="go('calendario')" id="n-calendario">
+          <i class="ti ti-calendar"></i><span>Calendario</span>
+        </a>
       </nav>
+
       <div class="side-ft">
         <!-- Motor de IA -->
         <div style="margin-bottom:10px">
@@ -162,20 +212,29 @@ tr:hover td{background:rgba(255,255,255,.018)}
             <button id="btn-gemini" class="ct" onclick="setAI('GEMINI')">Gemini</button>
           </div>
         </div>
-        <!-- Botón Ghost — solo visible para Admin (Sujeto A) -->
-        <button id="ghost-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none" onclick="toggleGhost()">👁 Ver Alicia</button>
-        <!-- Botón WhatsApp — solo visible para Alicia (Sujeto B) -->
-        <button id="wa-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none;background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.3)" onclick="sendWhatsAppInvite()">💬 Conectar WhatsApp</button>
-        <button class="btn btn-ghost btn-sm" style="width:100%" onclick="logout()">Cerrar sesión</button>
+        <!-- Tema -->
+        <button id="theme-btn" class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:6px;justify-content:center" onclick="toggleTheme()">
+          <i class="ti ti-moon" id="theme-icon"></i><span id="theme-label">Modo día</span>
+        </button>
+        <!-- Ghost — solo Admin -->
+        <button id="ghost-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none;justify-content:center" onclick="toggleGhost()">
+          <i class="ti ti-eye" id="ghost-icon"></i><span id="ghost-label">Ver Alicia</span>
+        </button>
+        <!-- WhatsApp — solo Alicia -->
+        <button id="wa-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none;background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.3);justify-content:center" onclick="sendWhatsAppInvite()">
+          <i class="ti ti-brand-whatsapp"></i><span>Conectar WhatsApp</span>
+        </button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="logout()">
+          <i class="ti ti-logout"></i><span>Cerrar sesión</span>
+        </button>
       </div>
     </aside>
 
     <!-- MAIN -->
     <main>
-      <!-- Banner fantasma -->
       <div id="ghost-banner">
-        <span>👁 <strong>Modo Fantasma</strong> — viendo el dashboard de Alicia</span>
-        <button onclick="toggleGhost()" title="Salir">✕</button>
+        <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-eye"></i> <strong>Modo Fantasma</strong> — viendo el dashboard de Alicia</span>
+        <button onclick="toggleGhost()" title="Salir"><i class="ti ti-x"></i></button>
       </div>
 
       <div id="tab-dashboard"   class="tab active"></div>
@@ -211,10 +270,7 @@ const CLR    = ['#818cf8','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb
 
 // ── ESTADO GLOBAL ────────────────────────────────────────────────────────────
 const S = {
-  phone: '',        // teléfono activo (puede ser A o B en ghost mode)
-  identity: null,   // 'A' | 'B'
-  adminPhone: '',   // teléfono de Ángel (siempre guardado cuando identity=A)
-  ghostMode: false,
+  phone: '', identity: null, adminPhone: '', ghostMode: false,
   data: { movs:[], tdc:[], metas:[], calendario:[], presupuesto:[], patrones:[], nidito:[] },
   ch: {}, ct: {}, tab: 'dashboard', cy: 0, cm: 0, mctx: null
 };
@@ -230,12 +286,37 @@ async function api(m, p, b) {
   return r.json();
 }
 
+// ── SIDEBAR TOGGLE ───────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const layout   = $('layout');
+  const floatBtn = $('sb-float');
+  const isHidden = layout.classList.toggle('sb-hidden');
+  floatBtn.style.display = isHidden ? 'flex' : 'none';
+  localStorage.setItem('fos_sidebar', isHidden ? '0' : '1');
+}
+
+// ── THEME TOGGLE ─────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.documentElement.classList.toggle('light');
+  $('theme-icon').className = isLight ? 'ti ti-sun' : 'ti ti-moon';
+  $('theme-label').textContent = isLight ? 'Modo noche' : 'Modo día';
+  localStorage.setItem('fos_theme', isLight ? 'light' : 'dark');
+  renderTab(S.tab); // redibujar charts con colores del nuevo tema
+}
+
 // ── AUTH FLOW ────────────────────────────────────────────────────────────────
 function showPhoneInput(id) {
   S.identity = id;
   $('auth-phone').style.display = 'flex';
-  if (id === 'A') { $('auth-ava').textContent='👑'; $('auth-name').textContent='Ángel'; $('auth-desc').innerHTML='Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Acceso administrador</span>'; }
-  else            { $('auth-ava').textContent='💑'; $('auth-name').textContent='OnlyUs'; $('auth-desc').innerHTML='Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se pide una vez en este dispositivo</span>'; }
+  if (id === 'A') {
+    $('auth-ava').innerHTML = '<i class="ti ti-star" style="font-size:46px;color:var(--accent)"></i>';
+    $('auth-name').textContent = 'Ángel';
+    $('auth-desc').innerHTML = 'Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Acceso administrador</span>';
+  } else {
+    $('auth-ava').innerHTML = '<i class="ti ti-heart-handshake" style="font-size:46px;color:#f9a8d4"></i>';
+    $('auth-name').textContent = 'OnlyUs';
+    $('auth-desc').innerHTML = 'Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se pide una vez en este dispositivo</span>';
+  }
   setTimeout(() => $('ph-input').focus(), 100);
 }
 
@@ -254,27 +335,21 @@ function confirmPhone() {
 function showApp(id, firstTime = false) {
   $('auth-phone').style.display = 'none';
   $('app').style.display        = 'block';
-
-  $('id-label').textContent = id === 'A' ? '👑 Ángel' : '';
-  if (id === 'A') $('ghost-btn').style.display = 'block';
-  if (id === 'B') $('wa-btn').style.display    = 'block';
-
+  $('id-label').textContent = id === 'A' ? 'Ángel' : '';
+  if (id === 'A') $('ghost-btn').style.display = 'flex';
+  if (id === 'B') $('wa-btn').style.display    = 'flex';
   const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
-  load().then(() => {
-    if (id === 'B' && firstTime) showWelcome();
-  });
+  load().then(() => { if (id === 'B' && firstTime) showWelcome(); });
 }
 
 function showWelcome() {
   if (localStorage.getItem('fos_welcome_shown')) return;
   $('welcome-modal').classList.add('open');
 }
-
 function closeWelcome() {
   $('welcome-modal').classList.remove('open');
   localStorage.setItem('fos_welcome_shown', '1');
 }
-
 function logout() {
   localStorage.removeItem('fos_identity');
   location.reload();
@@ -285,26 +360,22 @@ async function toggleGhost() {
   if (S.ghostMode) {
     exitGhost();
   } else {
-    // Intenta encontrar el teléfono de B
     let bPhone = localStorage.getItem('fos_phone_B');
     if (!bPhone) {
-      // Consulta la DB para encontrar el Sujeto B
       const r = await api('GET', '/api/usuarios');
       if (r.success && r.data) {
         const otros = r.data.filter(u => u.telefono !== S.adminPhone);
-        if (otros.length) {
-          bPhone = otros[0].telefono;
-          localStorage.setItem('fos_phone_B', bPhone); // cachear
-        }
+        if (otros.length) { bPhone = otros[0].telefono; localStorage.setItem('fos_phone_B', bPhone); }
       }
     }
     if (!bPhone) {
       alert('Alicia aún no ha iniciado sesión en ningún dispositivo.\nUsa WhatsApp o pídele que acceda al dashboard primero.');
       return;
     }
-    S.ghostMode  = true;
-    S.phone      = bPhone;
-    $('ghost-btn').textContent   = '✕ Salir modo fantasma';
+    S.ghostMode = true;
+    S.phone     = bPhone;
+    $('ghost-icon').className = 'ti ti-eye-off';
+    $('ghost-label').textContent = 'Salir fantasma';
     $('ghost-banner').classList.add('show');
     await load();
   }
@@ -313,7 +384,8 @@ async function toggleGhost() {
 function exitGhost() {
   S.ghostMode = false;
   S.phone     = S.adminPhone;
-  $('ghost-btn').textContent = '👁 Ver Alicia';
+  $('ghost-icon').className = 'ti ti-eye';
+  $('ghost-label').textContent = 'Ver Alicia';
   $('ghost-banner').classList.remove('show');
   load();
 }
@@ -323,7 +395,6 @@ async function load() {
   const r = await api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}`);
   if (r.success) {
     S.data = r.data || {};
-    // Actualizar botones de IA según preferencia guardada en DB
     const aiPref = S.data.user?.ai_preference || 'CLAUDE';
     $('btn-claude').classList.toggle('act', aiPref === 'CLAUDE');
     $('btn-gemini').classList.toggle('act', aiPref === 'GEMINI');
@@ -331,9 +402,9 @@ async function load() {
   renderTab(S.tab);
 }
 
-// ── IA PREFERENCE ─────────────────────────────────────────────────────────────
+// ── IA PREFERENCE ────────────────────────────────────────────────────────────
 async function setAI(pref) {
-  const phone = S.ghostMode ? S.adminPhone : S.phone; // En ghost mode, cambia la IA del admin (no de B)
+  const phone = S.ghostMode ? S.adminPhone : S.phone;
   await api('POST', '/api/preferencia', { phone, ai_preference: pref });
   $('btn-claude').classList.toggle('act', pref === 'CLAUDE');
   $('btn-gemini').classList.toggle('act', pref === 'GEMINI');
@@ -341,23 +412,21 @@ async function setAI(pref) {
 
 async function sendWhatsAppInvite() {
   const btn = $('wa-btn');
-  const oldText = btn.textContent;
+  const oldHTML = btn.innerHTML;
   try {
-    btn.textContent = '⏳ Enviando...';
+    btn.innerHTML = '<i class="ti ti-loader-2"></i><span>Enviando...</span>';
     btn.disabled = true;
     const res = await api('POST', '/api/send-whatsapp-invite', { phone: S.phone });
     if (res.success) {
-      btn.textContent = '✅ Invitación enviada';
-      setTimeout(() => { btn.textContent = oldText; btn.disabled = false; }, 3000);
+      btn.innerHTML = '<i class="ti ti-check"></i><span>Invitación enviada</span>';
+      setTimeout(() => { btn.innerHTML = oldHTML; btn.disabled = false; }, 3000);
     } else {
       alert('Error: ' + res.error);
-      btn.textContent = oldText;
-      btn.disabled = false;
+      btn.innerHTML = oldHTML; btn.disabled = false;
     }
   } catch (e) {
     alert('Error al enviar: ' + e.message);
-    btn.textContent = oldText;
-    btn.disabled = false;
+    btn.innerHTML = oldHTML; btn.disabled = false;
   }
 }
 
@@ -380,6 +449,9 @@ function renderTab(t) {
 // ── CHARTS ────────────────────────────────────────────────────────────────────
 function mkC(id, type, labels, datasets, extra={}) {
   if (S.ch[id]) S.ch[id].destroy();
+  const isLight = document.documentElement.classList.contains('light');
+  const tickClr = isLight ? '#64748b' : '#94a3b8';
+  const gridClr = isLight ? '#e2e8f055' : '#33415566';
   const isH=type==='bar-h', isFill=type==='area';
   const rt = isH?'bar':isFill?'line':type;
   const ctx = $(id)?.getContext('2d');
@@ -392,9 +464,10 @@ function mkC(id, type, labels, datasets, extra={}) {
       borderColor: CLR[i%CLR.length], borderWidth:1.5,
       fill: isFill, tension:.35, ...d })) },
     options: { indexAxis:isH?'y':'x', responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#94a3b8', boxWidth:10, font:{size:11} } } },
-      scales: rad ? {} : { x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{color:'#1e293b55'}},
-                           y:{ticks:{color:'#94a3b8',font:{size:10}},grid:{color:'#33415566'}} }, ...extra }
+      plugins:{ legend:{ labels:{ color:tickClr, boxWidth:10, font:{size:11} } } },
+      scales: rad ? {} : {
+        x:{ticks:{color:tickClr,font:{size:10}},grid:{color:gridClr}},
+        y:{ticks:{color:tickClr,font:{size:10}},grid:{color:gridClr}} }, ...extra }
   });
 }
 
@@ -408,7 +481,7 @@ function sct(id, t) { S.ct[id]=t; renderTab(S.tab); }
 const PIE  = [['Pastel','pie'],['Dona','doughnut'],['Barras','bar'],['Polar','polarArea'],['Radar','radar']];
 const LINE = [['Barras','bar'],['Líneas','line'],['Área','area'],['Horiz.','bar-h']];
 
-// ── HELPERS DE DATOS ──────────────────────────────────────────────────────────
+// ── HELPERS DE DATOS ─────────────────────────────────────────────────────────
 function byKey(arr, k) {
   return arr.reduce((a,m) => { const x=m[k]||'OTROS'; a[x]=(a[x]||0)+(m.monto||0); return a; }, {});
 }
@@ -419,7 +492,7 @@ function last6() {
 }
 function curMes() { return last6()[5]; }
 
-// ── RENDER: DASHBOARD ─────────────────────────────────────────────────────────
+// ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
 function rDash() {
   const cm=curMes(), movs=S.data.movs||[];
   const gasC = movs.filter(m=>m.tipo==='GASTO'&&(m.fecha||'').startsWith(cm)).reduce((a,m)=>a+(m.monto||0),0);
@@ -429,8 +502,10 @@ function rDash() {
   const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
 
   $('tab-dashboard').innerHTML = `
-<div class="hdr"><h2>📊 Dashboard <span style="font-size:13px;color:var(--muted);font-weight:400">${who}</span></h2>
-  <button class="btn btn-accent btn-sm" onclick="oMov()">+ Movimiento</button></div>
+<div class="hdr">
+  <h2><i class="ti ti-layout-dashboard"></i> Dashboard <span style="font-size:13px;color:var(--muted);font-weight:400">${who}</span></h2>
+  <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
+</div>
 <div class="cards">
   <div class="card"><div class="card-lbl">Gastos ${cm}</div><div class="card-val red">${fmt(gasC)}</div></div>
   <div class="card"><div class="card-lbl">Ingresos ${cm}</div><div class="card-val green">${fmt(ingC)}</div></div>
@@ -442,9 +517,10 @@ function rDash() {
   <div class="cbox"><h3>Ingresos vs Gastos (6 meses)</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div></div>
   <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div></div>
 </div>
-${pats.length?`<h3 style="color:var(--muted);font-size:12px;margin-bottom:8px">🔍 Patrones IA</h3>
+${pats.length ? `
+<h3 style="color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Patrones IA</h3>
 <table><tr><th>Concepto</th><th>Cat.</th><th>Promedio</th><th>Veces</th><th>Último</th><th>Medio habitual</th></tr>
-${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td>${fmt(p.monto_promedio)}</td><td>${p.contador}</td><td>${fd(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>`).join('')}</table>`:''}`;
+${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td>${fmt(p.monto_promedio)}</td><td>${p.contador}</td><td>${fd(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>`).join('')}</table>` : ''}`;
 
   const cg=byKey(movs.filter(m=>m.tipo==='GASTO'&&(m.fecha||'').startsWith(cm)),'categoria');
   const ck=Object.keys(cg);
@@ -459,59 +535,67 @@ ${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'�
 
 // ── RENDER: NIDITO ────────────────────────────────────────────────────────────
 const NIDITO_TIPOS = ['meta','idea','wishlist','plan','nota'];
-const NIDITO_EMOJIS = { meta:'🎯', idea:'💡', wishlist:'🛍️', plan:'📋', nota:'📝' };
+const NIDITO_ICONS = { meta:'ti-target', idea:'ti-bulb', wishlist:'ti-shopping-bag', plan:'ti-clipboard-list', nota:'ti-note' };
 
 function rNidito() {
-  const items = S.data.nidito || [];
+  const items   = S.data.nidito || [];
   const pending = items.filter(x => !x.completado);
   const done    = items.filter(x =>  x.completado);
 
   $('tab-nidito').innerHTML = `
 <div class="hdr">
-  <h2 style="color:#f9a8d4">💑 Nidito</h2>
-  <button class="btn btn-sm" style="background:rgba(249,168,212,.15);color:#f9a8d4;border:1px solid rgba(249,168,212,.3)" onclick="oNidito()">+ Agregar</button>
+  <h2 style="color:#f9a8d4"><i class="ti ti-heart-handshake" style="color:#f9a8d4"></i> Nidito</h2>
+  <button class="btn btn-sm" style="background:rgba(249,168,212,.15);color:#f9a8d4;border:1px solid rgba(249,168,212,.3)" onclick="oNidito()">
+    <i class="ti ti-plus"></i> Agregar
+  </button>
 </div>
-<p style="color:var(--muted);font-size:12px;margin-bottom:16px">Espacio compartido entre Ángel y Alicia — metas, ideas, deseos y planes juntos 💕</p>
+<p style="color:var(--muted);font-size:12px;margin-bottom:16px">Espacio compartido entre Ángel y Alicia — metas, ideas, deseos y planes juntos</p>
 
 ${NIDITO_TIPOS.map(tipo => {
   const ts = pending.filter(x => x.tipo === tipo);
   if (!ts.length) return '';
   return `<div style="margin-bottom:20px">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${NIDITO_EMOJIS[tipo]} ${tipo}</div>
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+      <i class="ti ${NIDITO_ICONS[tipo]}"></i>${tipo}
+    </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
     ${ts.map(n => `
-      <div style="background:var(--card);border:1px solid rgba(249,168,212,.2);border-radius:12px;padding:14px;position:relative">
-        <div style="display:flex;align-items:flex-start;gap:8px">
-          <span style="font-size:22px">${n.emoji||NIDITO_EMOJIS[n.tipo]||'💫'}</span>
-          <div style="flex:1">
+      <div style="background:var(--card);border:1px solid rgba(249,168,212,.2);border-radius:12px;padding:14px">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <span style="font-size:22px;line-height:1.2">${n.emoji || `<i class="ti ${NIDITO_ICONS[n.tipo]||'ti-sparkles'}" style="font-size:20px;color:var(--accent)"></i>`}</span>
+          <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:13px;margin-bottom:3px">${n.titulo}</div>
             ${n.descripcion ? `<div style="color:var(--muted);font-size:11px;margin-bottom:4px">${n.descripcion}</div>` : ''}
-            ${n.monto > 0 ? `<div style="color:var(--green);font-size:12px">💰 ${fmt(n.monto)}</div>` : ''}
+            ${n.monto > 0 ? `<div style="color:var(--green);font-size:12px;display:flex;align-items:center;gap:4px"><i class="ti ti-coin"></i>${fmt(n.monto)}</div>` : ''}
           </div>
-          <div class="acts">
-            <button class="btn btn-sm" style="padding:3px 7px;background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.2)" onclick="toggleNidito(${n.id},true)" title="Completar">✓</button>
-            <button class="btn btn-ghost btn-sm" onclick="eNidito(${n.id})" title="Editar">✏️</button>
-            <button class="btn btn-danger btn-sm" onclick="dNidito(${n.id})" title="Eliminar">✕</button>
+          <div class="acts" style="flex-shrink:0">
+            <button class="btn btn-sm" style="padding:4px 7px;background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.2)" onclick="toggleNidito(${n.id},true)" title="Completar"><i class="ti ti-check"></i></button>
+            <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick="eNidito(${n.id})" title="Editar"><i class="ti ti-pencil"></i></button>
+            <button class="btn btn-danger btn-sm" style="padding:4px 7px" onclick="dNidito(${n.id})" title="Eliminar"><i class="ti ti-trash"></i></button>
           </div>
         </div>
       </div>`).join('')}
-    </div></div>`;
+    </div>
+  </div>`;
 }).join('')}
 
 ${done.length ? `
-<div style="margin-top:20px;opacity:.55">
-  <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">✅ Completados (${done.length})</div>
+<div style="margin-top:20px;opacity:.5">
+  <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+    <i class="ti ti-circle-check"></i> Completados (${done.length})
+  </div>
   <div style="display:flex;flex-wrap:wrap;gap:8px">
-    ${done.map(n=>`<div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;display:flex;align-items:center;gap:6px">
-      <span>${n.emoji||'💫'}</span><span style="text-decoration:line-through;color:var(--muted)">${n.titulo}</span>
-      <button class="btn btn-ghost btn-sm" onclick="toggleNidito(${n.id},false)" title="Reabrir" style="padding:1px 5px;font-size:10px">↩</button>
-      <button class="btn btn-danger btn-sm" onclick="dNidito(${n.id})" style="padding:1px 5px;font-size:10px">✕</button>
+    ${done.map(n=>`<div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;display:flex;align-items:center;gap:7px">
+      <i class="ti ${NIDITO_ICONS[n.tipo]||'ti-note'}" style="color:var(--muted)"></i>
+      <span style="text-decoration:line-through;color:var(--muted)">${n.titulo}</span>
+      <button class="btn btn-ghost btn-sm" onclick="toggleNidito(${n.id},false)" title="Reabrir" style="padding:2px 6px;font-size:10px"><i class="ti ti-arrow-back-up"></i></button>
+      <button class="btn btn-danger btn-sm" onclick="dNidito(${n.id})" style="padding:2px 6px;font-size:10px"><i class="ti ti-trash"></i></button>
     </div>`).join('')}
   </div>
 </div>` : ''}
 
 ${!items.length ? `<div style="text-align:center;padding:60px 20px;color:var(--muted)">
-  <div style="font-size:48px;margin-bottom:12px">💑</div>
+  <i class="ti ti-heart-handshake" style="font-size:48px;display:block;margin-bottom:12px;color:#f9a8d4"></i>
   <div style="font-size:15px;margin-bottom:6px">Nidito está vacío</div>
   <div style="font-size:12px">Agrega metas, ideas o deseos que quieran lograr juntos</div>
 </div>` : ''}`;
@@ -519,14 +603,14 @@ ${!items.length ? `<div style="text-align:center;padding:60px 20px;color:var(--m
 
 function oNidito(item={}) {
   S.mctx = { mode: item.id ? 'edit-nidito' : 'new-nidito', item };
-  $('m-title').textContent = item.id ? 'Editar Nidito' : 'Agregar al Nidito 💑';
+  $('m-title').textContent = item.id ? 'Editar Nidito' : 'Agregar al Nidito';
   $('m-body').innerHTML = `
 <div class="fr"><label>Título *</label><input id="nd-titulo" value="${item.titulo||''}" placeholder="Ej: Viaje a Europa, Sillón nuevo..."></div>
 <div class="fr"><label>Tipo</label><select id="nd-tipo">
-  ${NIDITO_TIPOS.map(t=>`<option value="${t}"${(item.tipo||'idea')===t?' selected':''}>${NIDITO_EMOJIS[t]} ${t}</option>`).join('')}
+  ${NIDITO_TIPOS.map(t=>`<option value="${t}"${(item.tipo||'idea')===t?' selected':''}>${t}</option>`).join('')}
 </select></div>
 <div class="f2">
-  <div class="fr"><label>Emoji</label><input id="nd-emoji" value="${item.emoji||''}" placeholder="💫" style="font-size:20px;text-align:center"></div>
+  <div class="fr"><label>Emoji (opcional)</label><input id="nd-emoji" value="${item.emoji||''}" placeholder="💫" style="font-size:20px;text-align:center"></div>
   <div class="fr"><label>Monto (opcional)</label><input id="nd-monto" type="number" value="${item.monto||0}" placeholder="0"></div>
 </div>
 <div class="fr"><label>Descripción</label><textarea id="nd-desc" placeholder="Detalles, notas...">${item.descripcion||''}</textarea></div>`;
@@ -549,12 +633,12 @@ async function dNidito(id) {
   await load();
 }
 
-// ── RENDER: DEUDAS TDC ────────────────────────────────────────────────────────
+// ── RENDER: DEUDAS TDC ───────────────────────────────────────────────────────
 function rDeudas() {
   const tdcs=S.data.tdc||[];
   const total=tdcs.reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
   $('tab-deudas').innerHTML=`
-<div class="hdr"><h2>💳 Deudas TDC</h2></div>
+<div class="hdr"><h2><i class="ti ti-credit-card"></i> Deudas TDC</h2></div>
 <div class="cards">
   <div class="card"><div class="card-lbl">Deuda Total</div><div class="card-val red">${fmt(total)}</div></div>
   <div class="card"><div class="card-lbl">Tarjetas</div><div class="card-val accent">${tdcs.length}</div></div>
@@ -575,14 +659,14 @@ ${tdcs.map(t=>{const s=Math.max(0,(t.a_pagar||0)-(t.pagado||0));const p=t.a_paga
   mkC('c-tdc2',S.ct['c-tdc2']||'bar',tdcs.map(t=>t.nombre),[{label:'% Pagado',data:tdcs.map(t=>t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0)}]);
 }
 
-// ── RENDER: PRESUPUESTO ───────────────────────────────────────────────────────
+// ── RENDER: PRESUPUESTO ──────────────────────────────────────────────────────
 function rPresp() {
   const cm=curMes();
   const movs=(S.data.movs||[]).filter(m=>m.tipo==='GASTO'&&(m.fecha||'').startsWith(cm));
   const prsp=(S.data.presupuesto||[]).filter(p=>p.mes===cm);
   const rows=CATS.map(c=>{const r=movs.filter(m=>m.categoria===c).reduce((a,m)=>a+(m.monto||0),0);const l=(prsp.find(p=>p.categoria===c)||{}).limite||0;return{c,r,l};}).filter(x=>x.r>0||x.l>0);
   $('tab-presupuesto').innerHTML=`
-<div class="hdr"><h2>📋 Presupuesto — ${cm}</h2></div>
+<div class="hdr"><h2><i class="ti ti-report-money"></i> Presupuesto — ${cm}</h2></div>
 <div class="cbox" style="margin-bottom:14px">
   <h3>Presupuesto vs Gasto Real</h3>${ctBtns('c-prsp',LINE,'bar')}
   <div class="cwrap"><canvas id="c-prsp"></canvas></div>
@@ -596,28 +680,31 @@ ${rows.map(({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;return`<t
   mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[{label:'Real',data:rows.map(x=>x.r)},{label:'Límite',data:rows.map(x=>x.l)}]);
 }
 
-// ── RENDER: OBJETIVOS ─────────────────────────────────────────────────────────
+// ── RENDER: OBJETIVOS ────────────────────────────────────────────────────────
 function rObjs() {
   const metas=S.data.metas||[];
   $('tab-objetivos').innerHTML=`
-<div class="hdr"><h2>🎯 Objetivos</h2><button class="btn btn-accent btn-sm" onclick="oMeta()">+ Meta</button></div>
+<div class="hdr">
+  <h2><i class="ti ti-target"></i> Objetivos</h2>
+  <button class="btn btn-accent btn-sm" onclick="oMeta()"><i class="ti ti-plus"></i> Meta</button>
+</div>
 <div class="cbox" style="margin-bottom:14px">
   <h3>Progreso de Metas</h3>${ctBtns('c-meta',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Polar','polarArea']],'bar-h')}
   <div class="cwrap"><canvas id="c-meta"></canvas></div>
 </div>
-${metas.length?`<table><tr><th>Meta</th><th>Tipo</th><th>Actual</th><th>Objetivo</th><th>%</th><th></th></tr>
+${metas.length ? `<table><tr><th>Meta</th><th>Tipo</th><th>Actual</th><th>Objetivo</th><th>%</th><th></th></tr>
 ${metas.map(m=>{const p=m.meta>0?Math.min(100,Math.round((m.actual||0)/m.meta*100)):0;return`<tr>
   <td><strong>${m.nombre}</strong></td><td style="color:var(--muted)">${m.tipo||'ahorro'}</td>
   <td class="green">${fmt(m.actual)}</td><td>${fmt(m.meta)}</td>
   <td><div class="pbar" style="width:100px"><div class="pfill" style="width:${p}%"></div></div> ${p}%</td>
-  <td><button class="btn btn-danger btn-sm" onclick="dMeta(${m.id})">🗑</button></td>
-</tr>`}).join('')}</table>`:
+  <td><button class="btn btn-danger btn-sm" onclick="dMeta(${m.id})" style="padding:4px 7px"><i class="ti ti-trash"></i></button></td>
+</tr>`}).join('')}</table>` :
 `<p style="color:var(--muted);text-align:center;padding:36px">Sin metas aún.<br><small>Dile a la IA: "Quiero ahorrar $5000 para un fondo de emergencia"</small></p>`}`;
   mkC('c-meta',S.ct['c-meta']||'bar-h',metas.map(m=>m.nombre),
     [{label:'Actual',data:metas.map(m=>m.actual||0)},{label:'Objetivo',data:metas.map(m=>m.meta||0)}]);
 }
 
-// ── RENDER: MOVIMIENTOS / EGRESOS / INGRESOS ──────────────────────────────────
+// ── RENDER: MOVIMIENTOS / EGRESOS / INGRESOS ─────────────────────────────────
 function rMovs(tipo) {
   const all=S.data.movs||[];
   const movs=tipo==='all'?all:all.filter(m=>m.tipo===tipo);
@@ -641,9 +728,13 @@ function rMovs(tipo) {
       const kP=Object.keys(bP); mkC(c3,S.ct[c3]||'pie',kP,[{data:kP.map(k=>bP[k]),label:'Monto',backgroundColor:CLR.map(c=>c+'bb')}]);
     };
   }
-  const title=tipo==='all'?'↕️ Movimientos':tipo==='GASTO'?'💸 Egresos':'💰 Ingresos';
+  const icono = tipo==='all'?'ti-arrows-exchange':tipo==='GASTO'?'ti-trending-down':'ti-trending-up';
+  const titulo = tipo==='all'?'Movimientos':tipo==='GASTO'?'Egresos':'Ingresos';
   $('tab-'+tabId).innerHTML=`
-<div class="hdr"><h2>${title}</h2><button class="btn btn-accent btn-sm" onclick="oMov('${tipo==='all'?'GASTO':tipo}')">+ ${tipo==='INGRESO'?'Ingreso':'Gasto'}</button></div>
+<div class="hdr">
+  <h2><i class="ti ${icono}"></i> ${titulo}</h2>
+  <button class="btn btn-accent btn-sm" onclick="oMov('${tipo==='all'?'GASTO':tipo}')"><i class="ti ti-plus"></i> ${tipo==='INGRESO'?'Ingreso':'Gasto'}</button>
+</div>
 ${tipo!=='all'?`<div class="cards">
   <div class="card"><div class="card-lbl">Mes ${cm}</div><div class="card-val ${tipo==='GASTO'?'red':'green'}">${fmt(total)}</div></div>
   <div class="card"><div class="card-lbl">Total registros</div><div class="card-val accent">${movs.length}</div></div>
@@ -658,14 +749,14 @@ ${movs.slice(0,150).map(m=>`<tr>
   <td style="color:var(--muted)">${m.medio_pago||''}</td>
   <td style="color:var(--muted);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(m.comentarios||'').replace(/"/g,'')}">${m.comentarios||''}</td>
   <td class="acts">
-    <button class="btn btn-ghost btn-sm" onclick='eMov(${JSON.stringify(m)})'>✏️</button>
-    <button class="btn btn-danger btn-sm" onclick="dMov(${m.id})">🗑</button>
+    <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick='eMov(${JSON.stringify(m)})'><i class="ti ti-pencil"></i></button>
+    <button class="btn btn-danger btn-sm" style="padding:4px 7px" onclick="dMov(${m.id})"><i class="ti ti-trash"></i></button>
   </td>
 </tr>`).join('')}</table>`;
   chInit();
 }
 
-// ── RENDER: CALENDARIO ────────────────────────────────────────────────────────
+// ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
 function rCal() {
   const evts=S.data.calendario||[];
   const y=S.cy, mo=S.cm;
@@ -681,16 +772,19 @@ function rCal() {
   }
   const up=evts.filter(e=>fd(e.fecha)>=today).slice(0,10);
   $('tab-calendario').innerHTML=`
-<div class="hdr"><h2>📅 Calendario</h2><button class="btn btn-accent btn-sm" onclick="oEvt()">+ Evento</button></div>
+<div class="hdr">
+  <h2><i class="ti ti-calendar"></i> Calendario</h2>
+  <button class="btn btn-accent btn-sm" onclick="oEvt()"><i class="ti ti-plus"></i> Evento</button>
+</div>
 <div class="cbox" style="margin-bottom:14px">
   <div class="cal-nav">
-    <button class="btn btn-ghost btn-sm" onclick="calN(-1)">‹</button>
+    <button class="btn btn-ghost btn-sm" onclick="calN(-1)"><i class="ti ti-chevron-left"></i></button>
     <h3>${MN[mo]} ${y}</h3>
-    <button class="btn btn-ghost btn-sm" onclick="calN(1)">›</button>
+    <button class="btn btn-ghost btn-sm" onclick="calN(1)"><i class="ti ti-chevron-right"></i></button>
   </div>
   <div id="cal-grid">${cells}</div>
 </div>
-<h3 style="color:var(--muted);font-size:12px;margin-bottom:8px">Próximos eventos</h3>
+<h3 style="color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-clock-hour-4"></i> Próximos eventos</h3>
 <table><tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Tipo</th><th>Recurrente</th><th>Descripción</th><th></th></tr>
 ${up.map(e=>`<tr>
   <td>${fd(e.fecha)}</td><td style="color:var(--muted)">${e.hora||'—'}</td>
@@ -698,8 +792,8 @@ ${up.map(e=>`<tr>
   <td style="color:var(--muted)">${e.recurrente||'no'}</td>
   <td style="color:var(--muted)">${e.descripcion||''}</td>
   <td class="acts">
-    <button class="btn btn-ghost btn-sm" onclick='eEvt(${JSON.stringify(e)})'>✏️</button>
-    <button class="btn btn-danger btn-sm" onclick="dEvt(${e.id})">🗑</button>
+    <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick='eEvt(${JSON.stringify(e)})'><i class="ti ti-pencil"></i></button>
+    <button class="btn btn-danger btn-sm" style="padding:4px 7px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
   </td>
 </tr>`).join('')}</table>`;
 }
@@ -763,7 +857,6 @@ function closeM() { $('ovl').classList.remove('open'); }
 async function saveM() {
   const ctx=S.mctx; let datos={}, r;
 
-  // ── Nidito ────────────────────────────────────────────────────────────────
   if (ctx.mode==='new-nidito' || ctx.mode==='edit-nidito') {
     const titulo = $('nd-titulo').value.trim();
     if (!titulo) { alert('Ingresa un título'); return; }
@@ -810,7 +903,22 @@ async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DE
 
 // ── INICIALIZACIÓN ────────────────────────────────────────────────────────────
 (function init() {
-  // Acceso admin: URL contiene ?angel (o /?angel)
+  // Restaurar tema
+  if (localStorage.getItem('fos_theme') === 'light') {
+    document.documentElement.classList.add('light');
+    const icon = $('theme-icon');
+    const lbl  = $('theme-label');
+    if (icon) icon.className = 'ti ti-sun';
+    if (lbl)  lbl.textContent = 'Modo noche';
+  }
+  // Restaurar estado del sidebar
+  if (localStorage.getItem('fos_sidebar') === '0') {
+    const layout = $('layout');
+    if (layout) layout.classList.add('sb-hidden');
+    const f = $('sb-float');
+    if (f) f.style.display = 'flex';
+  }
+
   const isAdminURL = location.search.includes('angel') || location.hash.includes('angel');
   const storedId   = localStorage.getItem('fos_identity');
 
@@ -822,7 +930,6 @@ async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DE
     return;
   }
 
-  // Por defecto: Alicia
   S.identity = 'B';
   const bPhone = localStorage.getItem('fos_phone_B');
   if (bPhone) { S.phone = bPhone; showApp('B'); }
