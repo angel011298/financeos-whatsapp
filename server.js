@@ -66,6 +66,27 @@ async function learnPattern(phone, mov) {
   }
 }
 
+// ── AUDIO TRANSCRIPTION (Gemini multimodal) ───────────────────────────────
+async function transcribeAudio(mediaUrl, contentType) {
+  try {
+    const auth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+    const res  = await fetch(mediaUrl, { headers: { Authorization: `Basic ${auth}` } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf    = await res.arrayBuffer();
+    const base64 = Buffer.from(buf).toString('base64');
+    const mime   = contentType || 'audio/ogg';
+    const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent([
+      { inlineData: { mimeType: mime, data: base64 } },
+      'Transcribe exactamente este audio en español. Devuelve solo el texto transcrito, sin comentarios adicionales.'
+    ]);
+    return result.response.text().trim();
+  } catch (e) {
+    console.error('Audio transcription error:', e.message);
+    return null;
+  }
+}
+
 // ── PROACTIVE REMINDERS ────────────────────────────────────────────────────
 async function checkAndSendReminders(phone) {
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -167,11 +188,14 @@ async function buildSystemPrompt(user) {
 Hoy: ${today} | Mes: ${mesStr}
 
 REGLAS DE ORO:
-- Habla con naturalidad. NO eres un bot robótico. Eres un asesor que conoce bien a Ángel.
+- Habla con naturalidad. NO eres un bot robótico. Eres un asistente cercano que conoce bien al usuario.
 - Para WhatsApp: máx 4 párrafos cortos. Usa emojis con moderación.
 - DETECTA PATRONES: Si gasta mucho en algo comparado con historial, avísale proactivamente.
-- TIENES PODER DE ACCIÓN: usa la herramienta 'modificar_plataforma' automáticamente cuando el usuario registre un gasto, ingreso, pago TDC o evento de calendario.
-- Si el usuario dice algo como "gasté X en Y" o "pagué Z" o "recuérdame en N días/meses" → EJECUTA la herramienta sin preguntar primero.
+- TIENES PODER DE ACCIÓN: usa la herramienta 'modificar_plataforma' automáticamente cuando la información sea suficientemente clara.
+- Si el usuario dice algo como "gasté X en Y" (monto + concepto claros) → EJECUTA sin preguntar.
+- Si la información es AMBIGUA o falta algo CRÍTICO (monto sin número, concepto completamente vago) → PREGUNTA brevemente antes de registrar. Ejemplo: si dice "gasté en el súper" sin monto, pregunta "¿Cuánto gastaste en el súper?" antes de registrar.
+- Para nidito y calendario: puedes inferir detalles razonables sin preguntar (usa monto=0 si no hay monto, tipo "idea" si no está claro).
+- Si viene de 🎤 nota de voz: mismas reglas, confía en la transcripción.
 
 CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   tipo: "GASTO"
@@ -455,24 +479,41 @@ app.post('/api/send-whatsapp-invite', async (req, res) => {
 // ── WEBHOOK ────────────────────────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
   res.status(200).send('OK');
-  const { Body, From, MediaUrl0 } = req.body;
+  const { Body, From, MediaUrl0, MediaContentType0 } = req.body;
   const phone = From || 'unknown';
   let reply = '';
   try {
-    const text = (Body || '').trim();
-    const lower = text.toLowerCase().trim();
-    const user = await getOrCreateUser(phone);
-    await checkAndSendReminders(phone).catch(() => {});
+    let text = (Body || '').trim();
+    let isAudio = false;
 
-    if (['resumen','summary'].includes(lower))               reply = await cmdResumen(phone);
-    else if (['deudas','tdc'].includes(lower))               reply = await cmdDeudas(phone);
-    else if (['historial','movimientos'].includes(lower))    reply = await cmdHistorial(phone);
-    else if (['calendario','agenda','eventos'].includes(lower)) reply = await cmdCalendario(phone);
-    else if (['ayuda','hola','help'].includes(lower))
-      reply = `💑 *OnlyUs* (${user.ai_preference})\n\n*Comandos:* resumen · deudas · historial · calendario · nidito · ayuda\n\n*Habla natural:*\n"Gasté 250 en comida"\n"Pagué mínimo BBVA $2700"\n"Recuérdame renovar seguro en 3 meses"\n"Recibí $8000 de sueldo"\n"Agrega a wishlist un sillón $3000"\n"Anota en nidito que queremos ir a Europa"`;
-    else {
-      const sys = await buildSystemPrompt(user);
-      reply = await callIA(user, sys, text + (MediaUrl0 ? `\n[Adjunto: ${MediaUrl0}]` : ''), phone);
+    // ── Transcripción de audio (notas de voz WhatsApp) ──────────────────────
+    if (MediaUrl0 && MediaContentType0?.startsWith('audio/')) {
+      isAudio = true;
+      const transcripcion = await transcribeAudio(MediaUrl0, MediaContentType0);
+      if (transcripcion) {
+        text = transcripcion;
+        console.log(`🎤 Audio transcrito [${phone}]: "${text}"`);
+      } else {
+        reply = '⚠️ No pude entender el audio. ¿Puedes escribirlo?';
+      }
+    }
+
+    if (!reply) {
+      const lower = text.toLowerCase().trim();
+      const user  = await getOrCreateUser(phone);
+      await checkAndSendReminders(phone).catch(() => {});
+
+      if (['resumen','summary'].includes(lower))                  reply = await cmdResumen(phone);
+      else if (['deudas','tdc'].includes(lower))                  reply = await cmdDeudas(phone);
+      else if (['historial','movimientos'].includes(lower))       reply = await cmdHistorial(phone);
+      else if (['calendario','agenda','eventos'].includes(lower)) reply = await cmdCalendario(phone);
+      else if (['ayuda','hola','help'].includes(lower))
+        reply = `💑 *OnlyUs* (${user.ai_preference})\n\n*Comandos:* resumen · deudas · historial · calendario · nidito · ayuda\n\n*Habla natural:*\n"Gasté 250 en comida"\n"Pagué mínimo BBVA $2700"\n"Recuérdame renovar seguro en 3 meses"\n"Recibí $8000 de sueldo"\n"Agrega a wishlist un sillón $3000"\n"Anota en nidito que queremos ir a Europa"`;
+      else {
+        const sys = await buildSystemPrompt(user);
+        const input = isAudio ? `[🎤 Nota de voz] ${text}` : text;
+        reply = await callIA(user, sys, input, phone);
+      }
     }
   } catch (err) {
     console.error('Webhook err:', err);
