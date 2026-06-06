@@ -533,6 +533,56 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+// ── CHAT WEB (PWA) ────────────────────────────────────────────────────────────
+// Mismo motor que WhatsApp pero para el chat integrado en el dashboard
+app.post('/api/chat-web', async (req, res) => {
+  try {
+    const { phone, message, audio_b64, audio_mime } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Missing phone' });
+
+    let text    = (message || '').trim();
+    let isAudio = false;
+
+    // Transcribir audio si viene en base64 (desde grabación web)
+    if (audio_b64) {
+      isAudio = true;
+      try {
+        const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const result = await model.generateContent([
+          { inlineData: { mimeType: audio_mime || 'audio/mp4', data: audio_b64 } },
+          'Transcribe exactamente este audio en español. Devuelve solo el texto transcrito, sin comentarios adicionales.'
+        ]);
+        text = result.response.text().trim();
+        console.log(`🎤 Audio web transcrito [${phone}]: "${text}"`);
+      } catch (e) {
+        return res.json({ reply: '⚠️ No pude transcribir el audio. ¿Lo escribes?' });
+      }
+    }
+
+    if (!text) return res.json({ reply: '⚠️ Mensaje vacío.' });
+
+    const lower = text.toLowerCase().trim();
+    const user  = await getOrCreateUser(phone);
+    await checkAndSendReminders(phone).catch(() => {});
+
+    let reply = '';
+    if (['resumen','summary','balance'].includes(lower))         reply = await cmdResumen(phone);
+    else if (['deudas','tdc'].includes(lower))                   reply = await cmdDeudas(phone);
+    else if (['historial','movimientos'].includes(lower))        reply = await cmdHistorial(phone);
+    else if (['calendario','agenda','eventos'].includes(lower))  reply = await cmdCalendario(phone);
+    else {
+      const sys   = await buildSystemPrompt(user);
+      const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
+      reply       = await callIA(user, sys, input, phone);
+    }
+
+    res.json({ reply, transcription: isAudio ? text : undefined });
+  } catch (e) {
+    console.error('chat-web error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅' }));
 
 // ── SEED ADMIN AL STARTUP ──────────────────────────────────────────────────

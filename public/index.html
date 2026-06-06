@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OnlyUs ♡</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="OnlyUs">
+<meta name="theme-color" content="#818cf8">
+<!-- Libs -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <style>
@@ -122,6 +130,25 @@ tr:hover td{background:rgba(128,128,128,.04)}
 .cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .cal-nav h3{flex:1;font-size:14px}
 
+/* ── CHAT ────────────────────────────────────────────── */
+.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 80px)}
+.chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:78%;padding:10px 14px;border-radius:16px;font-size:13px;line-height:1.55;word-break:break-word;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg-user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.msg-bot{align-self:flex-start;background:var(--card);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
+.msg-time{font-size:10px;opacity:.55;margin-top:4px;text-align:right}
+.msg-user .msg-time{color:rgba(255,255,255,.7)}
+.chat-bar{display:flex;align-items:center;gap:8px;padding:10px 0 0;border-top:1px solid var(--border);flex-shrink:0}
+.chat-bar input{flex:1;border-radius:24px;padding:10px 16px}
+.round-btn{width:40px;height:40px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;transition:.15s}
+.send-btn{background:var(--accent);color:#fff}.send-btn:hover{opacity:.85}
+.mic-btn{background:var(--card2);color:var(--muted);border:1px solid var(--border)}
+.mic-btn:hover{color:var(--text);border-color:var(--muted)}
+.mic-btn.recording{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.chat-empty{text-align:center;padding:40px 20px;color:var(--muted);margin:auto}
+.chat-empty .ti{font-size:40px;display:block;margin-bottom:12px;opacity:.6}
 @media(max-width:700px){.layout{grid-template-columns:1fr} aside{display:none} .charts-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -201,6 +228,9 @@ tr:hover td{background:rgba(128,128,128,.04)}
         <a onclick="go('calendario')" id="n-calendario">
           <i class="ti ti-calendar"></i><span>Calendario</span>
         </a>
+        <a onclick="go('chat')" id="n-chat" style="border-top:1px solid var(--border);margin-top:4px;padding-top:14px">
+          <i class="ti ti-message-circle" style="color:var(--accent)"></i><span style="color:var(--accent);font-weight:500">Chat IA</span>
+        </a>
       </nav>
 
       <div class="side-ft">
@@ -246,6 +276,7 @@ tr:hover td{background:rgba(128,128,128,.04)}
       <div id="tab-egresos"     class="tab"></div>
       <div id="tab-ingresos"    class="tab"></div>
       <div id="tab-calendario"  class="tab"></div>
+      <div id="tab-chat"        class="tab"></div>
     </main>
   </div>
 </div>
@@ -458,7 +489,7 @@ function go(t) {
 function renderTab(t) {
   ({ dashboard:rDash, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp, objetivos:rObjs,
      movimientos:()=>rMovs('all'), egresos:()=>rMovs('GASTO'), ingresos:()=>rMovs('INGRESO'),
-     calendario:rCal })[t]?.();
+     calendario:rCal, chat:rChat })[t]?.();
 }
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
@@ -916,6 +947,165 @@ async function dMov(id)  { if(!confirm('¿Eliminar?'))return; await api('DELETE'
 async function dEvt(id)  { if(!confirm('¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
 async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/movimientos/${id}`,{user_phone:S.phone}); await load(); }
 
+// ── CHAT IA (PWA) ─────────────────────────────────────────────────────────────
+let _mediaRec = null, _audioChunks = [], _recording = false;
+
+function rChat() {
+  const tab  = $('tab-chat');
+  const msgs = $('chat-msgs');
+  // Si el teléfono cambió (ghost mode) o el chat no existe, re-inicializar
+  if (!msgs || msgs.dataset.phone !== S.phone) {
+    tab.innerHTML = `
+<div class="chat-wrap">
+  <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"></div>
+  <div class="chat-bar">
+    <button class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
+      <i class="ti ti-microphone" id="mic-icon"></i>
+    </button>
+    <input id="chat-input" placeholder="Escribe un mensaje..." autocomplete="off"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}">
+    <button class="round-btn send-btn" onclick="sendChat()" title="Enviar">
+      <i class="ti ti-send"></i>
+    </button>
+  </div>
+</div>`;
+    _loadChatHistory();
+  }
+  _scrollChat();
+}
+
+function _chatKey() { return 'fos_chat_' + S.phone; }
+
+function _loadChatHistory() {
+  const saved = localStorage.getItem(_chatKey());
+  if (saved) {
+    try { JSON.parse(saved).slice(-60).forEach(m => _appendMsg(m.r, m.t, m.ts, false)); }
+    catch(_) {}
+  } else {
+    _appendMsg('bot',
+      'Hola 👋 Soy tu asistente OnlyUs.\n\nPuedes decirme:\n• "Gasté 350 en comida"\n• "Recibí $10,000 de sueldo"\n• "¿Cuánto debo en total?"\n• "Agrega viaje a Europa al nidito"\n\nO graba un audio con el micrófono 🎤',
+      null, false);
+  }
+}
+
+function _appendMsg(role, text, ts = null, save = true) {
+  const msgs = $('chat-msgs');
+  if (!msgs) return;
+  const t   = ts || new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+  const el  = document.createElement('div');
+  el.className = `msg msg-${role}`;
+  const html = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g,'<strong>$1</strong>')
+    .replace(/\n/g,'<br>');
+  el.innerHTML = `${html}<div class="msg-time">${t}</div>`;
+  msgs.appendChild(el);
+  _scrollChat();
+  if (save) {
+    const saved = localStorage.getItem(_chatKey());
+    const arr   = saved ? JSON.parse(saved) : [];
+    arr.push({ r: role, t: text, ts: t });
+    if (arr.length > 80) arr.splice(0, arr.length - 80);
+    localStorage.setItem(_chatKey(), JSON.stringify(arr));
+  }
+}
+
+function _scrollChat() {
+  const msgs = $('chat-msgs');
+  if (msgs) requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
+}
+
+function _showTyping() {
+  const msgs = $('chat-msgs');
+  if (!msgs || $('chat-typing')) return;
+  const el = document.createElement('div');
+  el.id = 'chat-typing'; el.className = 'msg msg-bot';
+  el.style.cssText = 'opacity:.6;padding:12px 16px;display:flex;gap:5px;align-items:center';
+  el.innerHTML = '<span style="animation:pulse .8s infinite">●</span><span style="animation:pulse .8s .2s infinite">●</span><span style="animation:pulse .8s .4s infinite">●</span>';
+  msgs.appendChild(el); _scrollChat();
+}
+function _hideTyping() { $('chat-typing')?.remove(); }
+
+async function sendChat() {
+  const input = $('chat-input');
+  const text  = input?.value.trim();
+  if (!text) return;
+  input.value = '';
+  _appendMsg('user', text);
+  await _askBot(text);
+}
+
+async function _askBot(message, audioB64 = null, audioMime = null) {
+  _showTyping();
+  const btn = $('chat-input');
+  if (btn) btn.disabled = true;
+  try {
+    const body = { phone: S.phone, message: message || '' };
+    if (audioB64) { body.audio_b64 = audioB64; body.audio_mime = audioMime; }
+    const r = await api('POST', '/api/chat-web', body);
+    _hideTyping();
+    if (r.error) { _appendMsg('bot', '❌ ' + r.error); return; }
+    if (r.transcription) _appendMsg('user', '🎤 ' + r.transcription);
+    _appendMsg('bot', r.reply || '...');
+    // Refresca datos si Claude hizo cambios en la DB
+    load().catch(() => {});
+  } catch (e) {
+    _hideTyping();
+    _appendMsg('bot', '❌ Sin conexión. Intenta de nuevo.');
+  } finally {
+    if (btn) btn.disabled = false;
+    $('chat-input')?.focus();
+  }
+}
+
+// ── GRABACIÓN DE VOZ ──────────────────────────────────────────────────────────
+async function toggleRecording() {
+  if (_recording) {
+    _mediaRec?.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime   = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
+                 : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+    _mediaRec   = new MediaRecorder(stream, { mimeType: mime });
+    _audioChunks = [];
+    _recording   = true;
+    $('mic-btn').classList.add('recording');
+    $('mic-icon').className = 'ti ti-player-stop-filled';
+    _appendMsg('bot', '🔴 Grabando... toca el botón para detener', null, false);
+
+    _mediaRec.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
+    _mediaRec.onstop = async () => {
+      _recording = false;
+      $('mic-btn').classList.remove('recording');
+      $('mic-icon').className = 'ti ti-microphone';
+      stream.getTracks().forEach(t => t.stop());
+      // Quitar mensaje "Grabando..."
+      const msgs = $('chat-msgs');
+      if (msgs?.lastChild?.textContent?.includes('Grabando')) msgs.removeChild(msgs.lastChild);
+      if (!_audioChunks.length) return;
+      const blob = new Blob(_audioChunks, { type: mime });
+      const b64  = await _blobToBase64(blob);
+      _appendMsg('user', '🎤 Audio enviado');
+      await _askBot(null, b64, mime);
+    };
+    _mediaRec.start();
+  } catch (e) {
+    _recording = false;
+    alert('No se pudo acceder al micrófono.\n' + e.message);
+  }
+}
+
+function _blobToBase64(blob) {
+  return new Promise(resolve => {
+    const r = new FileReader();
+    r.onloadend = () => resolve(r.result.split(',')[1]);
+    r.readAsDataURL(blob);
+  });
+}
+
 // ── INICIALIZACIÓN ────────────────────────────────────────────────────────────
 (function init() {
   // Restaurar tema
@@ -932,6 +1122,11 @@ async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DE
     if (layout) layout.classList.add('sb-hidden');
     const f = $('sb-float');
     if (f) f.style.display = 'flex';
+  }
+
+  // Registrar Service Worker para PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
 
   const isAdminURL = location.search.includes('angel') || location.hash.includes('angel');
