@@ -369,6 +369,14 @@ app.get('/api/usuarios', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── WHOAMI — detecta si el teléfono es admin o Alicia ─────────────────────
+app.get('/api/whoami/:phone', (req, res) => {
+  const adminPhone = (process.env.ADMIN_PHONE || '').replace('whatsapp:', '');
+  const reqPhone   = req.params.phone.replace('whatsapp:', '');
+  const isAdmin    = adminPhone && adminPhone === reqPhone;
+  res.json({ role: isAdmin ? 'ADMIN' : 'USER' });
+});
+
 app.post('/api/movimientos', async (req, res) => {
   try {
     const { user_phone, ...d } = req.body;

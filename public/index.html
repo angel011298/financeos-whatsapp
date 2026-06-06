@@ -286,6 +286,12 @@ async function api(m, p, b) {
   return r.json();
 }
 
+// Normaliza teléfono a formato whatsapp:+52XXXXXXXXXX
+function normalizePhone(raw) {
+  const d = raw.replace(/\D/g,'');
+  return 'whatsapp:+' + (d.startsWith('52') ? d : '52' + d);
+}
+
 // ── SIDEBAR TOGGLE ───────────────────────────────────────────────────────────
 function toggleSidebar() {
   const layout   = $('layout');
@@ -320,16 +326,25 @@ function showPhoneInput(id) {
   setTimeout(() => $('ph-input').focus(), 100);
 }
 
-function confirmPhone() {
+async function confirmPhone() {
   const v = $('ph-input').value.trim();
   if (!v) { alert('Ingresa tu número'); return; }
-  const phone = fmtPhone(v);
-  localStorage.setItem('fos_phone_' + S.identity, phone);
-  localStorage.setItem('fos_identity', S.identity);
-  S.phone = phone;
-  if (S.identity === 'A') S.adminPhone = phone;
+  const phone = normalizePhone(v);
+
+  // El servidor decide si el teléfono es admin, sin importar desde qué URL se abrió
+  let identity = S.identity;
+  try {
+    const r = await api('GET', `/api/whoami/${encodeURIComponent(phone)}`);
+    if (r.role === 'ADMIN') identity = 'A';
+  } catch (_) { /* si falla, respeta la identidad pre-seleccionada */ }
+
+  S.identity = identity;
+  S.phone    = phone;
+  if (identity === 'A') S.adminPhone = phone;
+  localStorage.setItem('fos_phone_' + identity, phone);
+  localStorage.setItem('fos_identity', identity);
   $('auth-phone').style.display = 'none';
-  showApp(S.identity, true);
+  showApp(identity, true);
 }
 
 function showApp(id, firstTime = false) {
