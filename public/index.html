@@ -166,6 +166,8 @@ tr:hover td{background:rgba(255,255,255,.018)}
         </div>
         <!-- Botón Ghost — solo visible para Admin (Sujeto A) -->
         <button id="ghost-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none" onclick="toggleGhost()">👁 Ver Alicia</button>
+        <!-- Botón WhatsApp — solo visible para Alicia (Sujeto B) -->
+        <button id="wa-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none;background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.3)" onclick="sendWhatsAppInvite()">💬 Conectar WhatsApp</button>
         <button class="btn btn-ghost btn-sm" style="width:100%" onclick="logout()">Cerrar sesión</button>
       </div>
     </aside>
@@ -268,6 +270,8 @@ function showApp(id) {
   $('id-label').textContent = id === 'A' ? '👑 Ángel (Admin)' : '👩 Alicia';
   // Ghost button solo para Admin
   if (id === 'A') $('ghost-btn').style.display = 'block';
+  // WhatsApp button solo para Alicia
+  if (id === 'B') $('wa-btn').style.display = 'block';
 
   const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
   load();
@@ -336,6 +340,28 @@ async function setAI(pref) {
   await api('POST', '/api/preferencia', { phone, ai_preference: pref });
   $('btn-claude').classList.toggle('act', pref === 'CLAUDE');
   $('btn-gemini').classList.toggle('act', pref === 'GEMINI');
+}
+
+async function sendWhatsAppInvite() {
+  const btn = $('wa-btn');
+  const oldText = btn.textContent;
+  try {
+    btn.textContent = '⏳ Enviando...';
+    btn.disabled = true;
+    const res = await api('POST', '/api/send-whatsapp-invite', { phone: S.phone });
+    if (res.success) {
+      btn.textContent = '✅ Invitación enviada';
+      setTimeout(() => { btn.textContent = oldText; btn.disabled = false; }, 3000);
+    } else {
+      alert('Error: ' + res.error);
+      btn.textContent = oldText;
+      btn.disabled = false;
+    }
+  } catch (e) {
+    alert('Error al enviar: ' + e.message);
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
 }
 
 // ── NAVEGACIÓN ────────────────────────────────────────────────────────────────

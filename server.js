@@ -383,6 +383,16 @@ app.post('/api/preferencia', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+app.post('/api/send-whatsapp-invite', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ success: false, error: 'Phone required' });
+    const msg = `Hola 👋 Desde *FinanceOS*\n\nPara conectarte al bot y gestionar tus gastos, responde a este mensaje o envía:\n\n*join everywhere-shot*\n\nLuego podrás hablar conmigo naturalmente: "gasté 250 en comida", "pago mínimo BBVA", etc.`;
+    await twl.messages.create({ from: WA_FROM, to: phone, body: msg });
+    res.json({ success: true, message: 'Invitación enviada a WhatsApp' });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 // ── WEBHOOK ────────────────────────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
   res.status(200).send('OK');
