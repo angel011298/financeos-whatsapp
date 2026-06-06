@@ -1,4 +1,4 @@
-// FinanceOS WhatsApp — server.js v4 (IA Autodidacta + Calendario + Dashboard)
+// OnlyUs — server.js v5 (IA Autodidacta + Nidito Compartido + Dashboard)
 // Stack: Express + Twilio + Claude Sonnet 4.6 + Gemini 1.5 + Supabase
 // Deploy: Railway.app
 
@@ -76,7 +76,7 @@ async function checkAndSendReminders(phone) {
     try {
       await twl.messages.create({
         from: WA_FROM, to: phone,
-        body: `🔔 *Recordatorio FinanceOS*\nMañana: *${ev.titulo}*\n📅 ${ev.fecha}${ev.hora ? ' a las ' + ev.hora : ''}\n${ev.descripcion || ''}`
+        body: `🔔 *OnlyUs — Recordatorio*\nMañana: *${ev.titulo}*\n📅 ${ev.fecha}${ev.hora ? ' a las ' + ev.hora : ''}\n${ev.descripcion || ''}`
       });
       await sb.from('calendario').update({ notificado: true }).eq('id', ev.id);
     } catch (e) { console.error('reminder err:', e.message); }
@@ -87,6 +87,24 @@ async function checkAndSendReminders(phone) {
 async function executeDbAction(phone, arg) {
   const { tabla, accion, id, datos } = arg;
   try {
+    // nidito es tabla compartida — sin user_phone
+    if (tabla === 'nidito') {
+      if (accion === 'crear') {
+        const { data, error } = await sb.from('nidito').insert({ ...datos, created_by: phone }).select().single();
+        if (error) return `❌ Error: ${error.message}`;
+        return `✅ Agregado al Nidito ✓ ID: ${data?.id}`;
+      }
+      if (accion === 'editar') {
+        const { error } = await sb.from('nidito').update({ ...datos, updated_at: new Date().toISOString() }).eq('id', id);
+        if (error) return `❌ Error: ${error.message}`;
+        return `✅ Nidito #${id} actualizado.`;
+      }
+      if (accion === 'eliminar') {
+        const { error } = await sb.from('nidito').delete().eq('id', id);
+        if (error) return `❌ Error: ${error.message}`;
+        return `🗑️ Eliminado del Nidito #${id}.`;
+      }
+    }
     if (accion === 'crear') {
       const { data, error } = await sb.from(tabla).insert({ ...datos, user_phone: phone }).select().single();
       if (error) return `❌ Error: ${error.message}`;
@@ -113,17 +131,19 @@ async function buildSystemPrompt(user) {
   const phone = user.telefono;
   const mesStr = mes();
 
-  const [tdcR, movsR, metasR, calR, patrR, prspR] = await Promise.all([
+  const [tdcR, movsR, metasR, calR, patrR, prspR, niditoR] = await Promise.all([
     sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
     sb.from('movimientos').select('*').eq('user_phone', phone).order('created_at', { ascending: false }).limit(60),
     sb.from('metas').select('*').eq('user_phone', phone),
     sb.from('calendario').select('*').eq('user_phone', phone).gte('fecha', today).order('fecha').limit(10),
     sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }).limit(10),
     sb.from('presupuesto').select('*').eq('user_phone', phone).eq('mes', mesStr),
+    sb.from('nidito').select('*').order('prioridad', { ascending: false }).limit(20),
   ]);
 
   const tdcs = tdcR.data || [], movs = movsR.data || [], metas = metasR.data || [];
   const eventos = calR.data || [], patrones = patrR.data || [], presp = prspR.data || [];
+  const nidito = niditoR.data || [];
 
   const mesMov = movs.filter(m => m.fecha?.startsWith(mesStr));
   const gastMes = mesMov.filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0);
@@ -143,7 +163,7 @@ async function buildSystemPrompt(user) {
     ghost = `\n[MODO FANTASMA — últimos movs Sujeto B]\n${JSON.stringify(otros)}`;
   }
 
-  return `Eres FinanceOS, el asesor financiero personal inteligente de Ángel.
+  return `Eres OnlyUs, el asesor financiero personal inteligente de Ángel.
 Hoy: ${today} | Mes: ${mesStr}
 
 REGLAS DE ORO:
@@ -187,6 +207,10 @@ ${eventos.map(e => `  [${e.id}] ${e.fecha}: ${e.titulo}`).join('\n') || '  Calen
 
 PATRONES (top conceptos recurrentes):
 ${patrones.map(p => `  ${p.concepto_clave}: promedio ${fmt(p.monto_promedio)}, ${p.contador}x, último ${p.ultima_vez}, medio: ${p.medio_pago_usual||'?'}`).join('\n') || '  Sin patrones aún'}
+
+NIDITO (espacio compartido con Alicia — metas/ideas/wishlist):
+${nidito.map(n => `  [${n.id}] ${n.emoji||'💫'} ${n.tipo?.toUpperCase()}: "${n.titulo}"${n.monto>0?' '+fmt(n.monto):''}${n.completado?' ✅':''}`).join('\n') || '  Nidito vacío'}
+Para agregar al nidito usa tabla="nidito". Ejemplos: "anota en nidito que queremos ir a Cancún", "agrega a wishlist un sillón $3000".
 ${ghost}`;
 }
 
@@ -233,20 +257,20 @@ async function cmdCalendario(phone) {
 // ── TOOLS SCHEMA ───────────────────────────────────────────────────────────
 const toolsSchema = {
   name: "modificar_plataforma",
-  description: "Crea, edita o elimina registros en: movimientos, metas, calendario, tdc, presupuesto.",
+  description: "Crea, edita o elimina registros en: movimientos, metas, calendario, tdc, presupuesto, nidito (metas/ideas/wishlist compartidas entre Ángel y Alicia).",
   input_schema: {
     type: "object",
     properties: {
-      tabla:  { type: "string", enum: ["movimientos","metas","calendario","tdc","presupuesto"] },
+      tabla:  { type: "string", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito"] },
       accion: { type: "string", enum: ["crear","editar","eliminar"] },
       id:     { type: "string", description: "ID a editar/eliminar" },
-      datos:  { type: "object", description: "Campos a insertar/actualizar. Para movimientos: tipo, categoria, concepto, comentarios, monto, medio_pago, fecha. Para calendario: titulo, fecha, hora, tipo, descripcion, recurrente." }
+      datos:  { type: "object", description: "Campos a insertar/actualizar. Para movimientos: tipo, categoria, concepto, comentarios, monto, medio_pago, fecha. Para calendario: titulo, fecha, hora, tipo, descripcion, recurrente. Para nidito: titulo, descripcion, tipo (meta/idea/wishlist/plan/nota), emoji, monto, completado, prioridad." }
     },
     required: ["tabla","accion"]
   }
 };
 
-const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", description: "Crea, edita o elimina registros.", parameters: { type: "OBJECT", properties: { tabla: { type: "STRING" }, accion: { type: "STRING" }, id: { type: "STRING" }, datos: { type: "OBJECT" } }, required: ["tabla","accion"] } }] }];
+const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", description: "Crea, edita o elimina registros incluyendo nidito (espacio compartido).", parameters: { type: "OBJECT", properties: { tabla: { type: "STRING" }, accion: { type: "STRING" }, id: { type: "STRING" }, datos: { type: "OBJECT" } }, required: ["tabla","accion"] } }] }];
 
 // ── LLM ENGINE ─────────────────────────────────────────────────────────────
 async function callIA(user, sysPrompt, text, phone) {
@@ -299,7 +323,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'CLAUDE' }]);
     }
-    const [tdc, movs, metas, user, cal, pat, presp] = await Promise.all([
+    const [tdc, movs, metas, user, cal, pat, presp, nidito] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
       sb.from('movimientos').select('*').eq('user_phone', phone).order('fecha', { ascending: false }).limit(500),
       sb.from('metas').select('*').eq('user_phone', phone),
@@ -307,8 +331,9 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('calendario').select('*').eq('user_phone', phone).order('fecha'),
       sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }),
       sb.from('presupuesto').select('*').eq('user_phone', phone),
+      sb.from('nidito').select('*').order('completado').order('prioridad', { ascending: false }),
     ]);
-    res.json({ success: true, data: { tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data, calendario: cal.data, patrones: pat.data, presupuesto: presp.data } });
+    res.json({ success: true, data: { tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data, calendario: cal.data, patrones: pat.data, presupuesto: presp.data, nidito: nidito.data } });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -383,11 +408,45 @@ app.post('/api/preferencia', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── NIDITO (espacio compartido) ───────────────────────────────────────────────
+app.get('/api/nidito', async (_req, res) => {
+  try {
+    const { data, error } = await sb.from('nidito').select('*').order('completado').order('prioridad', { ascending: false });
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/nidito', async (req, res) => {
+  try {
+    const { created_by, ...d } = req.body;
+    const { data, error } = await sb.from('nidito').insert({ ...d, created_by: created_by || '' }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/nidito/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('nidito').update({ ...req.body, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/nidito/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('nidito').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.post('/api/send-whatsapp-invite', async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ success: false, error: 'Phone required' });
-    const msg = `Hola 👋 Desde *FinanceOS*\n\nPara conectarte al bot y gestionar tus gastos, responde a este mensaje o envía:\n\n*join everywhere-shot*\n\nLuego podrás hablar conmigo naturalmente: "gasté 250 en comida", "pago mínimo BBVA", etc.`;
+    const msg = `Hola 👋 Desde *OnlyUs* 💑\n\nPara conectarte al asistente y gestionar tus finanzas, responde a este mensaje o envía:\n\n*join everywhere-shot*\n\nLuego puedes hablar naturalmente: "gasté 250 en comida", "recibí $8000 de sueldo", "agrega a wishlist un sillón", etc.`;
     await twl.messages.create({ from: WA_FROM, to: phone, body: msg });
     res.json({ success: true, message: 'Invitación enviada a WhatsApp' });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -410,7 +469,7 @@ app.post('/webhook', async (req, res) => {
     else if (['historial','movimientos'].includes(lower))    reply = await cmdHistorial(phone);
     else if (['calendario','agenda','eventos'].includes(lower)) reply = await cmdCalendario(phone);
     else if (['ayuda','hola','help'].includes(lower))
-      reply = `🤖 *FinanceOS v4* (${user.ai_preference})\n\n*Comandos:* resumen · deudas · historial · calendario · ayuda\n\n*Habla natural:*\n"Gasté 250 en comida con Alicia"\n"Pagué mínimo BBVA $2700"\n"Recuérdame cambiar cepillo en 3 meses"\n"Recibí $8000 de sueldo"\n"Agrega 500 de pasajes en efectivo"`;
+      reply = `💑 *OnlyUs* (${user.ai_preference})\n\n*Comandos:* resumen · deudas · historial · calendario · nidito · ayuda\n\n*Habla natural:*\n"Gasté 250 en comida"\n"Pagué mínimo BBVA $2700"\n"Recuérdame renovar seguro en 3 meses"\n"Recibí $8000 de sueldo"\n"Agrega a wishlist un sillón $3000"\n"Anota en nidito que queremos ir a Europa"`;
     else {
       const sys = await buildSystemPrompt(user);
       reply = await callIA(user, sys, text + (MediaUrl0 ? `\n[Adjunto: ${MediaUrl0}]` : ''), phone);
@@ -425,7 +484,7 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({ status: 'FinanceOS v4 ✅' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅' }));
 
 // ── SEED ADMIN AL STARTUP ──────────────────────────────────────────────────
 // Si ADMIN_PHONE está definido, asigna automáticamente los registros huérfanos
@@ -450,6 +509,6 @@ async function seedAdminOnStartup() {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
-  console.log(`FinanceOS v4 — puerto ${PORT}`);
+  console.log(`OnlyUs v5 — puerto ${PORT}`);
   await seedAdminOnStartup();
 });

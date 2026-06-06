@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FinanceOS</title>
+<title>OnlyUs ♡</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{--bg:#0f172a;--card:#1e293b;--card2:#162032;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#818cf8;--green:#34d399;--red:#f87171;--yellow:#fbbf24}
@@ -11,16 +11,19 @@
 body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px}
 
 /* ── AUTH ─────────────────────────────────────────── */
-.auth-wrap{display:flex;align-items:center;justify-content:center;height:100vh}
+.auth-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:radial-gradient(ellipse at 60% 40%,rgba(129,140,248,.08) 0%,transparent 70%)}
 .auth-box{background:var(--card);padding:36px;border-radius:16px;width:360px;text-align:center;border:1px solid var(--border)}
-.auth-box h1{font-size:22px;margin-bottom:6px;color:var(--accent)}
+.auth-box h1{font-size:24px;margin-bottom:6px;color:var(--accent)}
 .auth-box p{color:var(--muted);margin-bottom:20px;font-size:13px}
-.id-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.id-card{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:20px 14px;cursor:pointer;transition:.15s}
-.id-card:hover{border-color:var(--accent);background:rgba(129,140,248,.1);transform:translateY(-2px)}
-.id-card .ava{font-size:34px;margin-bottom:8px}
-.id-card .name{font-weight:700;font-size:15px}
-.id-card .role{color:var(--muted);font-size:11px;margin-top:3px}
+
+/* ── WELCOME MODAL ────────────────────────────────── */
+.welcome-ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center}
+.welcome-ovl.open{display:flex}
+.welcome-box{background:var(--card);border:1px solid rgba(129,140,248,.4);border-radius:20px;padding:32px;width:440px;max-width:95vw;text-align:center;position:relative;box-shadow:0 0 60px rgba(129,140,248,.15)}
+.welcome-box .w-heart{font-size:52px;margin-bottom:12px}
+.welcome-box h2{font-size:20px;color:var(--accent);margin-bottom:14px}
+.welcome-box p{color:var(--muted);font-size:13px;line-height:1.7;margin-bottom:20px}
+.welcome-box .w-sig{font-size:12px;color:var(--muted);opacity:.7;font-style:italic}
 
 /* ── APP LAYOUT ──────────────────────────────────── */
 #app{display:none;height:100vh;overflow:hidden}
@@ -104,34 +107,28 @@ tr:hover td{background:rgba(255,255,255,.018)}
 </head>
 <body>
 
-<!-- ── PANTALLA 1: SELECCIÓN DE IDENTIDAD ──────────── -->
-<div class="auth-wrap" id="auth-select">
+<!-- ── PANTALLA: REGISTRO DE TELÉFONO (solo 1ª vez) ── -->
+<div class="auth-wrap" id="auth-phone" style="display:none">
   <div class="auth-box">
-    <h1>💸 FinanceOS</h1>
-    <p>¿Quién eres?</p>
-    <div class="id-cards">
-      <div class="id-card" onclick="pickId('A')">
-        <div class="ava">👑</div>
-        <div class="name">Ángel</div>
-        <div class="role">Admin</div>
-      </div>
-      <div class="id-card" onclick="pickId('B')">
-        <div class="ava">👩</div>
-        <div class="name">Alicia</div>
-        <div class="role">Usuario</div>
-      </div>
-    </div>
+    <div id="auth-ava" style="font-size:48px;margin-bottom:10px"></div>
+    <h1 id="auth-name" style="font-size:21px;margin-bottom:6px;color:var(--accent)"></h1>
+    <p id="auth-desc">Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se pide una vez en este dispositivo</span></p>
+    <input id="ph-input" placeholder="+52 10 dígitos" style="margin:14px 0 10px">
+    <button class="btn btn-accent" style="width:100%" onclick="confirmPhone()">Entrar ›</button>
   </div>
 </div>
 
-<!-- ── PANTALLA 2: REGISTRO DE TELÉFONO (solo 1ª vez) ── -->
-<div class="auth-wrap" id="auth-phone" style="display:none">
-  <div class="auth-box">
-    <div id="auth-ava" style="font-size:44px;margin-bottom:8px"></div>
-    <h1 id="auth-name" style="font-size:20px;margin-bottom:6px"></h1>
-    <p>Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se pide una vez en este dispositivo</span></p>
-    <input id="ph-input" placeholder="+52 10 dígitos" style="margin:14px 0 10px">
-    <button class="btn btn-accent" style="width:100%" onclick="confirmPhone()">Entrar ›</button>
+<!-- ── WELCOME MODAL (Alicia, solo 1ª vez) ─────────── -->
+<div class="welcome-ovl" id="welcome-modal">
+  <div class="welcome-box">
+    <div class="w-heart">💑</div>
+    <h2>¡Bienvenida a OnlyUs!</h2>
+    <p>Este espacio fue creado por el amor de tu vida para que plasmes todas tus ideas, planes, proyectos y cualquier cosa que se te ocurra.<br><br>
+    Velo también como tu <strong>contador personal vía WhatsApp</strong> — envía mensaje de texto o audio diciendo lo que has gastado, lo que has ganado, tus metas, tu lista de deseos… cualquier cosa que se te ocurra.<br><br>
+    Incluye una sección especial <strong>💑 Nidito</strong> donde planearemos y visualizaremos nuestras metas juntos.<br><br>
+    <span style="color:var(--accent)">Todo es confidencial y solo lo puedes ver tú.</span></p>
+    <button class="btn btn-accent" style="width:100%;margin-bottom:10px" onclick="closeWelcome()">Entrar ›</button>
+    <div class="w-sig">Cualquier duda, queja o comentario no dudes en decirle a tu marido 💬</div>
   </div>
 </div>
 
@@ -142,11 +139,12 @@ tr:hover td{background:rgba(255,255,255,.018)}
     <!-- SIDEBAR -->
     <aside>
       <div class="logo">
-        <h2>💸 FinanceOS</h2>
+        <h2>💑 OnlyUs</h2>
         <small id="id-label"></small>
       </div>
       <nav>
         <a onclick="go('dashboard')" id="n-dashboard" class="active">📊 Dashboard</a>
+        <a onclick="go('nidito')"    id="n-nidito" style="color:#f9a8d4;border-left:2px solid transparent">💑 Nidito</a>
         <a onclick="go('deudas')"    id="n-deudas">💳 Deudas TDC</a>
         <a onclick="go('presupuesto')" id="n-presupuesto">📋 Presupuesto</a>
         <a onclick="go('objetivos')" id="n-objetivos">🎯 Objetivos</a>
@@ -181,6 +179,7 @@ tr:hover td{background:rgba(255,255,255,.018)}
       </div>
 
       <div id="tab-dashboard"   class="tab active"></div>
+      <div id="tab-nidito"      class="tab"></div>
       <div id="tab-deudas"      class="tab"></div>
       <div id="tab-presupuesto" class="tab"></div>
       <div id="tab-objetivos"   class="tab"></div>
@@ -216,7 +215,7 @@ const S = {
   identity: null,   // 'A' | 'B'
   adminPhone: '',   // teléfono de Ángel (siempre guardado cuando identity=A)
   ghostMode: false,
-  data: { movs:[], tdc:[], metas:[], calendario:[], presupuesto:[], patrones:[] },
+  data: { movs:[], tdc:[], metas:[], calendario:[], presupuesto:[], patrones:[], nidito:[] },
   ch: {}, ct: {}, tab: 'dashboard', cy: 0, cm: 0, mctx: null
 };
 
@@ -232,21 +231,12 @@ async function api(m, p, b) {
 }
 
 // ── AUTH FLOW ────────────────────────────────────────────────────────────────
-function pickId(id) {
+function showPhoneInput(id) {
   S.identity = id;
-  const saved = localStorage.getItem('fos_phone_' + id);
-  if (saved) {
-    S.phone = saved;
-    if (id === 'A') S.adminPhone = saved;
-    localStorage.setItem('fos_identity', id);
-    showApp(id);
-  } else {
-    $('auth-select').style.display = 'none';
-    $('auth-phone').style.display  = 'flex';
-    if (id === 'A') { $('auth-ava').textContent='👑'; $('auth-name').textContent='Ángel'; }
-    else            { $('auth-ava').textContent='👩'; $('auth-name').textContent='Alicia'; }
-    setTimeout(() => $('ph-input').focus(), 100);
-  }
+  $('auth-phone').style.display = 'flex';
+  if (id === 'A') { $('auth-ava').textContent='👑'; $('auth-name').textContent='Ángel'; $('auth-desc').innerHTML='Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Acceso administrador</span>'; }
+  else            { $('auth-ava').textContent='💑'; $('auth-name').textContent='OnlyUs'; $('auth-desc').innerHTML='Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se pide una vez en este dispositivo</span>'; }
+  setTimeout(() => $('ph-input').focus(), 100);
 }
 
 function confirmPhone() {
@@ -258,27 +248,34 @@ function confirmPhone() {
   S.phone = phone;
   if (S.identity === 'A') S.adminPhone = phone;
   $('auth-phone').style.display = 'none';
-  showApp(S.identity);
+  showApp(S.identity, true);
 }
 
-function showApp(id) {
-  $('auth-select').style.display = 'none';
-  $('auth-phone').style.display  = 'none';
-  $('app').style.display         = 'block';
+function showApp(id, firstTime = false) {
+  $('auth-phone').style.display = 'none';
+  $('app').style.display        = 'block';
 
-  // Label en sidebar
-  $('id-label').textContent = id === 'A' ? '👑 Ángel (Admin)' : '👩 Alicia';
-  // Ghost button solo para Admin
+  $('id-label').textContent = id === 'A' ? '👑 Ángel' : '';
   if (id === 'A') $('ghost-btn').style.display = 'block';
-  // WhatsApp button solo para Alicia
-  if (id === 'B') $('wa-btn').style.display = 'block';
+  if (id === 'B') $('wa-btn').style.display    = 'block';
 
   const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
-  load();
+  load().then(() => {
+    if (id === 'B' && firstTime) showWelcome();
+  });
+}
+
+function showWelcome() {
+  if (localStorage.getItem('fos_welcome_shown')) return;
+  $('welcome-modal').classList.add('open');
+}
+
+function closeWelcome() {
+  $('welcome-modal').classList.remove('open');
+  localStorage.setItem('fos_welcome_shown', '1');
 }
 
 function logout() {
-  // Borra solo la sesión activa (mantiene el teléfono para el siguiente login instantáneo)
   localStorage.removeItem('fos_identity');
   location.reload();
 }
@@ -375,7 +372,7 @@ function go(t) {
 }
 
 function renderTab(t) {
-  ({ dashboard:rDash, deudas:rDeudas, presupuesto:rPresp, objetivos:rObjs,
+  ({ dashboard:rDash, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp, objetivos:rObjs,
      movimientos:()=>rMovs('all'), egresos:()=>rMovs('GASTO'), ingresos:()=>rMovs('INGRESO'),
      calendario:rCal })[t]?.();
 }
@@ -458,6 +455,98 @@ ${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'�
     {label:'Ingresos',data:ms.map(m=>movs.filter(x=>x.tipo==='INGRESO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0))}]);
   const top=pats.slice(0,8);
   mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
+}
+
+// ── RENDER: NIDITO ────────────────────────────────────────────────────────────
+const NIDITO_TIPOS = ['meta','idea','wishlist','plan','nota'];
+const NIDITO_EMOJIS = { meta:'🎯', idea:'💡', wishlist:'🛍️', plan:'📋', nota:'📝' };
+
+function rNidito() {
+  const items = S.data.nidito || [];
+  const pending = items.filter(x => !x.completado);
+  const done    = items.filter(x =>  x.completado);
+
+  $('tab-nidito').innerHTML = `
+<div class="hdr">
+  <h2 style="color:#f9a8d4">💑 Nidito</h2>
+  <button class="btn btn-sm" style="background:rgba(249,168,212,.15);color:#f9a8d4;border:1px solid rgba(249,168,212,.3)" onclick="oNidito()">+ Agregar</button>
+</div>
+<p style="color:var(--muted);font-size:12px;margin-bottom:16px">Espacio compartido entre Ángel y Alicia — metas, ideas, deseos y planes juntos 💕</p>
+
+${NIDITO_TIPOS.map(tipo => {
+  const ts = pending.filter(x => x.tipo === tipo);
+  if (!ts.length) return '';
+  return `<div style="margin-bottom:20px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${NIDITO_EMOJIS[tipo]} ${tipo}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
+    ${ts.map(n => `
+      <div style="background:var(--card);border:1px solid rgba(249,168,212,.2);border-radius:12px;padding:14px;position:relative">
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <span style="font-size:22px">${n.emoji||NIDITO_EMOJIS[n.tipo]||'💫'}</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px;margin-bottom:3px">${n.titulo}</div>
+            ${n.descripcion ? `<div style="color:var(--muted);font-size:11px;margin-bottom:4px">${n.descripcion}</div>` : ''}
+            ${n.monto > 0 ? `<div style="color:var(--green);font-size:12px">💰 ${fmt(n.monto)}</div>` : ''}
+          </div>
+          <div class="acts">
+            <button class="btn btn-sm" style="padding:3px 7px;background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.2)" onclick="toggleNidito(${n.id},true)" title="Completar">✓</button>
+            <button class="btn btn-ghost btn-sm" onclick="eNidito(${n.id})" title="Editar">✏️</button>
+            <button class="btn btn-danger btn-sm" onclick="dNidito(${n.id})" title="Eliminar">✕</button>
+          </div>
+        </div>
+      </div>`).join('')}
+    </div></div>`;
+}).join('')}
+
+${done.length ? `
+<div style="margin-top:20px;opacity:.55">
+  <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">✅ Completados (${done.length})</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    ${done.map(n=>`<div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;display:flex;align-items:center;gap:6px">
+      <span>${n.emoji||'💫'}</span><span style="text-decoration:line-through;color:var(--muted)">${n.titulo}</span>
+      <button class="btn btn-ghost btn-sm" onclick="toggleNidito(${n.id},false)" title="Reabrir" style="padding:1px 5px;font-size:10px">↩</button>
+      <button class="btn btn-danger btn-sm" onclick="dNidito(${n.id})" style="padding:1px 5px;font-size:10px">✕</button>
+    </div>`).join('')}
+  </div>
+</div>` : ''}
+
+${!items.length ? `<div style="text-align:center;padding:60px 20px;color:var(--muted)">
+  <div style="font-size:48px;margin-bottom:12px">💑</div>
+  <div style="font-size:15px;margin-bottom:6px">Nidito está vacío</div>
+  <div style="font-size:12px">Agrega metas, ideas o deseos que quieran lograr juntos</div>
+</div>` : ''}`;
+}
+
+function oNidito(item={}) {
+  S.mctx = { mode: item.id ? 'edit-nidito' : 'new-nidito', item };
+  $('m-title').textContent = item.id ? 'Editar Nidito' : 'Agregar al Nidito 💑';
+  $('m-body').innerHTML = `
+<div class="fr"><label>Título *</label><input id="nd-titulo" value="${item.titulo||''}" placeholder="Ej: Viaje a Europa, Sillón nuevo..."></div>
+<div class="fr"><label>Tipo</label><select id="nd-tipo">
+  ${NIDITO_TIPOS.map(t=>`<option value="${t}"${(item.tipo||'idea')===t?' selected':''}>${NIDITO_EMOJIS[t]} ${t}</option>`).join('')}
+</select></div>
+<div class="f2">
+  <div class="fr"><label>Emoji</label><input id="nd-emoji" value="${item.emoji||''}" placeholder="💫" style="font-size:20px;text-align:center"></div>
+  <div class="fr"><label>Monto (opcional)</label><input id="nd-monto" type="number" value="${item.monto||0}" placeholder="0"></div>
+</div>
+<div class="fr"><label>Descripción</label><textarea id="nd-desc" placeholder="Detalles, notas...">${item.descripcion||''}</textarea></div>`;
+  $('ovl').classList.add('open');
+}
+
+function eNidito(id) {
+  const item = (S.data.nidito||[]).find(x=>x.id===id);
+  if (item) oNidito(item);
+}
+
+async function toggleNidito(id, completado) {
+  await api('PUT', `/api/nidito/${id}`, { completado });
+  await load();
+}
+
+async function dNidito(id) {
+  if (!confirm('¿Eliminar del Nidito?')) return;
+  await api('DELETE', `/api/nidito/${id}`);
+  await load();
 }
 
 // ── RENDER: DEUDAS TDC ────────────────────────────────────────────────────────
@@ -672,7 +761,22 @@ function oMeta() {
 function closeM() { $('ovl').classList.remove('open'); }
 
 async function saveM() {
-  const ctx=S.mctx; let datos={};
+  const ctx=S.mctx; let datos={}, r;
+
+  // ── Nidito ────────────────────────────────────────────────────────────────
+  if (ctx.mode==='new-nidito' || ctx.mode==='edit-nidito') {
+    const titulo = $('nd-titulo').value.trim();
+    if (!titulo) { alert('Ingresa un título'); return; }
+    datos = { titulo, tipo:$('nd-tipo').value, emoji:$('nd-emoji').value.trim()||null,
+              monto:parseFloat($('nd-monto').value)||0, descripcion:$('nd-desc').value.trim() };
+    if (ctx.mode==='edit-nidito')
+      r = await api('PUT', `/api/nidito/${ctx.item.id}`, datos);
+    else
+      r = await api('POST', '/api/nidito', { ...datos, created_by: S.phone });
+    if (r?.success===false) { alert('Error: '+(r.error||'')); return; }
+    closeM(); await load(); return;
+  }
+
   if (ctx.tabla==='movimientos') {
     datos={ tipo:$('f-tipo').value, categoria:$('f-cat').value, monto:parseFloat($('f-monto').value)||0,
             concepto:$('f-cpto').value, medio_pago:$('f-medio').value, fecha:$('f-fecha').value, comentarios:$('f-com').value };
@@ -687,7 +791,7 @@ async function saveM() {
     if (!datos.nombre) { alert('Ingresa un nombre'); return; }
     ctx.tabla = 'metas';
   }
-  const isE=!!ctx.id; let r;
+  const isE=!!ctx.id;
   if (ctx.tabla==='movimientos')
     r = isE ? await api('PUT',`/api/movimientos/${ctx.id}`,{user_phone:S.phone,...datos})
             : await api('POST','/api/movimientos',{user_phone:S.phone,...datos});
@@ -706,18 +810,23 @@ async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DE
 
 // ── INICIALIZACIÓN ────────────────────────────────────────────────────────────
 (function init() {
-  const id    = localStorage.getItem('fos_identity');
-  const phone = id ? localStorage.getItem('fos_phone_' + id) : null;
-  if (id && phone) {
-    S.identity    = id;
-    S.phone       = phone;
-    if (id === 'A') S.adminPhone = phone;
-    const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
-    showApp(id);
-  } else {
-    // Mostrar selección de identidad
-    $('auth-select').style.display = 'flex';
+  // Acceso admin: URL contiene ?angel (o /?angel)
+  const isAdminURL = location.search.includes('angel') || location.hash.includes('angel');
+  const storedId   = localStorage.getItem('fos_identity');
+
+  if (isAdminURL || storedId === 'A') {
+    S.identity = 'A';
+    const aPhone = localStorage.getItem('fos_phone_A');
+    if (aPhone) { S.phone = aPhone; S.adminPhone = aPhone; showApp('A'); }
+    else         { showPhoneInput('A'); }
+    return;
   }
+
+  // Por defecto: Alicia
+  S.identity = 'B';
+  const bPhone = localStorage.getItem('fos_phone_B');
+  if (bPhone) { S.phone = bPhone; showApp('B'); }
+  else         { showPhoneInput('B'); }
 })();
 </script>
 </body>
