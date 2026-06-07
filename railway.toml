@@ -1,0 +1,19 @@
+[deploy]
+startCommand = "node server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+
+[[crons]]
+name = "resumen-diario"
+schedule = "0 2 * * *"
+command = "curl -s -X POST $RAILWAY_PUBLIC_DOMAIN/cron/resumen-diario -H \"x-cron-token: $CRON_SECRET\" || true"
+
+[[crons]]
+name = "recordatorio-tdc"
+schedule = "0 16 14,29 * *"
+command = "curl -s -X POST $RAILWAY_PUBLIC_DOMAIN/cron/recordatorio-tdc -H \"x-cron-token: $CRON_SECRET\" || true"
+
+[[crons]]
+name = "recordatorio-vales"
+schedule = "0 16 10 * *"
+command = "curl -s -X POST $RAILWAY_PUBLIC_DOMAIN/cron/recordatorio-vales -H \"x-cron-token: $CRON_SECRET\" || true"
