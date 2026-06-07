@@ -612,8 +612,9 @@ app.post('/api/chat-web', async (req, res) => {
 
     res.json({ reply, transcription: isAudio ? text : undefined });
   } catch (e) {
-    console.error('chat-web error:', e.message);
-    res.status(500).json({ error: e.message });
+    const detail = `${e.message || e} | status=${e.status} | code=${e.code}`;
+    console.error('chat-web error:', detail);
+    res.status(500).json({ error: detail.slice(0, 200) });
   }
 });
 

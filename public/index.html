@@ -1202,7 +1202,7 @@ async function _askBot(message, audioB64 = null, audioMime = null) {
     if (audioB64) { body.audio_b64 = audioB64; body.audio_mime = audioMime; }
     const r = await api('POST', '/api/chat-web', body);
     _hideTyping();
-    if (r.error) { _appendMsg('bot', '❌ ' + r.error); return; }
+    if (r.error) { _appendMsg('bot', '❌ Error servidor: ' + r.error); return; }
     if (r.transcription) _appendMsg('user', '🎤 ' + r.transcription);
     _appendMsg('bot', r.reply || '...');
     // Refresca datos si Claude hizo cambios en la DB
@@ -1239,45 +1239,12 @@ function _removeTypingMsg(keyword) {
 async function toggleRecording() {
   // ── Si ya está grabando, detener ──────────────────────────────────────────
   if (_recording) {
-    _recognition?.stop();
     _mediaRec?.stop();
     return;
   }
-
-  // ── Opción 1: Web Speech API (iOS Safari, Chrome) — sin subir audio ───────
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SR) {
-    const rec = new SR();
-    rec.lang            = 'es-MX';
-    rec.continuous      = false;
-    rec.interimResults  = false;
-    _recognition = rec;
-    _recording = true;
-    $('mic-btn').classList.add('recording');
-    $('mic-icon').className = 'ti ti-player-stop-filled';
-    _appendMsg('bot', '🎙️ Escuchando... habla ahora', null, false);
-
-    // Usar 'rec' (closure local) en los handlers — _recognition puede quedar null
-    // antes de que disparen onspeechend/onend
-    rec.onresult = e => {
-      const text = Array.from(e.results).map(r => r[0].transcript).join(' ').trim();
-      _removeTypingMsg('Escuchando');
-      _stopRecording();   // nulifica _recognition y llama rec.abort() → libera mic YA
-      if (text) { _appendMsg('user', '🎤 ' + text); _askBot(text); }
-    };
-    rec.onspeechend = () => { try { rec.stop(); } catch(e) {} };
-    rec.onerror = e => {
-      _removeTypingMsg('Escuchando');
-      _stopRecording();
-      if (e.error !== 'no-speech' && e.error !== 'aborted')
-        _appendMsg('bot', '⚠️ No te escuché bien. Intenta de nuevo o escribe tu mensaje.');
-    };
-    rec.onend = () => { _removeTypingMsg('Escuchando'); _stopRecording(); };
-    try { rec.start(); } catch(e) { _stopRecording(); _recFallback(); }
-    return;
-  }
-
-  // ── Opción 2: MediaRecorder + Gemini (navegadores sin Speech API) ─────────
+  // Siempre usar MediaRecorder + transcripción Gemini:
+  // webkitSpeechRecognition en iOS PWA pide permiso CADA VEZ y no lo recuerda.
+  // getUserMedia pide permiso UNA SOLA VEZ y lo persiste en Settings del sistema.
   _recFallback();
 }
 
