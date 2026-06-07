@@ -303,9 +303,9 @@ async function callIA(user, sysPrompt, text, phone) {
   if (history[phone].length > 20) history[phone].splice(0, 2);
 
   // ── GEMINI 2.0 Flash — motor principal ───────────────────────────────────
-  // gemini-1.5-pro fue deprecado. Usamos gemini-2.0-flash (más rápido, gratuito).
+  // gemini-1.5-pro fue deprecado. Usamos gemini-1.5-flash (más rápido, gratuito).
   // NO usamos systemInstruction del SDK — lo inyectamos via historial (más compatible).
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', tools: geminiTools });
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', tools: geminiTools });
 
   // Construir historial de conversación (sin el mensaje actual, que va en sendMessage)
   let gHist = history[phone]
@@ -623,7 +623,7 @@ app.post('/api/chat-web', async (req, res) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅', build: 'gemini-2.0-flash' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅', build: 'gemini-1.5-flash' }));
 
 // ── SEED ADMIN AL STARTUP ──────────────────────────────────────────────────
 // Si ADMIN_PHONE está definido, asigna automáticamente los registros huérfanos
