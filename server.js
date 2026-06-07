@@ -303,26 +303,31 @@ async function callIA(user, sysPrompt, text, phone) {
   if (history[phone].length > 20) history[phone].splice(0, 2);
 
   // ── GEMINI 1.5 Pro — motor principal ─────────────────────────────────────
-  // IMPORTANTE: systemInstruction va en getGenerativeModel, no en startChat
-  // La SDK v0.24.x rechaza systemInstruction en startChat con error 400
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro', tools: geminiTools, systemInstruction: sysPrompt });
-  // Construir historial Gemini — debe alternar user/model estrictamente
-  // slice(0,-1) excluye el mensaje actual (se envía vía sendMessage)
+  // NO usamos systemInstruction del SDK — varias versiones lo serializan mal.
+  // En su lugar inyectamos el system prompt como primer par user/model del historial.
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro', tools: geminiTools });
+
+  // Construir historial de conversación (sin el mensaje actual, que va en sendMessage)
   let gHist = history[phone]
     .filter(m => typeof m.content === 'string')
     .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-  gHist = gHist.slice(0, -1); // sin el último (el mensaje actual)
+  gHist = gHist.slice(0, -1);
+
   // Garantizar alternancia user→model (Gemini rechaza duplicados consecutivos)
   const safeHist = [];
   for (const msg of gHist) {
-    if (safeHist.length === 0 && msg.role !== 'user') continue; // debe empezar con user
-    const last = safeHist[safeHist.length - 1];
-    if (last && last.role === msg.role) continue; // saltar duplicados de rol
+    if (safeHist.length === 0 && msg.role !== 'user') continue;
+    if (safeHist.length > 0 && safeHist[safeHist.length - 1].role === msg.role) continue;
     safeHist.push(msg);
   }
-  // Si el último del historial es user, eliminar (Gemini requiere que termine en model)
   if (safeHist.length > 0 && safeHist[safeHist.length - 1].role === 'user') safeHist.pop();
-  const chat = model.startChat({ history: safeHist });
+
+  // System prompt como par falso al inicio del historial — compatible con todos los SDKs
+  const sysHist = [
+    { role: 'user',  parts: [{ text: `[INSTRUCCIONES DEL SISTEMA]\n${sysPrompt}` }] },
+    { role: 'model', parts: [{ text: 'Entendido. Seguiré estas instrucciones en todas mis respuestas.' }] }
+  ];
+  const chat = model.startChat({ history: [...sysHist, ...safeHist] });
   const res  = await chat.sendMessage(text);
   const calls = res.response.functionCalls();
   if (calls?.length) {
@@ -618,7 +623,7 @@ app.post('/api/chat-web', async (req, res) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅', build: 'gemini-sysHist-fix' }));
 
 // ── SEED ADMIN AL STARTUP ──────────────────────────────────────────────────
 // Si ADMIN_PHONE está definido, asigna automáticamente los registros huérfanos
