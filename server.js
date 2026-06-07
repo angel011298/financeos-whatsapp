@@ -75,7 +75,7 @@ async function transcribeAudio(mediaUrl, contentType) {
     const buf    = await res.arrayBuffer();
     const base64 = Buffer.from(buf).toString('base64');
     const mime   = contentType || 'audio/ogg';
-    const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     const result = await model.generateContent([
       { inlineData: { mimeType: mime, data: base64 } },
       'Transcribe exactamente este audio en español. Devuelve solo el texto transcrito, sin comentarios adicionales.'
@@ -303,9 +303,9 @@ async function callIA(user, sysPrompt, text, phone) {
   if (history[phone].length > 20) history[phone].splice(0, 2);
 
   // ── GEMINI 2.0 Flash — motor principal ───────────────────────────────────
-  // gemini-1.5-pro fue deprecado. Usamos gemini-1.5-flash (más rápido, gratuito).
+  // gemini-1.5-pro y 1.5-flash fueron deprecados. Usamos gemini-2.0-flash.
   // NO usamos systemInstruction del SDK — lo inyectamos via historial (más compatible).
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', tools: geminiTools });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', tools: geminiTools });
 
   // Construir historial de conversación (sin el mensaje actual, que va en sendMessage)
   let gHist = history[phone]
@@ -585,7 +585,7 @@ app.post('/api/chat-web', async (req, res) => {
       const sizeKB = Math.round(audio_b64.length * 0.75 / 1024);
       console.log(`🎤 Audio recibido | mime=${audio_mime} | size≈${sizeKB}KB`);
       try {
-        const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
         const result = await model.generateContent([
           { inlineData: { mimeType: audio_mime || 'audio/wav', data: audio_b64 } },
           'Transcribe exactamente este audio en español. Solo devuelve el texto transcrito.'
@@ -623,7 +623,7 @@ app.post('/api/chat-web', async (req, res) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅', build: 'gemini-1.5-flash' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅', build: 'gemini-2.0-flash' }));
 
 // ── SEED ADMIN AL STARTUP ──────────────────────────────────────────────────
 // Si ADMIN_PHONE está definido, asigna automáticamente los registros huérfanos
