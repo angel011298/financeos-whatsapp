@@ -303,11 +303,26 @@ async function callIA(user, sysPrompt, text, phone) {
   if (history[phone].length > 20) history[phone].splice(0, 2);
 
   // ── GEMINI 1.5 Pro — motor principal ─────────────────────────────────────
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro', tools: geminiTools });
-  const gHist = history[phone]
+  // IMPORTANTE: systemInstruction va en getGenerativeModel, no en startChat
+  // La SDK v0.24.x rechaza systemInstruction en startChat con error 400
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro', tools: geminiTools, systemInstruction: sysPrompt });
+  // Construir historial Gemini — debe alternar user/model estrictamente
+  // slice(0,-1) excluye el mensaje actual (se envía vía sendMessage)
+  let gHist = history[phone]
     .filter(m => typeof m.content === 'string')
     .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-  const chat = model.startChat({ history: gHist.slice(0, -1), systemInstruction: { parts: [{ text: sysPrompt }] } });
+  gHist = gHist.slice(0, -1); // sin el último (el mensaje actual)
+  // Garantizar alternancia user→model (Gemini rechaza duplicados consecutivos)
+  const safeHist = [];
+  for (const msg of gHist) {
+    if (safeHist.length === 0 && msg.role !== 'user') continue; // debe empezar con user
+    const last = safeHist[safeHist.length - 1];
+    if (last && last.role === msg.role) continue; // saltar duplicados de rol
+    safeHist.push(msg);
+  }
+  // Si el último del historial es user, eliminar (Gemini requiere que termine en model)
+  if (safeHist.length > 0 && safeHist[safeHist.length - 1].role === 'user') safeHist.pop();
+  const chat = model.startChat({ history: safeHist });
   const res  = await chat.sendMessage(text);
   const calls = res.response.functionCalls();
   if (calls?.length) {
