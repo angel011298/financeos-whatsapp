@@ -1282,11 +1282,12 @@ async function toggleRecording() {
 }
 
 async function _recFallback() {
+  let stream;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime   = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-                 : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-                 : MediaRecorder.isTypeSupported('audio/mp4')  ? 'audio/mp4' : 'audio/ogg';
+    stream    = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+               : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+               : MediaRecorder.isTypeSupported('audio/mp4')  ? 'audio/mp4' : 'audio/ogg';
     _mediaRec    = new MediaRecorder(stream, { mimeType: mime });
     _audioChunks = [];
     _recording   = true;
@@ -1297,17 +1298,15 @@ async function _recFallback() {
     _mediaRec.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
     _mediaRec.onstop = async () => {
       _stopRecording();
-      stream.getTracks().forEach(t => t.stop());
+      try { stream.getTracks().forEach(t => t.stop()); } catch(e) {} // libera mic
       _removeTypingMsg('Grabando');
       if (!_audioChunks.length) return;
       _appendMsg('user', '🎤 Audio enviado');
       try {
-        // Convertir a WAV antes de enviar — Gemini puede decodificar WAV PCM sin problemas
         const rawBlob = new Blob(_audioChunks, { type: mime });
         const wavB64  = await _blobToWavBase64(rawBlob);
         await _askBot(null, wavB64, 'audio/wav');
       } catch (convErr) {
-        // Si la conversión falla, enviar el formato original como último recurso
         const b64 = await _blobToBase64(new Blob(_audioChunks, { type: mime }));
         await _askBot(null, b64, mime);
       }
@@ -1315,6 +1314,8 @@ async function _recFallback() {
     _recTimer = setTimeout(() => { if (_recording) _mediaRec?.stop(); }, 90000);
     _mediaRec.start();
   } catch (e) {
+    // Asegurarse de liberar el mic incluso si el MediaRecorder falla
+    try { stream?.getTracks().forEach(t => t.stop()); } catch(_) {}
     _stopRecording();
     alert('No se pudo acceder al micrófono.\n' + e.message);
   }

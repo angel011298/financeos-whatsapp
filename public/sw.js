@@ -1,5 +1,5 @@
 // OnlyUs — Service Worker
-const CACHE = 'onlyus-v1';
+const CACHE = 'onlyus-v3';
 const PRECACHE = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {
