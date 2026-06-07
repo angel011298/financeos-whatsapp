@@ -130,6 +130,38 @@ tr:hover td{background:rgba(128,128,128,.04)}
 .cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .cal-nav h3{flex:1;font-size:14px}
 
+/* ── MOBILE NAV ──────────────────────────────────────── */
+.mobile-nav{
+  display:none;position:fixed;bottom:0;left:0;right:0;z-index:80;
+  background:var(--card);border-top:1px solid var(--border);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  box-shadow:0 -4px 20px rgba(0,0,0,.18);
+}
+.mobile-nav a{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;padding:12px 4px 10px;color:var(--muted);cursor:pointer;
+  border:none;background:transparent;text-decoration:none;transition:.15s;
+  -webkit-tap-highlight-color:transparent;min-height:60px;
+}
+.mobile-nav a .ti{font-size:25px;line-height:1}
+.mobile-nav a span{font-size:11px;font-weight:500;line-height:1}
+.mobile-nav a.active{color:var(--accent)}
+.mobile-nav a.active .ti{transform:translateY(-1px)}
+/* Bottom sheet (Más) */
+#mobile-sheet{display:none;position:fixed;inset:0;z-index:150;background:rgba(0,0,0,0);align-items:flex-end;
+  transition:background .22s ease}
+#mobile-sheet.open{display:flex;background:rgba(0,0,0,.65)}
+.sheet-inner{background:var(--card);border-radius:22px 22px 0 0;padding:16px 20px;width:100%;
+  padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  transform:translateY(100%);transition:transform .25s cubic-bezier(.32,1,.56,1)}
+#mobile-sheet.open .sheet-inner{transform:translateY(0)}
+.sheet-pill{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 18px}
+.sheet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.sheet-item{display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;
+  background:var(--card2);border:1px solid var(--border);border-radius:14px;cursor:pointer;
+  color:var(--muted);font-size:11px;font-weight:500;-webkit-tap-highlight-color:transparent;transition:.12s}
+.sheet-item:active{opacity:.7}
+.sheet-item .ti{font-size:24px;color:var(--text)}
 /* ── CHAT ────────────────────────────────────────────── */
 .chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 80px)}
 .chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px}
@@ -139,9 +171,9 @@ tr:hover td{background:rgba(128,128,128,.04)}
 .msg-bot{align-self:flex-start;background:var(--card);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
 .msg-time{font-size:10px;opacity:.55;margin-top:4px;text-align:right}
 .msg-user .msg-time{color:rgba(255,255,255,.7)}
-.chat-bar{display:flex;align-items:center;gap:8px;padding:10px 0 0;border-top:1px solid var(--border);flex-shrink:0}
-.chat-bar input{flex:1;border-radius:24px;padding:10px 16px}
-.round-btn{width:40px;height:40px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;transition:.15s}
+.chat-bar{display:flex;align-items:center;gap:10px;padding:12px 0 0;border-top:1px solid var(--border);flex-shrink:0}
+.chat-bar input{flex:1;border-radius:24px;padding:12px 18px;font-size:15px}
+.round-btn{width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;transition:.15s}
 .send-btn{background:var(--accent);color:#fff}.send-btn:hover{opacity:.85}
 .mic-btn{background:var(--card2);color:var(--muted);border:1px solid var(--border)}
 .mic-btn:hover{color:var(--text);border-color:var(--muted)}
@@ -149,7 +181,18 @@ tr:hover td{background:rgba(128,128,128,.04)}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 .chat-empty{text-align:center;padding:40px 20px;color:var(--muted);margin:auto}
 .chat-empty .ti{font-size:40px;display:block;margin-bottom:12px;opacity:.6}
-@media(max-width:700px){.layout{grid-template-columns:1fr} aside{display:none} .charts-grid{grid-template-columns:1fr}}
+@media(max-width:700px){
+  .layout{grid-template-columns:1fr}
+  aside{display:none}
+  #sb-float{display:none!important}
+  main{padding:16px 14px calc(82px + env(safe-area-inset-bottom,0px))}
+  .mobile-nav{display:flex}
+  .charts-grid{grid-template-columns:1fr}
+  .hdr h2{font-size:16px}
+  .card-val{font-size:18px}
+  .chat-wrap{height:calc(100dvh - 148px)}
+}
+@media(min-width:701px){#mobile-nav{display:none!important}}
 </style>
 </head>
 <body>
@@ -246,8 +289,8 @@ tr:hover td{background:rgba(128,128,128,.04)}
         <button id="theme-btn" class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:6px;justify-content:center" onclick="toggleTheme()">
           <i class="ti ti-moon" id="theme-icon"></i><span id="theme-label">Modo día</span>
         </button>
-        <!-- Ghost — solo Admin -->
-        <button id="ghost-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none;justify-content:center" onclick="toggleGhost()">
+        <!-- Ghost — oculto, se activa vía ?alicia URL -->
+        <button id="ghost-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none!important;justify-content:center" onclick="toggleGhost()">
           <i class="ti ti-eye" id="ghost-icon"></i><span id="ghost-label">Ver Alicia</span>
         </button>
         <!-- WhatsApp — solo Alicia -->
@@ -279,6 +322,56 @@ tr:hover td{background:rgba(128,128,128,.04)}
       <div id="tab-chat"        class="tab"></div>
     </main>
   </div>
+
+  <!-- ── MOBILE BOTTOM NAV ─────────────────────────────── -->
+  <div class="mobile-nav" id="mobile-nav">
+    <a onclick="go('chat')" id="mn-chat"><i class="ti ti-message-circle"></i><span>Chat</span></a>
+    <a onclick="go('dashboard')" id="mn-dashboard"><i class="ti ti-layout-dashboard"></i><span>Inicio</span></a>
+    <a onclick="go('nidito')" id="mn-nidito"><i class="ti ti-heart-handshake"></i><span>Nidito</span></a>
+    <a onclick="go('movimientos')" id="mn-movimientos"><i class="ti ti-arrows-exchange"></i><span>Movs</span></a>
+    <a onclick="openMobileMore()" id="mn-mas"><i class="ti ti-grid-dots"></i><span>Más</span></a>
+  </div>
+
+  <!-- ── MOBILE MORE SHEET ──────────────────────────────── -->
+  <div id="mobile-sheet" onclick="closeMobileMore()">
+    <div class="sheet-inner" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span style="font-weight:600;font-size:15px;color:var(--text)">Más opciones</span>
+        <button class="icon-btn" onclick="closeMobileMore()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="sheet-grid">
+        <div class="sheet-item" onclick="go('deudas');closeMobileMore()">
+          <i class="ti ti-credit-card"></i><span>Deudas TDC</span>
+        </div>
+        <div class="sheet-item" onclick="go('presupuesto');closeMobileMore()">
+          <i class="ti ti-report-money"></i><span>Presupuesto</span>
+        </div>
+        <div class="sheet-item" onclick="go('objetivos');closeMobileMore()">
+          <i class="ti ti-target"></i><span>Objetivos</span>
+        </div>
+        <div class="sheet-item" onclick="go('egresos');closeMobileMore()">
+          <i class="ti ti-trending-down"></i><span>Egresos</span>
+        </div>
+        <div class="sheet-item" onclick="go('ingresos');closeMobileMore()">
+          <i class="ti ti-trending-up"></i><span>Ingresos</span>
+        </div>
+        <div class="sheet-item" onclick="go('calendario');closeMobileMore()">
+          <i class="ti ti-calendar"></i><span>Calendario</span>
+        </div>
+        <div class="sheet-item" onclick="toggleTheme();closeMobileMore()">
+          <i class="ti ti-moon" id="mn-theme-icon"></i><span id="mn-theme-label">Modo día</span>
+        </div>
+        <!-- ghost item oculto - se usa solo via ?alicia URL -->
+        <div class="sheet-item" id="mn-ghost-item" style="display:none!important" onclick="toggleGhost();closeMobileMore()">
+          <i class="ti ti-eye"></i><span>Ver Alicia</span>
+        </div>
+        <div class="sheet-item" style="color:var(--red)" onclick="logout()">
+          <i class="ti ti-logout"></i><span>Salir</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- MODAL -->
@@ -311,10 +404,31 @@ const $ = id => document.getElementById(id);
 const fmt  = n => '$' + Math.round(n||0).toLocaleString('es-MX');
 const fd   = d => d ? d.substring(0,10) : '';
 const fmtPhone = r => { const d=r.replace(/\D/g,''); return 'whatsapp:+'+(d.startsWith('52')?d:'52'+d); };
+const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function fmtDate(d) {
+  if (!d) return '';
+  const [y,m,day] = (d+'').substring(0,10).split('-');
+  return `${parseInt(day)} ${MESES_CORTO[parseInt(m)-1]} ${y}`;
+}
+function diasRestantes(d) {
+  if (!d) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const target = new Date(d+'T00:00:00');
+  return Math.ceil((target - hoy) / 86400000);
+}
+function badgeFecha(d) {
+  if (!d) return '';
+  const dias = diasRestantes(d);
+  const color = dias < 0 ? 'var(--red)' : dias <= 7 ? 'var(--yellow)' : 'var(--muted)';
+  const label = dias < 0 ? `vencida hace ${Math.abs(dias)}d` : dias === 0 ? 'hoy' : dias === 1 ? 'mañana' : `${fmtDate(d)} · ${dias}d`;
+  return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:${color}"><i class="ti ti-calendar-due" style="font-size:11px"></i>${label}</span>`;
+}
 
 async function api(m, p, b) {
   const r = await fetch(p, { method:m, headers:{'Content-Type':'application/json'}, body:b?JSON.stringify(b):undefined });
-  return r.json();
+  if (!r.ok && r.status === 413) throw new Error('Audio demasiado largo. Graba menos de 60 segundos.');
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { throw new Error('Respuesta inválida del servidor'); }
 }
 
 // Normaliza teléfono a formato whatsapp:+52XXXXXXXXXX
@@ -337,23 +451,31 @@ function toggleTheme() {
   const isLight = document.documentElement.classList.toggle('light');
   $('theme-icon').className = isLight ? 'ti ti-sun' : 'ti ti-moon';
   $('theme-label').textContent = isLight ? 'Modo noche' : 'Modo día';
+  const mni = $('mn-theme-icon'), mnl = $('mn-theme-label');
+  if (mni) mni.className = isLight ? 'ti ti-sun' : 'ti ti-moon';
+  if (mnl) mnl.textContent = isLight ? 'Modo noche' : 'Modo día';
   localStorage.setItem('fos_theme', isLight ? 'light' : 'dark');
   renderTab(S.tab); // redibujar charts con colores del nuevo tema
+}
+
+// ── MOBILE MORE SHEET ────────────────────────────────────────────────────────
+function openMobileMore() {
+  const sheet = $('mobile-sheet');
+  if (sheet) { sheet.style.display = 'flex'; requestAnimationFrame(() => sheet.classList.add('open')); }
+}
+function closeMobileMore() {
+  const sheet = $('mobile-sheet');
+  if (sheet) { sheet.classList.remove('open'); setTimeout(() => { sheet.style.display = 'none'; }, 220); }
 }
 
 // ── AUTH FLOW ────────────────────────────────────────────────────────────────
 function showPhoneInput(id) {
   S.identity = id;
   $('auth-phone').style.display = 'flex';
-  if (id === 'A') {
-    $('auth-ava').innerHTML = '<i class="ti ti-star" style="font-size:46px;color:var(--accent)"></i>';
-    $('auth-name').textContent = 'Ángel';
-    $('auth-desc').innerHTML = 'Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Acceso administrador</span>';
-  } else {
-    $('auth-ava').innerHTML = '<i class="ti ti-heart-handshake" style="font-size:46px;color:#f9a8d4"></i>';
-    $('auth-name').textContent = 'OnlyUs';
-    $('auth-desc').innerHTML = 'Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se pide una vez en este dispositivo</span>';
-  }
+  // Pantalla siempre neutral — el servidor decide quién eres al ingresar tu número
+  $('auth-ava').innerHTML = '<i class="ti ti-infinity" style="font-size:46px;color:var(--accent)"></i>';
+  $('auth-name').textContent = 'OnlyUs';
+  $('auth-desc').innerHTML = 'Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se configura una vez en este dispositivo</span>';
   setTimeout(() => $('ph-input').focus(), 100);
 }
 
@@ -362,12 +484,12 @@ async function confirmPhone() {
   if (!v) { alert('Ingresa tu número'); return; }
   const phone = normalizePhone(v);
 
-  // El servidor decide si el teléfono es admin, sin importar desde qué URL se abrió
-  let identity = S.identity;
+  // El servidor determina la identidad por número de teléfono
+  let identity = 'B'; // default: usuario normal
   try {
     const r = await api('GET', `/api/whoami/${encodeURIComponent(phone)}`);
     if (r.role === 'ADMIN') identity = 'A';
-  } catch (_) { /* si falla, respeta la identidad pre-seleccionada */ }
+  } catch (_) { /* si falla la red, queda como usuario B */ }
 
   S.identity = identity;
   S.phone    = phone;
@@ -382,14 +504,26 @@ function showApp(id, firstTime = false) {
   $('auth-phone').style.display = 'none';
   $('app').style.display        = 'block';
   $('id-label').textContent = id === 'A' ? 'Ángel' : '';
-  if (id === 'A') $('ghost-btn').style.display = 'flex';
-  if (id === 'B') $('wa-btn').style.display    = 'flex';
+  // ghost-btn y mn-ghost-item permanecen ocultos — acceso via URL ?alicia
+  if (id === 'B') $('wa-btn').style.display = 'flex';
   const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
-  load().then(() => { if (id === 'B' && firstTime) showWelcome(); });
+  // Default to chat in PWA / standalone mode (iOS home screen shortcut)
+  const isPWA = window.navigator.standalone === true ||
+                window.matchMedia('(display-mode: standalone)').matches;
+  load().then(() => {
+    if (S._autoGhost) {
+      S._autoGhost = false;
+      setTimeout(() => toggleGhost(), 120); // activa ghost mode para ver a Alicia
+      return;
+    }
+    if (isPWA) go('chat');
+    if (id === 'B' && firstTime) showWelcome();
+  });
 }
 
 function showWelcome() {
   if (localStorage.getItem('fos_welcome_shown')) return;
+  if (S.identity === 'A') return; // nunca mostrar el mensaje de Alicia al admin
   $('welcome-modal').classList.add('open');
 }
 function closeWelcome() {
@@ -397,7 +531,7 @@ function closeWelcome() {
   localStorage.setItem('fos_welcome_shown', '1');
 }
 function logout() {
-  localStorage.removeItem('fos_identity');
+  ['fos_identity','fos_phone_A','fos_phone_B','fos_welcome_shown'].forEach(k => localStorage.removeItem(k));
   location.reload();
 }
 
@@ -480,8 +614,10 @@ async function sendWhatsAppInvite() {
 function go(t) {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
-  $('tab-'+t).classList.add('active');
-  $('n-'+t).classList.add('active');
+  document.querySelectorAll('.mobile-nav a').forEach(x => x.classList.remove('active'));
+  $('tab-'+t)?.classList.add('active');
+  $('n-'+t)?.classList.add('active');
+  $('mn-'+t)?.classList.add('active');
   S.tab = t;
   renderTab(t);
 }
@@ -612,7 +748,10 @@ ${NIDITO_TIPOS.map(tipo => {
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:13px;margin-bottom:3px">${n.titulo}</div>
             ${n.descripcion ? `<div style="color:var(--muted);font-size:11px;margin-bottom:4px">${n.descripcion}</div>` : ''}
-            ${n.monto > 0 ? `<div style="color:var(--green);font-size:12px;display:flex;align-items:center;gap:4px"><i class="ti ti-coin"></i>${fmt(n.monto)}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
+              ${n.monto > 0 ? `<span style="color:var(--green);font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-coin"></i>${fmt(n.monto)}</span>` : ''}
+              ${badgeFecha(n.fecha_objetivo)}
+            </div>
           </div>
           <div class="acts" style="flex-shrink:0">
             <button class="btn btn-sm" style="padding:4px 7px;background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.2)" onclick="toggleNidito(${n.id},true)" title="Completar"><i class="ti ti-check"></i></button>
@@ -659,7 +798,8 @@ function oNidito(item={}) {
   <div class="fr"><label>Emoji (opcional)</label><input id="nd-emoji" value="${item.emoji||''}" placeholder="💫" style="font-size:20px;text-align:center"></div>
   <div class="fr"><label>Monto (opcional)</label><input id="nd-monto" type="number" value="${item.monto||0}" placeholder="0"></div>
 </div>
-<div class="fr"><label>Descripción</label><textarea id="nd-desc" placeholder="Detalles, notas...">${item.descripcion||''}</textarea></div>`;
+<div class="fr"><label>Descripción</label><textarea id="nd-desc" placeholder="Detalles, notas...">${item.descripcion||''}</textarea></div>
+<div class="fr"><label>Fecha objetivo <span style="color:var(--muted);font-size:11px">(opcional)</span></label><input id="nd-fecha" type="date" value="${item.fecha_objetivo?fd(item.fecha_objetivo):''}"></div>`;
   $('ovl').classList.add('open');
 }
 
@@ -711,8 +851,18 @@ function rPresp() {
   const movs=(S.data.movs||[]).filter(m=>m.tipo==='GASTO'&&(m.fecha||'').startsWith(cm));
   const prsp=(S.data.presupuesto||[]).filter(p=>p.mes===cm);
   const rows=CATS.map(c=>{const r=movs.filter(m=>m.categoria===c).reduce((a,m)=>a+(m.monto||0),0);const l=(prsp.find(p=>p.categoria===c)||{}).limite||0;return{c,r,l};}).filter(x=>x.r>0||x.l>0);
+  // Calcular primer y último día del mes activo
+  const [cmY,cmM] = cm.split('-');
+  const primerDia = `01 ${MESES_CORTO[parseInt(cmM)-1]} ${cmY}`;
+  const lastDay   = new Date(parseInt(cmY), parseInt(cmM), 0).getDate();
+  const ultimoDia = `${lastDay} ${MESES_CORTO[parseInt(cmM)-1]} ${cmY}`;
   $('tab-presupuesto').innerHTML=`
-<div class="hdr"><h2><i class="ti ti-report-money"></i> Presupuesto — ${cm}</h2></div>
+<div class="hdr">
+  <h2><i class="ti ti-report-money"></i> Presupuesto — ${cm}</h2>
+  <span style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px">
+    <i class="ti ti-calendar-event"></i>${primerDia} – ${ultimoDia}
+  </span>
+</div>
 <div class="cbox" style="margin-bottom:14px">
   <h3>Presupuesto vs Gasto Real</h3>${ctBtns('c-prsp',LINE,'bar')}
   <div class="cwrap"><canvas id="c-prsp"></canvas></div>
@@ -738,11 +888,12 @@ function rObjs() {
   <h3>Progreso de Metas</h3>${ctBtns('c-meta',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Polar','polarArea']],'bar-h')}
   <div class="cwrap"><canvas id="c-meta"></canvas></div>
 </div>
-${metas.length ? `<table><tr><th>Meta</th><th>Tipo</th><th>Actual</th><th>Objetivo</th><th>%</th><th></th></tr>
+${metas.length ? `<table><tr><th>Meta</th><th>Tipo</th><th>Actual</th><th>Objetivo</th><th>%</th><th>Fecha objetivo</th><th></th></tr>
 ${metas.map(m=>{const p=m.meta>0?Math.min(100,Math.round((m.actual||0)/m.meta*100)):0;return`<tr>
   <td><strong>${m.nombre}</strong></td><td style="color:var(--muted)">${m.tipo||'ahorro'}</td>
   <td class="green">${fmt(m.actual)}</td><td>${fmt(m.meta)}</td>
-  <td><div class="pbar" style="width:100px"><div class="pfill" style="width:${p}%"></div></div> ${p}%</td>
+  <td><div class="pbar" style="width:90px"><div class="pfill" style="width:${p}%"></div></div> ${p}%</td>
+  <td>${badgeFecha(m.fecha_objetivo)||'<span style="color:var(--muted);font-size:11px">—</span>'}</td>
   <td><button class="btn btn-danger btn-sm" onclick="dMeta(${m.id})" style="padding:4px 7px"><i class="ti ti-trash"></i></button></td>
 </tr>`}).join('')}</table>` :
 `<p style="color:var(--muted);text-align:center;padding:36px">Sin metas aún.<br><small>Dile a la IA: "Quiero ahorrar $5000 para un fondo de emergencia"</small></p>`}`;
@@ -894,7 +1045,10 @@ function oMeta() {
   <div class="fr"><label>Objetivo ($)</label><input id="f-meta" type="number" min="0"></div>
   <div class="fr"><label>Ya tengo ($)</label><input id="f-actual" type="number" min="0" value="0"></div>
 </div>
-<div class="fr"><label>Tipo</label><select id="f-tipo"><option>ahorro</option><option>compra</option></select></div>`;
+<div class="f2">
+  <div class="fr"><label>Tipo</label><select id="f-tipo"><option>ahorro</option><option>compra</option></select></div>
+  <div class="fr"><label>Fecha objetivo <span style="color:var(--muted);font-size:11px">(opcional)</span></label><input id="f-fecha-obj" type="date"></div>
+</div>`;
   $('ovl').classList.add('open');
 }
 
@@ -907,7 +1061,8 @@ async function saveM() {
     const titulo = $('nd-titulo').value.trim();
     if (!titulo) { alert('Ingresa un título'); return; }
     datos = { titulo, tipo:$('nd-tipo').value, emoji:$('nd-emoji').value.trim()||null,
-              monto:parseFloat($('nd-monto').value)||0, descripcion:$('nd-desc').value.trim() };
+              monto:parseFloat($('nd-monto').value)||0, descripcion:$('nd-desc').value.trim(),
+              fecha_objetivo: $('nd-fecha').value || null };
     if (ctx.mode==='edit-nidito')
       r = await api('PUT', `/api/nidito/${ctx.item.id}`, datos);
     else
@@ -926,7 +1081,8 @@ async function saveM() {
     if (!datos.titulo) { alert('Ingresa un título'); return; }
   } else {
     datos={ nombre:$('f-nombre').value, meta:parseFloat($('f-meta').value)||0,
-            actual:parseFloat($('f-actual').value)||0, tipo:$('f-tipo').value };
+            actual:parseFloat($('f-actual').value)||0, tipo:$('f-tipo').value,
+            fecha_objetivo: $('f-fecha-obj')?.value || null };
     if (!datos.nombre) { alert('Ingresa un nombre'); return; }
     ctx.tabla = 'metas';
   }
@@ -938,17 +1094,18 @@ async function saveM() {
     r = isE ? await api('PUT',`/api/calendario/${ctx.id}`,{user_phone:S.phone,...datos})
             : await api('POST','/api/calendario',{user_phone:S.phone,...datos});
   else
-    r = await api('POST','/api/movimientos',{user_phone:S.phone,...datos,tipo:'META_AHORRO'});
+    r = isE ? await api('PUT',`/api/metas/${ctx.id}`,{user_phone:S.phone,...datos})
+            : await api('POST','/api/metas',{user_phone:S.phone,...datos});
   if (r?.success===false) { alert('Error: '+(r.error||'')); return; }
   closeM(); await load();
 }
 
 async function dMov(id)  { if(!confirm('¿Eliminar?'))return; await api('DELETE',`/api/movimientos/${id}`,{user_phone:S.phone}); await load(); }
 async function dEvt(id)  { if(!confirm('¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
-async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/movimientos/${id}`,{user_phone:S.phone}); await load(); }
+async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/metas/${id}`,{user_phone:S.phone}); await load(); }
 
 // ── CHAT IA (PWA) ─────────────────────────────────────────────────────────────
-let _mediaRec = null, _audioChunks = [], _recording = false;
+let _mediaRec = null, _audioChunks = [], _recording = false, _recTimer = null, _recognition = null;
 
 function rChat() {
   const tab  = $('tab-chat');
@@ -1052,7 +1209,10 @@ async function _askBot(message, audioB64 = null, audioMime = null) {
     load().catch(() => {});
   } catch (e) {
     _hideTyping();
-    _appendMsg('bot', '❌ Sin conexión. Intenta de nuevo.');
+    const msg = e.message?.includes('demasiado') ? `❌ ${e.message}`
+              : e.message?.includes('Failed to fetch') ? '❌ Sin conexión. Revisa tu red e intenta de nuevo.'
+              : `❌ Error: ${e.message || 'Intenta de nuevo.'}`;
+    _appendMsg('bot', msg);
   } finally {
     if (btn) btn.disabled = false;
     $('chat-input')?.focus();
@@ -1060,42 +1220,151 @@ async function _askBot(message, audioB64 = null, audioMime = null) {
 }
 
 // ── GRABACIÓN DE VOZ ──────────────────────────────────────────────────────────
+// Estrategia: Web Speech API (nativa, sin subir audio) → fallback MediaRecorder+Gemini
+function _stopRecording() {
+  _recording = false;
+  if (_recTimer) { clearTimeout(_recTimer); _recTimer = null; }
+  const r = _recognition;
+  _recognition = null;             // nulificar antes de abort para evitar re-entrada
+  try { r?.abort(); } catch(e) {}  // forzar liberación del micrófono inmediatamente
+  $('mic-btn')?.classList.remove('recording');
+  if ($('mic-icon')) $('mic-icon').className = 'ti ti-microphone';
+}
+
+function _removeTypingMsg(keyword) {
+  const msgs = $('chat-msgs');
+  if (msgs?.lastChild?.textContent?.includes(keyword)) msgs.removeChild(msgs.lastChild);
+}
+
 async function toggleRecording() {
+  // ── Si ya está grabando, detener ──────────────────────────────────────────
   if (_recording) {
+    _recognition?.stop();
     _mediaRec?.stop();
     return;
   }
+
+  // ── Opción 1: Web Speech API (iOS Safari, Chrome) — sin subir audio ───────
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    const rec = new SR();
+    rec.lang            = 'es-MX';
+    rec.continuous      = false;
+    rec.interimResults  = false;
+    _recognition = rec;
+    _recording = true;
+    $('mic-btn').classList.add('recording');
+    $('mic-icon').className = 'ti ti-player-stop-filled';
+    _appendMsg('bot', '🎙️ Escuchando... habla ahora', null, false);
+
+    // Usar 'rec' (closure local) en los handlers — _recognition puede quedar null
+    // antes de que disparen onspeechend/onend
+    rec.onresult = e => {
+      const text = Array.from(e.results).map(r => r[0].transcript).join(' ').trim();
+      _removeTypingMsg('Escuchando');
+      _stopRecording();   // nulifica _recognition y llama rec.abort() → libera mic YA
+      if (text) { _appendMsg('user', '🎤 ' + text); _askBot(text); }
+    };
+    rec.onspeechend = () => { try { rec.stop(); } catch(e) {} };
+    rec.onerror = e => {
+      _removeTypingMsg('Escuchando');
+      _stopRecording();
+      if (e.error !== 'no-speech' && e.error !== 'aborted')
+        _appendMsg('bot', '⚠️ No te escuché bien. Intenta de nuevo o escribe tu mensaje.');
+    };
+    rec.onend = () => { _removeTypingMsg('Escuchando'); _stopRecording(); };
+    try { rec.start(); } catch(e) { _stopRecording(); _recFallback(); }
+    return;
+  }
+
+  // ── Opción 2: MediaRecorder + Gemini (navegadores sin Speech API) ─────────
+  _recFallback();
+}
+
+async function _recFallback() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime   = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
-                 : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
-    _mediaRec   = new MediaRecorder(stream, { mimeType: mime });
+    const mime   = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+                 : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+                 : MediaRecorder.isTypeSupported('audio/mp4')  ? 'audio/mp4' : 'audio/ogg';
+    _mediaRec    = new MediaRecorder(stream, { mimeType: mime });
     _audioChunks = [];
     _recording   = true;
     $('mic-btn').classList.add('recording');
     $('mic-icon').className = 'ti ti-player-stop-filled';
-    _appendMsg('bot', '🔴 Grabando... toca el botón para detener', null, false);
+    _appendMsg('bot', '🔴 Grabando... toca para detener', null, false);
 
     _mediaRec.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
     _mediaRec.onstop = async () => {
-      _recording = false;
-      $('mic-btn').classList.remove('recording');
-      $('mic-icon').className = 'ti ti-microphone';
+      _stopRecording();
       stream.getTracks().forEach(t => t.stop());
-      // Quitar mensaje "Grabando..."
-      const msgs = $('chat-msgs');
-      if (msgs?.lastChild?.textContent?.includes('Grabando')) msgs.removeChild(msgs.lastChild);
+      _removeTypingMsg('Grabando');
       if (!_audioChunks.length) return;
-      const blob = new Blob(_audioChunks, { type: mime });
-      const b64  = await _blobToBase64(blob);
       _appendMsg('user', '🎤 Audio enviado');
-      await _askBot(null, b64, mime);
+      try {
+        // Convertir a WAV antes de enviar — Gemini puede decodificar WAV PCM sin problemas
+        const rawBlob = new Blob(_audioChunks, { type: mime });
+        const wavB64  = await _blobToWavBase64(rawBlob);
+        await _askBot(null, wavB64, 'audio/wav');
+      } catch (convErr) {
+        // Si la conversión falla, enviar el formato original como último recurso
+        const b64 = await _blobToBase64(new Blob(_audioChunks, { type: mime }));
+        await _askBot(null, b64, mime);
+      }
     };
+    _recTimer = setTimeout(() => { if (_recording) _mediaRec?.stop(); }, 90000);
     _mediaRec.start();
   } catch (e) {
-    _recording = false;
+    _stopRecording();
     alert('No se pudo acceder al micrófono.\n' + e.message);
   }
+}
+
+// Decodifica cualquier formato de audio y re-codifica como WAV PCM 16-bit
+// Gemini siempre puede procesar WAV sin importar el codec original
+async function _blobToWavBase64(blob) {
+  const arrayBuf = await blob.arrayBuffer();
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AudioCtx();
+  const decoded = await ctx.decodeAudioData(arrayBuf);
+  ctx.close();
+
+  const numCh  = Math.min(decoded.numberOfChannels, 1); // mono = más pequeño
+  const sr     = 16000; // 16kHz — suficiente para voz, reduce tamaño ~2.75x
+  const frames = decoded.length;
+
+  // Resamplear a 16kHz si es necesario
+  let samples;
+  if (decoded.sampleRate !== sr) {
+    const offCtx = new OfflineAudioContext(numCh, Math.ceil(frames * sr / decoded.sampleRate), sr);
+    const src = offCtx.createBufferSource();
+    src.buffer = decoded; src.connect(offCtx.destination); src.start();
+    const resampled = await offCtx.startRendering();
+    samples = resampled.getChannelData(0);
+  } else {
+    samples = decoded.getChannelData(0);
+  }
+
+  // Construir WAV PCM 16-bit mono
+  const dataLen  = samples.length * 2;
+  const buf      = new ArrayBuffer(44 + dataLen);
+  const view     = new DataView(buf);
+  const ws = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0,'RIFF'); view.setUint32(4, 36 + dataLen, true); ws(8,'WAVE');
+  ws(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22,1,true); view.setUint32(24,sr,true);
+  view.setUint32(28,sr*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
+  ws(36,'data'); view.setUint32(40,dataLen,true);
+  let off = 44;
+  for (let i = 0; i < samples.length; i++, off += 2)
+    view.setInt16(off, Math.max(-1,Math.min(1,samples[i])) * 0x7FFF, true);
+
+  // Base64 en chunks para evitar stack overflow en audios largos
+  const bytes = new Uint8Array(buf);
+  let b64 = '';
+  for (let i = 0; i < bytes.length; i += 8192)
+    b64 += btoa(String.fromCharCode(...bytes.subarray(i, i + 8192)));
+  return b64;
 }
 
 function _blobToBase64(blob) {
@@ -1111,10 +1380,12 @@ function _blobToBase64(blob) {
   // Restaurar tema
   if (localStorage.getItem('fos_theme') === 'light') {
     document.documentElement.classList.add('light');
-    const icon = $('theme-icon');
-    const lbl  = $('theme-label');
+    const icon = $('theme-icon');  const lbl  = $('theme-label');
     if (icon) icon.className = 'ti ti-sun';
     if (lbl)  lbl.textContent = 'Modo noche';
+    const mni = $('mn-theme-icon'); const mnl = $('mn-theme-label');
+    if (mni) mni.className = 'ti ti-sun';
+    if (mnl) mnl.textContent = 'Modo noche';
   }
   // Restaurar estado del sidebar
   if (localStorage.getItem('fos_sidebar') === '0') {
@@ -1130,9 +1401,20 @@ function _blobToBase64(blob) {
   }
 
   const isAdminURL = location.search.includes('angel') || location.hash.includes('angel');
+  const isAliciaURL = location.search.includes('alicia') || location.hash.includes('alicia');
   const storedId   = localStorage.getItem('fos_identity');
 
-  if (isAdminURL || storedId === 'A') {
+  // Link directo ?alicia → entra como admin y activa ghost mode automáticamente
+  if (isAliciaURL) {
+    S.identity = 'A'; S._autoGhost = true;
+    const aPhone = localStorage.getItem('fos_phone_A');
+    if (aPhone) { S.phone = aPhone; S.adminPhone = aPhone; showApp('A'); }
+    else         { showPhoneInput(null); }
+    return;
+  }
+
+  // Admin forzado por URL (para primer acceso desde link directo)
+  if (isAdminURL) {
     S.identity = 'A';
     const aPhone = localStorage.getItem('fos_phone_A');
     if (aPhone) { S.phone = aPhone; S.adminPhone = aPhone; showApp('A'); }
@@ -1140,10 +1422,23 @@ function _blobToBase64(blob) {
     return;
   }
 
-  S.identity = 'B';
-  const bPhone = localStorage.getItem('fos_phone_B');
-  if (bPhone) { S.phone = bPhone; showApp('B'); }
-  else         { showPhoneInput('B'); }
+  // Identidad ya guardada — entrar directo sin pedir número
+  if (storedId === 'A') {
+    S.identity = 'A';
+    const aPhone = localStorage.getItem('fos_phone_A');
+    if (aPhone) { S.phone = aPhone; S.adminPhone = aPhone; showApp('A'); }
+    else         { showPhoneInput(null); }
+    return;
+  }
+  if (storedId === 'B') {
+    const bPhone = localStorage.getItem('fos_phone_B');
+    if (bPhone) { S.identity = 'B'; S.phone = bPhone; showApp('B'); }
+    else         { showPhoneInput(null); }
+    return;
+  }
+
+  // Primera vez — pantalla neutral, el servidor detecta quién eres
+  showPhoneInput(null);
 })();
 </script>
 </body>

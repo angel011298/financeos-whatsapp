@@ -13,7 +13,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+app.use(express.json({ limit: '25mb' })); // audio base64 puede ser varios MB
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── CLIENTS ────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ const MEDIOS_PAGO  = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX'
 async function getOrCreateUser(phone) {
   let { data: u } = await sb.from('usuarios').select('*').eq('telefono', phone).single();
   if (!u) {
-    const { data: n } = await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'CLAUDE' }]).select().single();
+    const { data: n } = await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]).select().single();
     u = n;
   }
   return u;
@@ -302,38 +302,22 @@ async function callIA(user, sysPrompt, text, phone) {
   history[phone].push({ role: 'user', content: text });
   if (history[phone].length > 20) history[phone].splice(0, 2);
 
-  if (user.ai_preference === 'GEMINI') {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro', tools: geminiTools });
-    const gHist = history[phone].map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }] }));
-    const chat = model.startChat({ history: gHist.slice(0, -1), systemInstruction: sysPrompt });
-    const res = await chat.sendMessage(text);
-    const calls = res.response.functionCalls();
-    if (calls?.length) {
-      const dbRes = await executeDbAction(phone, calls[0].args);
-      const res2 = await chat.sendMessage([{ functionResponse: { name: "modificar_plataforma", response: { result: dbRes } } }]);
-      const reply = res2.response.text();
-      history[phone].push({ role: 'assistant', content: reply });
-      return reply;
-    }
-    const reply = res.response.text();
+  // ── GEMINI 1.5 Pro — motor principal ─────────────────────────────────────
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro', tools: geminiTools });
+  const gHist = history[phone]
+    .filter(m => typeof m.content === 'string')
+    .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  const chat = model.startChat({ history: gHist.slice(0, -1), systemInstruction: { parts: [{ text: sysPrompt }] } });
+  const res  = await chat.sendMessage(text);
+  const calls = res.response.functionCalls();
+  if (calls?.length) {
+    const dbRes = await executeDbAction(phone, calls[0].args);
+    const res2  = await chat.sendMessage([{ functionResponse: { name: 'modificar_plataforma', response: { result: dbRes } } }]);
+    const reply = res2.response.text();
     history[phone].push({ role: 'assistant', content: reply });
     return reply;
   }
-
-  // Claude
-  const msg = await ai.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: sysPrompt, tools: [toolsSchema], messages: history[phone] });
-  if (msg.stop_reason === 'tool_use') {
-    const tc = msg.content.find(c => c.type === 'tool_use');
-    const txt0 = msg.content.find(c => c.type === 'text')?.text || '';
-    const dbRes = await executeDbAction(phone, tc.input);
-    history[phone].push({ role: 'assistant', content: msg.content });
-    history[phone].push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: tc.id, content: dbRes }] });
-    const msg2 = await ai.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: sysPrompt, tools: [toolsSchema], messages: history[phone] });
-    const reply = msg2.content[0].text;
-    history[phone].push({ role: 'assistant', content: reply });
-    return (txt0 ? txt0 + '\n' : '') + reply;
-  }
-  const reply = msg.content[0].text;
+  const reply = res.response.text();
   history[phone].push({ role: 'assistant', content: reply });
   return reply;
 }
@@ -345,7 +329,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     // Auto-create usuario si accede por primera vez desde la web
     const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', phone).single();
     if (!existing) {
-      await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'CLAUDE' }]);
+      await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
     const [tdc, movs, metas, user, cal, pat, presp, nidito] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
@@ -371,9 +355,13 @@ app.get('/api/usuarios', async (req, res) => {
 
 // ── WHOAMI — detecta si el teléfono es admin o Alicia ─────────────────────
 app.get('/api/whoami/:phone', (req, res) => {
-  const adminPhone = (process.env.ADMIN_PHONE || '').replace('whatsapp:', '');
-  const reqPhone   = req.params.phone.replace('whatsapp:', '');
-  const isAdmin    = adminPhone && adminPhone === reqPhone;
+  // Compara los últimos 10 dígitos (número local sin prefijo de país ni el "1" de México móvil)
+  // Así funciona sin importar si ADMIN_PHONE es +521XXXXXXXXXX, +52XXXXXXXXXX, whatsapp:+521..., etc.
+  const last10 = s => (s || '').replace(/\D/g, '').slice(-10);
+  const adminLast10 = last10(process.env.ADMIN_PHONE);
+  const reqLast10   = last10(req.params.phone);
+  const isAdmin = adminLast10.length === 10 && adminLast10 === reqLast10;
+  console.log(`[whoami] req=${reqLast10} admin=${adminLast10} match=${isAdmin}`);
   res.json({ role: isAdmin ? 'ADMIN' : 'USER' });
 });
 
@@ -474,6 +462,34 @@ app.delete('/api/nidito/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── METAS (objetivos de ahorro) ───────────────────────────────────────────────
+app.post('/api/metas', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    const { data, error } = await sb.from('metas').insert({ ...d, user_phone }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/metas/:id', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    const { data, error } = await sb.from('metas').update(d).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/metas/:id', async (req, res) => {
+  try {
+    const { user_phone } = req.body;
+    const { error } = await sb.from('metas').delete().eq('id', req.params.id).eq('user_phone', user_phone);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.post('/api/send-whatsapp-invite', async (req, res) => {
   try {
     const { phone } = req.body;
@@ -546,16 +562,19 @@ app.post('/api/chat-web', async (req, res) => {
     // Transcribir audio si viene en base64 (desde grabación web)
     if (audio_b64) {
       isAudio = true;
+      const sizeKB = Math.round(audio_b64.length * 0.75 / 1024);
+      console.log(`🎤 Audio recibido | mime=${audio_mime} | size≈${sizeKB}KB`);
       try {
         const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
         const result = await model.generateContent([
-          { inlineData: { mimeType: audio_mime || 'audio/mp4', data: audio_b64 } },
-          'Transcribe exactamente este audio en español. Devuelve solo el texto transcrito, sin comentarios adicionales.'
+          { inlineData: { mimeType: audio_mime || 'audio/wav', data: audio_b64 } },
+          'Transcribe exactamente este audio en español. Solo devuelve el texto transcrito.'
         ]);
         text = result.response.text().trim();
-        console.log(`🎤 Audio web transcrito [${phone}]: "${text}"`);
+        console.log(`🎤 Transcripción OK: "${text}"`);
       } catch (e) {
-        return res.json({ reply: '⚠️ No pude transcribir el audio. ¿Lo escribes?' });
+        console.error(`🎤 Error Gemini transcripción: ${e.message} | status=${e.status} | code=${e.code}`);
+        return res.json({ reply: `⚠️ Error de transcripción: ${e.message?.slice(0,80) || 'desconocido'}. Escribe tu mensaje.` });
       }
     }
 
@@ -594,7 +613,7 @@ async function seedAdminOnStartup() {
   if (!adminPhone) return;
   try {
     await sb.from('usuarios').upsert(
-      [{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'CLAUDE' }],
+      [{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'GEMINI' }],
       { onConflict: 'telefono' }
     );
     const [r1, r2] = await Promise.all([
