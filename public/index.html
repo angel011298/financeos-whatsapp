@@ -111,6 +111,27 @@ tr:hover td{background:rgba(128,128,128,.04)}
 .pbar{background:var(--border);border-radius:4px;height:7px;overflow:hidden;display:inline-block;vertical-align:middle}
 .pfill{height:100%;border-radius:4px;background:var(--accent)}.pfill.warn{background:var(--yellow)}.pfill.dng{background:var(--red)}
 
+/* ── PERIOD SELECTOR ──────────────────────────────── */
+.periodo-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px}
+.periodo-tabs{display:flex;gap:3px;background:var(--card2);padding:3px;border-radius:8px;flex-shrink:0}
+.ptab{padding:4px 11px;border-radius:6px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:500;transition:.12s;white-space:nowrap}
+.ptab.act{background:var(--accent);color:#fff}
+.p-range{flex:1;text-align:center;font-size:12px;font-weight:600;color:var(--text);min-width:120px;white-space:nowrap}
+
+/* ── QUINCENAL PANEL ──────────────────────────────── */
+.q-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+.q-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.q-nav{display:flex;align-items:center;gap:6px}
+.q-nav-lbl{font-size:13px;font-weight:600;min-width:186px;text-align:center}
+.q-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:8px;margin-bottom:12px}
+.qstat{background:var(--card2);border-radius:8px;padding:10px;text-align:center}
+.qstat-lbl{font-size:10px;color:var(--muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.3px}
+.qstat-val{font-size:16px;font-weight:700}
+.qstat-sub{font-size:10px;margin-top:2px}
+.q-section-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.q-item-row{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--card2);border-radius:7px;margin-bottom:4px}
+.q-ai-box{background:var(--card2);border-radius:8px;padding:12px;font-size:12px;line-height:1.75;color:var(--text);margin-top:8px;white-space:pre-wrap}
+
 /* ── MODAL ───────────────────────────────────────── */
 .ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;align-items:center;justify-content:center}
 .ovl.open{display:flex}
@@ -162,6 +183,38 @@ tr:hover td{background:rgba(128,128,128,.04)}
   color:var(--muted);font-size:11px;font-weight:500;-webkit-tap-highlight-color:transparent;transition:.12s}
 .sheet-item:active{opacity:.7}
 .sheet-item .ti{font-size:24px;color:var(--text)}
+/* ── MOVIMIENTOS — FILTER PANEL ─────────────────────── */
+.mov-filter{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.mf-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
+.mf-row:last-child{margin-bottom:0}
+.mf-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;width:68px;flex-shrink:0}
+.f-pill{padding:3px 9px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:11px;transition:.12s;white-space:nowrap}
+.f-pill:hover{color:var(--text);border-color:var(--muted)}
+.f-pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.f-pill.preset{font-weight:500}
+.mov-search{position:relative;flex:1}
+.mov-search input{padding-left:30px;font-size:12px;padding-top:6px;padding-bottom:6px}
+.mov-search .ti{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
+/* ── MOVIMIENTOS — KPI CARDS ─────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.kpi-val{font-size:20px;font-weight:700}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:2px}
+/* ── MOVIMIENTOS — CHART BOX ─────────────────────────── */
+.mov-cbox{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.mov-cbox-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.mov-cbox-hdr h3{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.mov-chart-sel{padding:5px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;cursor:pointer;width:auto}
+.cwrap-lg{position:relative;height:240px}
+/* ── MOVIMIENTOS — TABLE ENHANCEMENTS ───────────────── */
+.cat-bdg{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:500}
+.tipo-bdg{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600}
+.nota-ia{display:inline-flex;align-items:center;gap:2px;font-size:10px;color:#a78bfa;cursor:help}
+td.editable{cursor:text}
+td.editable:hover{text-decoration:underline dotted var(--muted)}
+.btn-dup{background:rgba(129,140,248,.1);color:var(--accent);border:1px solid rgba(129,140,248,.25)}
+.btn-dup:hover{background:rgba(129,140,248,.22)}
 /* ── CHAT ────────────────────────────────────────────── */
 .chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 80px)}
 .chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px}
@@ -262,12 +315,6 @@ tr:hover td{background:rgba(128,128,128,.04)}
         <a onclick="go('movimientos')" id="n-movimientos">
           <i class="ti ti-arrows-exchange"></i><span>Movimientos</span>
         </a>
-        <a onclick="go('egresos')" id="n-egresos">
-          <i class="ti ti-trending-down"></i><span>Egresos</span>
-        </a>
-        <a onclick="go('ingresos')" id="n-ingresos">
-          <i class="ti ti-trending-up"></i><span>Ingresos</span>
-        </a>
         <a onclick="go('calendario')" id="n-calendario">
           <i class="ti ti-calendar"></i><span>Calendario</span>
         </a>
@@ -316,8 +363,6 @@ tr:hover td{background:rgba(128,128,128,.04)}
       <div id="tab-presupuesto" class="tab"></div>
       <div id="tab-objetivos"   class="tab"></div>
       <div id="tab-movimientos" class="tab"></div>
-      <div id="tab-egresos"     class="tab"></div>
-      <div id="tab-ingresos"    class="tab"></div>
       <div id="tab-calendario"  class="tab"></div>
       <div id="tab-chat"        class="tab"></div>
     </main>
@@ -349,11 +394,8 @@ tr:hover td{background:rgba(128,128,128,.04)}
         <div class="sheet-item" onclick="go('objetivos');closeMobileMore()">
           <i class="ti ti-target"></i><span>Objetivos</span>
         </div>
-        <div class="sheet-item" onclick="go('egresos');closeMobileMore()">
-          <i class="ti ti-trending-down"></i><span>Egresos</span>
-        </div>
-        <div class="sheet-item" onclick="go('ingresos');closeMobileMore()">
-          <i class="ti ti-trending-up"></i><span>Ingresos</span>
+        <div class="sheet-item" onclick="go('movimientos');closeMobileMore()">
+          <i class="ti ti-arrows-exchange"></i><span>Movimientos</span>
         </div>
         <div class="sheet-item" onclick="go('calendario');closeMobileMore()">
           <i class="ti ti-calendar"></i><span>Calendario</span>
@@ -391,12 +433,17 @@ tr:hover td{background:rgba(128,128,128,.04)}
 const CATS   = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Pasajes','OTROS'];
 const MEDIOS = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito'];
 const CLR    = ['#818cf8','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
+const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Hormiga':'#fbbf24','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Pasajes':'#818cf8','OTROS':'#94a3b8'};
 
 // ── ESTADO GLOBAL ────────────────────────────────────────────────────────────
 const S = {
   phone: '', identity: null, adminPhone: '', ghostMode: false,
   data: { movs:[], tdc:[], metas:[], calendario:[], presupuesto:[], patrones:[], nidito:[] },
-  ch: {}, ct: {}, tab: 'dashboard', cy: 0, cm: 0, mctx: null
+  ch: {}, ct: {}, tab: 'dashboard', cy: 0, cm: 0, mctx: null,
+  periodo: { tipo: 'mes', offset: 0 },
+  qOffset: 0,
+  movF: null,          // filter state for Movimientos tab
+  _movData: {}         // id → movimiento lookup (safe onclick refs)
 };
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -624,7 +671,7 @@ function go(t) {
 
 function renderTab(t) {
   ({ dashboard:rDash, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp, objetivos:rObjs,
-     movimientos:()=>rMovs('all'), egresos:()=>rMovs('GASTO'), ingresos:()=>rMovs('INGRESO'),
+     movimientos:rMovs,
      calendario:rCal, chat:rChat })[t]?.();
 }
 
@@ -674,11 +721,305 @@ function last6() {
 }
 function curMes() { return last6()[5]; }
 
+// ── PERIOD & QUINCENA HELPERS ────────────────────────────────────────────────
+function toISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function getQuincenaInfo(off) {
+  off = off || 0;
+  const now = new Date();
+  const curQ = now.getFullYear() * 24 + now.getMonth() * 2 + (now.getDate() > 15 ? 1 : 0);
+  const tQ   = curQ + off;
+  const year  = Math.floor(tQ / 24);
+  const rem   = ((tQ % 24) + 24) % 24;
+  const month = Math.floor(rem / 2);
+  const is2nd = rem % 2 === 1;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const mm = String(month + 1).padStart(2, '0');
+  const from = `${year}-${mm}-${is2nd ? '16' : '01'}`;
+  const to   = `${year}-${mm}-${is2nd ? String(lastDay).padStart(2,'0') : '15'}`;
+  const label= `${is2nd ? '2ᵃ' : '1ᵃ'} quincena ${MESES_CORTO[month]} ${year}`;
+  return { from, to, label, q: is2nd ? 2 : 1, month, year, fromDay: is2nd ? 16 : 1, toDay: is2nd ? lastDay : 15 };
+}
+
+function getPeriodoRange() {
+  const { tipo, offset } = S.periodo;
+  const now = new Date();
+  if (tipo === 'quincena') {
+    const qi = getQuincenaInfo(offset);
+    return { from: qi.from, to: qi.to, label: qi.label, tipo, short: '' };
+  }
+  let from, to, label, short = '';
+  if (tipo === 'semana') {
+    const d = new Date(now); d.setDate(d.getDate() + offset * 7);
+    const day = d.getDay();
+    const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    from = toISO(mon); to = toISO(sun);
+    label = `${fmtDate(from)} – ${fmtDate(to)}`;
+  } else if (tipo === 'mes') {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    from = toISO(d);
+    to   = toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    short= `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    label= `${MESES_CORTO[d.getMonth()]} ${d.getFullYear()}`;
+  } else if (tipo === 'trimestre') {
+    const qN = Math.floor(now.getMonth() / 3) + offset;
+    const yr = now.getFullYear() + Math.floor(qN / 4);
+    const q  = ((qN % 4) + 4) % 4;
+    from = toISO(new Date(yr, q*3, 1));
+    to   = toISO(new Date(yr, q*3 + 3, 0));
+    label= `Q${q+1} ${yr}`;
+  } else { // año
+    const yr = now.getFullYear() + offset;
+    from = `${yr}-01-01`; to = `${yr}-12-31`;
+    label= `${yr}`;
+  }
+  return { from, to, label, tipo, short };
+}
+
+function filterMovs(movs, from, to) {
+  return (movs || []).filter(m => { const f = m.fecha || ''; return f >= from && f <= to; });
+}
+
+function getIngresosEsperados(refs) {
+  if (Array.isArray(refs.ingresos_esperados) && refs.ingresos_esperados.length)
+    return refs.ingresos_esperados;
+  const list = [];
+  if ((refs.ingreso_quincenal || 0) > 0)
+    list.push({ _id: 'legacy-sueldo', descripcion: 'Sueldo', monto: refs.ingreso_quincenal, dias: refs.dias_pago || [] });
+  return list;
+}
+
+function getGastosEsperados(refs) {
+  if (Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length)
+    return refs.gastos_esperados;
+  return Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }));
+}
+
+// ── PERIOD SELECTOR UI ───────────────────────────────────────────────────────
+function periodoSelectorHTML() {
+  const tipos = [['Sem','semana'],['Quinc','quincena'],['Mes','mes'],['Trim','trimestre'],['Año','año']];
+  const r = getPeriodoRange();
+  return `<div class="periodo-wrap">
+  <div class="periodo-tabs">${tipos.map(([l,v]) =>
+    `<button class="ptab${S.periodo.tipo===v?' act':''}" onclick="setPeriodo('${v}')">${l}</button>`).join('')}</div>
+  <button class="btn btn-ghost btn-sm" onclick="navPeriodo(-1)"><i class="ti ti-chevron-left"></i></button>
+  <span class="p-range">${r.label}</span>
+  <button class="btn btn-ghost btn-sm" onclick="navPeriodo(1)"><i class="ti ti-chevron-right"></i></button>
+  ${S.periodo.offset !== 0 ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="navPeriodo(0,'reset')"><i class="ti ti-home-2"></i> Actual</button>` : ''}
+</div>`;
+}
+function setPeriodo(tipo) { S.periodo = { tipo, offset: 0 }; renderTab(S.tab); }
+function navPeriodo(dir, mode) { if (mode==='reset') S.periodo.offset=0; else S.periodo.offset+=dir; renderTab(S.tab); }
+
+// ── QUINCENAL PANEL ──────────────────────────────────────────────────────────
+function rQuincenaPanel(ctx) {
+  const refs   = (S.data.user || {}).external_refs || {};
+  const qi     = getQuincenaInfo(S.qOffset);
+  const movs   = S.data.movs || [];
+  const qMovs  = filterMovs(movs, qi.from, qi.to);
+
+  const allIngEsp = getIngresosEsperados(refs);
+  const gasEsp    = getGastosEsperados(refs);
+
+  // Filter expected income whose pay day falls in this quincena
+  const ingEspQ = allIngEsp.filter(ing =>
+    (ing.dias || []).some(d => d >= qi.fromDay && d <= qi.toDay)
+  );
+
+  const totalIngEsp  = ingEspQ.reduce((a, i) => a + (i.monto || 0), 0);
+  const totalGasEsp  = gasEsp.reduce((a, g) => a + (g.monto || 0), 0);
+  const totalIngReal = qMovs.filter(m => m.tipo==='INGRESO').reduce((a,m) => a+(m.monto||0), 0);
+  const totalGasReal = qMovs.filter(m => m.tipo==='GASTO').reduce((a,m) => a+(m.monto||0), 0);
+  const ingDiff  = totalIngReal - totalIngEsp;
+  const gasDiff  = totalGasReal - totalGasEsp;
+  const balEsp   = totalIngEsp - totalGasEsp;
+  const balReal  = totalIngReal - totalGasReal;
+
+  // Build gastos comparison map
+  const gasMap = {};
+  gasEsp.forEach(g => { gasMap[g.descripcion] = { esp: g.monto, real: 0, _id: g._id || g.id || g.descripcion }; });
+  qMovs.filter(m => m.tipo==='GASTO').forEach(m => {
+    const key = m.concepto || m.categoria || '';
+    const match = gasEsp.find(g =>
+      key.toLowerCase().includes(g.descripcion.toLowerCase()) ||
+      g.descripcion.toLowerCase().includes(key.toLowerCase())
+    );
+    if (match) gasMap[match.descripcion].real += (m.monto || 0);
+    else {
+      const k2 = m.categoria || 'Otros';
+      if (!gasMap[k2]) gasMap[k2] = { esp: 0, real: 0, _id: 'auto-'+k2 };
+      gasMap[k2].real += (m.monto || 0);
+    }
+  });
+
+  const qChId  = `qch-${ctx}`;
+  const qAiId  = `qai-${ctx}`;
+  const compRows = Object.entries(gasMap).map(([nombre, {esp, real, _id}]) => {
+    const diff = real - esp; const over = diff > 0;
+    const pct  = esp > 0 ? Math.min(100, Math.round(real/esp*100)) : 0;
+    return `<tr>
+      <td>${nombre}</td>
+      <td style="color:var(--muted)">${esp>0?fmt(esp):'—'}</td>
+      <td>${fmt(real)}</td>
+      <td class="${over?'red':'green'}">${over?'+':''}${fmt(diff)}</td>
+      <td>${esp>0?`<div class="pbar" style="width:70px"><div class="pfill${pct>=100?' dng':pct>=85?' warn':''}" style="width:${pct}%"></div></div> ${pct}%`:'—'}</td>
+      ${!_id.startsWith('lg-')&&!_id.startsWith('auto-')?`<td><button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x"></i></button></td>`:'<td></td>'}
+    </tr>`;
+  }).join('');
+
+  // Chart (deferred after render)
+  const chartLabels = ['Ingresos','Gastos','Balance'];
+  setTimeout(() => mkC(qChId, S.ct[qChId]||'bar', chartLabels, [
+    { label:'Esperado', data:[totalIngEsp, totalGasEsp, balEsp] },
+    { label:'Real',     data:[totalIngReal, totalGasReal, balReal] }
+  ]), 20);
+
+  return `<div class="q-panel">
+  <div class="q-hdr">
+    <div class="q-nav">
+      <button class="btn btn-ghost btn-sm" onclick="navQ(-1)"><i class="ti ti-chevron-left"></i></button>
+      <span class="q-nav-lbl">${qi.label}</span>
+      <button class="btn btn-ghost btn-sm" onclick="navQ(1)"><i class="ti ti-chevron-right"></i></button>
+      ${S.qOffset!==0?`<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="navQ(0,'reset')"><i class="ti ti-home-2"></i></button>`:''}
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap">
+      <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
+      <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);font-size:11px" onclick="oAddExpItem('gastos')"><i class="ti ti-plus"></i> Gasto fijo</button>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="q-stats">
+    <div class="qstat">
+      <div class="qstat-lbl">Ingreso esperado</div>
+      <div class="qstat-val green">${fmt(totalIngEsp)}</div>
+      ${ingEspQ.length?`<div class="qstat-sub" style="color:var(--muted)">días ${ingEspQ.flatMap(i=>(i.dias||[]).filter(d=>d>=qi.fromDay&&d<=qi.toDay)).join(', ')}</div>`:'<div class="qstat-sub" style="color:var(--muted)">sin configurar</div>'}
+    </div>
+    <div class="qstat">
+      <div class="qstat-lbl">Ingreso real</div>
+      <div class="qstat-val ${totalIngReal>=totalIngEsp?'green':'yellow'}">${fmt(totalIngReal)}</div>
+      <div class="qstat-sub" style="color:${ingDiff>=0?'var(--green)':'var(--red)'}">${ingDiff>=0?'+':''}${fmt(ingDiff)}</div>
+    </div>
+    <div class="qstat">
+      <div class="qstat-lbl">Gasto esperado</div>
+      <div class="qstat-val yellow">${fmt(totalGasEsp)}</div>
+    </div>
+    <div class="qstat">
+      <div class="qstat-lbl">Gasto real</div>
+      <div class="qstat-val ${gasDiff>0?'red':'green'}">${fmt(totalGasReal)}</div>
+      <div class="qstat-sub" style="color:${gasDiff>0?'var(--red)':'var(--green)'}">${gasDiff>0?'+':''}${fmt(gasDiff)}</div>
+    </div>
+    <div class="qstat" style="border:1px solid ${balReal>=0?'rgba(52,211,153,.3)':'rgba(248,113,113,.3)'}">
+      <div class="qstat-lbl">Balance real</div>
+      <div class="qstat-val ${balReal>=0?'green':'red'}">${fmt(balReal)}</div>
+      <div class="qstat-sub" style="color:var(--muted)">esp: ${fmt(balEsp)}</div>
+    </div>
+  </div>
+
+  <!-- Ingresos esperados this quincena -->
+  <div style="margin-bottom:10px">
+    <div class="q-section-lbl"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esperados esta quincena</div>
+    ${ingEspQ.length ? ingEspQ.map(ing=>`
+    <div class="q-item-row">
+      <span style="font-size:12px">${ing.descripcion} <span style="color:var(--muted);font-size:11px">días ${(ing.dias||[]).filter(d=>d>=qi.fromDay&&d<=qi.toDay).join(', ')}</span></span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="green" style="font-weight:600">${fmt(ing.monto)}</span>
+        ${!ing._id?.startsWith('legacy')?`<button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="removeExpItem('ingresos_esperados','${ing._id}')"><i class="ti ti-x"></i></button>`:''}
+      </div>
+    </div>`).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin ingresos esperados esta quincena. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('ingresos')">+ Agregar</button></div>`}
+  </div>
+
+  <!-- Gastos comparison table -->
+  <div style="margin-bottom:10px">
+    <div class="q-section-lbl"><i class="ti ti-table" style="color:var(--yellow)"></i> Gastos esperados vs real</div>
+    ${Object.keys(gasMap).length ? `<table style="margin:0">
+      <tr><th>Concepto</th><th>Esperado</th><th>Real</th><th>Diferencia</th><th>Uso</th><th></th></tr>
+      ${compRows}
+    </table>` : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
+  </div>
+
+  <!-- Chart -->
+  <div class="cbox" style="margin-bottom:10px">
+    <h3>Esperado vs Real — ${qi.label}</h3>${ctBtns(qChId,LINE,'bar')}
+    <div class="cwrap"><canvas id="${qChId}"></canvas></div>
+  </div>
+
+  <!-- AI Recommendations -->
+  <div>
+    <button class="btn btn-ghost btn-sm" id="qai-btn-${ctx}" onclick="loadQIA('${ctx}',${JSON.stringify(qi).replace(/"/g,'&quot;')})">
+      <i class="ti ti-brain" style="color:var(--accent)"></i> Recomendaciones IA
+    </button>
+    <div id="${qAiId}" style="display:none"></div>
+  </div>
+</div>`;
+}
+
+function navQ(dir, mode) {
+  if (mode === 'reset') S.qOffset = 0;
+  else S.qOffset = (S.qOffset || 0) + dir;
+  renderTab(S.tab);
+}
+
+async function loadQIA(ctx, qi) {
+  const btn  = $(`qai-btn-${ctx}`);
+  const wrap = $(`qai-${ctx}`);
+  if (!wrap || !btn) return;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> Analizando...';
+  btn.disabled  = true;
+  try {
+    const refs     = (S.data.user || {}).external_refs || {};
+    const movs     = S.data.movs || [];
+    const qMovs    = filterMovs(movs, qi.from, qi.to);
+    const ingEspQ  = getIngresosEsperados(refs).filter(i => (i.dias||[]).some(d => d>=qi.fromDay && d<=qi.toDay));
+    const gasEsp   = getGastosEsperados(refs);
+    const espIng   = ingEspQ.reduce((a,i) => a+(i.monto||0), 0);
+    const espGas   = gasEsp.reduce((a,g) => a+(g.monto||0), 0);
+    const realIng  = qMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0), 0);
+    const realGas  = qMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0), 0);
+    const items    = gasEsp.map(g => ({
+      desc: g.descripcion, esp: g.monto,
+      real: qMovs.filter(m=>m.tipo==='GASTO'&&(m.concepto||'').toLowerCase().includes(g.descripcion.toLowerCase())).reduce((a,m)=>a+(m.monto||0),0)
+    }));
+    const r = await api('POST', '/api/quincenal-ia', {
+      phone: S.phone, qLabel: qi.label, qFrom: qi.from, qTo: qi.to,
+      espIngreso: espIng, realIngreso: realIng, espGasto: espGas, realGasto: realGas, items
+    });
+    wrap.style.display = 'block';
+    wrap.innerHTML = `<div class="q-ai-box">${(r.text||'Sin respuesta').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`;
+  } catch(e) {
+    wrap.style.display = 'block';
+    wrap.innerHTML = `<div class="q-ai-box" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+  btn.innerHTML = '<i class="ti ti-brain" style="color:var(--accent)"></i> Recomendaciones IA';
+  btn.disabled  = false;
+}
+
+function oAddExpItem(tipo) {
+  S.mctx = { mode: 'add-exp-item', tipo };
+  $('m-title').textContent = tipo === 'ingresos' ? '+ Ingreso Esperado' : '+ Gasto Fijo Quincenal';
+  $('m-body').innerHTML = `
+<div class="fr"><label>Descripción</label><input id="ei-desc" placeholder="${tipo==='ingresos'?'Ej: Sueldo, Freelance, Alquiler':'Ej: Transporte, Gasolina, Internet'}"></div>
+<div class="fr"><label>Monto por quincena ($)</label><input id="ei-monto" type="number" min="0" step="1" placeholder="0"></div>
+${tipo==='ingresos' ? `<div class="fr"><label>Días de cobro <span style="color:var(--muted);font-size:10px">(separados por coma)</span></label><input id="ei-dias" placeholder="Ej: 10,25 ó 1,15 ó 25"></div>` : ''}`;
+  $('ovl').classList.add('open');
+}
+
+async function removeExpItem(field, id) {
+  if (!confirm('¿Eliminar este elemento?')) return;
+  await api('POST', '/api/update-refs', { phone: S.phone, field, action: 'remove', itemId: id });
+  await load();
+}
+
 // ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
 function rDash() {
-  const cm=curMes(), movs=S.data.movs||[];
-  const gasC = movs.filter(m=>m.tipo==='GASTO'&&(m.fecha||'').startsWith(cm)).reduce((a,m)=>a+(m.monto||0),0);
-  const ingC = movs.filter(m=>m.tipo==='INGRESO'&&(m.fecha||'').startsWith(cm)).reduce((a,m)=>a+(m.monto||0),0);
+  const movs = S.data.movs || [];
+  const r    = getPeriodoRange();
+  const pMovs= filterMovs(movs, r.from, r.to);
+  const gasC = pMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
+  const ingC = pMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
   const tdcP = (S.data.tdc||[]).reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
   const pats = S.data.patrones||[];
   const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
@@ -688,14 +1029,16 @@ function rDash() {
   <h2><i class="ti ti-layout-dashboard"></i> Dashboard <span style="font-size:13px;color:var(--muted);font-weight:400">${who}</span></h2>
   <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
 </div>
+${periodoSelectorHTML()}
 <div class="cards">
-  <div class="card"><div class="card-lbl">Gastos ${cm}</div><div class="card-val red">${fmt(gasC)}</div></div>
-  <div class="card"><div class="card-lbl">Ingresos ${cm}</div><div class="card-val green">${fmt(ingC)}</div></div>
-  <div class="card"><div class="card-lbl">Neto ${cm}</div><div class="card-val ${ingC-gasC>=0?'green':'red'}">${fmt(ingC-gasC)}</div></div>
+  <div class="card"><div class="card-lbl">Gastos</div><div class="card-val red">${fmt(gasC)}</div></div>
+  <div class="card"><div class="card-lbl">Ingresos</div><div class="card-val green">${fmt(ingC)}</div></div>
+  <div class="card"><div class="card-lbl">Neto</div><div class="card-val ${ingC-gasC>=0?'green':'red'}">${fmt(ingC-gasC)}</div></div>
   <div class="card"><div class="card-lbl">Deuda TDC</div><div class="card-val yellow">${fmt(tdcP)}</div></div>
 </div>
+${rQuincenaPanel('dash')}
 <div class="charts-grid">
-  <div class="cbox"><h3>Gastos por Categoría — ${cm}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div></div>
+  <div class="cbox"><h3>Gastos por Categoría — ${r.label}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div></div>
   <div class="cbox"><h3>Ingresos vs Gastos (6 meses)</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div></div>
   <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div></div>
 </div>
@@ -704,7 +1047,7 @@ ${pats.length ? `
 <table><tr><th>Concepto</th><th>Cat.</th><th>Promedio</th><th>Veces</th><th>Último</th><th>Medio habitual</th></tr>
 ${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td>${fmt(p.monto_promedio)}</td><td>${p.contador}</td><td>${fd(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>`).join('')}</table>` : ''}`;
 
-  const cg=byKey(movs.filter(m=>m.tipo==='GASTO'&&(m.fecha||'').startsWith(cm)),'categoria');
+  const cg=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
   const ck=Object.keys(cg);
   mkC('c-cat',S.ct['c-cat']||'doughnut',ck,[{data:ck.map(k=>cg[k]),label:'Gastos',backgroundColor:CLR.map(c=>c+'bb')}]);
   const ms=last6();
@@ -856,6 +1199,7 @@ function rPresp() {
   const primerDia = `01 ${MESES_CORTO[parseInt(cmM)-1]} ${cmY}`;
   const lastDay   = new Date(parseInt(cmY), parseInt(cmM), 0).getDate();
   const ultimoDia = `${lastDay} ${MESES_CORTO[parseInt(cmM)-1]} ${cmY}`;
+  const qHtml = rQuincenaPanel('prsp');
   $('tab-presupuesto').innerHTML=`
 <div class="hdr">
   <h2><i class="ti ti-report-money"></i> Presupuesto — ${cm}</h2>
@@ -863,6 +1207,7 @@ function rPresp() {
     <i class="ti ti-calendar-event"></i>${primerDia} – ${ultimoDia}
   </span>
 </div>
+${qHtml}
 <div class="cbox" style="margin-bottom:14px">
   <h3>Presupuesto vs Gasto Real</h3>${ctBtns('c-prsp',LINE,'bar')}
   <div class="cwrap"><canvas id="c-prsp"></canvas></div>
@@ -878,12 +1223,35 @@ ${rows.map(({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;return`<t
 
 // ── RENDER: OBJETIVOS ────────────────────────────────────────────────────────
 function rObjs() {
-  const metas=S.data.metas||[];
+  const metas = S.data.metas || [];
+  const movs  = S.data.movs  || [];
+  const qi    = getQuincenaInfo(S.qOffset);
+  // Balance disponible esta quincena = ingreso real - gastos reales quincenales
+  const qMovs   = filterMovs(movs, qi.from, qi.to);
+  const balReal = qMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0)
+                - qMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
+  const refs    = (S.data.user||{}).external_refs || {};
+  const gasEsp  = getGastosEsperados(refs);
+  const ingEspQ = getIngresosEsperados(refs).filter(i=>(i.dias||[]).some(d=>d>=qi.fromDay&&d<=qi.toDay));
+  const balEsp  = ingEspQ.reduce((a,i)=>a+(i.monto||0),0) - gasEsp.reduce((a,g)=>a+(g.monto||0),0);
+  const ahorroSugerido = Math.max(0, Math.round(balEsp * 0.2)); // 20% del balance esperado
+
   $('tab-objetivos').innerHTML=`
 <div class="hdr">
   <h2><i class="ti ti-target"></i> Objetivos</h2>
   <button class="btn btn-accent btn-sm" onclick="oMeta()"><i class="ti ti-plus"></i> Meta</button>
 </div>
+${rQuincenaPanel('objs')}
+${balEsp>0?`<div class="cbox" style="margin-bottom:14px;border-left:3px solid var(--green)">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">💡 Ahorro sugerido esta quincena (20% del balance)</div>
+      <div style="font-size:18px;font-weight:700;color:var(--green)">${fmt(ahorroSugerido)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Balance esperado: ${fmt(balEsp)} | Real: ${fmt(balReal)}</div>
+    </div>
+    ${metas.length?`<div style="font-size:12px;color:var(--muted)">Distribución sugerida: ${metas.map(m=>`${m.nombre} ${fmt(Math.round(ahorroSugerido/metas.length))}`).join(' • ')}</div>`:''}
+  </div>
+</div>`:''}
 <div class="cbox" style="margin-bottom:14px">
   <h3>Progreso de Metas</h3>${ctBtns('c-meta',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Polar','polarArea']],'bar-h')}
   <div class="cwrap"><canvas id="c-meta"></canvas></div>
@@ -901,82 +1269,324 @@ ${metas.map(m=>{const p=m.meta>0?Math.min(100,Math.round((m.actual||0)/m.meta*10
     [{label:'Actual',data:metas.map(m=>m.actual||0)},{label:'Objetivo',data:metas.map(m=>m.meta||0)}]);
 }
 
-// ── RENDER: MOVIMIENTOS / EGRESOS / INGRESOS ─────────────────────────────────
-function rMovs(tipo) {
-  const all=S.data.movs||[];
-  const movs=tipo==='all'?all:all.filter(m=>m.tipo===tipo);
-  const tabId=tipo==='all'?'movimientos':tipo==='GASTO'?'egresos':'ingresos';
-  const cm=curMes(), curM=movs.filter(m=>(m.fecha||'').startsWith(cm));
-  const total=curM.reduce((a,m)=>a+(m.monto||0),0);
-  let ch='', chInit=()=>{};
-  if (tipo !== 'all') {
-    const ms=last6();
-    const bM=ms.map(m=>({m,v:movs.filter(x=>(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0)}));
-    const bC=byKey(curM,'categoria'), bP=byKey(curM,'medio_pago');
-    const c1=`c-${tabId}t`, c2=`c-${tabId}c`, c3=`c-${tabId}m`;
-    ch=`<div class="charts-grid">
-      <div class="cbox"><h3>${tipo==='GASTO'?'Gastos':'Ingresos'} por Mes</h3>${ctBtns(c1,LINE,'line')}<div class="cwrap"><canvas id="${c1}"></canvas></div></div>
-      <div class="cbox"><h3>Por Categoría — ${cm}</h3>${ctBtns(c2,PIE,'doughnut')}<div class="cwrap"><canvas id="${c2}"></canvas></div></div>
-      <div class="cbox"><h3>Por Medio de Pago — ${cm}</h3>${ctBtns(c3,PIE,'pie')}<div class="cwrap"><canvas id="${c3}"></canvas></div></div>
-    </div>`;
-    chInit=()=>{
-      mkC(c1,S.ct[c1]||'line',bM.map(x=>x.m),[{label:tipo==='GASTO'?'Gasto':'Ingreso',data:bM.map(x=>x.v)}]);
-      const kC=Object.keys(bC); mkC(c2,S.ct[c2]||'doughnut',kC,[{data:kC.map(k=>bC[k]),label:'Monto',backgroundColor:CLR.map(c=>c+'bb')}]);
-      const kP=Object.keys(bP); mkC(c3,S.ct[c3]||'pie',kP,[{data:kP.map(k=>bP[k]),label:'Monto',backgroundColor:CLR.map(c=>c+'bb')}]);
-    };
+// ── MOVIMIENTOS — FILTER HELPERS ─────────────────────────────────────────────
+function initMovF() {
+  if (S.movF) return;
+  const now = new Date();
+  const cm  = curMes();
+  S.movF = {
+    desde:     cm + '-01',
+    hasta:     toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    cats:      [],
+    medios:    [],
+    search:    '',
+    chartType: 'doughnut'
+  };
+}
+
+function setMovPreset(p) {
+  initMovF();
+  const now = new Date(), cm = curMes();
+  if (p === 'hoy')      { S.movF.desde = S.movF.hasta = toISO(now); }
+  else if (p === 'quincena') { const qi=getQuincenaInfo(0); S.movF.desde=qi.from; S.movF.hasta=qi.to; }
+  else if (p === 'mes') { S.movF.desde=cm+'-01'; S.movF.hasta=toISO(new Date(now.getFullYear(),now.getMonth()+1,0)); }
+  else if (p === 'semestre') { S.movF.desde=toISO(new Date(now.getFullYear(),now.getMonth()-5,1)); S.movF.hasta=toISO(now); }
+  else if (p === 'anio') { S.movF.desde=now.getFullYear()+'-01-01'; S.movF.hasta=toISO(now); }
+  rMovs();
+}
+
+function applyMovDates() {
+  initMovF();
+  const d=$('movf-desde'), h=$('movf-hasta');
+  if (d) S.movF.desde=d.value;
+  if (h) S.movF.hasta=h.value;
+  rMovs();
+}
+
+function toggleMovCat(cat) {
+  initMovF();
+  const i=S.movF.cats.indexOf(cat);
+  if (i>=0) S.movF.cats.splice(i,1); else S.movF.cats.push(cat);
+  rMovs();
+}
+
+function toggleMovMedio(med) {
+  initMovF();
+  const i=S.movF.medios.indexOf(med);
+  if (i>=0) S.movF.medios.splice(i,1); else S.movF.medios.push(med);
+  rMovs();
+}
+
+function applyMovSearch() {
+  initMovF();
+  const el=$('movf-search');
+  if (el) S.movF.search=el.value;
+  rMovs();
+}
+
+function setMovChart(type) {
+  initMovF();
+  S.movF.chartType=type;
+  renderMovChart(getMovFiltradas());
+}
+
+function getMovFiltradas() {
+  initMovF();
+  const f=S.movF;
+  let mv=S.data.movs||[];
+  if (f.desde) mv=mv.filter(m=>fd(m.fecha)>=f.desde);
+  if (f.hasta) mv=mv.filter(m=>fd(m.fecha)<=f.hasta);
+  if (f.cats.length)  mv=mv.filter(m=>f.cats.includes(m.categoria));
+  if (f.medios.length) mv=mv.filter(m=>f.medios.includes(m.medio_pago));
+  if (f.search) {
+    const q=f.search.toLowerCase();
+    mv=mv.filter(m=>(m.concepto||'').toLowerCase().includes(q)||(m.comentarios||'').toLowerCase().includes(q)||(m.descripcion||'').toLowerCase().includes(q));
   }
-  const icono = tipo==='all'?'ti-arrows-exchange':tipo==='GASTO'?'ti-trending-down':'ti-trending-up';
-  const titulo = tipo==='all'?'Movimientos':tipo==='GASTO'?'Egresos':'Ingresos';
-  $('tab-'+tabId).innerHTML=`
-<div class="hdr">
-  <h2><i class="ti ${icono}"></i> ${titulo}</h2>
-  <button class="btn btn-accent btn-sm" onclick="oMov('${tipo==='all'?'GASTO':tipo}')"><i class="ti ti-plus"></i> ${tipo==='INGRESO'?'Ingreso':'Gasto'}</button>
-</div>
-${tipo!=='all'?`<div class="cards">
-  <div class="card"><div class="card-lbl">Mes ${cm}</div><div class="card-val ${tipo==='GASTO'?'red':'green'}">${fmt(total)}</div></div>
-  <div class="card"><div class="card-lbl">Total registros</div><div class="card-val accent">${movs.length}</div></div>
-</div>`:''}
-${ch}
-<table><tr><th>Fecha</th><th>Tipo</th><th>Cat.</th><th>Concepto</th><th>Monto</th><th>Medio</th><th>Comentarios</th><th></th></tr>
-${movs.slice(0,150).map(m=>`<tr>
-  <td>${fd(m.fecha)}</td>
-  <td><span class="badge b-${(m.tipo||'').toLowerCase()}">${m.tipo}</span></td>
-  <td>${m.categoria||''}</td><td>${m.concepto||''}</td>
-  <td class="${m.tipo==='GASTO'?'red':'green'}">${fmt(m.monto)}</td>
-  <td style="color:var(--muted)">${m.medio_pago||''}</td>
-  <td style="color:var(--muted);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(m.comentarios||'').replace(/"/g,'')}">${m.comentarios||''}</td>
+  return mv;
+}
+
+// ── MOVIMIENTOS — CHART ───────────────────────────────────────────────────────
+function renderMovChart(filtered) {
+  initMovF();
+  const type=S.movF.chartType;
+  const gastos=filtered.filter(m=>m.tipo==='GASTO');
+  const canvas=$('mov-chart');
+  if (!canvas) return;
+
+  if (type==='doughnut') {
+    const bC=byKey(gastos,'categoria');
+    const keys=Object.keys(bC).sort((a,b)=>bC[b]-bC[a]);
+    if (!keys.length) { if(S.ch['mov-chart']){S.ch['mov-chart'].destroy();delete S.ch['mov-chart'];} return; }
+    mkC('mov-chart','doughnut',keys,[{data:keys.map(k=>bC[k]),label:'$',
+      backgroundColor:keys.map(k=>(CAT_CLR[k]||'#94a3b8')+'bb'),
+      borderColor:keys.map(k=>CAT_CLR[k]||'#94a3b8'),borderWidth:2}]);
+  } else if (type==='bar') {
+    const ms=last6();
+    const all=S.data.movs||[];
+    mkC('mov-chart','bar',ms,[
+      {label:'Gastos',  data:ms.map(m=>all.filter(x=>x.tipo==='GASTO'  &&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0)),backgroundColor:'#f8717155',borderColor:'#f87171'},
+      {label:'Ingresos',data:ms.map(m=>all.filter(x=>x.tipo==='INGRESO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0)),backgroundColor:'#34d39955',borderColor:'#34d399'}
+    ]);
+  } else if (type==='line') {
+    const dates=[...new Set(filtered.map(m=>fd(m.fecha)))].sort();
+    if (!dates.length) { if(S.ch['mov-chart']){S.ch['mov-chart'].destroy();delete S.ch['mov-chart'];} return; }
+    mkC('mov-chart','line',dates,[
+      {label:'Gastos',  data:dates.map(d=>gastos.filter(m=>fd(m.fecha)===d).reduce((a,x)=>a+(x.monto||0),0)),borderColor:'#f87171',backgroundColor:'#f8717122',fill:true},
+      {label:'Ingresos',data:dates.map(d=>filtered.filter(m=>m.tipo==='INGRESO'&&fd(m.fecha)===d).reduce((a,x)=>a+(x.monto||0),0)),borderColor:'#34d399',backgroundColor:'#34d39922',fill:true}
+    ]);
+  }
+}
+
+// ── MOVIMIENTOS — TABLE ROW ───────────────────────────────────────────────────
+function movRow(m) {
+  S._movData[m.id]=m;
+  const cClr=CAT_CLR[m.categoria]||'#94a3b8';
+  const tClr=m.tipo==='GASTO'?'var(--red)':'var(--green)';
+  const tBg =m.tipo==='GASTO'?'rgba(248,113,113,.13)':'rgba(52,211,153,.13)';
+  const nota=m.comentarios?`<span class="nota-ia" title="${(m.comentarios||'').replace(/"/g,'&quot;')}"><i class="ti ti-robot"></i></span>`:'';
+  const cptEsc=(m.concepto||'').replace(/`/g,'').replace(/\\/g,'');
+  return `<tr>
+  <td style="white-space:nowrap;color:var(--muted);font-size:11px">${fd(m.fecha)}</td>
+  <td><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
+  <td><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
+  <td class="editable" data-mid="${m.id}" data-mfield="concepto" ondblclick="inlineEditMov(this)">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
+  <td class="editable" data-mid="${m.id}" data-mfield="monto" ondblclick="inlineEditMov(this)" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
+  <td style="color:var(--muted);font-size:11px">${m.medio_pago||'—'}</td>
+  <td style="text-align:center">${nota}</td>
   <td class="acts">
-    <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick='eMov(${JSON.stringify(m)})'><i class="ti ti-pencil"></i></button>
-    <button class="btn btn-danger btn-sm" style="padding:4px 7px" onclick="dMov(${m.id})"><i class="ti ti-trash"></i></button>
+    <button class="btn btn-ghost btn-sm" style="padding:3px 6px" title="Editar" onclick="eMov(S._movData[${m.id}])"><i class="ti ti-pencil"></i></button>
+    <button class="btn btn-dup btn-sm" style="padding:3px 6px" title="Duplicar" onclick="duplicarMov(${m.id})"><i class="ti ti-copy"></i></button>
+    <button class="btn btn-danger btn-sm" style="padding:3px 6px" title="Eliminar" onclick="dMov(${m.id})"><i class="ti ti-trash"></i></button>
   </td>
-</tr>`).join('')}</table>`;
-  chInit();
+</tr>`;
+}
+
+// ── MOVIMIENTOS — INLINE EDIT ─────────────────────────────────────────────────
+function inlineEditMov(td) {
+  if (td.querySelector('input')) return;
+  const id=td.dataset.mid, field=td.dataset.mfield;
+  const m=S._movData[id]; if (!m) return;
+  const isNum=field==='monto';
+  const cur=isNum?m.monto:(m.concepto||'');
+  const inp=document.createElement('input');
+  inp.type=isNum?'number':'text'; inp.value=cur; if(isNum)inp.step='0.01';
+  inp.style.cssText='width:100%;background:var(--card2);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;color:var(--text);font-size:12px;text-align:'+(isNum?'right':'left');
+  td.innerHTML=''; td.appendChild(inp); inp.focus(); inp.select();
+  const save=async()=>{
+    const val=isNum?parseFloat(inp.value):inp.value.trim();
+    if (val===cur||(isNum&&val===parseFloat(cur))){rMovs();return;}
+    try{ await api('PUT',`/api/movimientos/${id}`,{user_phone:S.phone,[field]:val}); await load(); }
+    catch(e){ alert('Error: '+e.message); rMovs(); }
+  };
+  inp.addEventListener('blur',save);
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save();}if(e.key==='Escape')rMovs();});
+}
+
+// ── MOVIMIENTOS — DUPLICATE ───────────────────────────────────────────────────
+async function duplicarMov(id) {
+  const m=S._movData[id]; if(!m)return;
+  const datos={tipo:m.tipo,categoria:m.categoria,concepto:m.concepto,medio_pago:m.medio_pago,
+               monto:m.monto,fecha:new Date().toISOString().split('T')[0],comentarios:''};
+  try{ await api('POST','/api/movimientos',{user_phone:S.phone,...datos}); await load(); }
+  catch(e){ alert('Error al duplicar: '+e.message); }
+}
+
+// ── RENDER: MOVIMIENTOS (main) ────────────────────────────────────────────────
+function rMovs() {
+  initMovF();
+  S._movData={};
+  const f=S.movF;
+  const filtered=getMovFiltradas();
+  const gastos  =filtered.filter(m=>m.tipo==='GASTO');
+  const ingresos=filtered.filter(m=>m.tipo==='INGRESO');
+  const totGas  =gastos.reduce((a,m)=>a+(m.monto||0),0);
+  const totIng  =ingresos.reduce((a,m)=>a+(m.monto||0),0);
+  const neto    =totIng-totGas;
+
+  const catPills=CATS.map(c=>{
+    const sel=f.cats.includes(c);
+    const cc=CAT_CLR[c]||'var(--border)';
+    return `<button class="f-pill${sel?' on':''}" onclick="toggleMovCat('${c}')" style="${sel?'':'border-color:'+cc+';color:'+cc}">${c}</button>`;
+  }).join('');
+
+  const medPills=MEDIOS.map(med=>{
+    const key=med.replace(/'/g,"\\'");
+    const sel=f.medios.includes(med);
+    return `<button class="f-pill${sel?' on':''}" onclick="toggleMovMedio('${key}')" style="font-size:10px">${med}</button>`;
+  }).join('');
+
+  const chartOpts=['doughnut:🍩 Dona — Gastos por categoría','bar:📊 Barras — Comparación mensual','line:📈 Línea — Tendencia'].map(o=>{
+    const[v,l]=o.split(':');
+    return `<option value="${v}"${f.chartType===v?' selected':''}>${l}</option>`;
+  }).join('');
+
+  $('tab-movimientos').innerHTML=`
+<div class="hdr">
+  <h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2>
+  <div style="display:flex;gap:6px">
+    <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green)" onclick="oMov('INGRESO')"><i class="ti ti-plus"></i> Ingreso</button>
+    <button class="btn btn-accent btn-sm" onclick="oMov('GASTO')"><i class="ti ti-plus"></i> Gasto</button>
+  </div>
+</div>
+
+<div class="mov-filter">
+  <div class="mf-row">
+    <span class="mf-lbl">Período</span>
+    ${['hoy:Hoy','quincena:Quincena','mes:Mes','semestre:Semestre','anio:Año'].map(p=>{const[k,l]=p.split(':');return`<button class="f-pill preset" onclick="setMovPreset('${k}')">${l}</button>`;}).join('')}
+  </div>
+  <div class="mf-row">
+    <span class="mf-lbl">Rango</span>
+    <input type="date" id="movf-desde" value="${f.desde||''}" style="width:140px;padding:5px 8px;font-size:12px" onchange="applyMovDates()">
+    <span style="color:var(--muted)">—</span>
+    <input type="date" id="movf-hasta" value="${f.hasta||''}" style="width:140px;padding:5px 8px;font-size:12px" onchange="applyMovDates()">
+  </div>
+  <div class="mf-row">
+    <span class="mf-lbl">Categoría</span>
+    <div style="display:flex;flex-wrap:wrap;gap:5px">${catPills}</div>
+  </div>
+  <div class="mf-row">
+    <span class="mf-lbl">Medio</span>
+    <div style="display:flex;flex-wrap:wrap;gap:5px">${medPills}</div>
+  </div>
+  <div class="mf-row">
+    <span class="mf-lbl">Buscar</span>
+    <div class="mov-search">
+      <i class="ti ti-search"></i>
+      <input id="movf-search" placeholder="Concepto, comentario..." value="${f.search||''}"
+        oninput="clearTimeout(S._ms);S._ms=setTimeout(applyMovSearch,380)">
+    </div>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-lbl"><i class="ti ti-trending-up"></i> Ingresos</div>
+    <div class="kpi-val green">${fmt(totIng)}</div>
+    <div class="kpi-sub">${ingresos.length} registro${ingresos.length!==1?'s':''}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-lbl"><i class="ti ti-trending-down"></i> Egresos</div>
+    <div class="kpi-val red">${fmt(totGas)}</div>
+    <div class="kpi-sub">${gastos.length} registro${gastos.length!==1?'s':''}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-lbl"><i class="ti ti-scale"></i> Neto</div>
+    <div class="kpi-val ${neto>=0?'green':'red'}">${fmt(neto)}</div>
+    <div class="kpi-sub">${neto>=0?'✓ Ahorro':'⚠ Déficit'}</div>
+  </div>
+</div>
+
+<div class="mov-cbox">
+  <div class="mov-cbox-hdr">
+    <h3>Análisis visual — ${filtered.length} movimiento${filtered.length!==1?'s':''}</h3>
+    <select class="mov-chart-sel" onchange="setMovChart(this.value)">${chartOpts}</select>
+  </div>
+  <div class="cwrap-lg"><canvas id="mov-chart"></canvas></div>
+</div>
+
+<div style="overflow-x:auto">
+<table>
+  <tr>
+    <th>Fecha</th><th>Tipo</th><th>Categoría</th>
+    <th>Concepto <span style="font-size:9px;color:var(--muted);font-weight:400">(doble clic para editar)</span></th>
+    <th style="text-align:right">Monto</th>
+    <th>Medio</th>
+    <th style="text-align:center" title="Nota / comentario IA"><i class="ti ti-robot" style="font-size:12px"></i></th>
+    <th></th>
+  </tr>
+  ${filtered.length
+    ? filtered.slice(0,250).map(m=>movRow(m)).join('')
+    : `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:28px">Sin movimientos en el período seleccionado</td></tr>`}
+</table>
+</div>`;
+
+  setTimeout(()=>renderMovChart(filtered),60);
 }
 
 // ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
 function rCal() {
-  const evts=S.data.calendario||[];
+  const evts = S.data.calendario || [];
+  const refs = (S.data.user || {}).external_refs || {};
   const y=S.cy, mo=S.cm;
   const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const first=new Date(y,mo,1), last=new Date(y,mo+1,0);
   const today=new Date().toISOString().split('T')[0];
+  const mm = String(mo+1).padStart(2,'0');
+
+  // Mark days with expected income/expenses
+  const ingEsp = getIngresosEsperados(refs);
+  const gasEsp = getGastosEsperados(refs);
+  const ingDays = new Set(ingEsp.flatMap(i => i.dias || []));
+  // Pay days for current month
+  const payDays = (refs.dias_pago || []);
+
   let cells='<div class="ch">Dom</div><div class="ch">Lun</div><div class="ch">Mar</div><div class="ch">Mié</div><div class="ch">Jue</div><div class="ch">Vie</div><div class="ch">Sáb</div>';
   for (let i=0;i<first.getDay();i++) cells+=`<div class="cd oth"></div>`;
   for (let d=1;d<=last.getDate();d++) {
-    const ds=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const ds=`${y}-${mm}-${String(d).padStart(2,'0')}`;
     const de=evts.filter(e=>fd(e.fecha)===ds);
-    cells+=`<div class="cd${ds===today?' today':''}"><div class="cdn">${d}</div>${de.map(e=>`<div class="cev" title="${e.titulo}" onclick='eEvt(${JSON.stringify(e)})'>${e.titulo}</div>`).join('')}</div>`;
+    const isPay = payDays.includes(d) || ingDays.has(d);
+    cells+=`<div class="cd${ds===today?' today':''}">
+      <div class="cdn" style="${isPay?'color:var(--green);font-weight:700':''}">${d}${isPay?'💰':''}</div>
+      ${de.map(e=>`<div class="cev" title="${e.titulo}" onclick='eEvt(${JSON.stringify(e)})'>${e.titulo}</div>`).join('')}
+    </div>`;
   }
   const up=evts.filter(e=>fd(e.fecha)>=today).slice(0,10);
+
+  // Upcoming scheduled payments this quincena
+  const qi = getQuincenaInfo(S.qOffset);
+  const qEvts = evts.filter(e => { const f=fd(e.fecha); return f>=qi.from && f<=qi.to; });
+
   $('tab-calendario').innerHTML=`
 <div class="hdr">
   <h2><i class="ti ti-calendar"></i> Calendario</h2>
   <button class="btn btn-accent btn-sm" onclick="oEvt()"><i class="ti ti-plus"></i> Evento</button>
 </div>
+${rQuincenaPanel('cal')}
 <div class="cbox" style="margin-bottom:14px">
   <div class="cal-nav">
     <button class="btn btn-ghost btn-sm" onclick="calN(-1)"><i class="ti ti-chevron-left"></i></button>
-    <h3>${MN[mo]} ${y}</h3>
+    <h3>${MN[mo]} ${y} <span style="font-size:11px;color:var(--muted);margin-left:6px">${payDays.length?'💰 cobro: días '+payDays.join(', '):''}</span></h3>
     <button class="btn btn-ghost btn-sm" onclick="calN(1)"><i class="ti ti-chevron-right"></i></button>
   </div>
   <div id="cal-grid">${cells}</div>
@@ -1056,6 +1666,22 @@ function closeM() { $('ovl').classList.remove('open'); }
 
 async function saveM() {
   const ctx=S.mctx; let datos={}, r;
+
+  if (ctx.mode === 'add-exp-item') {
+    const desc  = $('ei-desc')?.value.trim();
+    const monto = parseFloat($('ei-monto')?.value) || 0;
+    if (!desc)  { alert('Ingresa una descripción'); return; }
+    if (!monto) { alert('Ingresa el monto'); return; }
+    const field = ctx.tipo === 'ingresos' ? 'ingresos_esperados' : 'gastos_esperados';
+    const item  = { descripcion: desc, monto };
+    if (ctx.tipo === 'ingresos') {
+      const diasRaw = ($('ei-dias')?.value || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0 && n <= 31);
+      item.dias = diasRaw.length ? diasRaw : [];
+    }
+    const res = await api('POST', '/api/update-refs', { phone: S.phone, field, action: 'add', item });
+    if (res?.success === false) { alert('Error: ' + (res.error || '')); return; }
+    closeM(); await load(); return;
+  }
 
   if (ctx.mode==='new-nidito' || ctx.mode==='edit-nidito') {
     const titulo = $('nd-titulo').value.trim();
