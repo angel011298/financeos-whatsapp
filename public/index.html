@@ -1455,9 +1455,9 @@ function rMovs() {
     return `<button class="f-pill${sel?' on':''}" onclick="toggleMovMedio('${key}')" style="font-size:10px">${med}</button>`;
   }).join('');
 
-  const chartOpts=['doughnut:🍩 Dona — Gastos por categoría','bar:📊 Barras — Comparación mensual','line:📈 Línea — Tendencia'].map(o=>{
+  const chartPills=['doughnut:🍩 Dona','bar:📊 Barras','line:📈 Línea'].map(o=>{
     const[v,l]=o.split(':');
-    return `<option value="${v}"${f.chartType===v?' selected':''}>${l}</option>`;
+    return `<button class="f-pill${f.chartType===v?' on':''}" onclick="setMovChart('${v}')">${l}</button>`;
   }).join('');
 
   $('tab-movimientos').innerHTML=`
@@ -1519,7 +1519,7 @@ function rMovs() {
 <div class="mov-cbox">
   <div class="mov-cbox-hdr">
     <h3>Análisis visual — ${filtered.length} movimiento${filtered.length!==1?'s':''}</h3>
-    <select class="mov-chart-sel" onchange="setMovChart(this.value)">${chartOpts}</select>
+    <div style="display:flex;gap:4px">${chartPills}</div>
   </div>
   <div class="cwrap-lg"><canvas id="mov-chart"></canvas></div>
 </div>
