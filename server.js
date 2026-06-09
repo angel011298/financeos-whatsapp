@@ -225,7 +225,7 @@ async function llamarIA(usuario, systemPrompt, historial, mensajeUsuario) {
   }
 
   // Gemini — inyectar system prompt como primer turno del historial
-  const geminiModel = gemini.getGenerativeModel({ model: usuario.ai_model || 'gemini-1.5-flash' });
+  const geminiModel = gemini.getGenerativeModel({ model: usuario.ai_model || 'gemini-2.5-flash' });
   const historialGemini = [
     { role: 'user',  parts: [{ text: systemPrompt }] },
     { role: 'model', parts: [{ text: 'Entendido. Soy Finn. ¿En qué puedo ayudarte?' }] },
@@ -1131,9 +1131,19 @@ app.post('/api/chat-web', async (req, res) => {
     else if (['historial','movimientos'].includes(lower))        reply = await cmdHistorial(phone);
     else if (['calendario','agenda','eventos'].includes(lower))  reply = await cmdCalendario(phone);
     else {
-      const sys   = await buildSystemPrompt(user);
-      const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
-      reply       = await callIA(user, sys, input, phone);
+      // ── Finn v2 pipeline: historial DB + llamarIA (Claude/Gemini) + auto-save ──
+      const sys       = await buildSystemPrompt(user);
+      const historial = await cargarHistorial(phone);
+      const input     = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
+      const rawReply  = await llamarIA(user, sys, historial, input);
+      const { limpio, saves, metas, presup } = parsearYLimpiar(rawReply);
+      // Guardar en DB (persistente entre reinicios)
+      await guardarMensaje(phone, 'user', input);
+      await guardarMensaje(phone, 'assistant', limpio);
+      // Auto-guardar movimientos/metas/presupuesto detectados por la IA
+      await ejecutarGuardados(saves, metas, presup, phone)
+        .catch(e => console.error('chat-web ejecutarGuardados:', e.message));
+      reply = limpio;
     }
 
     res.json({ reply, transcription: isAudio ? text : undefined });
