@@ -1131,19 +1131,29 @@ app.post('/api/chat-web', async (req, res) => {
     else if (['historial','movimientos'].includes(lower))        reply = await cmdHistorial(phone);
     else if (['calendario','agenda','eventos'].includes(lower))  reply = await cmdCalendario(phone);
     else {
-      // ── Finn v2 pipeline: historial DB + llamarIA (Claude/Gemini) + auto-save ──
-      const sys       = await buildSystemPrompt(user);
-      const historial = await cargarHistorial(phone);
-      const input     = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
-      const rawReply  = await llamarIA(user, sys, historial, input);
-      const { limpio, saves, metas, presup } = parsearYLimpiar(rawReply);
-      // Guardar en DB (persistente entre reinicios)
-      await guardarMensaje(phone, 'user', input);
-      await guardarMensaje(phone, 'assistant', limpio);
-      // Auto-guardar movimientos/metas/presupuesto detectados por la IA
-      await ejecutarGuardados(saves, metas, presup, phone)
-        .catch(e => console.error('chat-web ejecutarGuardados:', e.message));
-      reply = limpio;
+      const sys   = await buildSystemPrompt(user);
+      const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
+
+      if (user.ai_preference === 'CLAUDE') {
+        // ── Claude: llamarIA + text tokens (SAVE/META/PRESUPUESTO) + DB history ──
+        const historial = await cargarHistorial(phone);
+        const rawReply  = await llamarIA(user, sys, historial, input);
+        const { limpio, saves, metas, presup } = parsearYLimpiar(rawReply);
+        await guardarMensaje(phone, 'user', input);
+        await guardarMensaje(phone, 'assistant', limpio);
+        await ejecutarGuardados(saves, metas, presup, phone)
+          .catch(e => console.error('chat-web ejecutarGuardados:', e.message));
+        reply = limpio;
+      } else {
+        // ── Gemini: callIA con function calling nativo (más confiable para DB) ──
+        // Precargar historial DB → history[phone] para persistencia entre reinicios
+        const dbHistorial = await cargarHistorial(phone);
+        history[phone] = dbHistorial.map(m => ({ role: m.role, content: m.content }));
+        reply = await callIA(user, sys, input, phone);
+        // Guardar en DB (callIA ya actualiza history[] en memoria)
+        await guardarMensaje(phone, 'user', input);
+        await guardarMensaje(phone, 'assistant', reply);
+      }
     }
 
     res.json({ reply, transcription: isAudio ? text : undefined });
