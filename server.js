@@ -1219,10 +1219,11 @@ async function seedAdminOnStartup() {
   const adminPhone = process.env.ADMIN_PHONE;
   if (!adminPhone) return;
   try {
-    await sb.from('usuarios').upsert(
-      [{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'GEMINI' }],
-      { onConflict: 'telefono' }
-    );
+    // Solo inserta si NO existe — nunca sobreescribir preferencias (ai_preference, ai_model)
+    const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', adminPhone).single();
+    if (!existing) {
+      await sb.from('usuarios').insert([{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'GEMINI' }]);
+    }
     const [r1, r2] = await Promise.all([
       sb.from('tdc').update({ user_phone: adminPhone }).eq('user_phone', ''),
       sb.from('metas').update({ user_phone: adminPhone }).eq('user_phone', ''),
