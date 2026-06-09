@@ -2,6 +2,7 @@ require('dotenv').config();
 const express   = require('express');
 const twilio    = require('twilio');
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket        = require('ws');
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios     = require('axios');
@@ -11,7 +12,9 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // ── Clientes ────────────────────────────────────────────────────────────────
-const sb        = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const sb        = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+  realtime: { transport: WebSocket }
+});
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
 const gemini    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const twl       = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
