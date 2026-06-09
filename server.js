@@ -700,10 +700,14 @@ async function callIA(user, sysPrompt, text, phone) {
   history[phone].push({ role: 'user', content: text });
   if (history[phone].length > 20) history[phone].splice(0, 2);
 
-  // ── GEMINI 2.0 Flash — motor principal ───────────────────────────────────
-  // gemini-1.5-pro y 1.5-flash fueron deprecados. Usamos gemini-2.5-flash.
-  // NO usamos systemInstruction del SDK — lo inyectamos via historial (más compatible).
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', tools: geminiTools });
+  // ── GEMINI 2.5-flash con systemInstruction nativo + function calling ─────
+  // Usar systemInstruction es la forma correcta para que el modelo respete
+  // las instrucciones de herramientas (TIENES PODER DE ACCIÓN, etc.)
+  const model = genAI.getGenerativeModel({
+    model:             'gemini-2.5-flash',
+    tools:             geminiTools,
+    systemInstruction: sysPrompt,            // nativo — más fiable que par falso user/model
+  });
 
   // Construir historial de conversación (sin el mensaje actual, que va en sendMessage)
   let gHist = history[phone]
@@ -720,12 +724,8 @@ async function callIA(user, sysPrompt, text, phone) {
   }
   if (safeHist.length > 0 && safeHist[safeHist.length - 1].role === 'user') safeHist.pop();
 
-  // System prompt como par falso al inicio del historial — compatible con todos los SDKs
-  const sysHist = [
-    { role: 'user',  parts: [{ text: `[INSTRUCCIONES DEL SISTEMA]\n${sysPrompt}` }] },
-    { role: 'model', parts: [{ text: 'Entendido. Seguiré estas instrucciones en todas mis respuestas.' }] }
-  ];
-  const chat = model.startChat({ history: [...sysHist, ...safeHist] });
+  // Sin par falso al inicio — systemInstruction lo maneja el SDK
+  const chat = model.startChat({ history: safeHist });
   const res  = await chat.sendMessage(text);
   const calls = res.response.functionCalls();
   if (calls?.length) {
