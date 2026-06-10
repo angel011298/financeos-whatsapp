@@ -36,7 +36,14 @@ const mesActual = () => new Date().toISOString().slice(0, 7);
 
 // ── Compatibilidad con código existente ──────────────────────────────────────
 const path    = require('path');
-app.use(express.static(path.join(__dirname, 'public')));
+// index.html sin caché (debe ir ANTES del static middleware)
+app.get('/', (_req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModified: false }));
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
 const history = {};          // DEPRECADO — reemplazado por historial_chat en DB
@@ -1327,12 +1334,6 @@ async function seedAdminOnStartup() {
     console.log(`✅ Admin seeded: ${adminPhone} | TDC: ${tdcCount} | Metas: ${metasCount}`);
   } catch (e) { console.error('seedAdmin error:', e.message); }
 }
-
-// ── Endpoint raíz (sirve index.html sin caché para que deploys sean inmediatos)
-app.get('/', (req, res) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
