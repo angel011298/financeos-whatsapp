@@ -908,6 +908,85 @@ app.delete('/api/metas/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── TDC CRUD ──────────────────────────────────────────────────────────────────
+app.post('/api/tdc', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+    const { data, error } = await sb.from('tdc').insert({ user_phone, ...d }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/tdc/:id', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    const { data, error } = await sb.from('tdc').update(d).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/tdc/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('tdc').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── PRESUPUESTO CRUD ──────────────────────────────────────────────────────────
+app.put('/api/presupuesto', async (req, res) => {
+  try {
+    const { user_phone, categoria, limite, mes } = req.body;
+    if (!user_phone || !categoria || !mes) return res.status(400).json({ success: false, error: 'Faltan campos' });
+    const { data, error } = await sb.from('presupuesto')
+      .upsert({ user_phone, categoria, limite: parseFloat(limite) || 0, mes }, { onConflict: 'user_phone,categoria,mes' })
+      .select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── DESPENSA CRUD ─────────────────────────────────────────────────────────────
+app.get('/api/despensa/:phone', async (req, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const { data, error } = await sb.from('despensa').select('*').eq('user_phone', phone).order('comprado').order('prioridad', { ascending: false }).order('created_at', { ascending: false });
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/despensa', async (req, res) => {
+  try {
+    const { user_phone, nombre, cantidad, precio_est, prioridad } = req.body;
+    if (!user_phone || !nombre) return res.status(400).json({ success: false, error: 'Faltan campos' });
+    const { data, error } = await sb.from('despensa').insert({ user_phone, nombre, cantidad: cantidad || '', precio_est: parseFloat(precio_est) || 0, prioridad: parseInt(prioridad) || 0, comprado: false }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/despensa/:id', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    const { data, error } = await sb.from('despensa').update({ ...d, updated_at: new Date().toISOString() }).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/despensa/:id', async (req, res) => {
+  try {
+    const { user_phone } = req.body;
+    const { error } = await sb.from('despensa').delete().eq('id', req.params.id).eq('user_phone', user_phone);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.post('/api/send-whatsapp-invite', async (req, res) => {
   try {
     const { phone } = req.body;
@@ -1202,13 +1281,19 @@ app.post('/api/update-refs', async (req, res) => {
     if (selErr && selErr.code !== 'PGRST116') return res.status(500).json({ success: false, error: selErr.message });
     const refs = { ...(cur?.external_refs || {}) };
 
-    if (field === 'ingresos_esperados' || field === 'gastos_esperados') {
+    if (field === 'forma_pago_gastos' && action === 'set') {
+      if (!refs.forma_pago_gastos) refs.forma_pago_gastos = {};
+      refs.forma_pago_gastos[itemId] = item || '';  // itemId=descripcion, item='efectivo'|'tarjeta_debito'|''
+    } else if (field === 'ingresos_esperados' || field === 'gastos_esperados') {
       const arr = Array.isArray(refs[field]) ? [...refs[field]] : [];
       if (action === 'add') {
         arr.push({ ...item, _id: Date.now().toString() });
       } else if (action === 'remove') {
         const idx = arr.findIndex(x => (x._id || x.id) === itemId);
         if (idx > -1) arr.splice(idx, 1);
+      } else if (action === 'update') {
+        const idx = arr.findIndex(x => (x._id || x.id) === itemId);
+        if (idx > -1) arr[idx] = { ...arr[idx], ...item };
       }
       refs[field] = arr;
     }
