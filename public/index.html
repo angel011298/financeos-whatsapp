@@ -14,6 +14,9 @@
 <!-- Libs -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#0f172a;--card:#1e293b;--card2:#162032;--border:#334155;
@@ -26,7 +29,7 @@ html.light{
   --green:#10b981;--red:#dc2626;--yellow:#d97706;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px;transition:background .2s,color .2s}
+body{background:var(--bg);color:var(--text);font-family:'Sora',system-ui,sans-serif;font-size:14px;transition:background .2s,color .2s}
 
 /* ── AUTH ─────────────────────────────────────────── */
 .auth-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:radial-gradient(ellipse at 60% 40%,rgba(129,140,248,.08) 0%,transparent 70%)}
@@ -246,6 +249,81 @@ td.editable:hover{text-decoration:underline dotted var(--muted)}
   .chat-wrap{height:calc(100dvh - 148px)}
 }
 @media(min-width:701px){#mobile-nav{display:none!important}}
+
+/* ── TYPOGRAPHY SYSTEM ────────────────────────────────────────────────────── */
+
+/* Encabezados de sección — DM Serif Display */
+.hdr h2,
+.auth-box h1,
+.sec-title {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-weight: 400;
+  font-size: 1.2rem;
+  letter-spacing: 0.01em;
+}
+.auth-box h1 { font-size: 1.5rem; }
+
+/* Cifras financieras / monoespaciado — DM Mono */
+.card-val,
+.kpi-val,
+.qstat-val,
+.mono {
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.8rem;
+  letter-spacing: -0.02em;
+}
+.qstat-val { font-size: 1.3rem; }   /* panel quincenal: más compacto */
+
+/* Texto de tabla — DM Mono para valores, jerarquía 0.85rem */
+td {
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+th { font-size: 0.75rem; }           /* headers de tabla levemente más chicos */
+
+/* Números positivos: respiro visual a la derecha */
+.green {
+  padding-right: 4px;
+}
+
+/* Números negativos: contraste fuerte — peso semibold + sombra de texto */
+.red {
+  font-weight: 600;
+  text-shadow: 0 0 12px rgba(248,113,113,.25);
+}
+
+/* Etiquetas de KPI — mantener Sora con uppercase tracking */
+.kpi-lbl,
+.card-lbl,
+.qstat-lbl,
+.q-section-lbl,
+.mf-lbl {
+  font-family: 'Sora', system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+/* Navegación y controles — Sora 500 */
+nav a,
+.btn,
+.f-pill,
+.ptab,
+.badge,
+.cat-bdg,
+.tipo-bdg {
+  font-family: 'Sora', system-ui, sans-serif;
+  font-weight: 500;
+}
+
+/* Input / textarea — Sora para coherencia */
+input, select, textarea {
+  font-family: 'Sora', system-ui, sans-serif;
+}
+
+/* Mensajes del chat — Sora */
+.msg { font-family: 'Sora', system-ui, sans-serif; }
 </style>
 </head>
 <body>
