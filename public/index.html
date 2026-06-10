@@ -2138,23 +2138,67 @@ function calN(d){S.cm+=d;if(S.cm>11){S.cm=0;S.cy++;}if(S.cm<0){S.cm=11;S.cy--;}r
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
 function oMov(tipo='GASTO', rec=null) {
-  S.mctx = { tabla:'movimientos', id:rec?.id||null };
-  $('m-title').textContent = rec ? 'Editar Movimiento' : `Nuevo ${tipo==='INGRESO'?'Ingreso':'Gasto'}`;
-  const today=new Date().toISOString().split('T')[0];
-  $('m-body').innerHTML=`
-<div class="fr"><label>Tipo</label><select id="f-tipo"><option${tipo==='GASTO'?' selected':''}>GASTO</option><option${tipo==='INGRESO'?' selected':''}>INGRESO</option></select></div>
+  const esIng = (rec?.tipo || tipo) === 'INGRESO';
+  S.mctx = { tabla:'movimientos', id:rec?.id||null, esIngreso: esIng };
+  $('m-title').textContent = rec
+    ? (esIng ? 'Editar Ingreso' : 'Editar Gasto')
+    : (esIng ? 'Nuevo Ingreso' : 'Nuevo Gasto');
+  const today = new Date().toISOString().split('T')[0];
+
+  if (esIng) {
+    const TIPOS_ING = ['Sueldo','Beca','Freelance','Vales','Bono','Otro'];
+    const concRec = rec?.concepto || '';
+    const concSel = TIPOS_ING.slice(0,-1).includes(concRec) ? concRec : (concRec ? 'Otro' : 'Sueldo');
+    const concOtro = concSel === 'Otro' ? concRec : '';
+    $('m-body').innerHTML=`
+<div class="fr"><label>Tipo de ingreso</label>
+  <select id="f-ing-tipo" onchange="toggleIngOtro(this.value)">
+    ${TIPOS_ING.map(t=>`<option${concSel===t?' selected':''}>${t}</option>`).join('')}
+  </select>
+</div>
+<div class="fr" id="f-ing-otro-row" style="display:${concSel==='Otro'?'block':'none'}">
+  <label>Descripción libre</label>
+  <input id="f-ing-otro" placeholder="Ej: Venta de artículo, comisión..." value="${concOtro.replace(/"/g,'&quot;')}">
+</div>
+<div class="fr"><label>Monto ($)</label>
+  <input id="f-monto" type="number" min="0" step="1" value="${rec?.monto||''}" placeholder="0.00">
+</div>
+<div class="f2">
+  <div class="fr"><label>Medio de pago</label>
+    <select id="f-medio">
+      <option${(rec?.medio_pago||'transferencia')==='transferencia'?' selected':''}>transferencia</option>
+      <option${rec?.medio_pago==='efectivo'?' selected':''}>efectivo</option>
+      <option${rec?.medio_pago==='débito'?' selected':''}>débito</option>
+    </select>
+  </div>
+  <div class="fr"><label>Fecha</label>
+    <input id="f-fecha" type="date" value="${rec?.fecha?fd(rec.fecha):today}">
+  </div>
+</div>
+<div class="fr"><label>Comentarios <span style="color:var(--muted);font-size:10px">(opcional)</span></label>
+  <textarea id="f-com" placeholder="Quincena completa, pago parcial, bono extra...">${rec?.comentarios||''}</textarea>
+</div>`;
+  } else {
+    $('m-body').innerHTML=`
 <div class="f2">
   <div class="fr"><label>Categoría</label><select id="f-cat">${CATS.map(c=>`<option${(rec?.categoria||'Comida')===c?' selected':''}>${c}</option>`).join('')}</select></div>
-  <div class="fr"><label>Monto ($)</label><input id="f-monto" type="number" min="0" step="1" value="${rec?.monto||''}"></div>
+  <div class="fr"><label>Monto ($)</label><input id="f-monto" type="number" min="0" step="1" value="${rec?.monto||''}" placeholder="0.00"></div>
 </div>
-<div class="fr"><label>Concepto / Producto</label><input id="f-cpto" placeholder="McDonald's, Uber, mínimo BBVA..." value="${rec?.concepto||''}"></div>
+<div class="fr"><label>Concepto / Producto</label><input id="f-cpto" placeholder="McDonald's, Uber, mínimo BBVA..." value="${(rec?.concepto||'').replace(/"/g,'&quot;')}"></div>
 <div class="f2">
   <div class="fr"><label>Medio de pago</label><select id="f-medio">${MEDIOS.map(m=>`<option${(rec?.medio_pago||'efectivo')===m?' selected':''}>${m}</option>`).join('')}</select></div>
   <div class="fr"><label>Fecha</label><input id="f-fecha" type="date" value="${rec?.fecha?fd(rec.fecha):today}"></div>
 </div>
 <div class="fr"><label>Comentarios (con quién, emergencia, error…)</label><textarea id="f-com" placeholder="Con Alicia, fue emergencia...">${rec?.comentarios||''}</textarea></div>`;
+  }
   $('ovl').classList.add('open');
 }
+
+function toggleIngOtro(val) {
+  const row = $('f-ing-otro-row');
+  if (row) row.style.display = val === 'Otro' ? 'block' : 'none';
+}
+
 function eMov(rec) { oMov(rec.tipo||'GASTO', rec); }
 
 function oEvt(rec=null) {
@@ -2262,8 +2306,17 @@ async function saveM() {
   }
 
   if (ctx.tabla==='movimientos') {
-    datos={ tipo:$('f-tipo').value, categoria:$('f-cat').value, monto:parseFloat($('f-monto').value)||0,
-            concepto:$('f-cpto').value, medio_pago:$('f-medio').value, fecha:$('f-fecha').value, comentarios:$('f-com').value };
+    if (ctx.esIngreso) {
+      const tipoSel = $('f-ing-tipo')?.value || 'Sueldo';
+      const concepto = tipoSel === 'Otro' ? ($('f-ing-otro')?.value.trim() || 'Otro ingreso') : tipoSel;
+      datos = { tipo:'INGRESO', categoria:'Ingresos', monto:parseFloat($('f-monto')?.value)||0,
+                concepto, medio_pago:$('f-medio')?.value||'transferencia',
+                fecha:$('f-fecha')?.value, comentarios:$('f-com')?.value||'' };
+    } else {
+      datos={ tipo:'GASTO', categoria:$('f-cat')?.value||'Otros', monto:parseFloat($('f-monto')?.value)||0,
+              concepto:$('f-cpto')?.value||'', medio_pago:$('f-medio')?.value||'efectivo',
+              fecha:$('f-fecha')?.value, comentarios:$('f-com')?.value||'' };
+    }
     if (!datos.monto) { alert('Ingresa el monto'); return; }
   } else if (ctx.tabla==='calendario') {
     datos={ titulo:$('f-titulo').value, fecha:$('f-fecha').value, hora:$('f-hora').value||null,
