@@ -859,13 +859,23 @@ function rQuincenaPanel(ctx) {
   const qAiId  = `qai-${ctx}`;
   const compRows = Object.entries(gasMap).map(([nombre, {esp, real, _id}]) => {
     const diff = real - esp; const over = diff > 0;
-    const pct  = esp > 0 ? Math.min(100, Math.round(real/esp*100)) : 0;
+    // Detectar si ya fue marcado como pagado este período
+    const pagado   = qMovs.find(m => m.concepto === '[Ppto] ' + nombre);
+    const pagadoId = pagado ? pagado.id : null;
+    const canCheck = esp > 0 && !_id.startsWith('auto-');
+    const nomSafe  = nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     return `<tr>
       <td>${nombre}</td>
       <td style="color:var(--muted)">${esp>0?fmt(esp):'—'}</td>
       <td>${fmt(real)}</td>
       <td class="${over?'red':'green'}">${over?'+':''}${fmt(diff)}</td>
-      <td>${esp>0?`<div class="pbar" style="width:70px"><div class="pfill${pct>=100?' dng':pct>=85?' warn':''}" style="width:${pct}%"></div></div> ${pct}%`:'—'}</td>
+      <td>${canCheck
+        ? `<button onclick="marcarPagado('${nomSafe}',${esp},${pagadoId||'null'})"
+            style="padding:3px 10px;border-radius:20px;border:1px solid ${pagadoId?'var(--green)':'var(--border)'};background:${pagadoId?'rgba(52,211,153,.13)':'transparent'};color:${pagadoId?'var(--green)':'var(--muted)'};cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:4px;transition:.12s">
+            <i class="ti ti-${pagadoId?'circle-check-filled':'circle'}"></i>${pagadoId?' Pagado':' Marcar'}
+          </button>`
+        : '—'
+      }</td>
       ${!_id.startsWith('lg-')&&!_id.startsWith('auto-')?`<td><button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x"></i></button></td>`:'<td></td>'}
     </tr>`;
   }).join('');
@@ -936,7 +946,7 @@ function rQuincenaPanel(ctx) {
   <div style="margin-bottom:10px">
     <div class="q-section-lbl"><i class="ti ti-table" style="color:var(--yellow)"></i> Gastos esperados vs real</div>
     ${Object.keys(gasMap).length ? `<table style="margin:0">
-      <tr><th>Concepto</th><th>Esperado</th><th>Real</th><th>Diferencia</th><th>Uso</th><th></th></tr>
+      <tr><th>Concepto</th><th>Esperado</th><th>Real</th><th>Diferencia</th><th>Pagado</th><th></th></tr>
       ${compRows}
     </table>` : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
   </div>
@@ -1727,6 +1737,34 @@ async function saveM() {
 }
 
 async function dMov(id)  { if(!confirm('¿Eliminar?'))return; await api('DELETE',`/api/movimientos/${id}`,{user_phone:S.phone}); await load(); }
+
+// ── PRESUPUESTO: MARCAR GASTO FIJO COMO PAGADO ───────────────────────────────
+async function marcarPagado(nombre, esp, pagadoId) {
+  try {
+    if (pagadoId) {
+      // Ya marcado → desmarcar (eliminar el movimiento)
+      await api('DELETE', `/api/movimientos/${pagadoId}`, { user_phone: S.phone });
+    } else {
+      // Marcar como pagado → crear movimiento con prefijo [Ppto]
+      const catMatch = CATS.find(c =>
+        nombre.toLowerCase().includes(c.toLowerCase()) ||
+        c.toLowerCase().includes(nombre.toLowerCase())
+      );
+      await api('POST', '/api/movimientos', {
+        user_phone:   S.phone,
+        tipo:         'GASTO',
+        categoria:    catMatch || 'OTROS',
+        concepto:     '[Ppto] ' + nombre,
+        descripcion:  '',
+        monto:        esp,
+        medio_pago:   'efectivo',
+        fecha:        new Date().toISOString().split('T')[0],
+        comentarios:  ''
+      });
+    }
+    await load();
+  } catch(e) { alert('Error al actualizar: ' + e.message); }
+}
 async function dEvt(id)  { if(!confirm('¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
 async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/metas/${id}`,{user_phone:S.phone}); await load(); }
 
