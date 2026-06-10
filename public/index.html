@@ -232,6 +232,12 @@ textarea{min-height:64px;resize:vertical}
 .cbox{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:20px}
 .cbox h3{font-size:var(--text-xs);color:var(--text-2);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em}
 .cwrap{position:relative;height:220px}
+.chart-legend{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:10px;font-size:11px;color:var(--text-2);font-family:'DM Mono',monospace}
+.leg-item{display:flex;align-items:center;gap:5px;cursor:default}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.leg-val{margin-left:3px;color:var(--text-1);font-weight:500}
+.empty-chart-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--text-3);font-size:12px;pointer-events:none}
+.empty-chart-msg .ti{font-size:28px}
 
 /* ═══════════════════════════════════════════════════════ PILL SELECTOR (período + chart type + any multi-option) */
 .ct-btns{display:flex;flex-wrap:wrap;gap:2px;margin-bottom:12px;background:var(--bg-surface-2);padding:4px;border-radius:var(--radius-lg);width:fit-content}
@@ -648,7 +654,7 @@ const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa'
 // ── ESTADO GLOBAL ────────────────────────────────────────────────────────────
 const S = {
   phone: '', identity: null, adminPhone: '', ghostMode: false,
-  data: { movs:[], tdc:[], metas:[], calendario:[], presupuesto:[], patrones:[], nidito:[] },
+  data: { movs:[], tdc:[], metas:[], calendario:[], presupuesto:[], patrones:[], nidito:[], despensa:[] },
   ch: {}, ct: {}, tab: 'dashboard', cy: 0, cm: 0, mctx: null,
   periodo: { tipo: 'mes', offset: 0 },
   qOffset: 0,
@@ -829,9 +835,13 @@ function exitGhost() {
 
 // ── CARGA DE DATOS ───────────────────────────────────────────────────────────
 async function load() {
-  const r = await api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}`);
+  const [r, rd] = await Promise.all([
+    api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}`),
+    api('GET', `/api/despensa/${encodeURIComponent(S.phone)}`).catch(() => ({ success: false, data: [] }))
+  ]);
   if (r.success) {
     S.data = r.data || {};
+    S.data.despensa = rd.success ? (rd.data || []) : [];
     const aiPref = S.data.user?.ai_preference || 'CLAUDE';
     $('btn-claude').classList.toggle('act', aiPref === 'CLAUDE');
     $('btn-gemini').classList.toggle('act', aiPref === 'GEMINI');
@@ -888,26 +898,83 @@ function renderTab(t) {
 // ── CHARTS ────────────────────────────────────────────────────────────────────
 function mkC(id, type, labels, datasets, extra={}) {
   if (S.ch[id]) S.ch[id].destroy();
+  // Remove any lingering empty-state overlay from a previous emptyChart() call
+  const _canvas = $(id);
+  if (_canvas) { const _old = _canvas.parentElement?.querySelector('.empty-chart-msg'); if (_old) _old.remove(); }
+  const cs      = getComputedStyle(document.documentElement);
   const isLight = document.documentElement.classList.contains('light');
-  const tickClr = isLight ? '#64748b' : '#94a3b8';
-  const gridClr = isLight ? '#e2e8f055' : '#33415566';
+  const tickClr = cs.getPropertyValue('--text-2').trim() || (isLight ? '#6B6B6B' : '#8A8A8A');
+  const text1   = cs.getPropertyValue('--text-1').trim() || (isLight ? '#0F0F0F' : '#F5F5F5');
+  const bgSurf  = cs.getPropertyValue('--bg-surface').trim() || (isLight ? '#FFFFFF' : '#171717');
+  const borderC = cs.getPropertyValue('--border-default').trim() || (isLight ? '#E2E2E6' : '#2A2A2A');
+  const gridClr = borderC + '55';
   const isH=type==='bar-h', isFill=type==='area';
   const rt = isH?'bar':isFill?'line':type;
   const ctx = $(id)?.getContext('2d');
   if (!ctx) return;
   const rad = ['pie','doughnut','polarArea','radar'].includes(rt);
+  // Auto-apply semantic category colors when all labels are known categories
+  const isCatLabels = labels.length > 0 && labels.every(l => l in CAT_CLR);
   S.ch[id] = new Chart(ctx, {
     type: rt,
-    data: { labels, datasets: datasets.map((d,i) => ({
-      backgroundColor: CLR[i%CLR.length]+(rad?'bb':'66'),
-      borderColor: CLR[i%CLR.length], borderWidth:1.5,
-      fill: isFill, tension:.35, ...d })) },
+    data: { labels, datasets: datasets.map((d,i) => {
+      const catColors = isCatLabels ? labels.map(l => CAT_CLR[l] || CLR[i%CLR.length]) : null;
+      const fallback  = CLR[i%CLR.length];
+      const bgBase    = catColors ? catColors : [fallback];
+      const bg = d.backgroundColor !== undefined ? d.backgroundColor
+               : rad ? (catColors ? catColors.map(c=>c+'cc') : [fallback+'bb'])
+               : (catColors ? catColors.map(c=>c+'55') : fallback+'55');
+      const bd = d.borderColor !== undefined ? d.borderColor
+               : catColors ? catColors : fallback;
+      return { fill:isFill, tension:.35, borderRadius: rt==='bar'?4:0, ...d,
+               backgroundColor:bg, borderColor:bd,
+               borderWidth: d.borderWidth !== undefined ? d.borderWidth : 1.5 };
+    }) },
     options: { indexAxis:isH?'y':'x', responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:tickClr, boxWidth:10, font:{size:11} } } },
+      cutout: rt==='doughnut'?'72%':undefined,
+      plugins:{
+        legend:{ display:false },
+        tooltip:{ backgroundColor:bgSurf, titleColor:text1, bodyColor:tickClr,
+                  borderColor:borderC, borderWidth:1, padding:10, cornerRadius:8 }
+      },
       scales: rad ? {} : {
         x:{ticks:{color:tickClr,font:{size:10}},grid:{color:gridClr}},
         y:{ticks:{color:tickClr,font:{size:10}},grid:{color:gridClr}} }, ...extra }
   });
+  // Custom HTML legend for radial charts
+  const leg = $('legend-'+id);
+  if (leg && rad) {
+    const ds0 = S.ch[id].data.datasets[0];
+    const bgs = Array.isArray(ds0.borderColor) ? ds0.borderColor : [ds0.borderColor];
+    leg.innerHTML = labels.map((l,i) => {
+      const clr = isCatLabels ? (CAT_CLR[l]||CLR[i%CLR.length]) : (bgs[i]||CLR[i%CLR.length]);
+      const val  = ds0.data ? ds0.data[i] : '';
+      return `<span class="leg-item"><span class="leg-dot" style="background:${clr}"></span>${l}${val?'<span class="leg-val">'+fmt(val)+'</span>':''}</span>`;
+    }).join('');
+  } else if (leg) {
+    leg.innerHTML = '';
+  }
+}
+// Empty-state helper: clears chart and shows placeholder message
+function emptyChart(id, msg) {
+  if (S.ch[id]) { S.ch[id].destroy(); delete S.ch[id]; }
+  const canvas = $(id);
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  const leg = $('legend-'+id);
+  if (leg) leg.innerHTML = '';
+  const wrap = canvas?.parentElement;
+  if (wrap) {
+    const existing = wrap.querySelector('.empty-chart-msg');
+    if (!existing) {
+      const div = document.createElement('div');
+      div.className='empty-chart-msg';
+      div.innerHTML=`<i class="ti ti-chart-bar-off"></i><span>${msg||'Sin datos para este período'}</span>`;
+      wrap.appendChild(div);
+    }
+  }
 }
 
 function ctBtns(id, types, def) {
@@ -1008,6 +1075,34 @@ function getGastosEsperados(refs) {
   return Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }));
 }
 
+// Calcula ingresos esperados para cualquier rango de fechas [from, to]
+// Recorre los días de cobro de cada ingreso y cuenta cuántos caen en el rango
+function calcIngresosEsperadosPeriodo(refs, from, to) {
+  const items = getIngresosEsperados(refs);
+  let total = 0;
+  items.forEach(ing => {
+    const dias = ing.dias || [];
+    if (!dias.length) return;
+    // Iterar mes a mes dentro del rango
+    const fromDate = new Date(from + 'T00:00:00');
+    const toDate   = new Date(to   + 'T00:00:00');
+    const cur = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+    const end = new Date(toDate.getFullYear(),   toDate.getMonth(),   1);
+    while (cur <= end) {
+      const yr = cur.getFullYear(), mo = cur.getMonth();
+      const lastDay = new Date(yr, mo + 1, 0).getDate();
+      dias.forEach(d => {
+        const actualDay = Math.min(d, lastDay);
+        const mm = String(mo + 1).padStart(2,'0'), dd = String(actualDay).padStart(2,'0');
+        const payISO = `${yr}-${mm}-${dd}`;
+        if (payISO >= from && payISO <= to) total += (ing.monto || 0);
+      });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+  });
+  return total;
+}
+
 // ── PERIOD SELECTOR UI ───────────────────────────────────────────────────────
 function periodoSelectorHTML() {
   const tipos = [['Sem','semana'],['Quinc','quincena'],['Mes','mes'],['Trim','trimestre'],['Año','año']];
@@ -1048,9 +1143,13 @@ function rQuincenaPanel(ctx) {
   const balEsp   = totalIngEsp - totalGasEsp;
   const balReal  = totalIngReal - totalGasReal;
 
-  // Build gastos comparison map
+  // Build gastos comparison map (incluyendo forma_pago por descripción)
+  const fpMap = ((S.data.user || {}).external_refs || {}).forma_pago_gastos || {};
   const gasMap = {};
-  gasEsp.forEach(g => { gasMap[g.descripcion] = { esp: g.monto, real: 0, _id: g._id || g.id || g.descripcion }; });
+  gasEsp.forEach(g => {
+    const fp = fpMap[g.descripcion] || g.forma_pago || '';
+    gasMap[g.descripcion] = { esp: g.monto, real: 0, _id: g._id || g.id || g.descripcion, forma_pago: fp };
+  });
   qMovs.filter(m => m.tipo==='GASTO').forEach(m => {
     const key = m.concepto || m.categoria || '';
     const match = gasEsp.find(g =>
@@ -1060,33 +1159,49 @@ function rQuincenaPanel(ctx) {
     if (match) gasMap[match.descripcion].real += (m.monto || 0);
     else {
       const k2 = m.categoria || 'Otros';
-      if (!gasMap[k2]) gasMap[k2] = { esp: 0, real: 0, _id: 'auto-'+k2 };
+      if (!gasMap[k2]) gasMap[k2] = { esp: 0, real: 0, _id: 'auto-'+k2, forma_pago: '' };
       gasMap[k2].real += (m.monto || 0);
     }
   });
+  // Retiro de efectivo = suma de gastos esperados marcados como efectivo
+  const retiroEfectivo = Object.values(gasMap)
+    .filter(v => v.esp > 0 && v.forma_pago === 'efectivo')
+    .reduce((a, v) => a + v.esp, 0);
 
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
-  const compRows = Object.entries(gasMap).map(([nombre, {esp, real, _id}]) => {
+  const compRows = Object.entries(gasMap).map(([nombre, {esp, real, _id, forma_pago}]) => {
     const diff = real - esp; const over = diff > 0;
-    // Detectar si ya fue marcado como pagado este período
     const pagado   = qMovs.find(m => m.concepto === '[Ppto] ' + nombre);
     const pagadoId = pagado ? pagado.id : null;
-    const canCheck = esp > 0 && !_id.startsWith('auto-');
+    const marcarMonto = esp > 0 ? esp : real;
     const nomSafe  = nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const isAuto   = _id.startsWith('auto-');
+    const fpEfectivo  = forma_pago === 'efectivo';
+    const fpDebito    = forma_pago === 'tarjeta_debito';
+    const fpNinguna   = !forma_pago;
     return `<tr>
-      <td>${nombre}</td>
+      <td style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:${CAT_CLR[nombre]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${nombre}</td>
       <td style="color:var(--muted)">${esp>0?fmt(esp):'—'}</td>
-      <td>${fmt(real)}</td>
-      <td class="${over?'red':'green'}">${over?'+':''}${fmt(diff)}</td>
-      <td>${canCheck
-        ? `<button onclick="marcarPagado('${nomSafe}',${esp},${pagadoId||'null'})"
-            style="padding:3px 10px;border-radius:20px;border:1px solid ${pagadoId?'var(--green)':'var(--border)'};background:${pagadoId?'rgba(52,211,153,.13)':'transparent'};color:${pagadoId?'var(--green)':'var(--muted)'};cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:4px;transition:.12s">
-            <i class="ti ti-${pagadoId?'circle-check-filled':'circle'}"></i>${pagadoId?' Pagado':' Marcar'}
-          </button>`
-        : '—'
-      }</td>
-      ${!_id.startsWith('lg-')&&!_id.startsWith('auto-')?`<td><button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x"></i></button></td>`:'<td></td>'}
+      <td>${real>0?fmt(real):'—'}</td>
+      <td class="${over?'red':'green'}">${diff!==0?(over?'+':'')+fmt(diff):'—'}</td>
+      <td>${isAuto ? '<span style="color:var(--text-3);font-size:11px">—</span>' : `
+        <div style="display:flex;gap:3px">
+          <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
+            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfectivo?'var(--color-income)':'var(--border-default)'};background:${fpEfectivo?'rgba(74,222,128,.15)':'transparent'};color:${fpEfectivo?'var(--color-income)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:10px;white-space:nowrap;transition:.12s">
+            <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
+          </button>
+          <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="Tarjeta Débito"
+            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebito?'var(--accent-primary)':'var(--border-default)'};background:${fpDebito?'rgba(124,106,247,.15)':'transparent'};color:${fpDebito?'var(--accent-primary)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:10px;white-space:nowrap;transition:.12s">
+            <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
+          </button>
+        </div>`}
+      </td>
+      <td><button onclick="marcarPagado('${nomSafe}',${marcarMonto},${pagadoId||'null'})"
+          style="padding:3px 10px;border-radius:20px;border:1px solid ${pagadoId?'var(--green)':'var(--border-default)'};background:${pagadoId?'rgba(52,211,153,.13)':'transparent'};color:${pagadoId?'var(--green)':'var(--text-2)'};cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:4px;transition:.12s">
+          <i class="ti ti-${pagadoId?'circle-check-filled':'circle'}"></i>${pagadoId?' Pagado':' Marcar'}
+        </button></td>
+      ${!_id.startsWith('lg-')&&!isAuto?`<td><button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x"></i></button></td>`:'<td></td>'}
     </tr>`;
   }).join('');
 
@@ -1152,19 +1267,38 @@ function rQuincenaPanel(ctx) {
     </div>`).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin ingresos esperados esta quincena. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('ingresos')">+ Agregar</button></div>`}
   </div>
 
+  <!-- Retiro de efectivo -->
+  ${retiroEfectivo > 0 ? `
+  <div style="margin-bottom:10px;padding:12px 16px;border-radius:var(--radius-lg);background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(251,191,36,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="ti ti-building-bank" style="color:var(--color-warning);font-size:18px"></i>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-2);margin-bottom:1px">Retiro de efectivo esta quincena</div>
+        <div style="font-size:11px;color:var(--text-3)">Gastos marcados como efectivo</div>
+      </div>
+    </div>
+    <div style="font-size:22px;font-weight:700;color:var(--color-warning);font-family:'DM Mono',monospace">${fmt(retiroEfectivo)}</div>
+  </div>` : Object.keys(gasMap).length && Object.values(gasMap).some(v=>v.esp>0) ? `
+  <div style="margin-bottom:10px;padding:10px 14px;border-radius:var(--radius-lg);background:var(--bg-surface-2);border:1px dashed var(--border-default);font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px">
+    <i class="ti ti-building-bank"></i> Asigna "Efectivo" a tus gastos fijos para ver cuánto retirar del cajero
+  </div>` : ''}
+
   <!-- Gastos comparison table -->
   <div style="margin-bottom:10px">
     <div class="q-section-lbl"><i class="ti ti-table" style="color:var(--yellow)"></i> Gastos esperados vs real</div>
-    ${Object.keys(gasMap).length ? `<table style="margin:0">
-      <tr><th>Concepto</th><th>Esperado</th><th>Real</th><th>Diferencia</th><th>Pagado</th><th></th></tr>
+    ${Object.keys(gasMap).length ? `<div style="overflow-x:auto"><table style="margin:0;min-width:600px">
+      <tr><th>Concepto</th><th>Esperado</th><th>Real</th><th>Diferencia</th><th>Forma de pago</th><th>Pagado</th><th></th></tr>
       ${compRows}
-    </table>` : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
+    </table></div>` : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
   </div>
 
   <!-- Chart -->
   <div class="cbox" style="margin-bottom:10px">
     <h3>Esperado vs Real — ${qi.label}</h3>${ctBtns(qChId,LINE,'bar')}
     <div class="cwrap"><canvas id="${qChId}"></canvas></div>
+    <div id="legend-${qChId}" class="chart-legend"></div>
   </div>
 
   <!-- AI Recommendations -->
@@ -1237,9 +1371,11 @@ async function removeExpItem(field, id) {
 function rDash() {
   const movs = S.data.movs || [];
   const r    = getPeriodoRange();
+  const refs = (S.data.user || {}).external_refs || {};
   const pMovs= filterMovs(movs, r.from, r.to);
   const gasC = pMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
   const ingC = pMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
+  const ingEsp = calcIngresosEsperadosPeriodo(refs, r.from, r.to);
   const tdcP = (S.data.tdc||[]).reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
   const pats = S.data.patrones||[];
   const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
@@ -1250,17 +1386,37 @@ function rDash() {
   <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
 </div>
 ${periodoSelectorHTML()}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+  <span style="font-size:11px;color:var(--text-2);display:flex;align-items:center;gap:6px">
+    <i class="ti ti-calendar-stats" style="color:var(--accent-primary)"></i>
+    <strong style="color:var(--text-1)">${r.label}</strong>
+    <span style="color:var(--text-3)">·</span>
+    <span>${pMovs.length} movimiento${pMovs.length!==1?'s':''}</span>
+    ${r.from!==r.to?`<span style="color:var(--text-3)">${r.from} → ${r.to}</span>`:''}
+  </span>
+  ${ingC-gasC>=0
+    ? `<span style="font-size:11px;color:var(--color-income);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-up"></i> Balance positivo</span>`
+    : `<span style="font-size:11px;color:var(--color-expense);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-down"></i> Balance negativo</span>`}
+</div>
 <div class="cards">
-  <div class="card"><div class="card-lbl">Gastos</div><div class="card-val red">${fmt(gasC)}</div></div>
-  <div class="card"><div class="card-lbl">Ingresos</div><div class="card-val green">${fmt(ingC)}</div></div>
-  <div class="card"><div class="card-lbl">Neto</div><div class="card-val ${ingC-gasC>=0?'green':'red'}">${fmt(ingC-gasC)}</div></div>
+  <div class="card"><div class="card-lbl">Gastos reales</div><div class="card-val red">${fmt(gasC)}</div></div>
+  <div class="card">
+    <div class="card-lbl">Ingresos esperados</div>
+    <div class="card-val green">${ingEsp ? fmt(ingEsp) : fmt(ingC)}</div>
+    ${ingEsp && ingC !== ingEsp ? `<div style="font-size:11px;margin-top:3px;color:var(--text-3)">Real: <span style="color:var(--text-2);font-family:'DM Mono',monospace">${fmt(ingC)}</span></div>` : ''}
+  </div>
+  <div class="card">
+    <div class="card-lbl">Neto esperado</div>
+    <div class="card-val ${(ingEsp||ingC)-gasC>=0?'green':'red'}">${fmt((ingEsp||ingC)-gasC)}</div>
+    ${ingEsp && ingC !== ingEsp ? `<div style="font-size:11px;margin-top:3px;color:var(--text-3)">Real: <span style="color:var(--text-2);font-family:'DM Mono',monospace">${fmt(ingC-gasC)}</span></div>` : ''}
+  </div>
   <div class="card"><div class="card-lbl">Deuda TDC</div><div class="card-val yellow">${fmt(tdcP)}</div></div>
 </div>
 ${rQuincenaPanel('dash')}
 <div class="charts-grid">
-  <div class="cbox"><h3>Gastos por Categoría — ${r.label}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div></div>
-  <div class="cbox"><h3>Ingresos vs Gastos (6 meses)</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div></div>
-  <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div></div>
+  <div class="cbox"><h3>Gastos por Categoría — ${r.label}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div><div id="legend-c-cat" class="chart-legend"></div></div>
+  <div class="cbox"><h3>Ingresos vs Gastos — últimos 6 meses</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div><div id="legend-c-men" class="chart-legend"></div></div>
+  <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div><div id="legend-c-pat" class="chart-legend"></div></div>
 </div>
 ${pats.length ? `
 <h3 style="color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Patrones IA</h3>
@@ -1268,14 +1424,18 @@ ${pats.length ? `
 ${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td>${fmt(p.monto_promedio)}</td><td>${p.contador}</td><td>${fd(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>`).join('')}</table>` : ''}`;
 
   const cg=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
-  const ck=Object.keys(cg);
-  mkC('c-cat',S.ct['c-cat']||'doughnut',ck,[{data:ck.map(k=>cg[k]),label:'Gastos',backgroundColor:CLR.map(c=>c+'bb')}]);
+  const ck=Object.keys(cg).sort((a,b)=>cg[b]-cg[a]);
+  if (ck.length) mkC('c-cat',S.ct['c-cat']||'doughnut',ck,[{data:ck.map(k=>cg[k]),label:'Gastos'}]);
+  else emptyChart('c-cat','Sin gastos en este período');
   const ms=last6();
+  const menGas=ms.map(m=>movs.filter(x=>x.tipo==='GASTO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0));
+  const menIng=ms.map(m=>movs.filter(x=>x.tipo==='INGRESO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0));
   mkC('c-men',S.ct['c-men']||'bar',ms,[
-    {label:'Gastos', data:ms.map(m=>movs.filter(x=>x.tipo==='GASTO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0))},
-    {label:'Ingresos',data:ms.map(m=>movs.filter(x=>x.tipo==='INGRESO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0))}]);
+    {label:'Gastos',  data:menGas, backgroundColor:'#f8717155', borderColor:'#f87171'},
+    {label:'Ingresos',data:menIng, backgroundColor:'#34d39955', borderColor:'#34d399'}]);
   const top=pats.slice(0,8);
-  mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
+  if (top.length) mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
+  else emptyChart('c-pat','Sin patrones registrados aún');
 }
 
 // ── RENDER: NIDITO ────────────────────────────────────────────────────────────
@@ -1393,8 +1553,8 @@ function rDeudas() {
   <div class="card"><div class="card-lbl">Tarjetas</div><div class="card-val accent">${tdcs.length}</div></div>
 </div>
 <div class="charts-grid">
-  <div class="cbox"><h3>Saldo por Tarjeta</h3>${ctBtns('c-tdc',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Pastel','pie']],'bar-h')}<div class="cwrap"><canvas id="c-tdc"></canvas></div></div>
-  <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h'],['Radar','radar']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div></div>
+  <div class="cbox"><h3>Saldo por Tarjeta</h3>${ctBtns('c-tdc',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Pastel','pie']],'bar-h')}<div class="cwrap"><canvas id="c-tdc"></canvas></div><div id="legend-c-tdc" class="chart-legend"></div></div>
+  <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h'],['Radar','radar']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div><div id="legend-c-tdc2" class="chart-legend"></div></div>
 </div>
 <table><tr><th>Tarjeta</th><th>Estado</th><th>Pago Mín.</th><th>Pagado</th><th>Saldo</th><th>Objetivo</th><th>%</th></tr>
 ${tdcs.map(t=>{const s=Math.max(0,(t.a_pagar||0)-(t.pagado||0));const p=t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0;return`<tr>
@@ -1404,8 +1564,12 @@ ${tdcs.map(t=>{const s=Math.max(0,(t.a_pagar||0)-(t.pagado||0));const p=t.a_paga
   <td style="color:var(--muted)">${t.mes_objetivo||'—'}</td>
   <td><div class="pbar" style="width:80px"><div class="pfill${p>=100?' dng':p>=75?' warn':''}" style="width:${p}%"></div></div> ${p}%</td>
 </tr>`}).join('')}</table>`;
-  mkC('c-tdc',S.ct['c-tdc']||'bar-h',tdcs.map(t=>t.nombre),[{label:'Saldo',data:tdcs.map(t=>Math.max(0,(t.a_pagar||0)-(t.pagado||0)))}]);
-  mkC('c-tdc2',S.ct['c-tdc2']||'bar',tdcs.map(t=>t.nombre),[{label:'% Pagado',data:tdcs.map(t=>t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0)}]);
+  const TDC_CLR_MAP = {'BBVA':'#1D6FA4','HEY':'#FF5733','Liverpool':'#C0392B','AMEX':'#2E86AB','NU':'#820AD1','Rappi':'#FF441F','Palacio':'#B8860B','Débito':'#8A8A8A','Efectivo':'#4A4A4A'};
+  const tdcColors = tdcs.map(t => { const k=Object.keys(TDC_CLR_MAP).find(n=>t.nombre.toUpperCase().includes(n.toUpperCase())); return TDC_CLR_MAP[k]||CLR[0]; });
+  if (tdcs.length) {
+    mkC('c-tdc',S.ct['c-tdc']||'bar-h',tdcs.map(t=>t.nombre),[{label:'Saldo',data:tdcs.map(t=>Math.max(0,(t.a_pagar||0)-(t.pagado||0))),backgroundColor:tdcColors.map(c=>c+'88'),borderColor:tdcColors}]);
+    mkC('c-tdc2',S.ct['c-tdc2']||'bar',tdcs.map(t=>t.nombre),[{label:'% Pagado',data:tdcs.map(t=>t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0),backgroundColor:tdcColors.map(c=>c+'66'),borderColor:tdcColors}]);
+  } else { emptyChart('c-tdc','Sin tarjetas configuradas'); emptyChart('c-tdc2',''); }
 }
 
 // ── RENDER: PRESUPUESTO ──────────────────────────────────────────────────────
@@ -1431,14 +1595,23 @@ ${qHtml}
 <div class="cbox" style="margin-bottom:14px">
   <h3>Presupuesto vs Gasto Real</h3>${ctBtns('c-prsp',LINE,'bar')}
   <div class="cwrap"><canvas id="c-prsp"></canvas></div>
+  <div id="legend-c-prsp" class="chart-legend"></div>
 </div>
-<table><tr><th>Categoría</th><th>Real</th><th>Límite</th><th>Disponible</th><th>Uso</th></tr>
+${rows.length ? `<table><tr><th>Categoría</th><th>Real</th><th>Límite <span style="font-size:9px;color:var(--text-3);font-weight:400">clic para editar</span></th><th>Disponible</th><th>Uso</th></tr>
 ${rows.map(({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;return`<tr>
-  <td>${c}</td><td class="red">${fmt(r)}</td><td style="color:var(--muted)">${l>0?fmt(l):'—'}</td>
+  <td style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${c}</td>
+  <td class="red">${fmt(r)}</td>
+  <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto('${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3);font-size:11px\'>+ límite</span>'}</td>
   <td class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</td>
   <td>${l>0?`<div class="pbar" style="width:90px"><div class="pfill${p>=100?' dng':p>=85?' warn':''}" style="width:${p}%"></div></div> ${p}%`:'—'}</td>
-</tr>`}).join('')}</table>`;
-  mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[{label:'Real',data:rows.map(x=>x.r)},{label:'Límite',data:rows.map(x=>x.l)}]);
+</tr>`}).join('')}</table>` : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
+<div id="despensa-section" style="margin-top:16px"></div>`;
+  if (rows.length) mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[
+    {label:'Real',  data:rows.map(x=>x.r), backgroundColor:rows.map(x=>(CAT_CLR[x.c]||'#94a3b8')+'88'), borderColor:rows.map(x=>CAT_CLR[x.c]||'#94a3b8')},
+    {label:'Límite',data:rows.map(x=>x.l), backgroundColor:rows.map(x=>(CAT_CLR[x.c]||'#94a3b8')+'33'), borderColor:rows.map(x=>CAT_CLR[x.c]||'#94a3b8')}
+  ]);
+  else emptyChart('c-prsp','Sin datos de presupuesto este mes');
+  rDespensa();
 }
 
 // ── RENDER: OBJETIVOS ────────────────────────────────────────────────────────
@@ -1475,6 +1648,7 @@ ${balEsp>0?`<div class="cbox" style="margin-bottom:14px;border-left:3px solid va
 <div class="cbox" style="margin-bottom:14px">
   <h3>Progreso de Metas</h3>${ctBtns('c-meta',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Polar','polarArea']],'bar-h')}
   <div class="cwrap"><canvas id="c-meta"></canvas></div>
+  <div id="legend-c-meta" class="chart-legend"></div>
 </div>
 ${metas.length ? `<table><tr><th>Meta</th><th>Tipo</th><th>Actual</th><th>Objetivo</th><th>%</th><th>Fecha objetivo</th><th></th></tr>
 ${metas.map(m=>{const p=m.meta>0?Math.min(100,Math.round((m.actual||0)/m.meta*100)):0;return`<tr>
@@ -1485,8 +1659,10 @@ ${metas.map(m=>{const p=m.meta>0?Math.min(100,Math.round((m.actual||0)/m.meta*10
   <td><button class="btn btn-danger btn-sm" onclick="dMeta(${m.id})" style="padding:4px 7px"><i class="ti ti-trash"></i></button></td>
 </tr>`}).join('')}</table>` :
 `<p style="color:var(--muted);text-align:center;padding:36px">Sin metas aún.<br><small>Dile a la IA: "Quiero ahorrar $5000 para un fondo de emergencia"</small></p>`}`;
-  mkC('c-meta',S.ct['c-meta']||'bar-h',metas.map(m=>m.nombre),
-    [{label:'Actual',data:metas.map(m=>m.actual||0)},{label:'Objetivo',data:metas.map(m=>m.meta||0)}]);
+  if (metas.length) mkC('c-meta',S.ct['c-meta']||'bar-h',metas.map(m=>m.nombre),
+    [{label:'Actual', data:metas.map(m=>m.actual||0), backgroundColor:'#4ade8066', borderColor:'#4ade80'},
+     {label:'Objetivo',data:metas.map(m=>m.meta||0),  backgroundColor:'#818cf855', borderColor:'#818cf8'}]);
+  else emptyChart('c-meta','Agrega metas para verlas aquí');
 }
 
 // ── MOVIMIENTOS — FILTER HELPERS ─────────────────────────────────────────────
@@ -1742,6 +1918,7 @@ function rMovs() {
     <div style="display:flex;gap:4px">${chartPills}</div>
   </div>
   <div class="cwrap-lg"><canvas id="mov-chart"></canvas></div>
+  <div id="legend-mov-chart" class="chart-legend"></div>
 </div>
 
 <div style="overflow-x:auto">
@@ -1903,6 +2080,20 @@ async function saveM() {
     closeM(); await load(); return;
   }
 
+  if (ctx.mode === 'add-despensa') {
+    const nombre = $('d-nombre')?.value.trim();
+    if (!nombre) { alert('Ingresa el nombre del artículo'); return; }
+    const cantidad  = $('d-cantidad')?.value.trim() || '';
+    const precio_est= parseFloat($('d-precio')?.value) || 0;
+    try {
+      const r = await api('POST', '/api/despensa', { user_phone: S.phone, nombre, cantidad, precio_est });
+      if (r?.success === false) { alert('Error: ' + (r.error || '')); return; }
+      if (r.data) { if (!S.data.despensa) S.data.despensa = []; S.data.despensa.unshift(r.data); }
+      closeM(); rDespensa(); toast(`"${nombre}" agregado a la despensa`);
+    } catch(e) { alert('Error: ' + e.message); }
+    return;
+  }
+
   if (ctx.mode==='new-nidito' || ctx.mode==='edit-nidito') {
     const titulo = $('nd-titulo').value.trim();
     if (!titulo) { alert('Ingresa un título'); return; }
@@ -1947,6 +2138,150 @@ async function saveM() {
 }
 
 async function dMov(id)  { if(!confirm('¿Eliminar?'))return; await api('DELETE',`/api/movimientos/${id}`,{user_phone:S.phone}); await load(); }
+
+// ── TOAST NOTIFICATION ────────────────────────────────────────────────────────
+function toast(msg, type='success') {
+  let t = $('toast-el');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast-el';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:9999;padding:10px 20px;border-radius:var(--radius-pill);font-size:13px;font-family:\'Sora\',system-ui;font-weight:500;display:flex;align-items:center;gap:8px;opacity:0;transition:all .22s ease;pointer-events:none;white-space:nowrap;max-width:90vw;box-shadow:0 4px 20px rgba(0,0,0,.35)';
+    document.body.appendChild(t);
+  }
+  const clr  = type==='error' ? '#f87171' : type==='warn' ? '#fbbf24' : '#4ade80';
+  const icon = type==='error' ? 'ti-x'    : type==='warn' ? 'ti-alert-triangle' : 'ti-check';
+  t.style.background = type==='error' ? 'rgba(248,113,113,.15)' : type==='warn' ? 'rgba(251,191,36,.15)' : 'rgba(74,222,128,.15)';
+  t.style.border = `1px solid ${clr}44`;
+  t.style.color  = clr;
+  t.innerHTML = `<i class="ti ${icon}"></i><span>${msg}</span>`;
+  requestAnimationFrame(() => { t.style.opacity='1'; t.style.transform='translateX(-50%) translateY(0)'; });
+  clearTimeout(t._to);
+  t._to = setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(10px)'; }, 2800);
+}
+
+// ── FORMA DE PAGO (gastos esperados) ─────────────────────────────────────────
+async function setFormaPago(descripcion, formaPago) {
+  try {
+    // Toggle: si ya está activo, deseleccionar
+    const cur = ((S.data.user||{}).external_refs||{}).forma_pago_gastos||{};
+    const nuevoValor = cur[descripcion] === formaPago ? '' : formaPago;
+    await api('POST', '/api/update-refs', {
+      phone: S.phone, field: 'forma_pago_gastos',
+      action: 'set', itemId: descripcion, item: nuevoValor
+    });
+    // Actualizar estado local para re-render inmediato sin esperar load()
+    if (!S.data.user) S.data.user = {};
+    if (!S.data.user.external_refs) S.data.user.external_refs = {};
+    if (!S.data.user.external_refs.forma_pago_gastos) S.data.user.external_refs.forma_pago_gastos = {};
+    S.data.user.external_refs.forma_pago_gastos[descripcion] = nuevoValor;
+    renderTab(S.tab);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── PRESUPUESTO: EDICIÓN INLINE DE LÍMITES ───────────────────────────────────
+async function editLimitePpto(categoria, currentVal, mes) {
+  const newVal = prompt(`Nuevo límite para ${categoria} (actual: ${fmt(currentVal||0)}):`, currentVal||0);
+  if (newVal === null) return;
+  const limite = parseFloat(newVal);
+  if (isNaN(limite) || limite < 0) { toast('Monto inválido','error'); return; }
+  try {
+    await api('PUT', '/api/presupuesto', { user_phone: S.phone, categoria, limite, mes });
+    await load();
+    toast(`Límite de ${categoria} actualizado a ${fmt(limite)}`);
+  } catch(e) { toast('Error al guardar: ' + e.message, 'error'); }
+}
+
+// ── DESPENSA ──────────────────────────────────────────────────────────────────
+function rDespensa() {
+  const el = $('despensa-section');
+  if (!el) return;
+  const items    = S.data.despensa || [];
+  const pending  = items.filter(x => !x.comprado);
+  const done     = items.filter(x =>  x.comprado);
+  const total    = pending.reduce((a, x) => a + (x.precio_est || 0), 0);
+  el.innerHTML = `
+<div class="cbox">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <h3 style="font-size:var(--text-sm);color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;margin:0">
+      <i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Lista de Despensa
+      ${items.length ? `<span style="font-size:10px;background:var(--cat-despensa)22;color:var(--cat-despensa);padding:2px 8px;border-radius:var(--radius-pill)">${pending.length} pendiente${pending.length!==1?'s':''}</span>` : ''}
+    </h3>
+    <div style="display:flex;gap:6px;align-items:center">
+      ${done.length ? `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="limpiarCompradosDespensa()"><i class="ti ti-trash-x"></i> Limpiar comprados</button>` : ''}
+      <button class="btn btn-sm" style="background:var(--cat-despensa)22;color:var(--cat-despensa);border:1px solid var(--cat-despensa)44;font-size:12px" onclick="oDespensa()">
+        <i class="ti ti-plus"></i> Agregar
+      </button>
+    </div>
+  </div>
+  ${!items.length ? `<p style="color:var(--text-3);text-align:center;padding:24px;font-size:12px"><i class="ti ti-shopping-bag" style="font-size:28px;display:block;margin-bottom:8px;color:var(--text-3)"></i>Lista vacía — agrega lo que necesitas comprar</p>` : `
+  <div style="display:flex;flex-direction:column;gap:4px">
+    ${pending.map(x => despensaRow(x)).join('')}
+    ${done.length ? `<div style="height:1px;background:var(--border-default);margin:8px 0"></div>
+    ${done.map(x => despensaRow(x)).join('')}` : ''}
+  </div>
+  ${total > 0 ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border-default);display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:12px;color:var(--text-2)">Total estimado pendiente</span>
+    <span style="font-size:16px;font-weight:700;color:var(--cat-despensa);font-family:'DM Mono',monospace">${fmt(total)}</span>
+  </div>` : ''}
+  `}
+</div>`;
+}
+
+function despensaRow(x) {
+  const nomSafe = (x.nombre||'').replace(/'/g,"\\'");
+  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-md);background:var(--bg-surface-2);${x.comprado?'opacity:.5':''}" id="drow-${x.id}">
+    <button onclick="toggleComprado(${x.id},${!x.comprado})" style="width:20px;height:20px;border-radius:50%;border:1.5px solid ${x.comprado?'var(--color-income)':'var(--border-default)'};background:${x.comprado?'var(--color-income)':'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s">
+      ${x.comprado?'<i class="ti ti-check" style="font-size:11px;color:#fff"></i>':''}
+    </button>
+    <div style="flex:1;min-width:0">
+      <span style="font-size:13px;${x.comprado?'text-decoration:line-through;color:var(--text-3)':''}">${x.nombre}</span>
+      ${x.cantidad?`<span style="font-size:11px;color:var(--text-3);margin-left:6px">${x.cantidad}</span>`:''}
+    </div>
+    ${x.precio_est>0?`<span style="font-size:12px;color:var(--text-2);font-family:'DM Mono',monospace;white-space:nowrap">${fmt(x.precio_est)}</span>`:''}
+    <button onclick="dDespensa(${x.id})" style="background:none;border:none;color:var(--text-3);cursor:pointer;padding:2px;line-height:1;font-size:14px" title="Eliminar"><i class="ti ti-x"></i></button>
+  </div>`;
+}
+
+function oDespensa() {
+  S.mctx = { mode: 'add-despensa' };
+  $('m-title').textContent = '+ Artículo de Despensa';
+  $('m-body').innerHTML = `
+<div class="fr"><label>Artículo</label><input id="d-nombre" placeholder="Ej: Leche, Arroz, Detergente" autofocus></div>
+<div class="fr"><label>Cantidad <span style="color:var(--muted);font-size:10px">(opcional)</span></label><input id="d-cantidad" placeholder="Ej: 2 litros, 1 kg, 3 piezas"></div>
+<div class="fr"><label>Precio estimado <span style="color:var(--muted);font-size:10px">(opcional)</span></label><input id="d-precio" type="number" min="0" step="1" placeholder="0"></div>`;
+  $('ovl').classList.add('open');
+}
+
+async function toggleComprado(id, comprado) {
+  try {
+    await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, comprado });
+    const item = (S.data.despensa || []).find(x => x.id === id);
+    if (item) item.comprado = comprado;
+    rDespensa();
+    if (comprado) toast('¡Artículo comprado! ✓');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function dDespensa(id) {
+  try {
+    await api('DELETE', `/api/despensa/${id}`, { user_phone: S.phone });
+    S.data.despensa = (S.data.despensa || []).filter(x => x.id !== id);
+    rDespensa();
+    toast('Artículo eliminado');
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function limpiarCompradosDespensa() {
+  const done = (S.data.despensa || []).filter(x => x.comprado);
+  if (!done.length) return;
+  if (!confirm(`¿Eliminar ${done.length} artículo${done.length!==1?'s':''} comprado${done.length!==1?'s':''}?`)) return;
+  try {
+    await Promise.all(done.map(x => api('DELETE', `/api/despensa/${x.id}`, { user_phone: S.phone })));
+    S.data.despensa = (S.data.despensa || []).filter(x => !x.comprado);
+    rDespensa();
+    toast(`${done.length} artículo${done.length!==1?'s':''} eliminado${done.length!==1?'s':''}`);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
 
 // ── PRESUPUESTO: MARCAR GASTO FIJO COMO PAGADO ───────────────────────────────
 async function marcarPagado(nombre, esp, pagadoId) {
@@ -2079,8 +2414,8 @@ async function _askBot(message, audioB64 = null, audioMime = null) {
     if (r.error) { _appendMsg('bot', '❌ Error servidor: ' + r.error); return; }
     if (r.transcription) _appendMsg('user', '🎤 ' + r.transcription);
     _appendMsg('bot', r.reply || '...');
-    // Refresca datos si Claude hizo cambios en la DB
-    load().catch(() => {});
+    // Refresca datos si Claude hizo cambios en la DB (await para que el tab activo ya muestre datos frescos)
+    await load().catch(() => {});
   } catch (e) {
     _hideTyping();
     const msg = e.message?.includes('demasiado') ? `❌ ${e.message}`
