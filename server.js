@@ -1328,8 +1328,9 @@ async function seedAdminOnStartup() {
   } catch (e) { console.error('seedAdmin error:', e.message); }
 }
 
-// ── Endpoint raíz (sirve index.html estático) ────────────────────────────────
+// ── Endpoint raíz (sirve index.html sin caché para que deploys sean inmediatos)
 app.get('/', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
