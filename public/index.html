@@ -224,7 +224,8 @@ textarea{min-height:64px;resize:vertical}
 .card-lbl{font-size:var(--text-xs);color:var(--text-2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
 .card-val{
   font-family:'DM Mono','Courier New',monospace;font-variant-numeric:tabular-nums;
-  font-size:var(--text-2xl);font-weight:700;letter-spacing:-0.5px;
+  font-size:clamp(15px,2vw,22px);font-weight:700;letter-spacing:-0.5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 
 /* ═══════════════════════════════════════════════════════ CHARTS */
@@ -1593,10 +1594,6 @@ ${periodoSelectorHTML()}
   <div class="card" style="cursor:pointer" onclick="oMov('INGRESO')" title="Doble clic para editar · Clic para registrar ingreso">
     <div class="card-lbl">Ingresos <i class="ti ti-pencil" style="font-size:9px;opacity:.3"></i></div>
     <div class="card-val green" ondblclick="editKpiIngresos(event,this)">${fmt(ingShow)}${ingC>0&&ingC!==ingEsp?`<span style="font-size:10px;color:var(--muted);display:block;margin-top:2px">Real: ${fmt(ingC)}</span>`:''}</div>
-  </div>
-  <div class="card">
-    <div class="card-lbl">Neto</div>
-    <div class="card-val ${ingShow-gasC>=0?'green':'red'}">${fmt(ingShow-gasC)}</div>
   </div>
   <div class="card" style="cursor:pointer" onclick="go('deudas')" title="Ver deudas TDC">
     <div class="card-lbl">Deuda TDC <i class="ti ti-chevron-right" style="font-size:9px;opacity:.5"></i></div>
