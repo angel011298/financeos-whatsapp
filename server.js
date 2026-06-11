@@ -1297,12 +1297,15 @@ app.post('/api/update-refs', async (req, res) => {
         arr.push({ ...item, _id: Date.now().toString() });
         refs[field] = arr;
       } else if (action === 'remove') {
-        const idx = arr.findIndex(x => (x._id || x.id) === itemId);
+        let idx = arr.findIndex(x => (x._id || x.id) === itemId);
+        if (idx === -1) idx = arr.findIndex(x => x.descripcion === itemId);
         if (idx > -1) { arr.splice(idx, 1); refs[field] = arr; }
       } else if (action === 'update') {
-        const idx = arr.findIndex(x => (x._id || x.id) === itemId);
+        let idx = arr.findIndex(x => (x._id || x.id) === itemId);
+        if (idx === -1) idx = arr.findIndex(x => x.descripcion === itemId);
         if (idx > -1) {
-          arr[idx] = { ...arr[idx], ...item };
+          // Ensure item gets an _id so future lookups use the proper path
+          arr[idx] = { _id: arr[idx]._id || arr[idx].id || Date.now().toString(), ...arr[idx], ...item };
           refs[field] = arr;
         } else if (typeof itemId === 'string' && itemId.startsWith('lg-') && field === 'gastos_esperados') {
           // legacy gastos_fijos format

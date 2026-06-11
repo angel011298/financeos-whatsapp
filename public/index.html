@@ -1171,9 +1171,10 @@ function rQuincenaPanel(ctx) {
   const gasEsp    = getGastosEsperados(refs);
 
   // Populate lookup for inline editing
+  // Items stored by bot may lack _id — fall back to descripcion as key
   S._expItemData = {};
-  allIngEsp.forEach(i => { if (i._id) S._expItemData[i._id] = { ...i, _tipo: 'ingresos' }; });
-  gasEsp.forEach(g => { if (g._id) S._expItemData[g._id] = { ...g, _tipo: 'gastos' }; });
+  allIngEsp.forEach(i => { const k = i._id || i.id || i.descripcion; if (k) S._expItemData[k] = { ...i, _tipo: 'ingresos' }; });
+  gasEsp.forEach(g => { const k = g._id || g.id || g.descripcion; if (k) S._expItemData[k] = { ...g, _tipo: 'gastos' }; });
 
   // Sueldo quincenal → mostrar en TODA quincena; beca/mensual → solo si día 1 cae en la quincena
   const ingEspQ = allIngEsp.filter(ing => {
