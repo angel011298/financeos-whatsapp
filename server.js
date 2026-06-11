@@ -47,7 +47,7 @@ app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModifi
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
 const history = {};          // DEPRECADO — reemplazado por historial_chat en DB
-const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Pasajes','OTROS'];
+const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
 const MEDIOS_PAGO = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito'];
 
 // ── Identificar usuario por número de teléfono ──────────────────────────────
