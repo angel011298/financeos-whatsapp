@@ -948,12 +948,12 @@ function mkC(id, type, labels, datasets, extra={}) {
   const ctx = $(id)?.getContext('2d');
   if (!ctx) return;
   const rad = ['pie','doughnut','polarArea','radar'].includes(rt);
-  // Auto-apply semantic category colors when all labels are known categories
-  const isCatLabels = labels.length > 0 && labels.every(l => l in CAT_CLR);
+  // Auto-apply semantic category colors when any label matches a known category
+  const isCatLabels = labels.length > 0 && labels.some(l => l in CAT_CLR);
   S.ch[id] = new Chart(ctx, {
     type: rt,
     data: { labels, datasets: datasets.map((d,i) => {
-      const catColors = isCatLabels ? labels.map(l => CAT_CLR[l] || CLR[i%CLR.length]) : null;
+      const catColors = isCatLabels ? labels.map((l,li) => CAT_CLR[l] || CLR[li%CLR.length]) : null;
       const fallback  = CLR[i%CLR.length];
       const bgBase    = catColors ? catColors : [fallback];
       const bg = d.backgroundColor !== undefined ? d.backgroundColor
@@ -1203,7 +1203,7 @@ function rQuincenaPanel(ctx) {
     );
     if (match) gasMap[match.descripcion].real += (m.monto || 0);
     else {
-      const k2 = m.categoria || 'Otros';
+      const k2 = (m.categoria === 'Pasajes' ? 'Transporte' : m.categoria) || 'Otros';
       if (!gasMap[k2]) gasMap[k2] = { esp: 0, real: 0, _id: 'auto-'+k2, forma_pago: '' };
       gasMap[k2].real += (m.monto || 0);
     }
@@ -1245,7 +1245,8 @@ function rQuincenaPanel(ctx) {
         </button></td>
       <td style="white-space:nowrap">
         ${isAuto
-          ? `<button class="edit-pill-btn" title="Agregar como gasto fijo" onclick="oAddExpItemPre('gastos','${nomSafe}',${monto})"><i class="ti ti-plus" style="font-size:12px"></i></button>`
+          ? `<button class="edit-pill-btn" title="Configurar como gasto fijo" onclick="oAddExpItemPre('gastos','${nomSafe}',${monto})"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+             <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar movimientos de esta categoría" onclick="deleteAutoMovs('${nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><i class="ti ti-x" style="font-size:12px"></i></button>`
           : `<button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>`
         }
       </td>
@@ -1412,6 +1413,22 @@ async function removeExpItem(field, id) {
   if (!confirm('¿Eliminar este elemento?')) return;
   await api('POST', '/api/update-refs', { phone: S.phone, field, action: 'remove', itemId: id });
   await load();
+}
+
+async function deleteAutoMovs(categoria) {
+  const qi = getQuincenaInfo(S.qOffset);
+  const matches = (S.data.movs || []).filter(m =>
+    m.tipo === 'GASTO' &&
+    (m.categoria === categoria || (categoria === 'Transporte' && m.categoria === 'Pasajes')) &&
+    (m.fecha||'') >= qi.from && (m.fecha||'') <= qi.to
+  );
+  if (!matches.length) { toast('Sin movimientos en esta categoría', 'info'); return; }
+  if (!confirm(`¿Eliminar ${matches.length} movimiento(s) de "${categoria}" en esta quincena?`)) return;
+  try {
+    for (const m of matches) await api('DELETE', `/api/movimientos/${m.id}`, { user_phone: S.phone });
+    await load();
+    toast(`${matches.length} movimiento(s) de "${categoria}" eliminados`);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 function oEditExpItem(tipo, id) {
@@ -1627,7 +1644,8 @@ ${pats.length ? `
 <table><tr><th>Concepto</th><th>Cat.</th><th>Promedio</th><th>Veces</th><th>Último</th><th>Medio habitual</th></tr>
 ${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td>${fmt(p.monto_promedio)}</td><td>${p.contador}</td><td>${fd(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>`).join('')}</table>` : ''}`;
 
-  const cg=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
+  const cgRaw=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
+  const cg={}; Object.entries(cgRaw).forEach(([k,v])=>{ const nk=k==='Pasajes'?'Transporte':k; cg[nk]=(cg[nk]||0)+v; });
   const ck=Object.keys(cg).sort((a,b)=>cg[b]-cg[a]);
   if (ck.length) mkC('c-cat',S.ct['c-cat']||'doughnut',ck,[{data:ck.map(k=>cg[k]),label:'Gastos'}]);
   else emptyChart('c-cat','Sin gastos en este período');
