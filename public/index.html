@@ -662,10 +662,10 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 
 <script>
 // ── CONSTANTES ──────────────────────────────────────────────────────────────
-const CATS   = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Pasajes','OTROS'];
+const CATS   = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
 const MEDIOS = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito'];
 const CLR    = ['#818cf8','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
-const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Hormiga':'#fbbf24','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Pasajes':'#818cf8','OTROS':'#94a3b8'};
+const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Hormiga':'#fbbf24','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
 
 // ── ESTADO GLOBAL ────────────────────────────────────────────────────────────
 const S = {
@@ -1225,7 +1225,7 @@ function rQuincenaPanel(ctx) {
     return `<tr>
       <td style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:${CAT_CLR[nombre]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${nombre}</td>
       <td class="editable" data-gid="${_id}" ondblclick="inlineEditGastoEsp(this)" title="Doble clic para editar">${monto>0?fmt(monto):'—'}</td>
-      <td>${isAuto ? '<span style="color:var(--text-3);font-size:11px">—</span>' : `
+      <td>
         <div style="display:flex;gap:3px">
           <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
             style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfectivo?'var(--color-income)':'var(--border-default)'};background:${fpEfectivo?'rgba(74,222,128,.15)':'transparent'};color:${fpEfectivo?'var(--color-income)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:10px;white-space:nowrap;transition:.12s">
@@ -1235,13 +1235,18 @@ function rQuincenaPanel(ctx) {
             style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebito?'var(--accent-primary)':'var(--border-default)'};background:${fpDebito?'rgba(124,106,247,.15)':'transparent'};color:${fpDebito?'var(--accent-primary)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:10px;white-space:nowrap;transition:.12s">
             <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
           </button>
-        </div>`}
+        </div>
       </td>
       <td><button onclick="marcarPagado('${nomSafe}',${monto},${pagadoId||'null'})"
           style="padding:3px 10px;border-radius:20px;border:1px solid ${pagadoId?'var(--green)':'var(--border-default)'};background:${pagadoId?'rgba(52,211,153,.13)':'transparent'};color:${pagadoId?'var(--green)':'var(--text-2)'};cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:4px;transition:.12s">
           <i class="ti ti-${pagadoId?'circle-check-filled':'circle'}"></i>${pagadoId?' Pagado':' Marcar'}
         </button></td>
-      ${!_id.startsWith('lg-')&&!isAuto?`<td style="white-space:nowrap"><button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>`:'<td></td>'}
+      <td style="white-space:nowrap">
+        ${isAuto
+          ? `<button class="edit-pill-btn" title="Agregar como gasto fijo" onclick="oAddExpItemPre('gastos','${nomSafe}',${monto})"><i class="ti ti-plus" style="font-size:12px"></i></button>`
+          : `<button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>`
+        }
+      </td>
     </tr>`;
   }).join('');
 
@@ -1390,6 +1395,15 @@ function oAddExpItem(tipo) {
 <div class="fr"><label>Monto por quincena ($)</label><input id="ei-monto" type="number" min="0" step="1" placeholder="0"></div>
 ${tipo==='ingresos' ? `<div class="fr"><label>Días de cobro <span style="color:var(--muted);font-size:10px">(separados por coma)</span></label><input id="ei-dias" placeholder="Ej: 10,25 ó 1,15 ó 25"></div>` : ''}`;
   $('ovl').classList.add('open');
+}
+
+function oAddExpItemPre(tipo, desc, monto) {
+  oAddExpItem(tipo);
+  requestAnimationFrame(() => {
+    const d = $('ei-desc'), m = $('ei-monto');
+    if (d) d.value = desc;
+    if (m) m.value = monto || 0;
+  });
 }
 
 async function removeExpItem(field, id) {
@@ -1797,13 +1811,18 @@ ${qHtml}
   <div class="cwrap"><canvas id="c-prsp"></canvas></div>
   <div id="legend-c-prsp" class="chart-legend"></div>
 </div>
-${rows.length ? `<table><tr><th>Categoría</th><th>Real</th><th>Límite <span style="font-size:9px;color:var(--text-3);font-weight:400">clic para editar</span></th><th>Disponible</th><th>Uso</th></tr>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+  <span style="font-size:11px;color:var(--muted)">Clic en el límite para editar · <i class="ti ti-pencil" style="font-size:10px"></i></span>
+  <button class="btn btn-sm" style="font-size:11px;background:rgba(124,106,247,.12);color:var(--accent-primary)" onclick="oAgregarLimitePpto('${cm}')"><i class="ti ti-plus"></i> Agregar categoría</button>
+</div>
+${rows.length ? `<table><tr><th>Categoría</th><th>Real</th><th>Límite</th><th>Disponible</th><th>Uso</th><th></th></tr>
 ${rows.map(({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;return`<tr>
   <td style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${c}</td>
   <td class="red">${fmt(r)}</td>
   <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto('${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3);font-size:11px\'>+ límite</span>'}</td>
   <td class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</td>
   <td>${l>0?`<div class="pbar" style="width:90px"><div class="pfill${p>=100?' dng':p>=85?' warn':''}" style="width:${p}%"></div></div> ${p}%`:'—'}</td>
+  <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
 </tr>`}).join('')}</table>` : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
 <div id="despensa-section" style="margin-top:16px"></div>`;
   if (rows.length) mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[
@@ -2468,6 +2487,28 @@ async function editLimitePpto(categoria, currentVal, mes) {
     await load();
     toast(`Límite de ${categoria} actualizado a ${fmt(limite)}`);
   } catch(e) { toast('Error al guardar: ' + e.message, 'error'); }
+}
+
+async function deleteLimitePpto(categoria, mes) {
+  if (!confirm(`¿Quitar el límite de "${categoria}"?`)) return;
+  try {
+    await api('PUT', '/api/presupuesto', { user_phone: S.phone, categoria, limite: 0, mes });
+    await load();
+    toast(`Límite de ${categoria} eliminado`);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+function oAgregarLimitePpto(mes) {
+  const refs  = (S.data.user||{}).external_refs||{};
+  const prsp  = (S.data.presupuesto||[]).filter(p=>p.mes===mes&&p.limite>0);
+  const usadas = prsp.map(p=>p.categoria);
+  const libres = CATS.filter(c=>!usadas.includes(c));
+  if (!libres.length) { toast('Todas las categorías ya tienen límite','info'); return; }
+  const cat = prompt(`¿Qué categoría agregar?\n${libres.map((c,i)=>`${i+1}. ${c}`).join('\n')}\n\nEscribe el nombre exacto:`);
+  if (!cat) return;
+  const catVal = libres.find(c=>c.toLowerCase()===cat.trim().toLowerCase());
+  if (!catVal) { toast('Categoría no válida','error'); return; }
+  editLimitePpto(catVal, 0, mes);
 }
 
 // ── DESPENSA ──────────────────────────────────────────────────────────────────
