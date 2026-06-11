@@ -1494,6 +1494,38 @@ function inlineEditTDC(td) {
   inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape') renderTab(S.tab); });
 }
 
+function editKpiIngresos(e, el) {
+  e.stopPropagation();
+  if (el.querySelector('input')) return;
+  const refs  = (S.data.user||{}).external_refs || {};
+  const items = getIngresosEsperados(refs);
+  const sueldo = items.find(i => !(i.descripcion||'').toLowerCase().includes('beca')) || items[0];
+  const cur = sueldo ? (sueldo.monto || 0) : 0;
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.value = cur; inp.step = '0.01';
+  inp.className = 'ie-inp num'; inp.style.cssText = 'font-size:18px;width:130px';
+  el.innerHTML = ''; el.appendChild(inp); inp.focus(); inp.select();
+  const save = async () => {
+    const val = parseFloat(inp.value);
+    if (isNaN(val) || val === cur) { renderTab(S.tab); return; }
+    try {
+      if (!sueldo) {
+        await api('POST', '/api/update-refs', { phone: S.phone, action: 'add', list: 'ingresos_esperados', data: { descripcion: 'Sueldo', monto: val, dias: [10, 25] } });
+      } else {
+        await api('POST', '/api/update-refs', { phone: S.phone, action: 'update', list: 'ingresos_esperados', id: sueldo._id, data: { monto: val } });
+      }
+      await load(); toast('Ingreso quincenal actualizado');
+    } catch(err) { toast('Error: ' + err.message, 'error'); renderTab(S.tab); }
+  };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', ev => { if(ev.key==='Enter'){ev.preventDefault();save();}if(ev.key==='Escape')renderTab(S.tab); });
+}
+
+function editKpiGastos(e, el) {
+  e.stopPropagation();
+  oMov('GASTO');
+}
+
 function inlineEditGastoEsp(td) {
   if (td.querySelector('input')) return;
   const gid = td.dataset.gid;
@@ -1522,10 +1554,11 @@ function rDash() {
   const r    = getPeriodoRange();
   const refs = (S.data.user || {}).external_refs || {};
   const pMovs= filterMovs(movs, r.from, r.to);
-  const gasC = pMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
-  const ingC = pMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
+  const gasC   = pMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
+  const ingC   = pMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
   const ingEsp = calcIngresosEsperadosPeriodo(refs, r.from, r.to);
-  const tdcP = (S.data.tdc||[]).reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
+  const ingShow = ingEsp || ingC;  // always prefer expected income over raw movimientos
+  const tdcP   = (S.data.tdc||[]).reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
   const pats = S.data.patrones||[];
   const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
 
@@ -1543,22 +1576,22 @@ ${periodoSelectorHTML()}
     <span>${pMovs.length} movimiento${pMovs.length!==1?'s':''}</span>
     ${r.from!==r.to?`<span style="color:var(--text-3)">${r.from} → ${r.to}</span>`:''}
   </span>
-  ${ingC-gasC>=0
+  ${ingShow-gasC>=0
     ? `<span style="font-size:11px;color:var(--color-income);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-up"></i> Balance positivo</span>`
     : `<span style="font-size:11px;color:var(--color-expense);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-down"></i> Balance negativo</span>`}
 </div>
 <div class="cards">
-  <div class="card" style="cursor:pointer" onclick="oMov('GASTO')" title="Registrar gasto">
+  <div class="card" style="cursor:pointer" onclick="oMov('GASTO')" title="Doble clic para editar · Clic para registrar gasto">
     <div class="card-lbl">Gastos <i class="ti ti-plus" style="font-size:9px;opacity:.5"></i></div>
-    <div class="card-val red">${fmt(gasC)}</div>
+    <div class="card-val red" ondblclick="editKpiGastos(event,this)">${fmt(gasC)}</div>
   </div>
-  <div class="card" style="cursor:pointer" onclick="oMov('INGRESO')" title="Registrar ingreso">
-    <div class="card-lbl">Ingresos <i class="ti ti-plus" style="font-size:9px;opacity:.5"></i></div>
-    <div class="card-val green">${fmt(ingC||ingEsp)}</div>
+  <div class="card" style="cursor:pointer" onclick="oMov('INGRESO')" title="Doble clic para editar · Clic para registrar ingreso">
+    <div class="card-lbl">Ingresos <i class="ti ti-pencil" style="font-size:9px;opacity:.3"></i></div>
+    <div class="card-val green" ondblclick="editKpiIngresos(event,this)">${fmt(ingShow)}${ingC>0&&ingC!==ingEsp?`<span style="font-size:10px;color:var(--muted);display:block;margin-top:2px">Real: ${fmt(ingC)}</span>`:''}</div>
   </div>
   <div class="card">
     <div class="card-lbl">Neto</div>
-    <div class="card-val ${(ingC||ingEsp)-gasC>=0?'green':'red'}">${fmt((ingC||ingEsp)-gasC)}</div>
+    <div class="card-val ${ingShow-gasC>=0?'green':'red'}">${fmt(ingShow-gasC)}</div>
   </div>
   <div class="card" style="cursor:pointer" onclick="go('deudas')" title="Ver deudas TDC">
     <div class="card-lbl">Deuda TDC <i class="ti ti-chevron-right" style="font-size:9px;opacity:.5"></i></div>
