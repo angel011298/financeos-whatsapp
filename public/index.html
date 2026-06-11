@@ -1974,10 +1974,12 @@ ${dispQ>0?`<div class="cbox" style="margin-bottom:14px;border-left:3px solid var
   <button class="btn btn-accent" onclick="oMeta()"><i class="ti ti-plus"></i> Crear primera meta</button>
 </div>`}`;
 
-  if (metas.length) mkC('c-meta',S.ct['c-meta']||'bar-h',metas.map(m=>m.nombre),
-    [{label:'Ahorrado', data:metas.map(m=>m.actual||0), backgroundColor:'#4ade8066', borderColor:'#4ade80'},
-     {label:'Objetivo', data:metas.map(m=>m.meta||0),   backgroundColor:'#818cf855', borderColor:'#818cf8'}]);
-  else emptyChart('c-meta','Agrega metas para ver el progreso');
+  if (metas.length) {
+    const mc = metas.map((_,i) => CLR[i % CLR.length]);
+    mkC('c-meta',S.ct['c-meta']||'bar-h',metas.map(m=>m.nombre),
+      [{label:'Ahorrado', data:metas.map(m=>m.actual||0), backgroundColor:mc.map(c=>c+'cc'), borderColor:mc},
+       {label:'Objetivo', data:metas.map(m=>m.meta||0),   backgroundColor:mc.map(c=>c+'33'), borderColor:mc.map(c=>c+'88')}]);
+  } else emptyChart('c-meta','Agrega metas para ver el progreso');
 }
 
 function metaIconClass(nombre, tipo) {
