@@ -1549,9 +1549,9 @@ function editKpiIngresos(e, el) {
     if (isNaN(val) || val === cur) { renderTab(S.tab); return; }
     try {
       if (!sueldo) {
-        await api('POST', '/api/update-refs', { phone: S.phone, action: 'add', list: 'ingresos_esperados', data: { descripcion: 'Sueldo', monto: val, dias: [10, 25] } });
+        await api('POST', '/api/update-refs', { phone: S.phone, action: 'add', field: 'ingresos_esperados', item: { descripcion: 'Sueldo', monto: val, dias: [10, 25] } });
       } else {
-        await api('POST', '/api/update-refs', { phone: S.phone, action: 'update', list: 'ingresos_esperados', id: sueldo._id, data: { monto: val } });
+        await api('POST', '/api/update-refs', { phone: S.phone, action: 'update', field: 'ingresos_esperados', itemId: sueldo._id, item: { monto: val } });
       }
       await load(); toast('Ingreso quincenal actualizado');
     } catch(err) { toast('Error: ' + err.message, 'error'); renderTab(S.tab); }
@@ -1578,7 +1578,7 @@ function inlineEditGastoEsp(td) {
     const val = parseFloat(inp.value);
     if (isNaN(val) || val === parseFloat(cur)) { renderTab(S.tab); return; }
     try {
-      await api('POST', '/api/update-refs', { phone: S.phone, action: 'update', list: 'gastos_esperados', id: gid, data: { monto: val } });
+      await api('POST', '/api/update-refs', { phone: S.phone, action: 'update', field: 'gastos_esperados', itemId: gid, item: { monto: val } });
       await load();
       toast('Gasto actualizado');
     } catch(e) { toast('Error: ' + e.message, 'error'); renderTab(S.tab); }
