@@ -859,9 +859,10 @@ function exitGhost() {
 
 // ── CARGA DE DATOS ───────────────────────────────────────────────────────────
 async function load() {
+  const ts = Date.now();
   const [r, rd] = await Promise.all([
-    api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}`),
-    api('GET', `/api/despensa/${encodeURIComponent(S.phone)}`).catch(() => ({ success: false, data: [] }))
+    api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}?_t=${ts}`),
+    api('GET', `/api/despensa/${encodeURIComponent(S.phone)}?_t=${ts}`).catch(() => ({ success: false, data: [] }))
   ]);
   if (r.success) {
     S.data = r.data || {};
@@ -1502,17 +1503,20 @@ function inlineEditMeta(td) {
   inp.type = 'number'; inp.value = cur; inp.step = '0.01';
   inp.className = 'ie-inp num';
   td.innerHTML = ''; td.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
   const save = async () => {
+    if (done) return; done = true;
+    inp.removeEventListener('blur', save);
     const val = parseFloat(inp.value);
     if (isNaN(val) || val === parseFloat(cur)) { renderTab(S.tab); return; }
     try {
       await api('PUT', `/api/metas/${id}`, { user_phone: S.phone, [field]: val });
       await load();
       toast(`Meta actualizada`);
-    } catch(e) { toast('Error: ' + e.message, 'error'); renderTab(S.tab); }
+    } catch(e) { toast('Error al guardar: ' + e.message, 'error'); renderTab(S.tab); }
   };
   inp.addEventListener('blur', save);
-  inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape') renderTab(S.tab); });
+  inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape'){done=true;renderTab(S.tab);} });
 }
 
 function inlineEditTDC(td) {
@@ -1524,17 +1528,20 @@ function inlineEditTDC(td) {
   inp.type = 'number'; inp.value = cur; inp.step = '0.01';
   inp.className = 'ie-inp num';
   td.innerHTML = ''; td.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
   const save = async () => {
+    if (done) return; done = true;
+    inp.removeEventListener('blur', save);
     const val = parseFloat(inp.value);
     if (isNaN(val) || val === parseFloat(cur)) { renderTab(S.tab); return; }
     try {
       await api('PUT', `/api/tdc/${id}`, { user_phone: S.phone, [field]: val });
       await load();
       toast(`TDC actualizada`);
-    } catch(e) { toast('Error: ' + e.message, 'error'); renderTab(S.tab); }
+    } catch(e) { toast('Error al guardar: ' + e.message, 'error'); renderTab(S.tab); }
   };
   inp.addEventListener('blur', save);
-  inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape') renderTab(S.tab); });
+  inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape'){done=true;renderTab(S.tab);} });
 }
 
 function editKpiIngresos(e, el) {
@@ -1548,20 +1555,25 @@ function editKpiIngresos(e, el) {
   inp.type = 'number'; inp.value = cur; inp.step = '0.01';
   inp.className = 'ie-inp num'; inp.style.cssText = 'font-size:18px;width:130px';
   el.innerHTML = ''; el.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
   const save = async () => {
+    if (done) return; done = true;
+    inp.removeEventListener('blur', save);
     const val = parseFloat(inp.value);
     if (isNaN(val) || val === cur) { renderTab(S.tab); return; }
     try {
       if (!sueldo) {
         await api('POST', '/api/update-refs', { phone: S.phone, action: 'add', field: 'ingresos_esperados', item: { descripcion: 'Sueldo', monto: val, dias: [10, 25] } });
       } else {
-        await api('POST', '/api/update-refs', { phone: S.phone, action: 'update', field: 'ingresos_esperados', itemId: sueldo._id, item: { monto: val } });
+        // Use replace strategy: send full updated array
+        const updArr = items.map(i => i === sueldo ? { ...i, monto: val } : i);
+        await api('POST', '/api/update-refs', { phone: S.phone, action: 'replace', field: 'ingresos_esperados', items: updArr });
       }
       await load(); toast('Ingreso quincenal actualizado');
-    } catch(err) { toast('Error: ' + err.message, 'error'); renderTab(S.tab); }
+    } catch(err) { toast('Error al guardar: ' + err.message, 'error'); renderTab(S.tab); }
   };
   inp.addEventListener('blur', save);
-  inp.addEventListener('keydown', ev => { if(ev.key==='Enter'){ev.preventDefault();save();}if(ev.key==='Escape')renderTab(S.tab); });
+  inp.addEventListener('keydown', ev => { if(ev.key==='Enter'){ev.preventDefault();save();}if(ev.key==='Escape'){done=true;renderTab(S.tab);} });
 }
 
 function editKpiGastos(e, el) {
@@ -1572,23 +1584,33 @@ function editKpiGastos(e, el) {
 function inlineEditGastoEsp(td) {
   if (td.querySelector('input')) return;
   const gid = td.dataset.gid;
-  const item = S._expItemData[gid]; if (!item) return;
-  const cur = item.monto || 0;
+  if (gid && gid.startsWith('auto-')) return; // auto items no son configurables inline
+  // Derive current value from DOM — no lookup needed
+  const cur = parseFloat((td.textContent || '0').replace(/[$,\s]/g, '')) || 0;
   const inp = document.createElement('input');
   inp.type = 'number'; inp.value = cur; inp.step = '0.01';
   inp.className = 'ie-inp num';
   td.innerHTML = ''; td.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
   const save = async () => {
+    if (done) return; done = true;
+    inp.removeEventListener('blur', save);
     const val = parseFloat(inp.value);
-    if (isNaN(val) || val === parseFloat(cur)) { renderTab(S.tab); return; }
+    if (isNaN(val) || val === cur) { renderTab(S.tab); return; }
     try {
-      await api('POST', '/api/update-refs', { phone: S.phone, action: 'update', field: 'gastos_esperados', itemId: gid, item: { monto: val } });
+      // Build the full updated array and replace — no ID-matching needed
+      const refs = (S.data.user || {}).external_refs || {};
+      const gasArr = getGastosEsperados(refs).map(g => {
+        const k = g._id || g.id || g.descripcion;
+        return k === gid ? { ...g, monto: val } : g;
+      });
+      await api('POST', '/api/update-refs', { phone: S.phone, action: 'replace', field: 'gastos_esperados', items: gasArr });
       await load();
       toast('Gasto actualizado');
-    } catch(e) { toast('Error: ' + e.message, 'error'); renderTab(S.tab); }
+    } catch(e) { toast('Error al guardar: ' + e.message, 'error'); renderTab(S.tab); }
   };
   inp.addEventListener('blur', save);
-  inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape') renderTab(S.tab); });
+  inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape'){done=true;renderTab(S.tab);} });
 }
 
 // ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
@@ -2176,14 +2198,17 @@ function inlineEditMov(td) {
   inp.type=isNum?'number':'text'; inp.value=cur; if(isNum)inp.step='0.01';
   inp.style.cssText='width:100%;background:var(--card2);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;color:var(--text);font-size:12px;text-align:'+(isNum?'right':'left');
   td.innerHTML=''; td.appendChild(inp); inp.focus(); inp.select();
+  let done=false;
   const save=async()=>{
+    if(done)return; done=true;
+    inp.removeEventListener('blur',save);
     const val=isNum?parseFloat(inp.value):inp.value.trim();
-    if (val===cur||(isNum&&val===parseFloat(cur))){rMovs();return;}
+    if(val===cur||(isNum&&val===parseFloat(cur))){rMovs();return;}
     try{ await api('PUT',`/api/movimientos/${id}`,{user_phone:S.phone,[field]:val}); await load(); }
-    catch(e){ alert('Error: '+e.message); rMovs(); }
+    catch(e){ toast('Error al guardar: '+e.message,'error'); rMovs(); }
   };
   inp.addEventListener('blur',save);
-  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save();}if(e.key==='Escape')rMovs();});
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save();}if(e.key==='Escape'){done=true;rMovs();}});
 }
 
 // ── MOVIMIENTOS — DUPLICATE ───────────────────────────────────────────────────

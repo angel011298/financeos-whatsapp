@@ -1292,6 +1292,10 @@ app.post('/api/update-refs', async (req, res) => {
       if (!refs.forma_pago_gastos) refs.forma_pago_gastos = {};
       refs.forma_pago_gastos[itemId] = item || '';  // itemId=descripcion, item='efectivo'|'tarjeta_debito'|''
     } else if (field === 'ingresos_esperados' || field === 'gastos_esperados') {
+      const { items: replaceItems } = req.body;
+      if (action === 'replace' && Array.isArray(replaceItems)) {
+        refs[field] = replaceItems;
+      }
       const arr = Array.isArray(refs[field]) ? [...refs[field]] : [];
       if (action === 'add') {
         arr.push({ ...item, _id: Date.now().toString() });
