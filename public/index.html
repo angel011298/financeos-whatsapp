@@ -1108,31 +1108,34 @@ function getGastosEsperados(refs) {
 }
 
 // Calcula ingresos esperados para cualquier rango de fechas [from, to]
-// Recorre los días de cobro de cada ingreso y cuenta cuántos caen en el rango
+// Ingresos tipo 'beca/mensual': cuenta cuántos días 1 caen en el rango
+// Ingresos tipo 'sueldo quincenal': prorratea por días usando base 15
 function calcIngresosEsperadosPeriodo(refs, from, to) {
   const items = getIngresosEsperados(refs);
+  const fromDate = new Date(from + 'T00:00:00');
+  const toDate   = new Date(to   + 'T00:00:00');
+  const days = Math.round((toDate - fromDate) / 86400000) + 1;
   let total = 0;
   items.forEach(ing => {
-    const dias = ing.dias || [];
-    if (!dias.length) return;
-    // Iterar mes a mes dentro del rango
-    const fromDate = new Date(from + 'T00:00:00');
-    const toDate   = new Date(to   + 'T00:00:00');
-    const cur = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
-    const end = new Date(toDate.getFullYear(),   toDate.getMonth(),   1);
-    while (cur <= end) {
-      const yr = cur.getFullYear(), mo = cur.getMonth();
-      const lastDay = new Date(yr, mo + 1, 0).getDate();
-      dias.forEach(d => {
-        const actualDay = Math.min(d, lastDay);
-        const mm = String(mo + 1).padStart(2,'0'), dd = String(actualDay).padStart(2,'0');
-        const payISO = `${yr}-${mm}-${dd}`;
-        if (payISO >= from && payISO <= to) total += (ing.monto || 0);
-      });
-      cur.setMonth(cur.getMonth() + 1);
+    const dias  = ing.dias || [];
+    const monto = ing.monto || 0;
+    if (!monto) return;
+    const isMensual = /beca|mensual/i.test(ing.descripcion || '');
+    if (isMensual) {
+      // Cuenta cuántas veces cae el día 1 en el rango (pago mensual fijo)
+      const cur = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+      const end = new Date(toDate.getFullYear(),   toDate.getMonth(),   1);
+      while (cur <= end) {
+        const payISO = toISO(cur);
+        if (payISO >= from && payISO <= to) total += monto;
+        cur.setMonth(cur.getMonth() + 1);
+      }
+    } else {
+      // Sueldo quincenal: prorratea linealmente — 1 quincena (15 días) = monto completo
+      total += monto * days / 15;
     }
   });
-  return total;
+  return Math.round(total * 100) / 100;
 }
 
 // ── PERIOD SELECTOR UI ───────────────────────────────────────────────────────
@@ -1166,10 +1169,12 @@ function rQuincenaPanel(ctx) {
   allIngEsp.forEach(i => { if (i._id) S._expItemData[i._id] = { ...i, _tipo: 'ingresos' }; });
   gasEsp.forEach(g => { if (g._id) S._expItemData[g._id] = { ...g, _tipo: 'gastos' }; });
 
-  // Filter expected income whose pay day falls in this quincena
-  const ingEspQ = allIngEsp.filter(ing =>
-    (ing.dias || []).some(d => d >= qi.fromDay && d <= qi.toDay)
-  );
+  // Sueldo quincenal → mostrar en TODA quincena; beca/mensual → solo si día 1 cae en la quincena
+  const ingEspQ = allIngEsp.filter(ing => {
+    if (!(ing.monto > 0)) return false;
+    const isMensual = /beca|mensual/i.test(ing.descripcion || '');
+    return isMensual ? qi.fromDay <= 1 : true;
+  });
 
   const totalIngEsp  = ingEspQ.reduce((a, i) => a + (i.monto || 0), 0);
   const totalGasEsp  = gasEsp.reduce((a, g) => a + (g.monto || 0), 0);
@@ -1178,7 +1183,7 @@ function rQuincenaPanel(ctx) {
   const ingDiff  = totalIngReal - totalIngEsp;
   const gasDiff  = totalGasReal - totalGasEsp;
   const balEsp   = totalIngEsp - totalGasEsp;
-  const balReal  = totalIngReal - totalGasReal;
+  const balReal  = totalIngEsp - totalGasReal; // balance = ingreso esperado - gasto real
 
   // Build gastos comparison map (incluyendo forma_pago por descripción)
   const fpMap = ((S.data.user || {}).external_refs || {}).forma_pago_gastos || {};
@@ -1242,7 +1247,7 @@ function rQuincenaPanel(ctx) {
   // Chart (deferred after render)
   const chartLabels = ['Ingresos','Gastos','Balance'];
   setTimeout(() => mkC(qChId, S.ct[qChId]||'bar', chartLabels, [
-    { label:'Monto', data:[totalIngReal||totalIngEsp, totalGasReal||totalGasEsp, balReal] }
+    { label:'Monto', data:[totalIngEsp||totalIngReal, totalGasReal||totalGasEsp, balReal] }
   ]), 20);
 
   return `<div class="q-panel">
@@ -1263,8 +1268,8 @@ function rQuincenaPanel(ctx) {
   <div class="q-stats" style="grid-template-columns:repeat(3,1fr)">
     <div class="qstat" style="cursor:pointer" onclick="oMov('INGRESO')" title="Registrar ingreso">
       <div class="qstat-lbl">Ingresos <i class="ti ti-plus" style="font-size:9px;opacity:.4"></i></div>
-      <div class="qstat-val green">${fmt(totalIngReal||totalIngEsp)}</div>
-      ${ingEspQ.length?`<div class="qstat-sub" style="color:var(--muted)">días ${ingEspQ.flatMap(i=>(i.dias||[]).filter(d=>d>=qi.fromDay&&d<=qi.toDay)).join(', ')}</div>`:''}
+      <div class="qstat-val green">${fmt(totalIngEsp||totalIngReal)}</div>
+      ${totalIngReal>0&&totalIngReal!==totalIngEsp?`<div class="qstat-sub" style="color:var(--muted)">Real: ${fmt(totalIngReal)}</div>`:''}
     </div>
     <div class="qstat" style="cursor:pointer" onclick="oMov('GASTO')" title="Registrar gasto">
       <div class="qstat-lbl">Gastos <i class="ti ti-plus" style="font-size:9px;opacity:.4"></i></div>
