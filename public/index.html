@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>OnlyUs ♡</title>
 <!-- PWA -->
 <link rel="manifest" href="/manifest.json">
@@ -433,17 +433,18 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .sheet-item .ti{font-size:22px;color:var(--text-1)}
 
 /* ═══════════════════════════════════════════════════════ CHAT */
-.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 80px)}
-.chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px}
+.chat-wrap{display:flex;flex-direction:column;height:calc(100svh - 80px)}
+@supports not (height:100svh){.chat-wrap{height:calc(100dvh - 80px)}}
+.chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
 .msg{max-width:78%;padding:10px 14px;font-size:var(--text-sm);line-height:1.6;word-break:break-word;animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .msg-user{align-self:flex-end;background:var(--accent-primary);color:#fff;border-radius:var(--radius-lg) var(--radius-sm) var(--radius-lg) var(--radius-lg)}
 .msg-bot{align-self:flex-start;background:var(--bg-surface-2);border:1px solid var(--border-default);color:var(--text-1);border-radius:var(--radius-sm) var(--radius-lg) var(--radius-lg) var(--radius-lg)}
 .msg-time{font-size:var(--text-xs);opacity:.55;margin-top:4px;text-align:right}
 .msg-user .msg-time{color:rgba(255,255,255,.7)}
-.chat-bar{display:flex;align-items:center;gap:10px;padding:12px 0 0;border-top:1px solid var(--border-default);flex-shrink:0}
-.chat-bar input{flex:1;border-radius:var(--radius-pill);padding:12px 18px;font-size:var(--text-base)}
-.round-btn{width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;transition:.15s}
+.chat-bar{display:flex;align-items:center;gap:10px;padding:12px 0 0;padding-bottom:max(12px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--border-default);flex-shrink:0}
+.chat-bar input{flex:1;border-radius:var(--radius-pill);padding:12px 18px;font-size:16px}
+.round-btn{width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;transition:.15s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .send-btn{background:var(--accent-primary);color:#fff}.send-btn:hover{opacity:.9}
 .mic-btn{background:var(--bg-surface-2);color:var(--text-2);border:1px solid var(--border-default)}
 .mic-btn:hover{color:var(--text-1);border-color:var(--text-2)}
@@ -463,10 +464,19 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .hdr h2{font-size:var(--text-lg)}
   .card-val{font-size:var(--text-xl)}
   .kpi-val{font-size:var(--text-xl)}
-  .chat-wrap{height:calc(100dvh - 148px)}
+  .chat-wrap{height:calc(100svh - 148px)}
   .kpi-grid{grid-template-columns:1fr;gap:8px}
+  .chat-bar input{font-size:16px!important}
+  .fab-save{bottom:90px}
 }
 @media(min-width:701px){#mobile-nav{display:none!important}}
+
+/* ── FLOATING SAVE BUTTON */
+.fab-save{position:fixed;right:20px;bottom:24px;z-index:80;display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:var(--radius-pill);background:var(--accent-primary);color:#fff;border:none;cursor:pointer;font-size:13px;font-family:'Sora',system-ui;font-weight:600;box-shadow:0 4px 20px rgba(124,106,247,.4);transition:all .18s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.fab-save:hover{opacity:.9;transform:translateY(-2px)}
+.fab-save:active{transform:scale(.96)}
+.fab-save.saving{opacity:.7;pointer-events:none}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -895,6 +905,20 @@ function go(t) {
   $('mn-'+t)?.classList.add('active');
   S.tab = t;
   renderTab(t);
+  const fab = $('fab-save');
+  if (fab) fab.style.display = t === 'chat' ? 'none' : 'flex';
+}
+
+async function saveSync(btn) {
+  const fab = $('fab-save');
+  if (fab) { fab.classList.add('saving'); fab.innerHTML = '<i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i> Guardando…'; }
+  try {
+    await load();
+    toast('Guardado — datos actualizados en todas las pestañas');
+  } catch(e) { toast('Error al guardar: ' + e.message, 'error'); }
+  finally {
+    if (fab) { fab.classList.remove('saving'); fab.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar'; }
+  }
 }
 
 function renderTab(t) {
@@ -1184,33 +1208,30 @@ function rQuincenaPanel(ctx) {
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
   const compRows = Object.entries(gasMap).map(([nombre, {esp, real, _id, forma_pago}]) => {
-    const diff = real - esp; const over = diff > 0;
+    const monto    = real > 0 ? real : esp;
     const pagado   = qMovs.find(m => m.concepto === '[Ppto] ' + nombre);
     const pagadoId = pagado ? pagado.id : null;
-    const marcarMonto = esp > 0 ? esp : real;
     const nomSafe  = nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     const isAuto   = _id.startsWith('auto-');
-    const fpEfectivo  = forma_pago === 'efectivo';
-    const fpDebito    = forma_pago === 'tarjeta_debito';
-    const fpNinguna   = !forma_pago;
+    const fpEfectivo = forma_pago === 'efectivo';
+    const fpDebito   = forma_pago === 'tarjeta_debito';
+    const fpNinguna  = !forma_pago;
     return `<tr>
       <td style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:${CAT_CLR[nombre]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${nombre}</td>
-      <td style="color:var(--muted)">${esp>0?fmt(esp):'—'}</td>
-      <td>${real>0?fmt(real):'—'}</td>
-      <td class="${over?'red':'green'}">${diff!==0?(over?'+':'')+fmt(diff):'—'}</td>
+      <td class="editable" data-gid="${_id}" ondblclick="inlineEditGastoEsp(this)" title="Doble clic para editar">${monto>0?fmt(monto):'—'}</td>
       <td>${isAuto ? '<span style="color:var(--text-3);font-size:11px">—</span>' : `
         <div style="display:flex;gap:3px">
           <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
             style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfectivo?'var(--color-income)':'var(--border-default)'};background:${fpEfectivo?'rgba(74,222,128,.15)':'transparent'};color:${fpEfectivo?'var(--color-income)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:10px;white-space:nowrap;transition:.12s">
             <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
           </button>
-          <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="Tarjeta Débito"
+          <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="T. Débito"
             style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebito?'var(--accent-primary)':'var(--border-default)'};background:${fpDebito?'rgba(124,106,247,.15)':'transparent'};color:${fpDebito?'var(--accent-primary)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:10px;white-space:nowrap;transition:.12s">
             <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
           </button>
         </div>`}
       </td>
-      <td><button onclick="marcarPagado('${nomSafe}',${marcarMonto},${pagadoId||'null'})"
+      <td><button onclick="marcarPagado('${nomSafe}',${monto},${pagadoId||'null'})"
           style="padding:3px 10px;border-radius:20px;border:1px solid ${pagadoId?'var(--green)':'var(--border-default)'};background:${pagadoId?'rgba(52,211,153,.13)':'transparent'};color:${pagadoId?'var(--green)':'var(--text-2)'};cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:4px;transition:.12s">
           <i class="ti ti-${pagadoId?'circle-check-filled':'circle'}"></i>${pagadoId?' Pagado':' Marcar'}
         </button></td>
@@ -1221,8 +1242,7 @@ function rQuincenaPanel(ctx) {
   // Chart (deferred after render)
   const chartLabels = ['Ingresos','Gastos','Balance'];
   setTimeout(() => mkC(qChId, S.ct[qChId]||'bar', chartLabels, [
-    { label:'Esperado', data:[totalIngEsp, totalGasEsp, balEsp] },
-    { label:'Real',     data:[totalIngReal, totalGasReal, balReal] }
+    { label:'Monto', data:[totalIngReal||totalIngEsp, totalGasReal||totalGasEsp, balReal] }
   ]), 20);
 
   return `<div class="q-panel">
@@ -1240,36 +1260,26 @@ function rQuincenaPanel(ctx) {
   </div>
 
   <!-- Stats row -->
-  <div class="q-stats">
-    <div class="qstat">
-      <div class="qstat-lbl">Ingreso esperado</div>
-      <div class="qstat-val green">${fmt(totalIngEsp)}</div>
-      ${ingEspQ.length?`<div class="qstat-sub" style="color:var(--muted)">días ${ingEspQ.flatMap(i=>(i.dias||[]).filter(d=>d>=qi.fromDay&&d<=qi.toDay)).join(', ')}</div>`:'<div class="qstat-sub" style="color:var(--muted)">sin configurar</div>'}
+  <div class="q-stats" style="grid-template-columns:repeat(3,1fr)">
+    <div class="qstat" style="cursor:pointer" onclick="oMov('INGRESO')" title="Registrar ingreso">
+      <div class="qstat-lbl">Ingresos <i class="ti ti-plus" style="font-size:9px;opacity:.4"></i></div>
+      <div class="qstat-val green">${fmt(totalIngReal||totalIngEsp)}</div>
+      ${ingEspQ.length?`<div class="qstat-sub" style="color:var(--muted)">días ${ingEspQ.flatMap(i=>(i.dias||[]).filter(d=>d>=qi.fromDay&&d<=qi.toDay)).join(', ')}</div>`:''}
     </div>
-    <div class="qstat">
-      <div class="qstat-lbl">Ingreso real</div>
-      <div class="qstat-val ${totalIngReal>=totalIngEsp?'green':'yellow'}">${fmt(totalIngReal)}</div>
-      <div class="qstat-sub" style="color:${ingDiff>=0?'var(--green)':'var(--red)'}">${ingDiff>=0?'+':''}${fmt(ingDiff)}</div>
-    </div>
-    <div class="qstat">
-      <div class="qstat-lbl">Gasto esperado</div>
-      <div class="qstat-val yellow">${fmt(totalGasEsp)}</div>
-    </div>
-    <div class="qstat">
-      <div class="qstat-lbl">Gasto real</div>
-      <div class="qstat-val ${gasDiff>0?'red':'green'}">${fmt(totalGasReal)}</div>
-      <div class="qstat-sub" style="color:${gasDiff>0?'var(--red)':'var(--green)'}">${gasDiff>0?'+':''}${fmt(gasDiff)}</div>
+    <div class="qstat" style="cursor:pointer" onclick="oMov('GASTO')" title="Registrar gasto">
+      <div class="qstat-lbl">Gastos <i class="ti ti-plus" style="font-size:9px;opacity:.4"></i></div>
+      <div class="qstat-val red">${fmt(totalGasReal)}</div>
+      ${totalGasEsp>0?`<div class="qstat-sub" style="color:var(--muted)">presup. ${fmt(totalGasEsp)}</div>`:''}
     </div>
     <div class="qstat" style="border:1px solid ${balReal>=0?'rgba(52,211,153,.3)':'rgba(248,113,113,.3)'}">
-      <div class="qstat-lbl">Balance real</div>
+      <div class="qstat-lbl">Balance</div>
       <div class="qstat-val ${balReal>=0?'green':'red'}">${fmt(balReal)}</div>
-      <div class="qstat-sub" style="color:var(--muted)">esp: ${fmt(balEsp)}</div>
     </div>
   </div>
 
   <!-- Ingresos esperados this quincena -->
   <div style="margin-bottom:10px">
-    <div class="q-section-lbl"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esperados esta quincena</div>
+    <div class="q-section-lbl"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esta quincena</div>
     ${ingEspQ.length ? ingEspQ.map(ing=>`
     <div class="q-item-row">
       <span style="font-size:12px">${ing.descripcion} <span style="color:var(--muted);font-size:11px">días ${(ing.dias||[]).filter(d=>d>=qi.fromDay&&d<=qi.toDay).join(', ')}</span></span>
@@ -1302,16 +1312,16 @@ function rQuincenaPanel(ctx) {
 
   <!-- Gastos comparison table -->
   <div style="margin-bottom:10px">
-    <div class="q-section-lbl"><i class="ti ti-table" style="color:var(--yellow)"></i> Gastos esperados vs real</div>
-    ${Object.keys(gasMap).length ? `<div style="overflow-x:auto"><table style="margin:0;min-width:600px">
-      <tr><th>Concepto</th><th>Esperado</th><th>Real</th><th>Diferencia</th><th>Forma de pago</th><th>Pagado</th><th></th></tr>
+    <div class="q-section-lbl"><i class="ti ti-table" style="color:var(--yellow)"></i> Gastos esta quincena</div>
+    ${Object.keys(gasMap).length ? `<div style="overflow-x:auto"><table style="margin:0;min-width:480px">
+      <tr><th>Concepto</th><th>Monto</th><th>Forma de pago</th><th>Pagado</th><th></th></tr>
       ${compRows}
     </table></div>` : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
   </div>
 
   <!-- Chart -->
   <div class="cbox" style="margin-bottom:10px">
-    <h3>Esperado vs Real — ${qi.label}</h3>${ctBtns(qChId,LINE,'bar')}
+    <h3>Balance — ${qi.label}</h3>${ctBtns(qChId,LINE,'bar')}
     <div class="cwrap"><canvas id="${qChId}"></canvas></div>
     <div id="legend-${qChId}" class="chart-legend"></div>
   </div>
@@ -1484,6 +1494,28 @@ function inlineEditTDC(td) {
   inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape') renderTab(S.tab); });
 }
 
+function inlineEditGastoEsp(td) {
+  if (td.querySelector('input')) return;
+  const gid = td.dataset.gid;
+  const item = S._expItemData[gid]; if (!item) return;
+  const cur = item.monto || 0;
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.value = cur; inp.step = '0.01';
+  inp.className = 'ie-inp num';
+  td.innerHTML = ''; td.appendChild(inp); inp.focus(); inp.select();
+  const save = async () => {
+    const val = parseFloat(inp.value);
+    if (isNaN(val) || val === parseFloat(cur)) { renderTab(S.tab); return; }
+    try {
+      await api('POST', '/api/update-refs', { phone: S.phone, action: 'update', list: 'gastos_esperados', id: gid, data: { monto: val } });
+      await load();
+      toast('Gasto actualizado');
+    } catch(e) { toast('Error: ' + e.message, 'error'); renderTab(S.tab); }
+  };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape') renderTab(S.tab); });
+}
+
 // ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
 function rDash() {
   const movs = S.data.movs || [];
@@ -1516,18 +1548,22 @@ ${periodoSelectorHTML()}
     : `<span style="font-size:11px;color:var(--color-expense);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-down"></i> Balance negativo</span>`}
 </div>
 <div class="cards">
-  <div class="card"><div class="card-lbl">Gastos reales</div><div class="card-val red">${fmt(gasC)}</div></div>
-  <div class="card">
-    <div class="card-lbl">Ingresos esperados</div>
-    <div class="card-val green">${ingEsp ? fmt(ingEsp) : fmt(ingC)}</div>
-    ${ingEsp && ingC !== ingEsp ? `<div style="font-size:11px;margin-top:3px;color:var(--text-3)">Real: <span style="color:var(--text-2);font-family:'DM Mono',monospace">${fmt(ingC)}</span></div>` : ''}
+  <div class="card" style="cursor:pointer" onclick="oMov('GASTO')" title="Registrar gasto">
+    <div class="card-lbl">Gastos <i class="ti ti-plus" style="font-size:9px;opacity:.5"></i></div>
+    <div class="card-val red">${fmt(gasC)}</div>
+  </div>
+  <div class="card" style="cursor:pointer" onclick="oMov('INGRESO')" title="Registrar ingreso">
+    <div class="card-lbl">Ingresos <i class="ti ti-plus" style="font-size:9px;opacity:.5"></i></div>
+    <div class="card-val green">${fmt(ingC||ingEsp)}</div>
   </div>
   <div class="card">
-    <div class="card-lbl">Neto esperado</div>
-    <div class="card-val ${(ingEsp||ingC)-gasC>=0?'green':'red'}">${fmt((ingEsp||ingC)-gasC)}</div>
-    ${ingEsp && ingC !== ingEsp ? `<div style="font-size:11px;margin-top:3px;color:var(--text-3)">Real: <span style="color:var(--text-2);font-family:'DM Mono',monospace">${fmt(ingC-gasC)}</span></div>` : ''}
+    <div class="card-lbl">Neto</div>
+    <div class="card-val ${(ingC||ingEsp)-gasC>=0?'green':'red'}">${fmt((ingC||ingEsp)-gasC)}</div>
   </div>
-  <div class="card"><div class="card-lbl">Deuda TDC</div><div class="card-val yellow">${fmt(tdcP)}</div></div>
+  <div class="card" style="cursor:pointer" onclick="go('deudas')" title="Ver deudas TDC">
+    <div class="card-lbl">Deuda TDC <i class="ti ti-chevron-right" style="font-size:9px;opacity:.5"></i></div>
+    <div class="card-val yellow">${fmt(tdcP)}</div>
+  </div>
 </div>
 ${rQuincenaPanel('dash')}
 <div class="charts-grid">
@@ -2530,16 +2566,17 @@ function rChat() {
     tab.innerHTML = `
 <div class="chat-wrap">
   <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"></div>
-  <div class="chat-bar">
-    <button class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
+  <form class="chat-bar" onsubmit="event.preventDefault();sendChat()">
+    <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
       <i class="ti ti-microphone" id="mic-icon"></i>
     </button>
     <input id="chat-input" placeholder="Escribe un mensaje..." autocomplete="off"
+      inputmode="text" enterkeyhint="send"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}">
-    <button class="round-btn send-btn" onclick="sendChat()" title="Enviar">
+    <button type="submit" class="round-btn send-btn" title="Enviar">
       <i class="ti ti-send"></i>
     </button>
-  </div>
+  </form>
 </div>`;
     _loadChatHistory();
   }
@@ -2822,7 +2859,22 @@ function _blobToBase64(blob) {
 
   // Primera vez — pantalla neutral, el servidor detecta quién eres
   showPhoneInput(null);
+
+  // iOS keyboard: scroll chat to bottom when virtual keyboard resizes viewport
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      const msgs = $('chat-msgs');
+      if (msgs && S.tab === 'chat') {
+        requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
+      }
+    });
+  }
 })();
 </script>
+
+<!-- Floating save button (hidden in chat tab) -->
+<button class="fab-save" id="fab-save" onclick="saveSync()" style="display:none">
+  <i class="ti ti-device-floppy"></i> Guardar
+</button>
 </body>
 </html>
