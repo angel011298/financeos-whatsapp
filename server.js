@@ -1295,14 +1295,26 @@ app.post('/api/update-refs', async (req, res) => {
       const arr = Array.isArray(refs[field]) ? [...refs[field]] : [];
       if (action === 'add') {
         arr.push({ ...item, _id: Date.now().toString() });
+        refs[field] = arr;
       } else if (action === 'remove') {
         const idx = arr.findIndex(x => (x._id || x.id) === itemId);
-        if (idx > -1) arr.splice(idx, 1);
+        if (idx > -1) { arr.splice(idx, 1); refs[field] = arr; }
       } else if (action === 'update') {
         const idx = arr.findIndex(x => (x._id || x.id) === itemId);
-        if (idx > -1) arr[idx] = { ...arr[idx], ...item };
+        if (idx > -1) {
+          arr[idx] = { ...arr[idx], ...item };
+          refs[field] = arr;
+        } else if (typeof itemId === 'string' && itemId.startsWith('lg-') && field === 'gastos_esperados') {
+          // legacy gastos_fijos format
+          const key = itemId.slice(3);
+          if (refs.gastos_fijos && key in refs.gastos_fijos) {
+            refs.gastos_fijos = { ...refs.gastos_fijos, [key]: item.monto ?? refs.gastos_fijos[key] };
+          }
+        } else if (itemId === 'legacy-sueldo' && field === 'ingresos_esperados') {
+          // legacy ingreso_quincenal format
+          if ('ingreso_quincenal' in refs) refs.ingreso_quincenal = item.monto ?? refs.ingreso_quincenal;
+        }
       }
-      refs[field] = arr;
     }
 
     const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);

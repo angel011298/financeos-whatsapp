@@ -710,9 +710,12 @@ function badgeFecha(d) {
 
 async function api(m, p, b) {
   const r = await fetch(p, { method:m, headers:{'Content-Type':'application/json'}, body:b?JSON.stringify(b):undefined });
-  if (!r.ok && r.status === 413) throw new Error('Audio demasiado largo. Graba menos de 60 segundos.');
+  if (r.status === 413) throw new Error('Audio demasiado largo. Graba menos de 60 segundos.');
   const text = await r.text();
-  try { return JSON.parse(text); } catch { throw new Error('Respuesta inválida del servidor'); }
+  let json;
+  try { json = JSON.parse(text); } catch { throw new Error('Respuesta inválida del servidor'); }
+  if (!r.ok || json?.success === false) throw new Error(json?.error || `Error ${r.status}`);
+  return json;
 }
 
 // Normaliza teléfono a formato whatsapp:+52XXXXXXXXXX
