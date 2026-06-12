@@ -480,6 +480,27 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .fab-save:active{transform:scale(.96)}
 .fab-save.saving{opacity:.7;pointer-events:none}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── DAILY SNAPSHOT */
+.snapshot-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);margin-bottom:16px;display:grid;grid-template-columns:repeat(3,1fr);overflow:hidden}
+.snap-item{padding:16px 20px}
+.snap-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);margin-bottom:5px;display:flex;align-items:center;gap:4px}
+.snap-val{font-family:'DM Mono',monospace;font-size:clamp(14px,2vw,20px);font-weight:700;letter-spacing:-0.4px;line-height:1.2}
+.snap-sub{font-size:11px;color:var(--text-2);margin-top:3px}
+@media(min-width:701px){.snap-item:nth-child(2){border-left:1px solid var(--border-default);border-right:1px solid var(--border-default)}}
+@media(max-width:700px){.snapshot-card{grid-template-columns:1fr}.snap-item{border-bottom:1px solid var(--border-default)}.snap-item:last-child{border-bottom:none}}
+
+/* ── REVIEW QUEUE */
+.dot-btn{background:none;border:none;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;flex-shrink:0}
+.unread-dot{width:9px;height:9px;border-radius:50%;background:#3B82F6;display:block;transition:transform .15s}
+.dot-btn:hover .unread-dot,.dot-btn:active .unread-dot{transform:scale(1.6)}
+.unrev-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(59,130,246,.12);color:#60A5FA;border:1px solid rgba(59,130,246,.3);border-radius:var(--radius-pill);padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;user-select:none;touch-action:manipulation;min-height:26px;transition:.15s;vertical-align:middle;margin-left:8px}
+.unrev-badge:hover{background:rgba(59,130,246,.25)}
+.unrev-badge.active-filter{background:#3B82F6;color:#fff;border-color:#3B82F6}
+.cat-picker{display:flex;flex-wrap:wrap;gap:3px;padding:2px 0;animation:fadeIn .12s ease}
+.cat-chip{padding:4px 10px;border-radius:var(--radius-pill);font-size:11px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:.12s;font-family:'Sora',system-ui;touch-action:manipulation;min-height:28px;display:inline-flex;align-items:center;-webkit-tap-highlight-color:transparent}
+.cat-chip.cur{font-weight:700}
+.cat-chip:hover{opacity:.8}
 </style>
 </head>
 <body>
@@ -677,10 +698,11 @@ const S = {
   periodo: { tipo: 'mes', offset: 0 },
   qOffset: 0,
   movF: null,          // filter state for Movimientos tab
-  _movData:     {},    // id → movimiento lookup
-  _metaData:    {},    // id → meta lookup
-  _tdcData:     {},    // id → tdc lookup
-  _expItemData: {}     // _id → ingreso/gasto esperado lookup
+  _movData:       {},    // id → movimiento lookup
+  _metaData:      {},    // id → meta lookup
+  _tdcData:       {},    // id → tdc lookup
+  _expItemData:   {},    // _id → ingreso/gasto esperado lookup
+  _openCatPicker: null   // id of movimiento whose cat picker is open
 };
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -1613,6 +1635,78 @@ function inlineEditGastoEsp(td) {
   inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape'){done=true;renderTab(S.tab);} });
 }
 
+// ── DAILY SNAPSHOT ────────────────────────────────────────────────────────────
+function rDailySnapshot() {
+  const movs = S.data.movs || [];
+  const tdcs  = S.data.tdc  || [];
+  const now   = new Date();
+  const today = now.toISOString().split('T')[0];
+  const cm    = curMes();
+  const diaActual = now.getDate();
+  const diasMes   = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+  // (a) Gastado hoy vs promedio diario del mes
+  const gastadoHoy = movs.filter(m => m.tipo==='GASTO' && fd(m.fecha)===today)
+                         .reduce((a,m)=>a+(m.monto||0),0);
+  const gastadoMes = movs.filter(m => m.tipo==='GASTO' && (m.fecha||'').startsWith(cm))
+                         .reduce((a,m)=>a+(m.monto||0),0);
+  const promDiario = diaActual > 0 ? gastadoMes / diaActual : 0;
+  const diffHoy    = gastadoHoy - promDiario;
+  const diffColor  = diffHoy > promDiario * 0.2 ? 'var(--color-expense)'
+                   : diffHoy < -promDiario * 0.2 ? 'var(--color-income)' : 'var(--text-2)';
+  const diffStr    = promDiario > 0 && Math.abs(diffHoy) > 10
+    ? ` <span style="color:${diffColor}">${diffHoy>0?'+':''}${fmt(Math.round(diffHoy))}</span>` : '';
+
+  // (b) Próximo pago TDC — el de mayor saldo pendiente
+  const nextTdc = tdcs
+    .map(t => ({ ...t, saldo: Math.max(0,(t.a_pagar||0)-(t.pagado||0)) }))
+    .filter(t => t.saldo > 0)
+    .sort((a,b) => b.saldo - a.saldo)[0];
+  const diasAlFin = diasMes - diaActual;
+
+  // (c) Estado del mes — comparar ritmo vs mes anterior
+  const lastMes = new Date(now.getFullYear(), now.getMonth()-1, 1).toISOString().substr(0,7);
+  const gastLastMes = movs.filter(m => m.tipo==='GASTO' && (m.fecha||'').startsWith(lastMes))
+                          .reduce((a,m)=>a+(m.monto||0),0);
+  const diasLastMes = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  const promLast    = diasLastMes > 0 ? gastLastMes / diasLastMes : 0;
+  let estadoMsg = 'Sin datos del mes anterior', estadoColor = 'var(--text-3)', estadoIcon = 'ti-help';
+  if (promLast > 0 && diaActual >= 3) {
+    const diffMes = Math.round((promDiario - promLast) * diasMes);
+    const abs     = Math.abs(diffMes);
+    if (abs < 300) {
+      estadoMsg = 'Al mismo ritmo del mes pasado'; estadoColor = 'var(--text-2)'; estadoIcon = 'ti-equal';
+    } else if (diffMes < 0) {
+      estadoMsg = `${fmt(abs)} abajo del ritmo pasado`; estadoColor = 'var(--color-income)'; estadoIcon = 'ti-trending-down';
+    } else {
+      estadoMsg = `${fmt(abs)} arriba del ritmo pasado`; estadoColor = 'var(--color-expense)'; estadoIcon = 'ti-trending-up';
+    }
+  } else if (diaActual < 3) {
+    estadoMsg = 'Inicio de mes'; estadoColor = 'var(--text-3)'; estadoIcon = 'ti-clock';
+  }
+
+  return `<div class="snapshot-card">
+  <div class="snap-item">
+    <div class="snap-lbl"><i class="ti ti-sun" style="font-size:11px;color:var(--color-warning)"></i> Gastado hoy</div>
+    <div class="snap-val" style="color:${gastadoHoy>0?'var(--color-expense)':'var(--text-1)'}">${fmt(gastadoHoy)}</div>
+    <div class="snap-sub">prom. diario ${fmt(Math.round(promDiario))}${diffStr}</div>
+  </div>
+  <div class="snap-item">
+    <div class="snap-lbl"><i class="ti ti-credit-card" style="font-size:11px;color:var(--color-warning)"></i> Próx. pago TDC</div>
+    ${nextTdc
+      ? `<div class="snap-val">${fmt(nextTdc.saldo)}</div>
+         <div class="snap-sub">${nextTdc.nombre} · <strong>${diasAlFin}</strong> días</div>`
+      : `<div class="snap-val" style="color:var(--color-income)">Sin deuda</div>
+         <div class="snap-sub" style="color:var(--color-income)">TDC al día</div>`}
+  </div>
+  <div class="snap-item">
+    <div class="snap-lbl"><i class="ti ${estadoIcon}" style="font-size:11px;color:${estadoColor}"></i> Estado del mes</div>
+    <div class="snap-val" style="font-size:clamp(11px,1.4vw,14px);color:${estadoColor};letter-spacing:0">${estadoMsg}</div>
+    <div class="snap-sub">día ${diaActual}/${diasMes} · ${fmt(gastadoMes)} mes</div>
+  </div>
+</div>`;
+}
+
 // ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
 function rDash() {
   const movs = S.data.movs || [];
@@ -1627,7 +1721,7 @@ function rDash() {
   const pats = S.data.patrones||[];
   const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
 
-  $('tab-dashboard').innerHTML = `
+  $('tab-dashboard').innerHTML = rDailySnapshot() + `
 <div class="hdr">
   <h2><i class="ti ti-layout-dashboard"></i> Dashboard <span style="font-size:13px;color:var(--muted);font-weight:400">${who}</span></h2>
   <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
@@ -2061,12 +2155,13 @@ function initMovF() {
   const now = new Date();
   const cm  = curMes();
   S.movF = {
-    desde:     cm + '-01',
-    hasta:     toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-    cats:      [],
-    medios:    [],
-    search:    '',
-    chartType: 'doughnut'
+    desde:      cm + '-01',
+    hasta:      toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    cats:       [],
+    medios:     [],
+    search:     '',
+    chartType:  'doughnut',
+    onlyUnread: false,
   };
 }
 
@@ -2128,6 +2223,7 @@ function getMovFiltradas() {
     const q=f.search.toLowerCase();
     mv=mv.filter(m=>(m.concepto||'').toLowerCase().includes(q)||(m.comentarios||'').toLowerCase().includes(q)||(m.descripcion||'').toLowerCase().includes(q));
   }
+  if (f.onlyUnread) mv=mv.filter(m=>!m.revisado);
   return mv;
 }
 
@@ -2171,10 +2267,12 @@ function movRow(m) {
   const tBg =m.tipo==='GASTO'?'rgba(248,113,113,.13)':'rgba(52,211,153,.13)';
   const nota=m.comentarios?`<span class="nota-ia" title="${(m.comentarios||'').replace(/"/g,'&quot;')}"><i class="ti ti-robot"></i></span>`:'';
   const cptEsc=(m.concepto||'').replace(/`/g,'').replace(/\\/g,'');
-  return `<tr>
+  const dot=m.revisado?'':`<button class="dot-btn" title="Marcar revisado" onclick="markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
+  return `<tr id="mrow-${m.id}">
+  <td style="padding:0;width:36px;text-align:center">${dot}</td>
   <td style="white-space:nowrap;color:var(--muted);font-size:11px">${fd(m.fecha)}</td>
   <td><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
-  <td><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
+  <td id="catcell-${m.id}" onclick="openCatPicker(${m.id})" style="cursor:pointer"><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
   <td class="editable" data-mid="${m.id}" data-mfield="concepto" ondblclick="inlineEditMov(this)">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
   <td class="editable" data-mid="${m.id}" data-mfield="monto" ondblclick="inlineEditMov(this)" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
   <td style="color:var(--muted);font-size:11px">${m.medio_pago||'—'}</td>
@@ -2251,9 +2349,13 @@ function rMovs() {
     return `<button class="f-pill${f.chartType===v?' on':''}" onclick="setMovChart('${v}')">${l}</button>`;
   }).join('');
 
+  const allMovs=S.data.movs||[];
+  const unreviewedCount=allMovs.filter(m=>!m.revisado&&!m.deleted_at).length;
+  const unrevBadge=unreviewedCount>0?`<button class="unrev-badge${S.movF.onlyUnread?' active-filter':''}" onclick="toggleUnreadFilter()">${unreviewedCount} sin revisar</button>`:'';
+
   $('tab-movimientos').innerHTML=`
 <div class="hdr">
-  <h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2>
+  <h2><i class="ti ti-arrows-exchange"></i> Movimientos ${unrevBadge}</h2>
   <div style="display:flex;gap:6px">
     <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green)" onclick="oMov('INGRESO')"><i class="ti ti-plus"></i> Ingreso</button>
     <button class="btn btn-accent btn-sm" onclick="oMov('GASTO')"><i class="ti ti-plus"></i> Gasto</button>
@@ -2319,6 +2421,7 @@ function rMovs() {
 <div style="overflow-x:auto">
 <table>
   <tr>
+    <th style="width:36px"></th>
     <th>Fecha</th><th>Tipo</th><th>Categoría</th>
     <th>Concepto <span style="font-size:9px;color:var(--muted);font-weight:400">(doble clic para editar)</span></th>
     <th style="text-align:right">Monto</th>
@@ -2328,11 +2431,92 @@ function rMovs() {
   </tr>
   ${filtered.length
     ? filtered.slice(0,250).map(m=>movRow(m)).join('')
-    : `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:28px">Sin movimientos en el período seleccionado</td></tr>`}
+    : `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:28px">Sin movimientos en el período seleccionado</td></tr>`}
 </table>
 </div>`;
 
   setTimeout(()=>renderMovChart(filtered),60);
+}
+
+// ── REVIEW QUEUE ─────────────────────────────────────────────────────────────
+async function markReviewed(id) {
+  const row = document.getElementById('mrow-'+id);
+  if (!row) return;
+  const btn = row.querySelector('.dot-btn');
+  if (btn) btn.remove();
+  const m = S._movData[id];
+  if (m) m.revisado = true;
+  const src = (S.data.movs||[]).find(x=>x.id==id);
+  if (src) src.revisado = true;
+  _updateUnrevBadge();
+  await fetch('/api/movimientos/'+id, {
+    method:'PATCH',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({user_phone: S.phone, revisado: true})
+  }).catch(()=>{});
+}
+
+function _updateUnrevBadge() {
+  const allMovs = S.data.movs || [];
+  const n = allMovs.filter(m=>!m.revisado&&!m.deleted_at).length;
+  const existing = document.querySelector('.unrev-badge');
+  if (!existing) return;
+  if (n === 0) { existing.remove(); return; }
+  existing.textContent = n + ' sin revisar';
+}
+
+function toggleUnreadFilter() {
+  S.movF.onlyUnread = !S.movF.onlyUnread;
+  rMovs();
+}
+
+function openCatPicker(id) {
+  if (S._openCatPicker === id) { closeCatPicker(); return; }
+  closeCatPicker();
+  S._openCatPicker = id;
+  const td = document.getElementById('catcell-'+id);
+  if (!td) return;
+  const m = S._movData[id]; if (!m) return;
+  td.innerHTML = _catPickerHTML(id, m.categoria);
+}
+
+function closeCatPicker() {
+  if (!S._openCatPicker) return;
+  const id = S._openCatPicker;
+  S._openCatPicker = null;
+  const td = document.getElementById('catcell-'+id);
+  if (!td) return;
+  const m = S._movData[id];
+  if (m) _renderCatBadge(td, m);
+}
+
+function _renderCatBadge(td, m) {
+  const cClr = CAT_CLR[m.categoria]||'#94a3b8';
+  td.innerHTML = `<span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span>`;
+}
+
+function _catPickerHTML(id, currentCat) {
+  const chips = CATS.map(c => {
+    const sel = c === currentCat;
+    const cc = CAT_CLR[c]||'#94a3b8';
+    return `<button class="cat-chip${sel?' on':''}" style="background:${sel?cc+'33':'transparent'};color:${cc};border:1px solid ${cc}40" onclick="changeCat(${id},'${c}')">${c}</button>`;
+  }).join('');
+  return `<div class="cat-picker" onclick="event.stopPropagation()">${chips}</div>`;
+}
+
+async function changeCat(id, newCat) {
+  const m = S._movData[id]; if (!m) return;
+  m.categoria = newCat;
+  const src = (S.data.movs||[]).find(x=>x.id==id);
+  if (src) src.categoria = newCat;
+  S._openCatPicker = null;
+  const td = document.getElementById('catcell-'+id);
+  if (td) _renderCatBadge(td, m);
+  await fetch('/api/movimientos/'+id, {
+    method:'PATCH',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({user_phone: S.phone, categoria: newCat})
+  }).catch(()=>{});
 }
 
 // ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
@@ -3067,6 +3251,12 @@ function _blobToBase64(blob) {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
+
+  document.addEventListener('click', e => {
+    if (S._openCatPicker && !e.target.closest('.cat-picker') && !e.target.closest('[id^="catcell-"]')) {
+      closeCatPicker();
+    }
+  });
 
   const isAdminURL = location.search.includes('angel') || location.hash.includes('angel');
   const isAliciaURL = location.search.includes('alicia') || location.hash.includes('alicia');

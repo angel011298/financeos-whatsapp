@@ -1030,6 +1030,19 @@ app.put('/api/movimientos/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+app.patch('/api/movimientos/:id', async (req, res) => {
+  try {
+    const { user_phone, ...fields } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+    const allowed = ['revisado', 'categoria'];
+    const update = Object.fromEntries(Object.entries(fields).filter(([k]) => allowed.includes(k)));
+    if (!Object.keys(update).length) return res.status(400).json({ success: false, error: 'Sin campos válidos' });
+    const { data, error } = await sb.from('movimientos').update(update).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.delete('/api/movimientos/:id', async (req, res) => {
   try {
     const { user_phone } = req.body;
