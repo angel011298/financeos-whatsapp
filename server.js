@@ -131,7 +131,7 @@ async function guardarMensaje(userPhone, role, content) {
 }
 
 // ── Audit log ─────────────────────────────────────────────────────────────────
-async function writeAuditLog(phone, tabla, accion, registroId, datosBefore, datosAfter, origen = 'whatsapp') {
+async function writeAuditLog(phone, tabla, accion, registroId, datosBefore, datosAfter, origen = 'whatsapp', texto_original = null) {
   try {
     await sb.from('audit_log').insert({
       user_phone:    phone,
@@ -141,6 +141,7 @@ async function writeAuditLog(phone, tabla, accion, registroId, datosBefore, dato
       datos_antes:   datosBefore  || null,
       datos_despues: datosAfter   || null,
       origen,
+      texto_original,
     });
   } catch (e) { console.error('audit_log write error:', e.message); }
 }
@@ -485,7 +486,7 @@ const TABLAS_VALIDAS = ['movimientos','metas','calendario','tdc','presupuesto','
 const TABLAS_SOFT_DELETE = ['movimientos','metas','calendario','nidito'];
 
 async function executeDbAction(phone, arg, origen = 'whatsapp') {
-  const { tabla, accion, id, datos } = arg;
+  const { tabla, accion, id, datos, texto_original } = arg;
   try {
     if (!TABLAS_VALIDAS.includes(tabla)) {
       return `❌ Tabla '${tabla}' no existe. Tablas válidas: ${TABLAS_VALIDAS.join(', ')}`;
@@ -503,19 +504,19 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
       if (accion === 'crear') {
         const { data, error } = await sb.from('nidito').insert({ ...datos, created_by: phone }).select().single();
         if (error) return `❌ Error: ${error.message}`;
-        await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen);
+        await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen, texto_original);
         return `✅ Agregado al Nidito ✓ ID: ${data?.id}`;
       }
       if (accion === 'editar') {
         const { data, error } = await sb.from('nidito').update({ ...datos, updated_at: new Date().toISOString() }).eq('id', id).select().single();
         if (error) return `❌ Error: ${error.message}`;
-        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen);
+        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen, texto_original);
         return `✅ Nidito #${id} actualizado.`;
       }
       if (accion === 'eliminar') {
         const { error } = await sb.from('nidito').update({ deleted_at: new Date().toISOString() }).eq('id', id);
         if (error) return `❌ Error: ${error.message}`;
-        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen);
+        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen, texto_original);
         return `🗑️ Eliminado del Nidito #${id}.`;
       }
     }
@@ -526,7 +527,7 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
       const refs = { ...(cur?.external_refs || {}), ...datos };
       const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
       if (error) return `❌ Error: ${error.message}`;
-      await writeAuditLog(phone, tabla, 'editar', phone, cur?.external_refs, refs, origen);
+      await writeAuditLog(phone, tabla, 'editar', phone, cur?.external_refs, refs, origen, texto_original);
       return `✅ Perfil personal actualizado.`;
     }
 
@@ -537,13 +538,13 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
         await learnPattern(phone, datos);
         await verificarLimitePresupuesto(phone, datos.categoria, mesActual()).catch(() => null);
       }
-      await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen);
+      await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen, texto_original);
       return `✅ ${tabla === 'calendario' ? 'Evento agendado' : 'Registrado'} ✓ ID: ${data?.id}`;
     }
     if (accion === 'editar') {
       const { data, error } = await sb.from(tabla).update(datos).eq('id', id).eq('user_phone', phone).select().single();
       if (error) return `❌ Error: ${error.message}`;
-      await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen);
+      await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen, texto_original);
       return `✅ Registro ${id} actualizado.`;
     }
     if (accion === 'eliminar') {
@@ -554,7 +555,7 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
         const { error } = await sb.from(tabla).delete().eq('id', id).eq('user_phone', phone);
         if (error) return `❌ Error: ${error.message}`;
       }
-      await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen);
+      await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen, texto_original);
       return `🗑️ Registro ${id} eliminado.`;
     }
     return '❌ Acción no reconocida.';
