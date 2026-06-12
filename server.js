@@ -256,6 +256,19 @@ async function purgarDatosVencidos() {
 setInterval(purgarDatosVencidos, 24 * 60 * 60 * 1000);
 purgarDatosVencidos().catch(() => {});
 
+async function expirarAccionesPendientes() {
+  try {
+    const { count } = await sb.from('acciones_pendientes')
+      .update({ estado: 'expirada' })
+      .in('estado', ['pending', 'editing'])
+      .lt('expira_at', new Date().toISOString())
+      .select('id', { count: 'exact', head: true });
+    if (count > 0) console.log(`[EXPIRY] ${count} acción(es) expiradas.`);
+  } catch (e) { console.error('expirarAccionesPendientes:', e.message); }
+}
+setInterval(expirarAccionesPendientes, 15 * 60 * 1000);
+expirarAccionesPendientes().catch(() => {});
+
 // Parsea "mejor 450", "categoría comida", etc. y los fusiona con los datos existentes
 function mergeEditIntent(datosActuales, editText) {
   const d = { ...datosActuales };
@@ -678,7 +691,9 @@ async function proposeDbAction(phone, arg, textoOriginal) {
     } else if (tabla === 'metas') {
       resumen = `🎯 Meta: ${d.nombre || ''} — ${fmt(d.meta || 0)}`;
     } else if (tabla === 'nidito') {
-      resumen = `💫 Nidito (${d.tipo || 'idea'}): ${d.titulo || ''}${d.monto > 0 ? ' · ' + fmt(d.monto) : ''}`;
+      const { data: usr } = await sb.from('usuarios').select('nombre').eq('telefono', phone).maybeSingle();
+      const nombreCreador = usr?.nombre || 'tú';
+      resumen = `💫 Nidito (${d.tipo || 'idea'}): ${d.titulo || ''}${d.monto > 0 ? ' · ' + fmt(d.monto) : ''}\n_Compartido — visible para ambos. Crea: ${nombreCreador}_`;
     } else {
       resumen = `${tabla}: ${JSON.stringify(d)}`;
     }
@@ -1727,7 +1742,13 @@ app.post('/webhook', async (req, res) => {
           const { msg } = await proposeDbAction(From, newArg, Body || '');
           reply = msg;
         } else {
-          // 3) extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
+          // 3) Si hay acción pendiente y el mensaje no es respuesta a ella → cancelar y proceder
+          const existingPending = await getLastPendingAction(From, 'pending');
+          if (existingPending) {
+            await sb.from('acciones_pendientes').update({ estado: 'cancelada' }).eq('id', existingPending.id);
+          }
+
+          // extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
           const { intent, toolArgs } = await extractIntent(Body || '', From);
           if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
             await guardarMensaje(From, 'user', Body || '');
@@ -1813,7 +1834,13 @@ app.post('/api/chat-web', async (req, res) => {
           const { msg } = await proposeDbAction(phone, newArg, input);
           reply = msg;
         } else {
-          // 3) extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
+          // 3) Si hay acción pendiente y el mensaje no es respuesta a ella → cancelar y proceder
+          const existingPending = await getLastPendingAction(phone, 'pending');
+          if (existingPending) {
+            await sb.from('acciones_pendientes').update({ estado: 'cancelada' }).eq('id', existingPending.id);
+          }
+
+          // extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
           const { intent, toolArgs } = await extractIntent(input, phone);
           if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
             await guardarMensaje(phone, 'user', input);
