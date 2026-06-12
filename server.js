@@ -184,6 +184,60 @@ async function undoLastAction(phone) {
   return '↩️ Deshecho. El registro fue revertido.';
 }
 
+// ── BORRADO DE DATOS ─────────────────────────────────────────────────────────
+async function ejecutarBorradoDatos(phone) {
+  const now = new Date().toISOString();
+  const purgeAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Soft-delete tablas operativas
+  await Promise.all([
+    sb.from('movimientos').update({ deleted_at: now }).eq('user_phone', phone).is('deleted_at', null),
+    sb.from('metas').update({ deleted_at: now }).eq('user_phone', phone).is('deleted_at', null),
+    sb.from('calendario').update({ deleted_at: now }).eq('user_phone', phone).is('deleted_at', null),
+    sb.from('nidito').update({ deleted_at: now }).eq('created_by', phone).is('deleted_at', null),
+  ]);
+  // Hard-delete tablas sin soft-delete
+  await Promise.all([
+    sb.from('tdc').delete().eq('user_phone', phone),
+    sb.from('presupuesto').delete().eq('user_phone', phone),
+    sb.from('patrones_ia').delete().eq('user_phone', phone),
+    sb.from('despensa').delete().eq('user_phone', phone),
+    sb.from('acciones_pendientes').update({ estado: 'cancelled' }).eq('user_phone', phone).eq('estado', 'pending'),
+  ]);
+  // Marcar usuario para purga en 30 días
+  const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+  const refs = { ...(cur?.external_refs || {}), borrar_definitivo_at: purgeAt };
+  await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+  await writeAuditLog(phone, 'usuarios', 'eliminar', phone, cur?.external_refs, { borrar_definitivo_at: purgeAt }, 'whatsapp');
+  return `🗑 Datos eliminados.\nPurga definitiva programada: *${purgeAt.split('T')[0]}*.\nEscribe *deshacer* en las próximas 24h si fue un error.`;
+}
+
+async function purgarDatosVencidos() {
+  try {
+    const now = new Date().toISOString();
+    const { data: users } = await sb.from('usuarios').select('telefono, external_refs');
+    for (const u of (users || [])) {
+      const purgeAt = u.external_refs?.borrar_definitivo_at;
+      if (!purgeAt || purgeAt > now) continue;
+      const p = u.telefono;
+      await Promise.all([
+        sb.from('movimientos').delete().eq('user_phone', p).not('deleted_at', 'is', null),
+        sb.from('metas').delete().eq('user_phone', p).not('deleted_at', 'is', null),
+        sb.from('calendario').delete().eq('user_phone', p).not('deleted_at', 'is', null),
+        sb.from('nidito').delete().eq('created_by', p).not('deleted_at', 'is', null),
+        sb.from('acciones_pendientes').delete().eq('user_phone', p),
+        sb.from('audit_log').delete().eq('user_phone', p),
+      ]);
+      const refs = { ...(u.external_refs || {}) };
+      delete refs.borrar_definitivo_at;
+      refs.borrado_definitivo_at = now;
+      await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', p);
+      console.log(`[PURGA] ${p} purgado definitivamente.`);
+    }
+  } catch (e) { console.error('Error en purga:', e.message); }
+}
+setInterval(purgarDatosVencidos, 24 * 60 * 60 * 1000);
+purgarDatosVencidos().catch(() => {});
+
 // Parsea "mejor 450", "categoría comida", etc. y los fusiona con los datos existentes
 function mergeEditIntent(datosActuales, editText) {
   const d = { ...datosActuales };
@@ -231,6 +285,22 @@ async function handlePendingCommand(phone, lower) {
   }
   if (isConfirm) {
     if (!pending) return '⚠️ No hay acción pendiente por confirmar.';
+    // Doble confirmación para borrar datos
+    if (pending.datos?.accion === 'borrar_datos') {
+      await sb.from('acciones_pendientes').update({ estado: 'done' }).eq('id', pending.id);
+      if (pending.datos.paso === 1) {
+        await sb.from('acciones_pendientes').insert({
+          user_phone: phone, tipo: 'db_action',
+          datos: { accion: 'borrar_datos', paso: 2 },
+          estado: 'pending',
+          expira_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        });
+        return `⚠️ *ÚLTIMA CONFIRMACIÓN*\n\nSe eliminarán: movimientos, metas, TDC, calendario, presupuesto y patrones. Los datos con soft-delete se purgarán definitivamente en 30 días.\n\n¿Confirmas?\n*1* Sí, borrar todo · *3* Cancelar`;
+      }
+      if (pending.datos.paso === 2) {
+        return await ejecutarBorradoDatos(phone);
+      }
+    }
     const dbRes = await executeDbAction(phone, pending.datos, 'whatsapp');
     await sb.from('acciones_pendientes').update({ estado: 'done' }).eq('id', pending.id);
     return `✓ Hecho. ${dbRes.startsWith('✅') ? '' : dbRes}`.trim();
@@ -737,6 +807,7 @@ REGLAS DE ACCIÓN:
 - Nota de voz: mismas reglas, confía en la transcripción.
 - SISTEMA DE CONFIRMACIÓN: cuando llames 'modificar_plataforma', tu texto debe ser vacío o máx 1 línea de contexto. La propuesta la maneja el sistema. NUNCA digas que algo quedó guardado.
 - DETECTA PATRONES: si gasta mucho en algo vs historial, avísalo en 1 línea.
+- PROYECCIONES: cuando des estimaciones de gasto futuro, tendencias o proyecciones de fin de mes, añade al final "— estimación basada en tu historial" (solo en respuestas analíticas; nunca en confirmaciones de registro ni comandos simples).
 
 CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   tipo: "GASTO"
@@ -1349,8 +1420,19 @@ app.post('/webhook', async (req, res) => {
         `🏠 *nidito* — metas compartidas con tu pareja\n` +
         `📋 *presupuesto* — avance por categoría\n` +
         `📂 *historial* — últimos 10 movimientos\n` +
-        `🗑 *borrar ultimo* — eliminar el último registro\n\n` +
+        `🗑 *borrar ultimo* — eliminar el último registro\n` +
+        `🔒 *privacidad* — qué datos guardo y cómo borrarlos\n\n` +
         `También puedes escribirme en lenguaje natural o mandarme foto/PDF de un estado de cuenta 📄`;
+
+    } else if (lower === 'privacidad' || lower === 'privacy') {
+      const aiModel = (usuario.ai_preference || '').toUpperCase() === 'CLAUDE' ? 'Anthropic Claude' : 'Google Gemini';
+      reply =
+        `🔒 *Privacidad — FinanceOS*\n\n` +
+        `*Datos guardados:* movimientos, metas, TDC, calendario, presupuesto y perfil — en Supabase (servidores en la nube).\n` +
+        `*IA que procesa tus mensajes:* ${aiModel}.\n` +
+        `*Sin vinculación bancaria* ni contraseñas: solo datos que tú registras explícitamente.\n` +
+        `*${aiModel.split(' ')[0]} no entrena sus modelos* con datos enviados por API por defecto.\n` +
+        `*Para borrar todo:* escribe *borrar mis datos* (soft-delete inmediato, purga definitiva en 30 días).`;
 
     } else if (lower === 'resumen') {
       const ctx = await cargarContexto(From, usuario.role);
@@ -1432,6 +1514,22 @@ app.post('/webhook', async (req, res) => {
         ).join('\n');
         reply = `📂 *Últimos movimientos, ${usuario.nombre}*\n\n${rows}`;
       }
+
+    } else if (lower === 'borrar mis datos' || lower === 'eliminar mis datos') {
+      await sb.from('acciones_pendientes').update({ estado: 'cancelled' })
+        .eq('user_phone', From).eq('estado', 'pending');
+      await sb.from('acciones_pendientes').insert({
+        user_phone: From, tipo: 'db_action',
+        datos: { accion: 'borrar_datos', paso: 1 },
+        estado: 'pending',
+        expira_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      });
+      reply =
+        `⚠️ *¿Borrar todos tus datos?*\n\n` +
+        `Se eliminarán: movimientos, metas, TDC, calendario, presupuesto y patrones de ${usuario.nombre}.\n` +
+        `Los registros con soft-delete se purgarán definitivamente en 30 días.\n` +
+        `Esta acción requiere doble confirmación.\n\n` +
+        `*1* Sí, continuar · *3* Cancelar`;
 
     } else if (lower === 'borrar ultimo') {
       const { data: ultimo } = await sb.from('movimientos')
