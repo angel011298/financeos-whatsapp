@@ -46,7 +46,6 @@ app.get('/', (_req, res) => {
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModified: false }));
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
-const history = {};          // DEPRECADO — reemplazado por historial_chat en DB
 const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
 const MEDIOS_PAGO = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito'];
 
@@ -86,10 +85,10 @@ async function cargarContexto(userPhone, role) {
     { data: presupuesto },
     { data: patrones },
   ] = await Promise.all([
-    sb.from('movimientos').select('*').eq('user_phone', userPhone).gte('fecha', inicio).order('fecha', { ascending: false }).limit(30),
+    sb.from('movimientos').select('*').eq('user_phone', userPhone).gte('fecha', inicio).is('deleted_at', null).order('fecha', { ascending: false }).limit(30),
     esAngel ? sb.from('tdc').select('*').order('prioridad') : Promise.resolve({ data: [] }),
-    sb.from('metas').select('*').eq('user_phone', userPhone).eq('tipo_meta', 'individual'),
-    sb.from('metas').select('*').eq('tipo_meta', 'nidito'),
+    sb.from('metas').select('*').eq('user_phone', userPhone).eq('tipo_meta', 'individual').is('deleted_at', null),
+    sb.from('metas').select('*').eq('tipo_meta', 'nidito').is('deleted_at', null),
     sb.from('presupuesto').select('*').eq('user_phone', userPhone).eq('mes', mesActual()),
     sb.from('patrones_ia').select('*').eq('user_phone', userPhone).order('contador', { ascending: false }).limit(10),
   ]);
@@ -104,92 +103,6 @@ async function cargarContexto(userPhone, role) {
     gastosMes:    (movs || []).filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0),
     ingresosMes:  (movs || []).filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0),
   };
-}
-
-// ── System prompt para Finn ──────────────────────────────────────────────────
-function buildSystemPrompt(usuario, ctx) {
-  const esAngel = usuario.role === 'ADMIN_A';
-  const nombre  = usuario.nombre;
-
-  const presStr = ctx.presupuesto.length
-    ? ctx.presupuesto.map(p => {
-        const gastado = ctx.movs.filter(m => m.categoria === p.categoria && m.tipo === 'GASTO')
-                                .reduce((a, m) => a + (m.monto || 0), 0);
-        const pct = p.limite > 0 ? Math.round(gastado / p.limite * 100) : 0;
-        const icon = pct >= 100 ? '🔴' : pct >= 80 ? '🟡' : '✅';
-        return `  ${icon} ${p.categoria}: ${fmt(gastado)} / ${fmt(p.limite)} (${pct}%)`;
-      }).join('\n')
-    : '  (sin presupuesto configurado)';
-
-  const tdcStr = esAngel && ctx.tdcs.length
-    ? ctx.tdcs.map(t => {
-        const saldo = Math.max(0, (t.a_pagar || 0) - (t.pagado || 0));
-        return `  • ${t.nombre}: saldo ${fmt(saldo)} | ${t.estado} | meta: ${t.mes_objetivo}`;
-      }).join('\n')
-    : '';
-
-  const perfilAngel = esAngel ? `
-PERFIL FINANCIERO BASE DE ANGEL:
-  Ingresos base: $31,898/mes (sueldo $27,407 + WFH $425 + vales $3,566 + beca $500)
-  Egresos fijos: ~$8,203/mes
-  Disponible para TDC: ~$22,726/mes
-  Meta: liquidar todas las TDC antes de febrero 2027
-  Inicio empleo: 26 mayo 2026` : '';
-
-  return `Eres Finn, el asistente financiero personal de ${nombre}.
-Eres cálido, cercano y directo — como un amigo muy inteligente que sabe de finanzas y contabilidad.
-Siempre llamas a ${nombre} por su nombre. Usas emojis con moderación.
-Respondes en español. Mensajes cortos y concretos para WhatsApp.
-Jamás inventas cifras — solo usas los datos reales del contexto.
-Si no tienes un dato, dilo claramente y pregunta.
-${perfilAngel}
-
-FINANZAS DEL MES ACTUAL (${mesActual()}):
-  💰 Ingresos registrados: ${fmt(ctx.ingresosMes)}
-  💸 Gastos registrados:   ${fmt(ctx.gastosMes)}
-  📈 Neto del mes:         ${fmt(ctx.ingresosMes - ctx.gastosMes)}
-${tdcStr ? '\nDEUDAS TDC:\n' + tdcStr : ''}
-
-PRESUPUESTO MENSUAL:
-${presStr}
-
-METAS INDIVIDUALES:
-${ctx.metasInd.length
-  ? ctx.metasInd.map(m => {
-      const pct = m.meta > 0 ? Math.min(100, Math.round((m.actual || 0) / m.meta * 100)) : 0;
-      return `  • ${m.nombre}: ${fmt(m.actual)} / ${fmt(m.meta)} (${pct}%)`;
-    }).join('\n')
-  : '  (sin metas individuales)'}
-
-METAS DE NIDITO (compartidas con pareja):
-${ctx.metasNidito.length
-  ? ctx.metasNidito.map(m => {
-      const pct = m.meta > 0 ? Math.min(100, Math.round((m.actual || 0) / m.meta * 100)) : 0;
-      return `  🏠 ${m.nombre}: ${fmt(m.actual)} / ${fmt(m.meta)} (${pct}%)`;
-    }).join('\n')
-  : '  (sin metas de Nidito)'}
-
-ÚLTIMOS MOVIMIENTOS:
-${ctx.movs.slice(0, 8).map(m =>
-  `  ${m.tipo === 'GASTO' ? '💸' : '💰'} ${m.fecha} | ${m.categoria} | ${m.descripcion} | ${fmt(m.monto)}`
-).join('\n') || '  (ninguno este mes)'}
-
-PATRONES APRENDIDOS DE ${nombre.toUpperCase()}:
-${ctx.patrones.length
-  ? ctx.patrones.map(p => `  "${p.concepto_clave}" → ${p.categoria} (${p.contador}x)`).join('\n')
-  : '  (aún aprendiendo tus hábitos)'}
-
-REGLAS DE GUARDADO — cuando detectes un movimiento incluye AL FINAL (el usuario no lo ve):
-SAVE:{"tipo":"GASTO","categoria":"COMIDA","descripcion":"tacos","monto":150}
-SAVE:{"tipo":"INGRESO","categoria":"SUELDO","descripcion":"Quincena 1 junio","monto":13703}
-META:{"accion":"crear","nombre":"Viaje Europa","meta":45000,"tipo_meta":"nidito"}
-META:{"accion":"crear","nombre":"Fondo emergencia","meta":10000,"tipo_meta":"individual"}
-META:{"accion":"abonar","nombre":"Viaje Europa","monto":2000}
-PRESUPUESTO:{"categoria":"OCIO","limite":2000}
-
-NO incluyas SAVE/META/PRESUPUESTO si el usuario solo pregunta o conversa.
-Si hay ambigüedad en monto o categoría, PREGUNTA antes de guardar.
-Cuando guardes algo, menciona brevemente que quedó registrado.`;
 }
 
 // ── Historial de conversación persistente en Supabase ───────────────────────
@@ -217,111 +130,117 @@ async function guardarMensaje(userPhone, role, content) {
   }
 }
 
-// ── Llamada a IA según preferencia del usuario ───────────────────────────────
-async function llamarIA(usuario, systemPrompt, historial, mensajeUsuario) {
-  const mensajes = [...historial, { role: 'user', content: mensajeUsuario }];
-
-  if (usuario.ai_preference === 'CLAUDE') {
-    const result = await anthropic.messages.create({
-      model:      usuario.ai_model || 'claude-sonnet-4-6',
-      max_tokens: 800,
-      system:     systemPrompt,
-      messages:   mensajes,
+// ── Audit log ─────────────────────────────────────────────────────────────────
+async function writeAuditLog(phone, tabla, accion, registroId, datosBefore, datosAfter, origen = 'whatsapp') {
+  try {
+    await sb.from('audit_log').insert({
+      user_phone:    phone,
+      tabla,
+      accion,
+      registro_id:   registroId != null ? String(registroId) : null,
+      datos_antes:   datosBefore  || null,
+      datos_despues: datosAfter   || null,
+      origen,
     });
-    return result.content[0].text;
-  }
-
-  // Gemini — inyectar system prompt como primer turno del historial
-  const geminiModel = gemini.getGenerativeModel({ model: usuario.ai_model || 'gemini-2.5-flash' });
-  const historialGemini = [
-    { role: 'user',  parts: [{ text: systemPrompt }] },
-    { role: 'model', parts: [{ text: 'Entendido. Soy Finn. ¿En qué puedo ayudarte?' }] },
-    ...mensajes.slice(0, -1).map(m => ({
-      role:  m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }],
-    })),
-  ];
-  const chat   = geminiModel.startChat({ history: historialGemini });
-  const result = await chat.sendMessage(mensajeUsuario);
-  return result.response.text();
+  } catch (e) { console.error('audit_log write error:', e.message); }
 }
 
-// ── Parsear y limpiar la respuesta de la IA ──────────────────────────────────
-function parsearYLimpiar(texto) {
-  const extraer = (regex) => [...texto.matchAll(new RegExp(regex, 'g'))].map(m => {
-    try { return JSON.parse(m[1]); } catch { return null; }
-  }).filter(Boolean);
-
-  const saves  = extraer('SAVE:(\\{[^}]+\\})');
-  const metas  = extraer('META:(\\{[^}]+\\})');
-  const presup = extraer('PRESUPUESTO:(\\{[^}]+\\})');
-
-  const limpio = texto
-    .replace(/SAVE:\{[^}]+\}/g, '')
-    .replace(/META:\{[^}]+\}/g, '')
-    .replace(/PRESUPUESTO:\{[^}]+\}/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-  return { limpio, saves, metas, presup };
+// ── Acciones pendientes helpers ───────────────────────────────────────────────
+async function getLastPendingAction(phone, estado = 'pending') {
+  const { data } = await sb.from('acciones_pendientes')
+    .select('*')
+    .eq('user_phone', phone)
+    .eq('estado', estado)
+    .gt('expira_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data || null;
 }
 
-// ── Ejecutar guardados en Supabase ───────────────────────────────────────────
-async function ejecutarGuardados(saves, metas, presup, userPhone) {
-  const fecha = hoy();
-  const mes   = mesActual();
+async function undoLastAction(phone) {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: entry } = await sb.from('audit_log')
+    .select('*')
+    .eq('user_phone', phone)
+    .neq('accion', 'undo')
+    .gt('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!entry) return '❌ No hay acción reciente para deshacer (límite: 24h).';
 
-  for (const s of saves) {
-    if (!s.monto || !s.tipo) continue;
-    await sb.from('movimientos').insert({
-      user_phone:  userPhone,
-      tipo:        s.tipo,
-      categoria:   s.categoria || 'OTROS',
-      descripcion: s.descripcion || '',
-      monto:       parseFloat(s.monto) || 0,
-      fecha,
-    });
-    if (s.tipo === 'GASTO') {
-      await verificarLimitePresupuesto(userPhone, s.categoria, mes).catch(() => null);
-    }
+  const now = new Date().toISOString();
+  if (entry.accion === 'crear') {
+    await sb.from(entry.tabla).update({ deleted_at: now }).eq('id', entry.registro_id);
+    await writeAuditLog(phone, entry.tabla, 'undo', entry.registro_id, entry.datos_despues, null, 'undo');
+  } else if (entry.accion === 'editar') {
+    await sb.from(entry.tabla).update(entry.datos_antes).eq('id', entry.registro_id);
+    await writeAuditLog(phone, entry.tabla, 'undo', entry.registro_id, entry.datos_despues, entry.datos_antes, 'undo');
+  } else if (entry.accion === 'eliminar') {
+    await sb.from(entry.tabla).update({ deleted_at: null }).eq('id', entry.registro_id);
+    await writeAuditLog(phone, entry.tabla, 'undo', entry.registro_id, entry.datos_antes, null, 'undo');
+  }
+  return '↩️ Deshecho. El registro fue revertido.';
+}
+
+// Parsea "mejor 450", "categoría comida", etc. y los fusiona con los datos existentes
+function mergeEditIntent(datosActuales, editText) {
+  const d = { ...datosActuales };
+
+  const montoM = editText.match(/(?:mejor|monto|son|cuesta|fue|costó|pagué)\s*\$?\s*([\d,]+(?:\.\d+)?)/i)
+               || editText.match(/^\$?\s*([\d,]+(?:\.\d+)?)$/);
+  if (montoM) d.monto = parseFloat(montoM[1].replace(/,/g, ''));
+
+  const catM = editText.match(/(?:categoría|categoria|cat)\s+(\w+)/i);
+  if (catM) {
+    const ci = catM[1].toLowerCase();
+    const match = CATEGORIAS.find(c => c.toLowerCase().startsWith(ci));
+    if (match) d.categoria = match;
   }
 
-  for (const m of metas) {
-    if (!m.nombre || !m.accion) continue;
-    const esNidito  = m.tipo_meta === 'nidito';
-    const phoneMeta = esNidito ? 'nidito_compartido' : userPhone;
+  const conceptoM = editText.match(/(?:concepto|fue en|en el|en la|en)\s+(.+)/i);
+  if (conceptoM) d.concepto = conceptoM[1].trim();
 
-    if (m.accion === 'crear') {
-      await sb.from('metas').upsert({
-        user_phone: phoneMeta,
-        nombre:     m.nombre,
-        tipo_meta:  m.tipo_meta || 'individual',
-        meta:       parseFloat(m.meta) || 0,
-        actual:     0,
-      }, { onConflict: 'user_phone,nombre' });
-    } else if (m.accion === 'abonar') {
-      const { data: existente } = await sb.from('metas')
-        .select('id, actual')
-        .eq('nombre', m.nombre)
-        .or(`user_phone.eq.${userPhone},user_phone.eq.nidito_compartido`)
-        .single();
-      if (existente) {
-        await sb.from('metas')
-          .update({ actual: (existente.actual || 0) + (parseFloat(m.monto) || 0) })
-          .eq('id', existente.id);
-      }
-    }
+  const medioM = editText.match(/(?:con|medio|pago con|pagué con)\s+(.+)/i);
+  if (medioM) {
+    const mi = medioM[1].toLowerCase();
+    const match = MEDIOS_PAGO.find(m => m.toLowerCase().includes(mi));
+    if (match) d.medio_pago = match;
   }
+  return d;
+}
 
-  for (const p of presup) {
-    if (!p.categoria || !p.limite) continue;
-    await sb.from('presupuesto').upsert({
-      user_phone: userPhone,
-      categoria:  p.categoria,
-      mes,
-      limite:     parseFloat(p.limite) || 0,
-    }, { onConflict: 'user_phone,categoria,mes' });
+// Intercept para comandos de confirmación/cancelación ANTES de llamar a la IA
+async function handlePendingCommand(phone, lower) {
+  const isConfirm = /^(1|si|sí|ok|✓|confirmo)$/i.test(lower);
+  const isCancel  = /^(3|no|cancela|cancelar)$/i.test(lower);
+  const isEdit    = /^(2|editar)$/i.test(lower);
+  const isUndo    = /^deshacer$/i.test(lower);
+
+  if (!isConfirm && !isCancel && !isEdit && !isUndo) return null;
+
+  if (isUndo) return undoLastAction(phone);
+
+  const pending = await getLastPendingAction(phone);
+
+  if (isEdit) {
+    if (!pending) return '⚠️ No hay acción pendiente para editar.';
+    await sb.from('acciones_pendientes').update({ estado: 'editing' }).eq('id', pending.id);
+    return 'Dime qué cambio (ej: *"mejor 450"* o *"categoría transporte"*)';
   }
+  if (isConfirm) {
+    if (!pending) return '⚠️ No hay acción pendiente por confirmar.';
+    const dbRes = await executeDbAction(phone, pending.datos, 'whatsapp');
+    await sb.from('acciones_pendientes').update({ estado: 'done' }).eq('id', pending.id);
+    return `✓ Hecho. ${dbRes.startsWith('✅') ? '' : dbRes}`.trim();
+  }
+  if (isCancel) {
+    if (!pending) return '⚠️ No hay acción pendiente por cancelar.';
+    await sb.from('acciones_pendientes').update({ estado: 'cancelled' }).eq('id', pending.id);
+    return '✗ Cancelado.';
+  }
+  return null;
 }
 
 // ── Verificar y alertar límite de presupuesto ────────────────────────────────
@@ -334,7 +253,7 @@ async function verificarLimitePresupuesto(userPhone, categoria, mes) {
   const inicio = mes + '-01';
   const { data: movs } = await sb.from('movimientos').select('monto')
     .eq('user_phone', userPhone).eq('categoria', categoria)
-    .eq('tipo', 'GASTO').gte('fecha', inicio);
+    .eq('tipo', 'GASTO').gte('fecha', inicio).is('deleted_at', null);
   const total = (movs || []).reduce((a, m) => a + (m.monto || 0), 0);
   const pct   = Math.round(total / pres.limite * 100);
 
@@ -475,61 +394,161 @@ async function checkAndSendReminders(phone) {
 
 // ── DB ACTION EXECUTOR ─────────────────────────────────────────────────────
 const TABLAS_VALIDAS = ['movimientos','metas','calendario','tdc','presupuesto','nidito','usuarios'];
+const TABLAS_SOFT_DELETE = ['movimientos','metas','calendario','nidito'];
 
-async function executeDbAction(phone, arg) {
+async function executeDbAction(phone, arg, origen = 'whatsapp') {
   const { tabla, accion, id, datos } = arg;
   try {
-    // Validar tabla — nunca usar nombres inventados
     if (!TABLAS_VALIDAS.includes(tabla)) {
       return `❌ Tabla '${tabla}' no existe. Tablas válidas: ${TABLAS_VALIDAS.join(', ')}`;
     }
 
-    // nidito — tabla compartida sin user_phone
+    // Snapshot previo para editar/eliminar
+    let snapshotBefore = null;
+    if ((accion === 'editar' || accion === 'eliminar') && id) {
+      const { data } = await sb.from(tabla).select('*').eq('id', id).maybeSingle();
+      snapshotBefore = data;
+    }
+
+    // ── nidito — tabla compartida sin user_phone ─────────────────────────────
     if (tabla === 'nidito') {
       if (accion === 'crear') {
         const { data, error } = await sb.from('nidito').insert({ ...datos, created_by: phone }).select().single();
         if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen);
         return `✅ Agregado al Nidito ✓ ID: ${data?.id}`;
       }
       if (accion === 'editar') {
-        const { error } = await sb.from('nidito').update({ ...datos, updated_at: new Date().toISOString() }).eq('id', id);
+        const { data, error } = await sb.from('nidito').update({ ...datos, updated_at: new Date().toISOString() }).eq('id', id).select().single();
         if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen);
         return `✅ Nidito #${id} actualizado.`;
       }
       if (accion === 'eliminar') {
-        const { error } = await sb.from('nidito').delete().eq('id', id);
+        const { error } = await sb.from('nidito').update({ deleted_at: new Date().toISOString() }).eq('id', id);
         if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen);
         return `🗑️ Eliminado del Nidito #${id}.`;
       }
     }
 
-    // usuarios — tabla de perfil, merge en external_refs
+    // ── usuarios — merge en external_refs ────────────────────────────────────
     if (tabla === 'usuarios') {
       const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
       const refs = { ...(cur?.external_refs || {}), ...datos };
       const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
       if (error) return `❌ Error: ${error.message}`;
+      await writeAuditLog(phone, tabla, 'editar', phone, cur?.external_refs, refs, origen);
       return `✅ Perfil personal actualizado.`;
     }
 
     if (accion === 'crear') {
       const { data, error } = await sb.from(tabla).insert({ ...datos, user_phone: phone }).select().single();
       if (error) return `❌ Error: ${error.message}`;
-      if (tabla === 'movimientos' && datos?.tipo === 'GASTO') await learnPattern(phone, datos);
+      if (tabla === 'movimientos' && datos?.tipo === 'GASTO') {
+        await learnPattern(phone, datos);
+        await verificarLimitePresupuesto(phone, datos.categoria, mesActual()).catch(() => null);
+      }
+      await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen);
       return `✅ ${tabla === 'calendario' ? 'Evento agendado' : 'Registrado'} ✓ ID: ${data?.id}`;
     }
     if (accion === 'editar') {
-      const { error } = await sb.from(tabla).update(datos).eq('id', id).eq('user_phone', phone);
+      const { data, error } = await sb.from(tabla).update(datos).eq('id', id).eq('user_phone', phone).select().single();
       if (error) return `❌ Error: ${error.message}`;
+      await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen);
       return `✅ Registro ${id} actualizado.`;
     }
     if (accion === 'eliminar') {
-      const { error } = await sb.from(tabla).delete().eq('id', id).eq('user_phone', phone);
-      if (error) return `❌ Error: ${error.message}`;
+      if (TABLAS_SOFT_DELETE.includes(tabla)) {
+        const { error } = await sb.from(tabla).update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_phone', phone);
+        if (error) return `❌ Error: ${error.message}`;
+      } else {
+        const { error } = await sb.from(tabla).delete().eq('id', id).eq('user_phone', phone);
+        if (error) return `❌ Error: ${error.message}`;
+      }
+      await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen);
       return `🗑️ Registro ${id} eliminado.`;
     }
     return '❌ Acción no reconocida.';
   } catch (e) { return `❌ DB error: ${e.message}`; }
+}
+
+// ── PROPOSE → CONFIRM ─────────────────────────────────────────────────────
+async function proposeDbAction(phone, arg, textoOriginal) {
+  const { tabla, accion, datos } = arg;
+
+  // Auto-confirm: crear movimiento con patrón conocido (contador≥5, diff≤30%, monto<5000)
+  if (accion === 'crear' && tabla === 'movimientos' && (datos?.monto || 0) < 5000) {
+    const concepto = (datos?.concepto || '').toLowerCase().trim();
+    if (concepto) {
+      const { data: patron } = await sb.from('patrones_ia')
+        .select('*').eq('user_phone', phone).eq('concepto_clave', concepto).maybeSingle();
+      if (patron && patron.contador >= 5 && patron.monto_promedio > 0) {
+        const diff = Math.abs(((datos.monto || 0) - patron.monto_promedio) / patron.monto_promedio);
+        if (diff <= 0.30) {
+          await executeDbAction(phone, arg, 'auto_confirm');
+          return {
+            auto: true,
+            msg: `✓ ${fmt(datos.monto)} · ${datos.categoria || 'OTROS'} · responde *deshacer* para revertir`,
+          };
+        }
+      }
+    }
+  }
+
+  // Construir texto de propuesta según accion/tabla
+  let propuesta;
+  if (accion === 'crear') {
+    let resumen;
+    const d = datos || {};
+    if (tabla === 'movimientos') {
+      const fechaStr = d.fecha === hoy() ? 'hoy' : (d.fecha || hoy());
+      const icon = d.tipo === 'INGRESO' ? '💰' : '💸';
+      resumen = `${icon} ${fmt(d.monto || 0)} · ${d.categoria || 'OTROS'} · ${d.concepto || ''} · ${d.medio_pago || 'efectivo'} · ${fechaStr}`;
+    } else if (tabla === 'calendario') {
+      resumen = `📅 ${d.fecha || ''} ${d.hora || ''} — ${d.titulo || ''}`;
+    } else if (tabla === 'metas') {
+      resumen = `🎯 Meta: ${d.nombre || ''} — ${fmt(d.meta || 0)}`;
+    } else if (tabla === 'nidito') {
+      resumen = `💫 Nidito (${d.tipo || 'idea'}): ${d.titulo || ''}${d.monto > 0 ? ' · ' + fmt(d.monto) : ''}`;
+    } else {
+      resumen = `${tabla}: ${JSON.stringify(d)}`;
+    }
+    propuesta = `Voy a registrar:\n${resumen}\n\n*1* Sí · *2* Editar · *3* No`;
+  } else if (accion === 'editar') {
+    const { id } = arg;
+    const { data: before } = await sb.from(tabla).select('*').eq('id', id).maybeSingle();
+    let changes = '(sin cambios detectados)';
+    if (before && datos) {
+      const lines = Object.entries(datos)
+        .filter(([k, v]) => before[k] !== v && k !== 'updated_at')
+        .map(([k, v]) => `  ${k}: *${before[k]}* → *${v}*`);
+      if (lines.length) changes = lines.join('\n');
+    }
+    propuesta = `¿Editar ${tabla}#${id}?\n${changes}\n\n*1* Sí · *2* Editar · *3* No`;
+  } else if (accion === 'eliminar') {
+    const { id } = arg;
+    const { data: before } = await sb.from(tabla).select('*').eq('id', id).maybeSingle();
+    let detalle = `${tabla}#${id}`;
+    if (before && tabla === 'movimientos') {
+      detalle = `${before.tipo === 'GASTO' ? '💸' : '💰'} ${before.fecha} | ${before.categoria} | ${before.concepto || ''} | ${fmt(before.monto)}`;
+    } else if (before) {
+      detalle = JSON.stringify(before, null, 2);
+    }
+    propuesta = `¿Eliminar este registro?\n${detalle}\n\n*1* Sí · *3* No`;
+  } else {
+    propuesta = `Ejecutar: ${tabla}.${accion}\n\n*1* Sí · *3* No`;
+  }
+
+  await sb.from('acciones_pendientes').insert({
+    user_phone: phone,
+    tipo:       'db_action',
+    datos:      { ...arg, texto_original: textoOriginal },
+    estado:     'pending',
+    expira_at:  new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  });
+
+  return { auto: false, msg: propuesta };
 }
 
 // ── SYSTEM PROMPT ──────────────────────────────────────────────────────────
@@ -540,12 +559,12 @@ async function buildSystemPrompt(user) {
 
   const [tdcR, movsR, metasR, calR, patrR, prspR, niditoR] = await Promise.all([
     sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
-    sb.from('movimientos').select('*').eq('user_phone', phone).order('created_at', { ascending: false }).limit(60),
-    sb.from('metas').select('*').eq('user_phone', phone),
-    sb.from('calendario').select('*').eq('user_phone', phone).gte('fecha', today).order('fecha').limit(10),
+    sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('created_at', { ascending: false }).limit(60),
+    sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
+    sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).gte('fecha', today).order('fecha').limit(10),
     sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }).limit(10),
     sb.from('presupuesto').select('*').eq('user_phone', phone).eq('mes', mesStr),
-    sb.from('nidito').select('*').order('prioridad', { ascending: false }).limit(20),
+    sb.from('nidito').select('*').is('deleted_at', null).order('prioridad', { ascending: false }).limit(20),
   ]);
 
   const tdcs = tdcR.data || [], movs = movsR.data || [], metas = metasR.data || [];
@@ -567,7 +586,7 @@ async function buildSystemPrompt(user) {
 
   let ghost = '';
   if (user.role === 'ADMIN_A') {
-    const { data: otros } = await sb.from('movimientos').select('*').neq('user_phone', phone).order('created_at', { ascending: false }).limit(20);
+    const { data: otros } = await sb.from('movimientos').select('*').neq('user_phone', phone).is('deleted_at', null).order('created_at', { ascending: false }).limit(20);
     ghost = `\n[MODO FANTASMA — últimos movs Sujeto B]\n${JSON.stringify(otros)}`;
   }
 
@@ -583,6 +602,7 @@ REGLAS DE ORO:
 - Si la información es AMBIGUA o falta algo CRÍTICO (monto sin número, concepto completamente vago) → PREGUNTA brevemente antes de registrar. Ejemplo: si dice "gasté en el súper" sin monto, pregunta "¿Cuánto gastaste en el súper?" antes de registrar.
 - Para nidito y calendario: puedes inferir detalles razonables sin preguntar (usa monto=0 si no hay monto, tipo "idea" si no está claro).
 - Si viene de 🎤 nota de voz: mismas reglas, confía en la transcripción.
+- SISTEMA DE CONFIRMACIÓN: cuando uses 'modificar_plataforma', tu texto de respuesta debe ser SOLO contexto breve (máx 1 línea). La propuesta y confirmación las maneja el sistema automáticamente. NUNCA afirmes que algo quedó guardado: di "te propongo registrar X" — el sistema pedirá confirmación al usuario.
 
 CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   tipo: "GASTO"
@@ -648,10 +668,10 @@ async function cmdResumen(phone) {
   const today = hoy();
   const mesStr = mes();
   const [{ data: hoyMovs }, { data: mesMovs }, { data: tdcs }, { data: evts }] = await Promise.all([
-    sb.from('movimientos').select('*').eq('user_phone', phone).eq('fecha', today),
-    sb.from('movimientos').select('*').eq('user_phone', phone).gte('fecha', mesStr + '-01'),
+    sb.from('movimientos').select('*').eq('user_phone', phone).eq('fecha', today).is('deleted_at', null),
+    sb.from('movimientos').select('*').eq('user_phone', phone).gte('fecha', mesStr + '-01').is('deleted_at', null),
     sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
-    sb.from('calendario').select('*').eq('user_phone', phone).gte('fecha', today).order('fecha').limit(3),
+    sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).gte('fecha', today).order('fecha').limit(3),
   ]);
   const gasHoy = (hoyMovs||[]).filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+m.monto,0);
   const ingHoy = (hoyMovs||[]).filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+m.monto,0);
@@ -671,14 +691,14 @@ async function cmdDeudas(phone) {
 }
 
 async function cmdHistorial(phone) {
-  const { data: movs } = await sb.from('movimientos').select('*').eq('user_phone', phone).order('created_at', { ascending: false }).limit(10);
+  const { data: movs } = await sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('created_at', { ascending: false }).limit(10);
   if (!movs?.length) return '📋 Sin movimientos.';
   return `📋 *ÚLTIMOS MOVIMIENTOS*\n\n${movs.map(m=>`${m.tipo==='GASTO'?'💸':'💰'} [${m.id}] ${m.fecha} | ${m.categoria} | ${m.concepto||''} | ${fmt(m.monto)} | ${m.medio_pago||''}`).join('\n')}`;
 }
 
 async function cmdCalendario(phone) {
   const today = hoy();
-  const { data: evts } = await sb.from('calendario').select('*').eq('user_phone', phone).gte('fecha', today).order('fecha').limit(10);
+  const { data: evts } = await sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).gte('fecha', today).order('fecha').limit(10);
   if (!evts?.length) return '📅 Calendario vacío.';
   return `📅 *PRÓXIMOS EVENTOS*\n\n${evts.map(e=>`[${e.id}] *${e.fecha}*${e.hora?' '+e.hora:''} — ${e.titulo}${e.descripcion?'\n   '+e.descripcion:''}`).join('\n\n')}`;
 }
@@ -702,49 +722,81 @@ const toolsSchema = {
 const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", description: "Crea, edita o elimina registros en la plataforma. Para guardar info personal del usuario (ingreso quincenal, días de pago, etc.) usa tabla='usuarios'. Para nidito (espacio compartido) usa tabla='nidito'.", parameters: { type: "OBJECT", properties: { tabla: { type: "STRING", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito","usuarios"], description: "Tabla destino. Usa 'usuarios' para datos personales/configuración, 'presupuesto' para límites por categoría, 'movimientos' para ingresos/gastos." }, accion: { type: "STRING", enum: ["crear","editar","eliminar"] }, id: { type: "STRING", description: "ID del registro a editar o eliminar (omitir en crear)" }, datos: { type: "OBJECT", description: "Para 'usuarios': {ingreso_quincenal, dias_pago, ...}. Para 'presupuesto': {categoria, limite, mes}. Para 'movimientos': {monto, tipo, categoria, descripcion, fecha}." } }, required: ["tabla","accion","datos"] } }] }];
 
 // ── LLM ENGINE ─────────────────────────────────────────────────────────────
-async function callIA(user, sysPrompt, text, phone) {
-  if (!history[phone]) history[phone] = [];
-  history[phone].push({ role: 'user', content: text });
-  if (history[phone].length > 20) history[phone].splice(0, 2);
 
-  // ── GEMINI 2.5-flash con systemInstruction nativo + function calling ─────
-  // Usar systemInstruction es la forma correcta para que el modelo respete
-  // las instrucciones de herramientas (TIENES PODER DE ACCIÓN, etc.)
-  const model = genAI.getGenerativeModel({
-    model:             'gemini-2.5-flash',
-    tools:             geminiTools,
-    systemInstruction: sysPrompt,            // nativo — más fiable que par falso user/model
+// Claude con tool calling — proposeDbAction intercepts; sin segundo turno de IA
+async function callClaude(user, sysPrompt, messages, text, phone) {
+  const model = user.ai_model || 'claude-sonnet-4-6';
+  const msgs = [...messages, { role: 'user', content: text }];
+
+  const res = await anthropic.messages.create({
+    model,
+    max_tokens: 1024,
+    system: sysPrompt,
+    tools: [toolsSchema],
+    messages: msgs,
   });
 
-  // Construir historial de conversación (sin el mensaje actual, que va en sendMessage)
-  let gHist = history[phone]
-    .filter(m => typeof m.content === 'string')
-    .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-  gHist = gHist.slice(0, -1);
+  let aiText = '';
+  const toolUses = [];
+  for (const block of res.content) {
+    if (block.type === 'text') aiText += block.text;
+    else if (block.type === 'tool_use') toolUses.push(block);
+  }
 
-  // Garantizar alternancia user→model (Gemini rechaza duplicados consecutivos)
+  if (toolUses.length > 0) {
+    // proposeDbAction decide auto-confirm o propuesta — short-circuit sin segundo turno
+    const results = await Promise.all(toolUses.map(t => proposeDbAction(phone, t.input, text)));
+    const proposalMsg = results.map(r => r.msg).join('\n');
+    return [aiText.trim(), proposalMsg].filter(Boolean).join('\n\n');
+  }
+
+  return aiText;
+}
+
+// Gemini con function calling — proposeDbAction intercepts; sin segundo turno de IA
+async function callGemini(user, sysPrompt, geminiHistory, text, phone) {
+  const model = genAI.getGenerativeModel({
+    model: user.ai_model || 'gemini-2.5-flash',
+    tools: geminiTools,
+    systemInstruction: sysPrompt,
+  });
+
+  // Garantizar alternancia user→model
   const safeHist = [];
-  for (const msg of gHist) {
+  for (const msg of geminiHistory) {
     if (safeHist.length === 0 && msg.role !== 'user') continue;
     if (safeHist.length > 0 && safeHist[safeHist.length - 1].role === msg.role) continue;
     safeHist.push(msg);
   }
   if (safeHist.length > 0 && safeHist[safeHist.length - 1].role === 'user') safeHist.pop();
 
-  // Sin par falso al inicio — systemInstruction lo maneja el SDK
   const chat = model.startChat({ history: safeHist });
-  const res  = await chat.sendMessage(text);
+  const res = await chat.sendMessage(text);
   const calls = res.response.functionCalls();
+
   if (calls?.length) {
-    const dbRes = await executeDbAction(phone, calls[0].args);
-    const res2  = await chat.sendMessage([{ functionResponse: { name: 'modificar_plataforma', response: { result: dbRes } } }]);
-    const reply = res2.response.text();
-    history[phone].push({ role: 'assistant', content: reply });
-    return reply;
+    const results = await Promise.all(calls.map(c => proposeDbAction(phone, c.args, text)));
+    return results.map(r => r.msg).join('\n');
   }
-  const reply = res.response.text();
-  history[phone].push({ role: 'assistant', content: reply });
-  return reply;
+
+  return res.response.text();
+}
+
+// Dispatcher que enruta por preferencia del usuario
+async function callIA(user, sysPrompt, text, phone) {
+  // Cargar historial de Supabase
+  const dbHistory = await cargarHistorial(phone);
+
+  if (user.ai_preference === 'CLAUDE') {
+    return callClaude(user, sysPrompt, dbHistory, text, phone);
+  } else {
+    // Convertir a formato Gemini
+    const geminiHistory = dbHistory.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+    return callGemini(user, sysPrompt, geminiHistory, text, phone);
+  }
 }
 
 // ── REST API DASHBOARD ─────────────────────────────────────────────────────
@@ -758,13 +810,13 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     }
     const [tdc, movs, metas, user, cal, pat, presp, nidito] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
-      sb.from('movimientos').select('*').eq('user_phone', phone).order('fecha', { ascending: false }).limit(500),
-      sb.from('metas').select('*').eq('user_phone', phone),
+      sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).limit(500),
+      sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
       sb.from('usuarios').select('*').eq('telefono', phone).single(),
-      sb.from('calendario').select('*').eq('user_phone', phone).order('fecha'),
+      sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha'),
       sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }),
       sb.from('presupuesto').select('*').eq('user_phone', phone),
-      sb.from('nidito').select('*').order('completado').order('prioridad', { ascending: false }),
+      sb.from('nidito').select('*').is('deleted_at', null).order('completado').order('prioridad', { ascending: false }),
     ]);
     res.json({ success: true, data: { tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data, calendario: cal.data, patrones: pat.data, presupuesto: presp.data, nidito: nidito.data } });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -1111,11 +1163,12 @@ app.post('/webhook', async (req, res) => {
 
     } else if (lower === 'borrar ultimo') {
       const { data: ultimo } = await sb.from('movimientos')
-        .select('*').eq('user_phone', From)
-        .order('created_at', { ascending: false }).limit(1).single();
+        .select('*').eq('user_phone', From).is('deleted_at', null)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (ultimo) {
-        await sb.from('movimientos').delete().eq('id', ultimo.id);
-        reply = `🗑 Eliminado: ${ultimo.tipo} | ${ultimo.categoria} | ${ultimo.descripcion} | ${fmt(ultimo.monto)}`;
+        await sb.from('movimientos').update({ deleted_at: new Date().toISOString() }).eq('id', ultimo.id);
+        await writeAuditLog(From, 'movimientos', 'eliminar', ultimo.id, ultimo, null, 'whatsapp');
+        reply = `🗑 Eliminado: ${ultimo.tipo} | ${ultimo.categoria} | ${ultimo.concepto || ultimo.descripcion || ''} | ${fmt(ultimo.monto)}\nResponde *deshacer* para revertirlo.`;
       } else {
         reply = `No encontré ningún movimiento para eliminar.`;
       }
@@ -1130,8 +1183,7 @@ app.post('/webhook', async (req, res) => {
       });
       const b64  = Buffer.from(mediaResp.data).toString('base64');
       const mime = MediaContentType0 || 'image/jpeg';
-      const ctx  = await cargarContexto(From, usuario.role);
-      const sys  = buildSystemPrompt(usuario, ctx);
+      const sys  = await buildSystemPrompt(usuario);
 
       const contentParts = [
         mime === 'application/pdf'
@@ -1151,19 +1203,27 @@ app.post('/webhook', async (req, res) => {
       reply = analisisResp.content[0].text;
 
     } else {
-      const ctx       = await cargarContexto(From, usuario.role);
-      const sys       = buildSystemPrompt(usuario, ctx);
-      const historial = await cargarHistorial(From);
-
-      await guardarMensaje(From, 'user', Body || '');
-
-      const respuestaRaw = await llamarIA(usuario, sys, historial, Body || '');
-      const { limpio, saves, metas, presup } = parsearYLimpiar(respuestaRaw);
-
-      await guardarMensaje(From, 'assistant', limpio);
-      await ejecutarGuardados(saves, metas, presup, From);
-
-      reply = limpio;
+      // 1) Intercept comandos de confirmación / cancelación / deshacer
+      const intercepted = await handlePendingCommand(From, lower);
+      if (intercepted !== null) {
+        reply = intercepted;
+      } else {
+        // 2) Verificar si hay una acción en estado 'editing' (usuario responde "2" y luego edita)
+        const pendingEdit = await getLastPendingAction(From, 'editing');
+        if (pendingEdit) {
+          const mergedDatos = mergeEditIntent(pendingEdit.datos?.datos || {}, Body || '');
+          const newArg = { ...pendingEdit.datos, datos: mergedDatos };
+          await sb.from('acciones_pendientes').update({ estado: 'cancelled' }).eq('id', pendingEdit.id);
+          const { msg } = await proposeDbAction(From, newArg, Body || '');
+          reply = msg;
+        } else {
+          // 3) Flujo normal: llamar IA
+          const sys = await buildSystemPrompt(usuario);
+          await guardarMensaje(From, 'user', Body || '');
+          reply = await callIA(usuario, sys, Body || '', From);
+          await guardarMensaje(From, 'assistant', reply);
+        }
+      }
     }
 
   } catch (err) {
@@ -1217,28 +1277,29 @@ app.post('/api/chat-web', async (req, res) => {
     else if (['historial','movimientos'].includes(lower))        reply = await cmdHistorial(phone);
     else if (['calendario','agenda','eventos'].includes(lower))  reply = await cmdCalendario(phone);
     else {
-      const sys   = await buildSystemPrompt(user);
       const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
+      const lowerInput = input.toLowerCase().trim();
 
-      if (user.ai_preference === 'CLAUDE') {
-        // ── Claude: llamarIA + text tokens (SAVE/META/PRESUPUESTO) + DB history ──
-        const historial = await cargarHistorial(phone);
-        const rawReply  = await llamarIA(user, sys, historial, input);
-        const { limpio, saves, metas, presup } = parsearYLimpiar(rawReply);
-        await guardarMensaje(phone, 'user', input);
-        await guardarMensaje(phone, 'assistant', limpio);
-        await ejecutarGuardados(saves, metas, presup, phone)
-          .catch(e => console.error('chat-web ejecutarGuardados:', e.message));
-        reply = limpio;
+      // 1) Intercept confirmación / cancelación / deshacer
+      const intercepted = await handlePendingCommand(phone, lowerInput);
+      if (intercepted !== null) {
+        reply = intercepted;
       } else {
-        // ── Gemini: callIA con function calling nativo (más confiable para DB) ──
-        // Precargar historial DB → history[phone] para persistencia entre reinicios
-        const dbHistorial = await cargarHistorial(phone);
-        history[phone] = dbHistorial.map(m => ({ role: m.role, content: m.content }));
-        reply = await callIA(user, sys, input, phone);
-        // Guardar en DB (callIA ya actualiza history[] en memoria)
-        await guardarMensaje(phone, 'user', input);
-        await guardarMensaje(phone, 'assistant', reply);
+        // 2) Estado 'editing' — usuario fusiona cambio con acción pendiente
+        const pendingEdit = await getLastPendingAction(phone, 'editing');
+        if (pendingEdit) {
+          const mergedDatos = mergeEditIntent(pendingEdit.datos?.datos || {}, input);
+          const newArg = { ...pendingEdit.datos, datos: mergedDatos };
+          await sb.from('acciones_pendientes').update({ estado: 'cancelled' }).eq('id', pendingEdit.id);
+          const { msg } = await proposeDbAction(phone, newArg, input);
+          reply = msg;
+        } else {
+          // 3) Flujo normal: llamar IA
+          const sys = await buildSystemPrompt(user);
+          await guardarMensaje(phone, 'user', input);
+          reply = await callIA(user, sys, input, phone);
+          await guardarMensaje(phone, 'assistant', reply);
+        }
       }
     }
 
