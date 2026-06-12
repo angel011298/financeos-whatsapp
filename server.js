@@ -145,6 +145,23 @@ async function writeAuditLog(phone, tabla, accion, registroId, datosBefore, dato
   } catch (e) { console.error('audit_log write error:', e.message); }
 }
 
+// ── USAGE LOGGING ─────────────────────────────────────────────────────────────
+const PRECIOS_IA = {
+  'claude-haiku-4-5-20251001': { input: 1.00,  output:  5.00, cacheRead: 0.10 },
+  'claude-sonnet-4-6':         { input: 3.00,  output: 15.00, cacheRead: 0.30 },
+  'gemini-2.5-flash':          { input: 0.15,  output:  0.60, cacheRead: 0    },
+  'gemini-1.5-flash':          { input: 0.075, output:  0.30, cacheRead: 0    },
+};
+
+function logUsage(phone, modelo, usage, etapa) {
+  if (!usage || !phone) return;
+  const input_tokens       = usage.input_tokens       || usage.promptTokenCount           || 0;
+  const output_tokens      = usage.output_tokens      || usage.candidatesTokenCount       || 0;
+  const cache_read_tokens  = usage.cache_read_input_tokens || usage.cache_read_tokens     || 0;
+  sb.from('usage_log').insert({ user_phone: phone, modelo, input_tokens, output_tokens, cache_read_tokens, etapa })
+    .then(() => {}).catch(e => console.error('logUsage:', e.message));
+}
+
 // ── Acciones pendientes helpers ───────────────────────────────────────────────
 async function getLastPendingAction(phone, estado = 'pending') {
   const { data } = await sb.from('acciones_pendientes')
@@ -425,7 +442,7 @@ async function learnPattern(phone, mov) {
 }
 
 // ── AUDIO TRANSCRIPTION (Gemini multimodal) ───────────────────────────────
-async function transcribeAudio(mediaUrl, contentType) {
+async function transcribeAudio(mediaUrl, contentType, phone = '') {
   try {
     const auth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
     const res  = await fetch(mediaUrl, { headers: { Authorization: `Basic ${auth}` } });
@@ -438,6 +455,7 @@ async function transcribeAudio(mediaUrl, contentType) {
       { inlineData: { mimeType: mime, data: base64 } },
       'Transcribe exactamente este audio en español. Devuelve solo el texto transcrito, sin comentarios adicionales.'
     ]);
+    logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'vision');
     return result.response.text().trim();
   } catch (e) {
     console.error('Audio transcription error:', e.message);
@@ -577,7 +595,7 @@ EJEMPLOS:
 "cuánto gasté este mes"       → CONSULTA  (sin tool)
 "hola cómo estás"             → CHARLA    (sin tool)`;
 
-async function extractIntent(text) {
+async function extractIntent(text, phone = '') {
   const today = hoy();
   try {
     const res = await anthropic.messages.create({
@@ -594,6 +612,7 @@ async function extractIntent(text) {
       tool_choice: { type: 'auto' },
       messages:    [{ role: 'user', content: text }],
     });
+    logUsage(phone, 'claude-haiku-4-5-20251001', res.usage, 'extractor');
 
     let intent   = 'CONSULTA';
     let toolArgs = null;
@@ -701,7 +720,7 @@ async function proposeDbAction(phone, arg, textoOriginal) {
 
 // ── RECEIPT EXTRACTOR (Haiku + imagen) ────────────────────────────────────
 // Intenta extraer datos de un ticket/recibo simple. Devuelve null si no es recibo.
-async function extractReceiptInfo(b64, mime) {
+async function extractReceiptInfo(b64, mime, phone = '') {
   try {
     const res = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -715,6 +734,7 @@ async function extractReceiptInfo(b64, mime) {
         ],
       }],
     });
+    logUsage(phone, 'claude-haiku-4-5-20251001', res.usage, 'vision');
     const raw = res.content[0]?.text || '';
     const m = raw.match(/\{[\s\S]*?\}/);
     if (!m) return null;
@@ -981,6 +1001,7 @@ async function callClaude(user, sysBlocks, messages, text, phone) {
     tools: [toolsSchema],
     messages: msgs,
   });
+  logUsage(phone, model, res.usage, 'conversador');
 
   let aiText = '';
   const toolUses = [];
@@ -1023,6 +1044,7 @@ async function callGemini(user, sysBlocks, geminiHistory, text, phone) {
 
   const chat = model.startChat({ history: safeHist });
   const res = await chat.sendMessage(text);
+  logUsage(phone, user.ai_model || 'gemini-2.5-flash', res.response.usageMetadata, 'conversador');
   const calls = res.response.functionCalls();
 
   if (calls?.length) {
@@ -1351,6 +1373,46 @@ app.put('/api/presupuesto', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── COSTOS IA ─────────────────────────────────────────────────────────────────
+app.get('/api/costos/:mes', async (req, res) => {
+  try {
+    const mesStr = req.params.mes;                          // YYYY-MM
+    const phone  = req.query.phone ? decodeURIComponent(req.query.phone) : null;
+    if (!phone) return res.status(400).json({ success: false, error: 'Falta phone' });
+
+    const { data: user } = await sb.from('usuarios').select('role').eq('telefono', phone).single();
+    if (user?.role !== 'ADMIN_A') return res.status(403).json({ success: false, error: 'Solo ADMIN_A' });
+
+    const [y, m] = mesStr.split('-').map(Number);
+    const nextMes = new Date(y, m, 1).toISOString().slice(0, 7);   // month is 1-indexed here
+
+    const { data: rows, error } = await sb.from('usage_log')
+      .select('modelo, input_tokens, output_tokens, cache_read_tokens, etapa')
+      .gte('created_at', mesStr + '-01T00:00:00')
+      .lt('created_at',  nextMes  + '-01T00:00:00');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+
+    const agg = {};
+    for (const r of (rows || [])) {
+      if (!agg[r.modelo]) agg[r.modelo] = { input: 0, output: 0, cacheRead: 0, calls: 0 };
+      agg[r.modelo].input    += r.input_tokens      || 0;
+      agg[r.modelo].output   += r.output_tokens     || 0;
+      agg[r.modelo].cacheRead += r.cache_read_tokens || 0;
+      agg[r.modelo].calls    += 1;
+    }
+
+    let totalUSD = 0;
+    const breakdown = Object.entries(agg).map(([modelo, t]) => {
+      const p = PRECIOS_IA[modelo] || { input: 0, output: 0, cacheRead: 0 };
+      const costUSD = (t.input * p.input + t.output * p.output + t.cacheRead * p.cacheRead) / 1e6;
+      totalUSD += costUSD;
+      return { modelo, ...t, costUSD: +costUSD.toFixed(5) };
+    }).sort((a, b) => b.costUSD - a.costUSD);
+
+    res.json({ success: true, data: { mes: mesStr, totalUSD: +totalUSD.toFixed(5), breakdown, totalCalls: rows?.length || 0 } });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 // ── DESPENSA CRUD ─────────────────────────────────────────────────────────────
 app.get('/api/despensa/:phone', async (req, res) => {
   try {
@@ -1548,7 +1610,7 @@ app.post('/webhook', async (req, res) => {
 
       if (mime.startsWith('audio/')) {
         // ── Nota de voz → transcribir → flujo idéntico al texto ──────────────
-        const transcribed = await transcribeAudio(MediaUrl0, mime);
+        const transcribed = await transcribeAudio(MediaUrl0, mime, From);
         if (!transcribed) {
           reply = '⚠️ No pude transcribir el audio. Intenta de nuevo.';
         } else {
@@ -1565,7 +1627,7 @@ app.post('/webhook', async (req, res) => {
               const { msg } = await proposeDbAction(From, newArg, voiceText);
               reply = msg;
             } else {
-              const { intent, toolArgs } = await extractIntent(voiceText);
+              const { intent, toolArgs } = await extractIntent(voiceText, From);
               if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
                 await guardarMensaje(From, 'user', voiceText);
                 const { msg } = await proposeDbAction(From, toolArgs, voiceText);
@@ -1591,7 +1653,7 @@ app.post('/webhook', async (req, res) => {
 
         if (mime.startsWith('image/')) {
           // Intento rápido de extracción de recibo con Haiku
-          const recibo = await extractReceiptInfo(b64, mime);
+          const recibo = await extractReceiptInfo(b64, mime, From);
           if (recibo) {
             const toolArg = {
               tabla: 'movimientos', accion: 'crear',
@@ -1663,7 +1725,7 @@ app.post('/webhook', async (req, res) => {
           reply = msg;
         } else {
           // 3) extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
-          const { intent, toolArgs } = await extractIntent(Body || '');
+          const { intent, toolArgs } = await extractIntent(Body || '', From);
           if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
             await guardarMensaje(From, 'user', Body || '');
             const { msg } = await proposeDbAction(From, toolArgs, Body || '');
@@ -1748,7 +1810,7 @@ app.post('/api/chat-web', async (req, res) => {
           reply = msg;
         } else {
           // 3) extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
-          const { intent, toolArgs } = await extractIntent(input);
+          const { intent, toolArgs } = await extractIntent(input, phone);
           if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
             await guardarMensaje(phone, 'user', input);
             const { msg } = await proposeDbAction(phone, toolArgs, input);
