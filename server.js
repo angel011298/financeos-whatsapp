@@ -769,6 +769,15 @@ Para nidito: titulo, descripcion, tipo (meta/idea/wishlist/plan/nota), emoji, mo
         return `  ${p.categoria}: límite ${fmt(p.limite)} | gastado ${fmt(gastado)}`;
       }).join('\n')
     : '  Sin límites. Usa: "pon límite de $X en categoría Y"';
+
+  const rebalSugs = calcRebalanceo(
+    presp, aggrMovs.filter(m => m.tipo === 'GASTO'),
+    new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate(),
+    new Date().getDate()
+  );
+  const rebalLine = rebalSugs.length
+    ? `\nREBALANCEO DISPONIBLE: ${rebalSugs.map(s => `mover ${fmt(s.monto)} de ${s.de} → ${s.hacia}`).join('; ')}. Menciónalo si el usuario pregunta sobre presupuesto o gastos altos.`
+    : '';
   const infoLines = [
     refs.ingreso_quincenal
       ? `  Ingreso quincenal: ${fmt(refs.ingreso_quincenal)} | Días de pago: ${(refs.dias_pago||[]).join(' y ')}`
@@ -798,7 +807,7 @@ POR CATEGORÍA (${mesStr}):
 ${catLines || '  (sin gastos este mes)'}
 
 PRESUPUESTO:
-${prspLines}
+${prspLines}${rebalLine}
 
 INFO PERSONAL:
 ${infoLines}
@@ -1174,6 +1183,87 @@ app.delete('/api/tdc/:id', async (req, res) => {
     const { error } = await sb.from('tdc').delete().eq('id', req.params.id);
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── REBALANCEO ───────────────────────────────────────────────────────────────
+// Pure function — no I/O. presupuesto: [{categoria,limite}], gastos: [{categoria,monto}]
+function calcRebalanceo(presupuesto, gastos, diasMes, diaActual) {
+  if (!diasMes || !diaActual || !presupuesto.length) return [];
+  const rows = presupuesto
+    .filter(p => p.limite > 0)
+    .map(p => {
+      const gastado = gastos.filter(m => m.categoria === p.categoria).reduce((a, m) => a + (m.monto || 0), 0);
+      const ritmo = diaActual > 0 ? gastado / diaActual : 0;
+      const proyectado = Math.round(ritmo * diasMes);
+      const margen = p.limite - proyectado;   // positive = surplus at month end
+      return { categoria: p.categoria, limite: p.limite, gastado, proyectado, margen };
+    });
+
+  const necesitadas = rows.filter(r => r.proyectado > r.limite)
+    .sort((a, b) => (a.limite - a.proyectado) - (b.limite - b.proyectado));
+  const sobrantes = rows.filter(r => r.margen > 100)
+    .sort((a, b) => b.margen - a.margen);
+
+  const sugerencias = [];
+  const comprometido = {};
+
+  for (const nec of necesitadas.slice(0, 2)) {
+    const sobrante = sobrantes.find(s =>
+      s.categoria !== nec.categoria &&
+      s.margen - 100 - (comprometido[s.categoria] || 0) >= 50
+    );
+    if (!sobrante) continue;
+    const disponible = sobrante.margen - 100 - (comprometido[sobrante.categoria] || 0);
+    const deficit = nec.proyectado - nec.limite;
+    const monto = Math.min(disponible, deficit);
+    if (monto < 50) continue;
+    const montoR = Math.round(monto / 50) * 50;
+    comprometido[sobrante.categoria] = (comprometido[sobrante.categoria] || 0) + montoR;
+    sugerencias.push({ de: sobrante.categoria, hacia: nec.categoria, monto: montoR,
+      deMargen: Math.round(sobrante.margen), haciaDeficit: Math.round(deficit) });
+  }
+  return sugerencias;
+}
+
+app.get('/api/rebalanceo/:phone', async (req, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const mesStr = mes();
+    const now = new Date();
+    const diaActual = now.getDate();
+    const diasMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const [{ data: presp }, { data: gastos }] = await Promise.all([
+      sb.from('presupuesto').select('*').eq('user_phone', phone).eq('mes', mesStr),
+      sb.from('movimientos').select('categoria,monto').eq('user_phone', phone)
+        .eq('tipo', 'GASTO').gte('fecha', mesStr + '-01').is('deleted_at', null),
+    ]);
+    const sugerencias = calcRebalanceo(presp || [], gastos || [], diasMes, diaActual);
+    res.json({ success: true, data: { sugerencias, diasMes, diaActual, mes: mesStr } });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/rebalanceo/apply', async (req, res) => {
+  try {
+    const { user_phone, de, hacia, monto, mes: mesReq } = req.body;
+    if (!user_phone || !de || !hacia || !monto) return res.status(400).json({ success: false, error: 'Faltan campos' });
+    const mesStr = mesReq || mes();
+    const { data: rows } = await sb.from('presupuesto').select('*').eq('user_phone', user_phone).eq('mes', mesStr).in('categoria', [de, hacia]);
+    const rowDe    = rows?.find(r => r.categoria === de)    || { limite: 0 };
+    const rowHacia = rows?.find(r => r.categoria === hacia) || { limite: 0 };
+    const nuevoLimiteDe    = Math.max(0, rowDe.limite - monto);
+    const nuevoLimiteHacia = rowHacia.limite + monto;
+    const [r1, r2] = await Promise.all([
+      sb.from('presupuesto').upsert({ user_phone, categoria: de, limite: nuevoLimiteDe, mes: mesStr }, { onConflict: 'user_phone,categoria,mes' }).select().single(),
+      sb.from('presupuesto').upsert({ user_phone, categoria: hacia, limite: nuevoLimiteHacia, mes: mesStr }, { onConflict: 'user_phone,categoria,mes' }).select().single(),
+    ]);
+    if (r1.error) return res.status(400).json({ success: false, error: r1.error.message });
+    if (r2.error) return res.status(400).json({ success: false, error: r2.error.message });
+    await Promise.all([
+      writeAuditLog(user_phone, 'presupuesto', 'editar', r1.data?.id, rowDe,    r1.data, 'pwa'),
+      writeAuditLog(user_phone, 'presupuesto', 'editar', r2.data?.id, rowHacia, r2.data, 'pwa'),
+    ]);
+    res.json({ success: true, data: { de: r1.data, hacia: r2.data } });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
