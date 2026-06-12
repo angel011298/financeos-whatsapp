@@ -629,6 +629,34 @@ async function proposeDbAction(phone, arg, textoOriginal) {
   return { auto: false, msg: propuesta };
 }
 
+// ── RECEIPT EXTRACTOR (Haiku + imagen) ────────────────────────────────────
+// Intenta extraer datos de un ticket/recibo simple. Devuelve null si no es recibo.
+async function extractReceiptInfo(b64, mime) {
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      system: 'Extrae datos de tickets/recibos de compra. Responde ÚNICAMENTE con JSON válido: {"es_recibo":true,"monto_total":número,"comercio":"nombre","fecha":"YYYY-MM-DD"}. Si la imagen NO es un recibo o ticket simple (es un estado de cuenta bancario, screenshot, foto de comida, etc.), responde exactamente: {"es_recibo":false}.',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+          { type: 'text', text: '¿Es un recibo o ticket de compra con monto total visible?' },
+        ],
+      }],
+    });
+    const raw = res.content[0]?.text || '';
+    const m = raw.match(/\{[\s\S]*?\}/);
+    if (!m) return null;
+    const data = JSON.parse(m[0]);
+    if (!data.es_recibo || !data.monto_total) return null;
+    return data;
+  } catch (e) {
+    console.error('extractReceiptInfo error:', e.message);
+    return null;
+  }
+}
+
 // ── SYSTEM PROMPT ──────────────────────────────────────────────────────────
 // Devuelve { static, dynamic } para que los callers apliquen cache_control
 // en el bloque estático. intent='CONSULTA' incluye últimos 10 movimientos.
@@ -693,18 +721,22 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
   }
 
   // ── Bloque estático (cacheable) — reglas y esquemas que no cambian ─────────
-  const staticBlock = `Eres OnlyUs, el asesor financiero personal inteligente de Ángel.
+  const staticBlock = `Eres Finn, el asistente financiero personal de Ángel.
 
-REGLAS DE ORO:
-- Habla con naturalidad. NO eres un bot robótico. Eres un asistente cercano que conoce bien al usuario.
-- Para WhatsApp: máx 4 párrafos cortos. Usa emojis con moderación.
-- DETECTA PATRONES: Si gasta mucho en algo comparado con historial, avísale proactivamente.
-- TIENES PODER DE ACCIÓN: usa la herramienta 'modificar_plataforma' automáticamente cuando la información sea suficientemente clara.
-- Si el usuario dice algo como "gasté X en Y" (monto + concepto claros) → EJECUTA sin preguntar.
-- Si la información es AMBIGUA o falta algo CRÍTICO (monto sin número, concepto completamente vago) → PREGUNTA brevemente antes de registrar.
-- Para nidito y calendario: infiere detalles razonables sin preguntar (monto=0 si no hay monto, tipo "idea" si no está claro).
-- Si viene de 🎤 nota de voz: mismas reglas, confía en la transcripción.
-- SISTEMA DE CONFIRMACIÓN: cuando uses 'modificar_plataforma', tu texto de respuesta debe ser SOLO contexto breve (máx 1 línea). La propuesta y confirmación las maneja el sistema. NUNCA afirmes que algo quedó guardado: di "te propongo registrar X".
+TONO Y ESTILO:
+- Respuestas cortas y directas. Sin relleno. Sin cascadas de emojis.
+- Un emoji máximo por respuesta; omítelo si el contexto no lo pide.
+- Consultas: máx 4 párrafos. Registros confirmados: máx 2 líneas, formato "✓ $580 · Comida · Uber Eats".
+- Habla con naturalidad, como un asesor cercano que ya conoce al usuario.
+
+REGLAS DE ACCIÓN:
+- TIENES PODER DE ACCIÓN: usa 'modificar_plataforma' cuando la información sea clara.
+- "gasté X en Y" (monto + concepto claros) → llama la herramienta sin preguntar.
+- Información AMBIGUA o falta algo CRÍTICO → pregunta en una sola línea antes de registrar.
+- Nidito y calendario: infiere detalles razonables sin preguntar.
+- Nota de voz: mismas reglas, confía en la transcripción.
+- SISTEMA DE CONFIRMACIÓN: cuando llames 'modificar_plataforma', tu texto debe ser vacío o máx 1 línea de contexto. La propuesta la maneja el sistema. NUNCA digas que algo quedó guardado.
+- DETECTA PATRONES: si gasta mucho en algo vs historial, avísalo en 1 línea.
 
 CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   tipo: "GASTO"
@@ -1311,37 +1343,108 @@ app.post('/webhook', async (req, res) => {
       }
 
     } else if (hasMedia && MediaUrl0) {
-      reply = '📄 Analizando tu estado de cuenta... dame un momento ⏳';
-      await enviarWhatsApp(From, reply);
+      const mime = MediaContentType0 || 'application/octet-stream';
 
-      const mediaResp = await axios.get(MediaUrl0, {
-        auth: { username: process.env.TWILIO_SID, password: process.env.TWILIO_TOKEN },
-        responseType: 'arraybuffer',
-      });
-      const b64  = Buffer.from(mediaResp.data).toString('base64');
-      const mime = MediaContentType0 || 'image/jpeg';
-      const sysBlocks = await buildSystemPrompt(usuario, 'CONSULTA');
-      const sysArray  = [
-        { type: 'text', text: sysBlocks.static, cache_control: { type: 'ephemeral' } },
-        { type: 'text', text: sysBlocks.dynamic },
-      ];
+      if (mime.startsWith('audio/')) {
+        // ── Nota de voz → transcribir → flujo idéntico al texto ──────────────
+        const transcribed = await transcribeAudio(MediaUrl0, mime);
+        if (!transcribed) {
+          reply = '⚠️ No pude transcribir el audio. Intenta de nuevo.';
+        } else {
+          const voiceText = `[🎤 Nota de voz] ${transcribed}`;
+          const intercepted = await handlePendingCommand(From, voiceText.toLowerCase());
+          if (intercepted !== null) {
+            reply = intercepted;
+          } else {
+            const pendingEdit = await getLastPendingAction(From, 'editing');
+            if (pendingEdit) {
+              const mergedDatos = mergeEditIntent(pendingEdit.datos?.datos || {}, voiceText);
+              const newArg = { ...pendingEdit.datos, datos: mergedDatos };
+              await sb.from('acciones_pendientes').update({ estado: 'cancelled' }).eq('id', pendingEdit.id);
+              const { msg } = await proposeDbAction(From, newArg, voiceText);
+              reply = msg;
+            } else {
+              const { intent, toolArgs } = await extractIntent(voiceText);
+              if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
+                await guardarMensaje(From, 'user', voiceText);
+                const { msg } = await proposeDbAction(From, toolArgs, voiceText);
+                await guardarMensaje(From, 'assistant', msg);
+                reply = msg;
+              } else {
+                const sysBlocks = await buildSystemPrompt(usuario, intent);
+                await guardarMensaje(From, 'user', voiceText);
+                reply = await callIA(usuario, sysBlocks, voiceText, From);
+                await guardarMensaje(From, 'assistant', reply);
+              }
+            }
+          }
+        }
 
-      const contentParts = [
-        mime === 'application/pdf'
-          ? { type: 'document', source: { type: 'base64', media_type: mime, data: b64 } }
-          : { type: 'image',    source: { type: 'base64', media_type: mime, data: b64 } },
-        { type: 'text', text: 'Analiza este estado de cuenta. Dame: banco y período, cargos principales, intereses cobrados, algo disputable, y la acción concreta que debo tomar esta semana según mi plan de finanzas.' },
-      ];
+      } else {
+        // ── Imagen o PDF — descargar primero ─────────────────────────────────
+        const mediaResp = await axios.get(MediaUrl0, {
+          auth: { username: process.env.TWILIO_SID, password: process.env.TWILIO_TOKEN },
+          responseType: 'arraybuffer',
+        });
+        const b64 = Buffer.from(mediaResp.data).toString('base64');
 
-      // Siempre Claude para análisis de documentos (mejor visión)
-      const analisisResp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system:     sysArray,
-        messages:   [{ role: 'user', content: contentParts }],
-        ...(mime === 'application/pdf' ? { betas: ['pdfs-2024-09-25'] } : {}),
-      });
-      reply = analisisResp.content[0].text;
+        if (mime.startsWith('image/')) {
+          // Intento rápido de extracción de recibo con Haiku
+          const recibo = await extractReceiptInfo(b64, mime);
+          if (recibo) {
+            const toolArg = {
+              tabla: 'movimientos', accion: 'crear',
+              datos: {
+                tipo: 'GASTO', categoria: 'OTROS',
+                concepto: recibo.comercio || 'Compra',
+                monto: recibo.monto_total,
+                medio_pago: 'efectivo',
+                fecha: recibo.fecha || hoy(),
+              },
+            };
+            await guardarMensaje(From, 'user', '[📷 Foto de recibo]');
+            const { msg } = await proposeDbAction(From, toolArg, '[foto recibo]');
+            await guardarMensaje(From, 'assistant', msg);
+            reply = msg;
+          } else {
+            // Imagen no reconocida como recibo → análisis Sonnet
+            reply = '🔍 Analizando imagen...';
+            await enviarWhatsApp(From, reply);
+            const sysBlocks = await buildSystemPrompt(usuario, 'CONSULTA');
+            const sysArray  = [
+              { type: 'text', text: sysBlocks.static, cache_control: { type: 'ephemeral' } },
+              { type: 'text', text: sysBlocks.dynamic },
+            ];
+            const analisisResp = await anthropic.messages.create({
+              model: 'claude-sonnet-4-6', max_tokens: 1024, system: sysArray,
+              messages: [{ role: 'user', content: [
+                { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+                { type: 'text', text: 'Analiza esta imagen y dime qué relevancia tiene para mis finanzas.' },
+              ]}],
+            });
+            reply = analisisResp.content[0].text;
+          }
+
+        } else {
+          // PDF — análisis profundo Sonnet (estados de cuenta multipágina)
+          reply = '📄 Analizando estado de cuenta...';
+          await enviarWhatsApp(From, reply);
+          const sysBlocks = await buildSystemPrompt(usuario, 'CONSULTA');
+          const sysArray  = [
+            { type: 'text', text: sysBlocks.static, cache_control: { type: 'ephemeral' } },
+            { type: 'text', text: sysBlocks.dynamic },
+          ];
+          const analisisResp = await anthropic.messages.create({
+            model: 'claude-sonnet-4-6', max_tokens: 1024, system: sysArray,
+            betas: ['pdfs-2024-09-25'],
+            messages: [{ role: 'user', content: [
+              { type: 'document', source: { type: 'base64', media_type: mime, data: b64 } },
+              { type: 'text', text: 'Analiza este estado de cuenta. Dame: banco y período, cargos principales, intereses cobrados, algo disputable, y la acción concreta que debo tomar esta semana según mi plan de finanzas.' },
+            ]}],
+          });
+          reply = analisisResp.content[0].text;
+        }
+      }
 
     } else {
       // 1) Intercept comandos de confirmación / cancelación / deshacer
