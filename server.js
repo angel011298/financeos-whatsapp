@@ -473,6 +473,84 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
   } catch (e) { return `❌ DB error: ${e.message}`; }
 }
 
+// ── INTENT EXTRACTION (Haiku — compartido para todos los usuarios) ────────────
+// El extractor siempre usa Claude Haiku independientemente de ai_preference.
+// Solo la CONVERSACIÓN (CONSULTA/CHARLA) respeta ai_preference del usuario.
+const _extractIntentStaticPrompt = `Eres un extractor de intents para una app de finanzas personales.
+Clasifica el mensaje del usuario en uno de estos intents y responde SOLO con la palabra:
+
+REGISTRO   → el usuario reporta un gasto, ingreso u operación con monto explícito
+EDICION    → el usuario quiere corregir/modificar un registro existente (menciona ID o "el último")
+ELIMINACION→ el usuario quiere borrar un registro específico
+CONSULTA   → el usuario pregunta por sus finanzas, pide análisis o resúmenes
+CHARLA     → saludo, agradecimiento, conversación casual, preguntas generales
+COMANDO    → palabras clave: resumen, deudas, metas, historial, presupuesto, calendario, ayuda, nidito
+
+Si el intent es REGISTRO, EDICION o ELIMINACION con datos suficientes: usa también la herramienta modificar_plataforma.
+Si faltan datos críticos (ej: "gasté en el súper" sin monto) → responde CONSULTA, sin tool.
+
+HERRAMIENTA: modificar_plataforma
+  tabla:  movimientos | metas | calendario | tdc | presupuesto | nidito | usuarios
+  accion: crear | editar | eliminar
+  id:     string (solo editar/eliminar)
+  datos:  object — campos del registro
+
+CATEGORÍAS:   Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
+MEDIOS PAGO:  efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
+Tipo GASTO requiere: tipo, categoria, concepto, monto, medio_pago (default "efectivo"), fecha
+Tipo INGRESO requiere: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
+
+EJEMPLOS:
+"50 tacos"                    → REGISTRO  + crear movimientos {tipo:"GASTO",categoria:"Comida",concepto:"tacos",monto:50,medio_pago:"efectivo"}
+"gasté 350 uber con TDC BBVA" → REGISTRO  + crear movimientos {tipo:"GASTO",categoria:"Transporte",concepto:"uber",monto:350,medio_pago:"TDC BBVA"}
+"recibí mi sueldo $14,000"    → REGISTRO  + crear movimientos {tipo:"INGRESO",categoria:"OTROS",concepto:"Sueldo",monto:14000}
+"cuánto gasté este mes"       → CONSULTA  (sin tool)
+"hola cómo estás"             → CHARLA    (sin tool)`;
+
+async function extractIntent(text) {
+  const today = hoy();
+  try {
+    const res = await anthropic.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 500,
+      system: [
+        {
+          type:          'text',
+          text:          _extractIntentStaticPrompt + `\nfecha hoy: ${today}`,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      tools:       [toolsSchema],
+      tool_choice: { type: 'auto' },
+      messages:    [{ role: 'user', content: text }],
+    });
+
+    let intent   = 'CONSULTA';
+    let toolArgs = null;
+
+    for (const block of res.content) {
+      if (block.type === 'text') {
+        const m = block.text.match(/\b(REGISTRO|EDICION|ELIMINACION|CONSULTA|CHARLA|COMANDO)\b/i);
+        if (m) intent = m[1].toUpperCase();
+      } else if (block.type === 'tool_use') {
+        toolArgs = block.input;
+        if (!toolArgs.datos?.fecha) {
+          toolArgs = { ...toolArgs, datos: { ...toolArgs.datos, fecha: today } };
+        }
+        // intent from tool accion
+        if (toolArgs.accion === 'crear')   intent = 'REGISTRO';
+        if (toolArgs.accion === 'editar')  intent = 'EDICION';
+        if (toolArgs.accion === 'eliminar') intent = 'ELIMINACION';
+      }
+    }
+
+    return { intent, toolArgs };
+  } catch (e) {
+    console.error('extractIntent error:', e.message);
+    return { intent: 'CONSULTA', toolArgs: null }; // fallback seguro
+  }
+}
+
 // ── PROPOSE → CONFIRM ─────────────────────────────────────────────────────
 async function proposeDbAction(phone, arg, textoOriginal) {
   const { tabla, accion, datos } = arg;
@@ -552,46 +630,70 @@ async function proposeDbAction(phone, arg, textoOriginal) {
 }
 
 // ── SYSTEM PROMPT ──────────────────────────────────────────────────────────
-async function buildSystemPrompt(user) {
+// Devuelve { static, dynamic } para que los callers apliquen cache_control
+// en el bloque estático. intent='CONSULTA' incluye últimos 10 movimientos.
+async function buildSystemPrompt(user, intent = 'CONSULTA') {
   const today = hoy();
   const phone = user.telefono;
   const mesStr = mes();
 
+  // Fetches paralelos — movimientos solo se trae con detalle en CONSULTA
+  const movsLimit = intent === 'CONSULTA' ? 10 : 0;
   const [tdcR, movsR, metasR, calR, patrR, prspR, niditoR] = await Promise.all([
     sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
-    sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('created_at', { ascending: false }).limit(60),
+    movsLimit > 0
+      ? sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null)
+          .order('created_at', { ascending: false }).limit(movsLimit)
+      : Promise.resolve({ data: [] }),
     sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
-    sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).gte('fecha', today).order('fecha').limit(10),
-    sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }).limit(10),
+    sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null)
+        .gte('fecha', today).order('fecha').limit(10),
+    sb.from('patrones_ia').select('*').eq('user_phone', phone)
+        .order('contador', { ascending: false }).limit(10),
     sb.from('presupuesto').select('*').eq('user_phone', phone).eq('mes', mesStr),
-    sb.from('nidito').select('*').is('deleted_at', null).order('prioridad', { ascending: false }).limit(20),
+    sb.from('nidito').select('*').is('deleted_at', null)
+        .order('prioridad', { ascending: false }).limit(20),
   ]);
 
-  const tdcs = tdcR.data || [], movs = movsR.data || [], metas = metasR.data || [];
-  const eventos = calR.data || [], patrones = patrR.data || [], presp = prspR.data || [];
-  const nidito = niditoR.data || [];
-  const refs = user.external_refs || {};
+  // Para gastos/ingresos del mes siempre necesitamos un agregado ligero
+  const [aggrR] = await Promise.all([
+    sb.from('movimientos').select('tipo,categoria,monto,fecha')
+      .eq('user_phone', phone).is('deleted_at', null)
+      .gte('fecha', mesStr + '-01'),
+  ]);
 
-  const mesMov = movs.filter(m => m.fecha?.startsWith(mesStr));
-  const gastMes = mesMov.filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0);
-  const ingrMes = mesMov.filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0);
+  const tdcs     = tdcR.data    || [];
+  const movs     = movsR.data   || [];
+  const metas    = metasR.data  || [];
+  const eventos  = calR.data    || [];
+  const patrones = patrR.data   || [];
+  const presp    = prspR.data   || [];
+  const nidito   = niditoR.data || [];
+  const aggrMovs = aggrR.data   || [];
+  const refs     = user.external_refs || {};
+
+  const gastMes = aggrMovs.filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0);
+  const ingrMes = aggrMovs.filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0);
 
   const catLines = CATEGORIAS.map(cat => {
-    const tot = mesMov.filter(m => m.tipo === 'GASTO' && m.categoria === cat).reduce((a, m) => a + (m.monto || 0), 0);
+    const tot = aggrMovs.filter(m => m.tipo === 'GASTO' && m.categoria === cat)
+                        .reduce((a, m) => a + (m.monto || 0), 0);
     if (!tot) return null;
-    const lim = presp.find(p => p.categoria === cat)?.limite || 0;
+    const lim    = presp.find(p => p.categoria === cat)?.limite || 0;
     const alerta = lim > 0 && tot > lim * 0.85 ? ' ⚠️ CERCA DEL LÍMITE' : '';
     return `  ${cat}: ${fmt(tot)}${lim > 0 ? ` / límite ${fmt(lim)}` : ''}${alerta}`;
   }).filter(Boolean).join('\n');
 
   let ghost = '';
   if (user.role === 'ADMIN_A') {
-    const { data: otros } = await sb.from('movimientos').select('*').neq('user_phone', phone).is('deleted_at', null).order('created_at', { ascending: false }).limit(20);
+    const { data: otros } = await sb.from('movimientos').select('*')
+      .neq('user_phone', phone).is('deleted_at', null)
+      .order('created_at', { ascending: false }).limit(20);
     ghost = `\n[MODO FANTASMA — últimos movs Sujeto B]\n${JSON.stringify(otros)}`;
   }
 
-  return `Eres OnlyUs, el asesor financiero personal inteligente de Ángel.
-Hoy: ${today} | Mes: ${mesStr}
+  // ── Bloque estático (cacheable) — reglas y esquemas que no cambian ─────────
+  const staticBlock = `Eres OnlyUs, el asesor financiero personal inteligente de Ángel.
 
 REGLAS DE ORO:
 - Habla con naturalidad. NO eres un bot robótico. Eres un asistente cercano que conoce bien al usuario.
@@ -599,68 +701,92 @@ REGLAS DE ORO:
 - DETECTA PATRONES: Si gasta mucho en algo comparado con historial, avísale proactivamente.
 - TIENES PODER DE ACCIÓN: usa la herramienta 'modificar_plataforma' automáticamente cuando la información sea suficientemente clara.
 - Si el usuario dice algo como "gasté X en Y" (monto + concepto claros) → EJECUTA sin preguntar.
-- Si la información es AMBIGUA o falta algo CRÍTICO (monto sin número, concepto completamente vago) → PREGUNTA brevemente antes de registrar. Ejemplo: si dice "gasté en el súper" sin monto, pregunta "¿Cuánto gastaste en el súper?" antes de registrar.
-- Para nidito y calendario: puedes inferir detalles razonables sin preguntar (usa monto=0 si no hay monto, tipo "idea" si no está claro).
+- Si la información es AMBIGUA o falta algo CRÍTICO (monto sin número, concepto completamente vago) → PREGUNTA brevemente antes de registrar.
+- Para nidito y calendario: infiere detalles razonables sin preguntar (monto=0 si no hay monto, tipo "idea" si no está claro).
 - Si viene de 🎤 nota de voz: mismas reglas, confía en la transcripción.
-- SISTEMA DE CONFIRMACIÓN: cuando uses 'modificar_plataforma', tu texto de respuesta debe ser SOLO contexto breve (máx 1 línea). La propuesta y confirmación las maneja el sistema automáticamente. NUNCA afirmes que algo quedó guardado: di "te propongo registrar X" — el sistema pedirá confirmación al usuario.
+- SISTEMA DE CONFIRMACIÓN: cuando uses 'modificar_plataforma', tu texto de respuesta debe ser SOLO contexto breve (máx 1 línea). La propuesta y confirmación las maneja el sistema. NUNCA afirmes que algo quedó guardado: di "te propongo registrar X".
 
 CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   tipo: "GASTO"
   categoria: una de [${CATEGORIAS.join(', ')}]
   concepto: producto/servicio específico ("Uber", "McDonald's", "mínimo BBVA")
-  comentarios: observaciones del usuario ("con Alicia", "fue emergencia", "error de cobro") — puede estar vacío
+  comentarios: observaciones — puede estar vacío
   monto: número
-  medio_pago: uno de [${MEDIOS_PAGO.join(', ')}] — si no lo dice, usa "efectivo"
-  fecha: "${today}" o la fecha que mencione
+  medio_pago: uno de [${MEDIOS_PAGO.join(', ')}] — default "efectivo"
+  fecha: YYYY-MM-DD
 
 Para INGRESO: tipo="INGRESO", categoria="OTROS", concepto=fuente del ingreso, monto, fecha.
+Para calendario.crear: titulo, fecha (YYYY-MM-DD), hora (HH:MM), tipo, descripcion.
+Para nidito: titulo, descripcion, tipo (meta/idea/wishlist/plan/nota), emoji, monto, prioridad.
 
-Para calendario.crear: titulo, fecha (YYYY-MM-DD), hora (HH:MM si la da), tipo, descripcion.
-Si dice "en 3 meses" → calcula: ${new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0]}.
-Si dice "en X días" → suma X a hoy.
+════════ REGLAS DE MODIFICACIÓN ════════
+- tabla="usuarios" datos={campo: valor}: merge automático, no sobreescribe campos no enviados.
+- NÚMEROS: Siempre números puros. "$14,843.72" → 14843.72 (coma=miles, punto=decimal). NUNCA truncar.
+- tabla="movimientos" accion="editar" id=X datos={campo: nuevo_valor}: corrige un movimiento existente.
+- Sueldo quincenal: tabla="usuarios", datos={ ingreso_quincenal: X, dias_pago:[D1,D2], ingresos_esperados:[{descripcion:"Sueldo",monto:X,dias:[D1,D2]}] }
+- Ingreso recurrente extra: tabla="usuarios", datos={ ingresos_esperados:[...existentes, {descripcion:"X",monto:Y,dias:[dia]}] }
+- Gasto fijo: tabla="usuarios", datos={ gastos_esperados:[...existentes,{descripcion:"X",monto:Y}], gastos_fijos:{...existentes,X:Y} }
+- Presupuesto mensual por categoría: una llamada a tabla="presupuesto" POR cada categoría.`;
+
+  // ── Bloque dinámico (por request) — datos del día ─────────────────────────
+  const date3m = new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0];
+  const prspLines = presp.length
+    ? presp.map(p => {
+        const gastado = aggrMovs.filter(m => m.tipo === 'GASTO' && m.categoria === p.categoria)
+                                .reduce((a, m) => a + (m.monto || 0), 0);
+        return `  ${p.categoria}: límite ${fmt(p.limite)} | gastado ${fmt(gastado)}`;
+      }).join('\n')
+    : '  Sin límites. Usa: "pon límite de $X en categoría Y"';
+  const infoLines = [
+    refs.ingreso_quincenal
+      ? `  Ingreso quincenal: ${fmt(refs.ingreso_quincenal)} | Días de pago: ${(refs.dias_pago||[]).join(' y ')}`
+      : '  Ingreso quincenal: no configurado.',
+    Array.isArray(refs.ingresos_esperados) && refs.ingresos_esperados.length
+      ? `  Ingresos esperados:\n${refs.ingresos_esperados.map(i=>`    • ${i.descripcion}: ${fmt(i.monto)} días ${(i.dias||[]).join(',')}`).join('\n')}`
+      : '',
+    Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length
+      ? `  Gastos fijos:\n${refs.gastos_esperados.map(g=>`    • ${g.descripcion}: ${fmt(g.monto)}`).join('\n')}`
+      : refs.gastos_fijos
+        ? `  Gastos fijos:\n${Object.entries(refs.gastos_fijos).map(([k,v])=>`    • ${k}: ${fmt(v)}`).join('\n')}`
+        : '  Gastos fijos: no configurados.',
+  ].filter(Boolean).join('\n');
+
+  const movsSection = intent === 'CONSULTA' && movs.length
+    ? `\nÚLTIMOS ${movs.length} MOVIMIENTOS:\n${movs.map(m=>`  [${m.id}] ${m.fecha} ${m.tipo} ${m.categoria} "${m.concepto||''}" ${fmt(m.monto)} ${m.medio_pago||''}`).join('\n')}`
+    : '';
+
+  const dynamicBlock = `Hoy: ${today} | Mes: ${mesStr}
+Si dice "en 3 meses" → fecha ${date3m}. Si dice "en X días" → suma X a ${today}.
+tabla="presupuesto" datos={categoria, limite, mes:"${mesStr}"}.
 
 ════════ DATOS FINANCIEROS ════════
 GASTOS MES: ${fmt(gastMes)} | INGRESOS: ${fmt(ingrMes)} | NETO: ${fmt(ingrMes - gastMes)}
 
-POR CATEGORÍA:
-${catLines || '  (sin gastos registrados este mes)'}
+POR CATEGORÍA (${mesStr}):
+${catLines || '  (sin gastos este mes)'}
 
-PRESUPUESTO MENSUAL (límites por categoría, mes ${mesStr}):
-${presp.length ? presp.map(p => `  ${p.categoria}: límite ${fmt(p.limite)} | gastado ${fmt(mesMov.filter(m => m.tipo === 'GASTO' && m.categoria === p.categoria).reduce((a,m) => a+(m.monto||0), 0))}`).join('\n') : '  Sin límites configurados. Para configurar usa: "pon límite de $X en categoría Y" o "configura presupuesto mensual".'}
+PRESUPUESTO:
+${prspLines}
 
 INFO PERSONAL:
-${refs.ingreso_quincenal ? `  Ingreso quincenal: ${fmt(refs.ingreso_quincenal)} | Días de pago: ${(refs.dias_pago||[]).join(' y ')}` : '  Ingreso quincenal: no configurado.'}
-${Array.isArray(refs.ingresos_esperados) && refs.ingresos_esperados.length ? `  Ingresos esperados configurados:\n${refs.ingresos_esperados.map(i=>`    • ${i.descripcion}: ${fmt(i.monto)} días ${(i.dias||[]).join(',')}`).join('\n')}` : ''}
-${Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length ? `  Gastos fijos configurados:\n${refs.gastos_esperados.map(g=>`    • ${g.descripcion}: ${fmt(g.monto)}`).join('\n')}` : refs.gastos_fijos ? `  Gastos fijos:\n${Object.entries(refs.gastos_fijos).map(([k,v])=>`    • ${k}: ${fmt(v)}`).join('\n')}` : '  Gastos fijos: no configurados.'}
+${infoLines}
 
 DEUDAS TDC:
-${tdcs.map(t => `  [${t.id}] ${t.nombre} (${t.estado}): pago ${fmt(t.a_pagar)} saldo ${fmt(Math.max(0, (t.a_pagar || 0) - (t.pagado || 0)))}`).join('\n') || '  Sin TDC'}
-
-ÚLTIMOS 10 MOVIMIENTOS:
-${movs.slice(0, 10).map(m => `  [${m.id}] ${m.fecha} ${m.tipo} ${m.categoria} "${m.concepto||''}" ${fmt(m.monto)} ${m.medio_pago||''}`).join('\n') || '  Sin movimientos'}
-
-METAS: ${metas.map(m => `[${m.id}] ${m.nombre}: ${fmt(m.actual)}/${fmt(m.meta)}`).join(' | ') || 'Sin metas'}
+${tdcs.map(t=>`  [${t.id}] ${t.nombre} (${t.estado}): pago ${fmt(t.a_pagar)} saldo ${fmt(Math.max(0,(t.a_pagar||0)-(t.pagado||0)))}`).join('\n')||'  Sin TDC'}
+${movsSection}
+METAS: ${metas.map(m=>`[${m.id}] ${m.nombre}: ${fmt(m.actual)}/${fmt(m.meta)}`).join(' | ')||'Sin metas'}
 
 PRÓXIMOS EVENTOS:
-${eventos.map(e => `  [${e.id}] ${e.fecha}: ${e.titulo}`).join('\n') || '  Calendario vacío'}
+${eventos.map(e=>`  [${e.id}] ${e.fecha}: ${e.titulo}`).join('\n')||'  Calendario vacío'}
 
-PATRONES (top conceptos recurrentes):
-${patrones.map(p => `  ${p.concepto_clave}: promedio ${fmt(p.monto_promedio)}, ${p.contador}x, último ${p.ultima_vez}, medio: ${p.medio_pago_usual||'?'}`).join('\n') || '  Sin patrones aún'}
+PATRONES:
+${patrones.map(p=>`  ${p.concepto_clave}: promedio ${fmt(p.monto_promedio)}, ${p.contador}x, medio: ${p.medio_pago_usual||'?'}`).join('\n')||'  Sin patrones'}
 
-NIDITO (espacio compartido con Alicia — metas/ideas/wishlist):
-${nidito.map(n => `  [${n.id}] ${n.emoji||'💫'} ${n.tipo?.toUpperCase()}: "${n.titulo}"${n.monto>0?' '+fmt(n.monto):''}${n.completado?' ✅':''}`).join('\n') || '  Nidito vacío'}
-Para agregar al nidito usa tabla="nidito". Ejemplos: "anota en nidito que queremos ir a Cancún", "agrega a wishlist un sillón $3000".
+NIDITO:
+${nidito.map(n=>`  [${n.id}] ${n.emoji||'💫'} ${n.tipo?.toUpperCase()}: "${n.titulo}"${n.monto>0?' '+fmt(n.monto):''}${n.completado?' ✅':''}`).join('\n')||'  Nidito vacío'}
+Para nidito usa tabla="nidito".${ghost}`;
 
-════════ REGLAS DE MODIFICACIÓN ════════
-- tabla="usuarios" accion="crear" datos={campo: valor}: guarda info personal (el backend hace merge automático, no sobreescribe campos no enviados).
-- tabla="presupuesto" accion="crear" datos={categoria, limite, mes:"${mesStr}"}: límite mensual por categoría.
-- NÚMEROS: Los montos siempre son números puros. "$14,843.72" → 14843.72 (coma=miles, punto=decimal). NUNCA truncar.
-- Cuando el usuario diga "mi sueldo es $X quincenal, cobro los días D1 y D2" → tabla="usuarios", datos={ ingreso_quincenal: X, dias_pago:[D1,D2], ingresos_esperados:[{descripcion:"Sueldo",monto:X,dias:[D1,D2]}] }
-- Cuando mencione un ingreso recurrente extra → tabla="usuarios", datos={ ingresos_esperados:[...existentes, {descripcion:"X",monto:Y,dias:[dia]}] }
-- Cuando mencione un gasto fijo → tabla="usuarios", datos={ gastos_esperados:[...existentes, {descripcion:"X",monto:Y}], gastos_fijos:{...existentes,X:Y} }
-- Cuando el usuario configure presupuesto mensual por categoría → una llamada a "presupuesto" POR cada categoría.
-- tabla="movimientos" accion="editar" id=X datos={campo: nuevo_valor}: corrige un movimiento.
-${ghost}`;
+  return { static: staticBlock, dynamic: dynamicBlock };
 }
 
 // ── QUICK COMMANDS ─────────────────────────────────────────────────────────
@@ -724,14 +850,22 @@ const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", de
 // ── LLM ENGINE ─────────────────────────────────────────────────────────────
 
 // Claude con tool calling — proposeDbAction intercepts; sin segundo turno de IA
-async function callClaude(user, sysPrompt, messages, text, phone) {
+async function callClaude(user, sysBlocks, messages, text, phone) {
   const model = user.ai_model || 'claude-sonnet-4-6';
   const msgs = [...messages, { role: 'user', content: text }];
+
+  // sysBlocks puede ser { static, dynamic } (Sprint 2) o string legado
+  const system = (sysBlocks && typeof sysBlocks === 'object' && sysBlocks.static)
+    ? [
+        { type: 'text', text: sysBlocks.static, cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: sysBlocks.dynamic },
+      ]
+    : sysBlocks;
 
   const res = await anthropic.messages.create({
     model,
     max_tokens: 1024,
-    system: sysPrompt,
+    system,
     tools: [toolsSchema],
     messages: msgs,
   });
@@ -754,11 +888,16 @@ async function callClaude(user, sysPrompt, messages, text, phone) {
 }
 
 // Gemini con function calling — proposeDbAction intercepts; sin segundo turno de IA
-async function callGemini(user, sysPrompt, geminiHistory, text, phone) {
+async function callGemini(user, sysBlocks, geminiHistory, text, phone) {
+  // sysBlocks puede ser { static, dynamic } (Sprint 2) o string legado
+  const systemInstruction = (sysBlocks && typeof sysBlocks === 'object' && sysBlocks.static)
+    ? sysBlocks.static + '\n\n' + sysBlocks.dynamic
+    : sysBlocks;
+
   const model = genAI.getGenerativeModel({
     model: user.ai_model || 'gemini-2.5-flash',
     tools: geminiTools,
-    systemInstruction: sysPrompt,
+    systemInstruction,
   });
 
   // Garantizar alternancia user→model
@@ -783,19 +922,17 @@ async function callGemini(user, sysPrompt, geminiHistory, text, phone) {
 }
 
 // Dispatcher que enruta por preferencia del usuario
-async function callIA(user, sysPrompt, text, phone) {
-  // Cargar historial de Supabase
+async function callIA(user, sysBlocks, text, phone) {
   const dbHistory = await cargarHistorial(phone);
 
   if (user.ai_preference === 'CLAUDE') {
-    return callClaude(user, sysPrompt, dbHistory, text, phone);
+    return callClaude(user, sysBlocks, dbHistory, text, phone);
   } else {
-    // Convertir a formato Gemini
     const geminiHistory = dbHistory.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
-    return callGemini(user, sysPrompt, geminiHistory, text, phone);
+    return callGemini(user, sysBlocks, geminiHistory, text, phone);
   }
 }
 
@@ -1183,7 +1320,11 @@ app.post('/webhook', async (req, res) => {
       });
       const b64  = Buffer.from(mediaResp.data).toString('base64');
       const mime = MediaContentType0 || 'image/jpeg';
-      const sys  = await buildSystemPrompt(usuario);
+      const sysBlocks = await buildSystemPrompt(usuario, 'CONSULTA');
+      const sysArray  = [
+        { type: 'text', text: sysBlocks.static, cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: sysBlocks.dynamic },
+      ];
 
       const contentParts = [
         mime === 'application/pdf'
@@ -1196,7 +1337,7 @@ app.post('/webhook', async (req, res) => {
       const analisisResp = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 1024,
-        system:     sys,
+        system:     sysArray,
         messages:   [{ role: 'user', content: contentParts }],
         ...(mime === 'application/pdf' ? { betas: ['pdfs-2024-09-25'] } : {}),
       });
@@ -1217,11 +1358,19 @@ app.post('/webhook', async (req, res) => {
           const { msg } = await proposeDbAction(From, newArg, Body || '');
           reply = msg;
         } else {
-          // 3) Flujo normal: llamar IA
-          const sys = await buildSystemPrompt(usuario);
-          await guardarMensaje(From, 'user', Body || '');
-          reply = await callIA(usuario, sys, Body || '', From);
-          await guardarMensaje(From, 'assistant', reply);
+          // 3) extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
+          const { intent, toolArgs } = await extractIntent(Body || '');
+          if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
+            await guardarMensaje(From, 'user', Body || '');
+            const { msg } = await proposeDbAction(From, toolArgs, Body || '');
+            await guardarMensaje(From, 'assistant', msg);
+            reply = msg;
+          } else {
+            const sysBlocks = await buildSystemPrompt(usuario, intent);
+            await guardarMensaje(From, 'user', Body || '');
+            reply = await callIA(usuario, sysBlocks, Body || '', From);
+            await guardarMensaje(From, 'assistant', reply);
+          }
         }
       }
     }
@@ -1294,11 +1443,19 @@ app.post('/api/chat-web', async (req, res) => {
           const { msg } = await proposeDbAction(phone, newArg, input);
           reply = msg;
         } else {
-          // 3) Flujo normal: llamar IA
-          const sys = await buildSystemPrompt(user);
-          await guardarMensaje(phone, 'user', input);
-          reply = await callIA(user, sys, input, phone);
-          await guardarMensaje(phone, 'assistant', reply);
+          // 3) extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
+          const { intent, toolArgs } = await extractIntent(input);
+          if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
+            await guardarMensaje(phone, 'user', input);
+            const { msg } = await proposeDbAction(phone, toolArgs, input);
+            await guardarMensaje(phone, 'assistant', msg);
+            reply = msg;
+          } else {
+            const sysBlocks = await buildSystemPrompt(user, intent);
+            await guardarMensaje(phone, 'user', input);
+            reply = await callIA(user, sysBlocks, input, phone);
+            await guardarMensaje(phone, 'assistant', reply);
+          }
         }
       }
     }
