@@ -84,3 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_metas_user      ON metas(user_phone);
 -- Reemplaza 521XXXXXXXXXX con tu número (sin +, sin espacios):
 -- UPDATE tdc   SET user_phone = 'whatsapp:+521XXXXXXXXXX' WHERE user_phone = '';
 -- UPDATE metas SET user_phone = 'whatsapp:+521XXXXXXXXXX' WHERE user_phone = '';
+
+-- 9. Perfil personal — info quincenal y gastos fijos (migration v3)
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS external_refs jsonb DEFAULT '{}'::jsonb;
+-- Almacena: { ingreso_quincenal, dias_pago, gastos_fijos: { categoria: monto } }

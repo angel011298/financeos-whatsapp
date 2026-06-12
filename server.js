@@ -64,7 +64,7 @@ async function identificarUsuario(phoneFrom) {
       nombre:        esAngel ? 'Angel' : 'Usuario',
       role:          esAngel ? 'ADMIN_A' : 'USER_B',
       ai_preference: esAngel ? 'CLAUDE' : 'GEMINI',
-      ai_model:      esAngel ? 'claude-sonnet-4-6' : 'gemini-1.5-flash',
+      ai_model:      esAngel ? 'claude-sonnet-4-6' : 'gemini-2.5-flash',
     };
     const { data } = await sb.from('usuarios').insert(nuevoUsuario).select().single();
     return data || nuevoUsuario;
@@ -1685,6 +1685,7 @@ app.post('/webhook', async (req, res) => {
                 { type: 'text', text: 'Analiza esta imagen y dime qué relevancia tiene para mis finanzas.' },
               ]}],
             });
+            logUsage(From, 'claude-sonnet-4-6', analisisResp.usage, 'vision');
             reply = analisisResp.content[0].text;
           }
 
@@ -1705,6 +1706,7 @@ app.post('/webhook', async (req, res) => {
               { type: 'text', text: 'Analiza este estado de cuenta. Dame: banco y período, cargos principales, intereses cobrados, algo disputable, y la acción concreta que debo tomar esta semana según mi plan de finanzas.' },
             ]}],
           });
+          logUsage(From, 'claude-sonnet-4-6', analisisResp.usage, 'vision');
           reply = analisisResp.content[0].text;
         }
       }
@@ -1772,6 +1774,7 @@ app.post('/api/chat-web', async (req, res) => {
           { inlineData: { mimeType: audio_mime || 'audio/wav', data: audio_b64 } },
           'Transcribe exactamente este audio en español. Solo devuelve el texto transcrito.'
         ]);
+        logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'vision');
         text = result.response.text().trim();
         console.log(`🎤 Transcripción OK: "${text}"`);
       } catch (e) {
@@ -1927,7 +1930,7 @@ async function seedAdminOnStartup() {
     // Solo inserta si NO existe — nunca sobreescribir preferencias (ai_preference, ai_model)
     const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', adminPhone).single();
     if (!existing) {
-      await sb.from('usuarios').insert([{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'GEMINI' }]);
+      await sb.from('usuarios').insert([{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'CLAUDE', ai_model: 'claude-sonnet-4-6' }]);
     }
     const [r1, r2] = await Promise.all([
       sb.from('tdc').update({ user_phone: adminPhone }).eq('user_phone', ''),
