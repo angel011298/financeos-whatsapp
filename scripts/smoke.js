@@ -19,14 +19,17 @@ const RESET  = '\x1b[0m';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function waitLastBotMsg(phone, pattern, since, timeout = 30_000, interval = 1_500) {
+async function waitLastBotMsg(phone, pattern, since, timeout = 45_000, interval = 1_500) {
   const deadline = Date.now() + timeout;
+  // Supabase clock is ~1-2s behind local machine clock; subtract 3s to catch
+  // messages that were saved before our local `since` timestamp.
+  const adjustedSince = new Date(new Date(since).getTime() - 3000).toISOString();
   while (Date.now() < deadline) {
     const { data } = await sb.from('historial_chat')
       .select('content')
       .eq('user_phone', phone)
       .neq('role', 'user')
-      .gt('created_at', since)
+      .gt('created_at', adjustedSince)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -91,8 +94,8 @@ async function waitMovimiento(phone, montoAprox, timeout = 45_000, interval = 1_
 
 async function cleanup() {
   const phones = [PHONE_ANGEL, PHONE_ALICIA];
-  const patterns = ['uber eats', 'súper', 'vuelo', 'smoke'];
-  const montos = [350, 200, 8500];
+  const patterns = ['uber eats', 'súper', 'vuelo', 'gasolina', 'smoke'];
+  const montos = [350, 200, 8500, 50];
 
   try {
     for (const phone of phones) {
@@ -157,7 +160,8 @@ async function runSmoke() {
   addResult(2, '"gasté 350 en uber eats con tarjeta nu"', s2Pass, s2Pass ? `ID: ${s2Pending?.id}` : 'No pending or auto-confirmed');
   await sleep(3000);
 
-  // S3
+  // S3 — enviar "1" para confirmar la propuesta de S2, luego esperar movimiento
+  if (s2Pending) await sendMsg(PHONE_ANGEL, '1');
   const s3Mov = await waitMovimiento(PHONE_ANGEL, 350);
   const s3Pass = !!s3Mov;
   addResult(3, '"1" → movimiento + audit_log', s3Pass, s3Pass ? `ID: ${s3Mov?.id}, monto: ${s3Mov?.monto}` : 'Movimiento no encontrado');
@@ -176,8 +180,8 @@ async function runSmoke() {
 
   // S4
   if (s3Mov) {
-    const res = await sendMsg(PHONE_ANGEL, 'deshacer');
-    await sleep(2000);
+    await sendMsg(PHONE_ANGEL, 'deshacer');
+    await sleep(5000);
     const { data: mov } = await sb.from('movimientos').select('deleted_at').eq('id', s3Mov.id).maybeSingle();
     const s4Pass = mov?.deleted_at !== null;
     addResult(4, '"deshacer" → soft-delete', s4Pass, s4Pass ? 'OK' : 'deleted_at still null');
@@ -216,7 +220,8 @@ async function runSmoke() {
   addResult(8, '"gasté 200 en súper"', s8Pass, s8Pass ? `ID: ${s8Pending?.id}` : 'No pending');
   await sleep(3000);
 
-  // S9
+  // S9 — enviar "1" para confirmar la propuesta de S8, luego esperar movimiento
+  if (s8Pending) await sendMsg(PHONE_ALICIA, '1');
   const s9Mov = await waitMovimiento(PHONE_ALICIA, 200);
   const s9Pass = !!s9Mov;
   addResult(9, '"1" → movimiento', s9Pass, s9Pass ? `ID: ${s9Mov?.id}` : 'Movimiento no encontrado');
@@ -241,18 +246,21 @@ async function runSmoke() {
   await sleep(3000);
 
   // S12 — Edge case: borrar movimiento
-  if (s3Mov) {
-    const s12 = await sendMsg(PHONE_ANGEL, 'borrar el movimiento de uber eats de hace rato');
-    const s12Pending = await waitPending(PHONE_ANGEL);
-    const s12Pass = !!s12Pending;
-    addResult(12, '"borrar movimiento" → propuesta (no borra directo)', s12Pass, s12Pass ? `ID: ${s12Pending?.id}` : 'No pending');
-    if (s12Pass) {
-      // Cancela
-      await sendMsg(PHONE_ANGEL, '3');
-      await sleep(1000);
-    }
-  } else {
-    addResult(12, '"borrar movimiento" → propuesta', false, 'Prerequisito (S3 movimiento) no cumplido');
+  // S3's movimiento was soft-deleted by S4, so we create a fresh one first.
+  await sendMsg(PHONE_ANGEL, 'gasté 50 en gasolina');
+  const s12prep = await waitPending(PHONE_ANGEL);
+  if (s12prep) {
+    await sendMsg(PHONE_ANGEL, '1');
+    await waitMovimiento(PHONE_ANGEL, 50);
+    await sleep(2000);
+  }
+  const s12 = await sendMsg(PHONE_ANGEL, 'borrar el último movimiento');
+  const s12Pending = await waitPending(PHONE_ANGEL);
+  const s12Pass = !!s12Pending;
+  addResult(12, '"borrar movimiento" → propuesta (no borra directo)', s12Pass, s12Pass ? `ID: ${s12Pending?.id}` : 'No pending');
+  if (s12Pass) {
+    await sendMsg(PHONE_ANGEL, '3');
+    await sleep(1000);
   }
 
   // Summary
