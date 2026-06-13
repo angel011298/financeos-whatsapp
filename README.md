@@ -12,6 +12,28 @@ Bot personal de WhatsApp para gestión financiera con IA dual (Claude + Gemini),
 5. Expón el puerto con ngrok (local) o despliega en Railway (producción)
 6. En Twilio Sandbox → "When a message comes in" → `https://tu-url/webhook`
 
+## Testing
+
+### Integration Tests
+```bash
+node tests/integration.test.js
+```
+Ejecuta 17 tests de Sprint 8–9 (webhook, propuestas, soft-delete, expiry, API endpoints).
+- **Requiere:** servidor en `http://localhost:3001` (se inicia automáticamente)
+- **Requiere:** créditos en `ANTHROPIC_KEY` (consumo ~$0.50/run)
+- **Timeout:** 300 s — espera cold start de Haiku + latencia Supabase
+
+### Smoke Test
+```bash
+npm start  # En otra terminal
+node scripts/smoke.js
+```
+Test con datos reales (TDC y metas de `PHONE_ANGEL`, `PHONE_ALICIA`). Valida flujo completo: gasto → propuesta → confirmación → audit_log → soft-delete.
+- **Requiere:** servidor en `http://localhost:3001` (por defecto)
+- **Requiere:** `PHONE_ANGEL` y `PHONE_ALICIA` en `.env` (solo dígitos)
+- **Producción:** `SMOKE_URL=https://tu-dominio.up.railway.app node scripts/smoke.js`
+- **Cleanup:** automático (limpia movimientos de prueba y acciones pendientes)
+
 ## Variables de entorno
 
 ```env

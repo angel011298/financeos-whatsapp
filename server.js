@@ -12,7 +12,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // ── Validación de variables de entorno ──────────────────────────────────────
-const REQUIRED_ENV = ['TWILIO_SID','TWILIO_TOKEN','ANTHROPIC_KEY','GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY'];
+const REQUIRED_ENV = ['TWILIO_SID','TWILIO_TOKEN','GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY'];
 const _missingEnv  = REQUIRED_ENV.filter(k => !process.env[k]);
 if (_missingEnv.length) {
   console.error('[FATAL] Missing env vars:', _missingEnv.join(', '));
@@ -23,7 +23,7 @@ if (_missingEnv.length) {
 const sb        = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
   realtime: { transport: WebSocket }
 });
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_KEY });
+const anthropic = process.env.ANTHROPIC_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_KEY }) : null;
 const gemini    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const twl       = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
 const WA_FROM   = process.env.TWILIO_WHATSAPP_FROM;
@@ -71,8 +71,8 @@ async function identificarUsuario(phoneFrom) {
       telefono:      phoneFrom,
       nombre:        esAngel ? 'Angel' : 'Usuario',
       role:          esAngel ? 'ADMIN_A' : 'USER_B',
-      ai_preference: esAngel ? 'CLAUDE' : 'GEMINI',
-      ai_model:      esAngel ? 'claude-sonnet-4-6' : 'gemini-2.5-flash',
+      ai_preference: 'GEMINI',
+      ai_model:      'gemini-2.5-flash',
     };
     const { data } = await sb.from('usuarios').insert(nuevoUsuario).select().single();
     return data || nuevoUsuario;
@@ -579,82 +579,63 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
   } catch (e) { return `❌ DB error: ${e.message}`; }
 }
 
-// ── INTENT EXTRACTION (Haiku — compartido para todos los usuarios) ────────────
-// El extractor siempre usa Claude Haiku independientemente de ai_preference.
+// ── INTENT EXTRACTION (Gemini Flash — todos los usuarios) ────────────────────
+// extractIntent usa siempre Gemini con JSON estructurado, sin depender de Anthropic.
 // Solo la CONVERSACIÓN (CONSULTA/CHARLA) respeta ai_preference del usuario.
-const _extractIntentStaticPrompt = `Eres un extractor de intents para una app de finanzas personales.
-Clasifica el mensaje del usuario en uno de estos intents y responde SOLO con la palabra:
+const _extractIntentStaticPrompt = `Eres un extractor de intents para una app de finanzas personales en México.
+Analiza el mensaje del usuario y responde ÚNICAMENTE con JSON válido (sin texto adicional).
 
-REGISTRO   → el usuario reporta un gasto, ingreso u operación con monto explícito
-EDICION    → el usuario quiere corregir/modificar un registro existente (menciona ID o "el último")
-ELIMINACION→ el usuario quiere borrar un registro específico
-CONSULTA   → el usuario pregunta por sus finanzas, pide análisis o resúmenes
-CHARLA     → saludo, agradecimiento, conversación casual, preguntas generales
-COMANDO    → palabras clave: resumen, deudas, metas, historial, presupuesto, calendario, ayuda, nidito
+INTENTS disponibles:
+- REGISTRO   → el usuario reporta un gasto, ingreso u operación con monto explícito
+- EDICION    → quiere corregir/modificar un registro existente (menciona ID o "el último")
+- ELIMINACION→ quiere borrar un registro específico
+- CONSULTA   → pregunta por sus finanzas, pide análisis o resúmenes
+- CHARLA     → saludo, agradecimiento, conversación casual
+- COMANDO    → palabras clave: resumen, deudas, metas, historial, presupuesto, calendario, ayuda, nidito
 
-Si el intent es REGISTRO, EDICION o ELIMINACION con datos suficientes: usa también la herramienta modificar_plataforma.
-Si faltan datos críticos (ej: "gasté en el súper" sin monto) → responde CONSULTA, sin tool.
+Para REGISTRO/EDICION/ELIMINACION con datos suficientes: incluye tabla, accion, datos (y id si aplica).
+Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"CONSULTA"}.
 
-HERRAMIENTA: modificar_plataforma
-  tabla:  movimientos | metas | calendario | tdc | presupuesto | nidito | usuarios
-  accion: crear | editar | eliminar
-  id:     string (solo editar/eliminar)
-  datos:  object — campos del registro
-
-CATEGORÍAS:   Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO:  efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
-Tipo GASTO requiere: tipo, categoria, concepto, monto, medio_pago (default "efectivo"), fecha
-Tipo INGRESO requiere: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
+TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
+ACCIONES: crear | editar | eliminar
+CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
+MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
+Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
+Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
 EJEMPLOS:
-"50 tacos"                    → REGISTRO  + crear movimientos {tipo:"GASTO",categoria:"Comida",concepto:"tacos",monto:50,medio_pago:"efectivo"}
-"gasté 350 uber con TDC BBVA" → REGISTRO  + crear movimientos {tipo:"GASTO",categoria:"Transporte",concepto:"uber",monto:350,medio_pago:"TDC BBVA"}
-"recibí mi sueldo $14,000"    → REGISTRO  + crear movimientos {tipo:"INGRESO",categoria:"OTROS",concepto:"Sueldo",monto:14000}
-"cuánto gasté este mes"       → CONSULTA  (sin tool)
-"hola cómo estás"             → CHARLA    (sin tool)`;
+"50 tacos" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
+"gasté 350 uber con TDC BBVA" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":350,"medio_pago":"TDC BBVA","fecha":"FECHA_HOY"}}
+"recibí mi sueldo $14,000" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"INGRESO","categoria":"OTROS","concepto":"Sueldo","monto":14000,"fecha":"FECHA_HOY"}}
+"cuánto gasté este mes" → {"intent":"CONSULTA"}
+"hola cómo estás" → {"intent":"CHARLA"}`;
 
 async function extractIntent(text, phone = '') {
   const today = hoy();
   try {
-    const res = await anthropic.messages.create({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: 500,
-      system: [
-        {
-          type:          'text',
-          text:          _extractIntentStaticPrompt + `\nfecha hoy: ${today}`,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      tools:       [toolsSchema],
-      tool_choice: { type: 'auto' },
-      messages:    [{ role: 'user', content: text }],
+    const model = genAI.getGenerativeModel({
+      model:            'gemini-2.5-flash',
+      generationConfig: { responseMimeType: 'application/json' },
+      systemInstruction: _extractIntentStaticPrompt.replace(/FECHA_HOY/g, today),
     });
-    logUsage(phone, 'claude-haiku-4-5-20251001', res.usage, 'extractor');
+    const result = await model.generateContent(text);
+    logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'extractor');
 
-    let intent   = 'CONSULTA';
-    let toolArgs = null;
+    const json    = JSON.parse(result.response.text());
+    const intent  = (json.intent || 'CONSULTA').toUpperCase();
+    let toolArgs  = null;
 
-    for (const block of res.content) {
-      if (block.type === 'text') {
-        const m = block.text.match(/\b(REGISTRO|EDICION|ELIMINACION|CONSULTA|CHARLA|COMANDO)\b/i);
-        if (m) intent = m[1].toUpperCase();
-      } else if (block.type === 'tool_use') {
-        toolArgs = block.input;
-        if (!toolArgs.datos?.fecha) {
-          toolArgs = { ...toolArgs, datos: { ...toolArgs.datos, fecha: today } };
-        }
-        // intent from tool accion
-        if (toolArgs.accion === 'crear')   intent = 'REGISTRO';
-        if (toolArgs.accion === 'editar')  intent = 'EDICION';
-        if (toolArgs.accion === 'eliminar') intent = 'ELIMINACION';
+    if (['REGISTRO','EDICION','ELIMINACION'].includes(intent) && json.tabla && json.accion) {
+      toolArgs = { tabla: json.tabla, accion: json.accion, id: json.id || undefined, datos: json.datos || {} };
+      if (!toolArgs.datos?.fecha) {
+        toolArgs = { ...toolArgs, datos: { ...toolArgs.datos, fecha: today } };
       }
     }
 
     return { intent, toolArgs };
   } catch (e) {
     console.error('extractIntent error:', e.message);
-    return { intent: 'CONSULTA', toolArgs: null }; // fallback seguro
+    return { intent: 'CONSULTA', toolArgs: null };
   }
 }
 
@@ -738,27 +719,20 @@ async function proposeDbAction(phone, arg, textoOriginal) {
   return { auto: false, msg: propuesta };
 }
 
-// ── RECEIPT EXTRACTOR (Haiku + imagen) ────────────────────────────────────
+// ── RECEIPT EXTRACTOR (Gemini Flash + imagen) ────────────────────────────────
 // Intenta extraer datos de un ticket/recibo simple. Devuelve null si no es recibo.
 async function extractReceiptInfo(b64, mime, phone = '') {
   try {
-    const res = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
-      system: 'Extrae datos de tickets/recibos de compra. Responde ÚNICAMENTE con JSON válido: {"es_recibo":true,"monto_total":número,"comercio":"nombre","fecha":"YYYY-MM-DD"}. Si la imagen NO es un recibo o ticket simple (es un estado de cuenta bancario, screenshot, foto de comida, etc.), responde exactamente: {"es_recibo":false}.',
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
-          { type: 'text', text: '¿Es un recibo o ticket de compra con monto total visible?' },
-        ],
-      }],
+    const model = genAI.getGenerativeModel({
+      model:            'gemini-2.5-flash',
+      generationConfig: { responseMimeType: 'application/json' },
     });
-    logUsage(phone, 'claude-haiku-4-5-20251001', res.usage, 'vision');
-    const raw = res.content[0]?.text || '';
-    const m = raw.match(/\{[\s\S]*?\}/);
-    if (!m) return null;
-    const data = JSON.parse(m[0]);
+    const result = await model.generateContent([
+      { inlineData: { mimeType: mime, data: b64 } },
+      'Extrae datos de este ticket/recibo de compra. Si la imagen NO es un recibo o ticket simple (es estado de cuenta bancario, screenshot, foto de comida, etc.) responde {"es_recibo":false}. Si SÍ es un recibo con monto visible responde: {"es_recibo":true,"monto_total":número,"comercio":"nombre","fecha":"YYYY-MM-DD"}',
+    ]);
+    logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'vision');
+    const data = JSON.parse(result.response.text());
     if (!data.es_recibo || !data.monto_total) return null;
     return data;
   } catch (e) {
@@ -1003,6 +977,14 @@ const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", de
 
 // Claude con tool calling — proposeDbAction intercepts; sin segundo turno de IA
 async function callClaude(user, sysBlocks, messages, text, phone) {
+  if (!anthropic) {
+    // Fallback a Gemini si Anthropic no está configurado
+    const geminiHistory = messages.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+    return callGemini(user, sysBlocks, geminiHistory, text, phone);
+  }
   const model = user.ai_model || 'claude-sonnet-4-6';
   const msgs = [...messages, { role: 'user', content: text }];
 
@@ -1095,7 +1077,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
     // Auto-create usuario si accede por primera vez desde la web
-    const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', phone).single();
+    const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', phone).maybeSingle();
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
@@ -1402,17 +1384,24 @@ app.get('/api/costos/:mes', async (req, res) => {
     const phone  = req.query.phone ? decodeURIComponent(req.query.phone) : null;
     if (!phone) return res.status(400).json({ success: false, error: 'Falta phone' });
 
-    const { data: user } = await sb.from('usuarios').select('role').eq('telefono', phone).single();
-    if (user?.role !== 'ADMIN_A') return res.status(403).json({ success: false, error: 'Solo ADMIN_A' });
+    const { data: usr, error: usrErr } = await sb.from('usuarios').select('role').eq('telefono', phone).maybeSingle();
+    if (usrErr || !usr) return res.status(404).json({ success: false, error: 'usuario no encontrado' });
+    if (usr.role !== 'ADMIN_A') return res.status(403).json({ success: false, error: 'Solo ADMIN_A' });
 
     const [y, m] = mesStr.split('-').map(Number);
     const nextMes = new Date(y, m, 1).toISOString().slice(0, 7);   // month is 1-indexed here
 
-    const { data: rows, error } = await sb.from('usage_log')
-      .select('modelo, input_tokens, output_tokens, cache_read_tokens, etapa')
-      .gte('created_at', mesStr + '-01T00:00:00')
-      .lt('created_at',  nextMes  + '-01T00:00:00');
-    if (error) return res.status(400).json({ success: false, error: error.message });
+    let rows = [];
+    try {
+      const { data: logRows, error: logErr } = await sb.from('usage_log')
+        .select('modelo, input_tokens, output_tokens, cache_read_tokens, etapa')
+        .gte('created_at', mesStr + '-01T00:00:00')
+        .lt('created_at',  nextMes  + '-01T00:00:00');
+      if (logErr) throw logErr;
+      rows = logRows || [];
+    } catch (_e) {
+      return res.json({ success: true, data: { totalUSD: 0, breakdown: [], totalCalls: 0, mes: mesStr } });
+    }
 
     const agg = {};
     for (const r of (rows || [])) {
@@ -1508,6 +1497,7 @@ app.post('/webhook', async (req, res) => {
   }
 
   let reply = '';
+  let replySaved = false;
   try {
     const usuario = await identificarUsuario(From);
     const lower   = (Body || '').trim().toLowerCase();
@@ -1670,12 +1660,13 @@ app.post('/webhook', async (req, res) => {
                 await guardarMensaje(From, 'user', voiceText);
                 const { msg } = await proposeDbAction(From, toolArgs, voiceText);
                 await guardarMensaje(From, 'assistant', msg);
-                reply = msg;
+                reply = msg; replySaved = true;
               } else {
                 const sysBlocks = await buildSystemPrompt(usuario, intent);
                 await guardarMensaje(From, 'user', voiceText);
                 reply = await callIA(usuario, sysBlocks, voiceText, From);
                 await guardarMensaje(From, 'assistant', reply);
+                replySaved = true;
               }
             }
           }
@@ -1704,44 +1695,37 @@ app.post('/webhook', async (req, res) => {
             await guardarMensaje(From, 'assistant', msg);
             reply = msg;
           } else {
-            // Imagen no reconocida como recibo → análisis Sonnet
+            // Imagen no reconocida como recibo → análisis Gemini
             reply = '🔍 Analizando imagen...';
             await enviarWhatsApp(From, reply);
-            const sysBlocks = await buildSystemPrompt(usuario, 'CONSULTA');
-            const sysArray  = [
-              { type: 'text', text: sysBlocks.static, cache_control: { type: 'ephemeral' } },
-              { type: 'text', text: sysBlocks.dynamic },
-            ];
-            const analisisResp = await anthropic.messages.create({
-              model: 'claude-sonnet-4-6', max_tokens: 1024, system: sysArray,
-              messages: [{ role: 'user', content: [
-                { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
-                { type: 'text', text: 'Analiza esta imagen y dime qué relevancia tiene para mis finanzas.' },
-              ]}],
+            const sysBlocks  = await buildSystemPrompt(usuario, 'CONSULTA');
+            const imageModel = genAI.getGenerativeModel({
+              model: 'gemini-2.5-flash',
+              systemInstruction: sysBlocks.static + '\n\n' + sysBlocks.dynamic,
             });
-            logUsage(From, 'claude-sonnet-4-6', analisisResp.usage, 'vision');
-            reply = analisisResp.content[0].text;
+            const imgResult = await imageModel.generateContent([
+              { inlineData: { mimeType: mime, data: b64 } },
+              'Analiza esta imagen y dime qué relevancia tiene para mis finanzas.',
+            ]);
+            logUsage(From, 'gemini-2.5-flash', imgResult.response.usageMetadata, 'vision');
+            reply = imgResult.response.text();
           }
 
         } else {
-          // PDF — análisis profundo Sonnet (estados de cuenta multipágina)
+          // PDF — análisis profundo Gemini (estados de cuenta multipágina)
           reply = '📄 Analizando estado de cuenta...';
           await enviarWhatsApp(From, reply);
-          const sysBlocks = await buildSystemPrompt(usuario, 'CONSULTA');
-          const sysArray  = [
-            { type: 'text', text: sysBlocks.static, cache_control: { type: 'ephemeral' } },
-            { type: 'text', text: sysBlocks.dynamic },
-          ];
-          const analisisResp = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6', max_tokens: 1024, system: sysArray,
-            betas: ['pdfs-2024-09-25'],
-            messages: [{ role: 'user', content: [
-              { type: 'document', source: { type: 'base64', media_type: mime, data: b64 } },
-              { type: 'text', text: 'Analiza este estado de cuenta. Dame: banco y período, cargos principales, intereses cobrados, algo disputable, y la acción concreta que debo tomar esta semana según mi plan de finanzas.' },
-            ]}],
+          const sysBlocks  = await buildSystemPrompt(usuario, 'CONSULTA');
+          const pdfModel   = genAI.getGenerativeModel({
+            model: 'gemini-2.5-flash',
+            systemInstruction: sysBlocks.static + '\n\n' + sysBlocks.dynamic,
           });
-          logUsage(From, 'claude-sonnet-4-6', analisisResp.usage, 'vision');
-          reply = analisisResp.content[0].text;
+          const pdfResult = await pdfModel.generateContent([
+            { inlineData: { mimeType: mime, data: b64 } },
+            'Analiza este estado de cuenta. Dame: banco y período, cargos principales, intereses cobrados, algo disputable, y la acción concreta que debo tomar esta semana según mi plan de finanzas.',
+          ]);
+          logUsage(From, 'gemini-2.5-flash', pdfResult.response.usageMetadata, 'vision');
+          reply = pdfResult.response.text();
         }
       }
 
@@ -1772,12 +1756,13 @@ app.post('/webhook', async (req, res) => {
             await guardarMensaje(From, 'user', Body || '');
             const { msg } = await proposeDbAction(From, toolArgs, Body || '');
             await guardarMensaje(From, 'assistant', msg);
-            reply = msg;
+            reply = msg; replySaved = true;
           } else {
             const sysBlocks = await buildSystemPrompt(usuario, intent);
             await guardarMensaje(From, 'user', Body || '');
             reply = await callIA(usuario, sysBlocks, Body || '', From);
             await guardarMensaje(From, 'assistant', reply);
+            replySaved = true;
           }
         }
       }
@@ -1789,6 +1774,7 @@ app.post('/webhook', async (req, res) => {
   }
 
   if (reply && From) {
+    if (!replySaved) await guardarMensaje(From, 'assistant', reply);
     await enviarWhatsApp(From, reply);
   }
 });

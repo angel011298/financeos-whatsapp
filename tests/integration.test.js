@@ -20,7 +20,7 @@ const ALICIA = 'whatsapp:+52TEST0000002';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function pollUntil(fn, timeout = 15_000, interval = 800) {
+async function pollUntil(fn, timeout = 45_000, interval = 1_500) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const v = await fn().catch(() => null);
@@ -128,7 +128,7 @@ test('FinanceOS Integration Tests', { timeout: 300_000 }, async (t) => {
     await cleanupPhone(ALICIA);
     await sb.from('usuarios').delete().in('telefono', [ANGEL, ALICIA]);
     const { error: uErr } = await sb.from('usuarios').insert([
-      { telefono: ANGEL,  nombre: 'TestAngel',  role: 'ADMIN_A', ai_preference: 'CLAUDE', ai_model: 'claude-sonnet-4-6' },
+      { telefono: ANGEL,  nombre: 'TestAngel',  role: 'ADMIN_A', ai_preference: 'GEMINI', ai_model: 'gemini-2.5-flash' },
       { telefono: ALICIA, nombre: 'TestAlicia', role: 'USER_B',  ai_preference: 'GEMINI', ai_model: 'gemini-2.5-flash' },
     ]);
     assert.ok(!uErr, `Failed to insert test users: ${uErr?.message}`);
