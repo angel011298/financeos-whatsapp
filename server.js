@@ -1832,7 +1832,8 @@ app.post('/api/chat-web', async (req, res) => {
     if (!text) return res.json({ reply: '⚠️ Mensaje vacío.' });
 
     const lower = text.toLowerCase().trim();
-    const user  = await getOrCreateUser(phone);
+    // El chat web SIEMPRE usa Gemini (gratis), sin importar la preferencia guardada.
+    const user  = { ...(await getOrCreateUser(phone)), ai_preference: 'GEMINI' };
     await checkAndSendReminders(phone).catch(() => {});
 
     let reply = '';

@@ -517,6 +517,71 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .cat-chip{padding:4px 10px;border-radius:var(--radius-pill);font-size:11px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:.12s;font-family:'Sora',system-ui;touch-action:manipulation;min-height:28px;display:inline-flex;align-items:center;-webkit-tap-highlight-color:transparent}
 .cat-chip.cur{font-weight:700}
 .cat-chip:hover{opacity:.8}
+
+/* ═══════════════════════════════════════════════════════ SORTABLE + FILTERABLE TABLES */
+.tbl-box{margin-bottom:16px}
+.tbl-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.tbl-filter-toggle{
+  background:var(--bg-surface-2);border:1px solid var(--border-default);color:var(--text-2);
+  border-radius:var(--radius-md);padding:7px 13px;font-size:var(--text-sm);cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;font-family:'Sora',system-ui,sans-serif;
+  transition:.12s ease-out;white-space:nowrap;min-height:34px;
+}
+.tbl-filter-toggle:hover{color:var(--text-1);border-color:var(--text-2)}
+.tbl-filter-toggle.on{background:var(--accent-primary);color:#fff;border-color:var(--accent-primary)}
+.tbl-search{position:relative;flex:1;min-width:150px;max-width:320px}
+.tbl-search input{padding:8px 12px 8px 33px;font-size:var(--text-sm)}
+.tbl-search .ti{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:14px;pointer-events:none}
+.tbl-count{font-size:var(--text-xs);color:var(--text-3);white-space:nowrap;margin-left:auto;font-family:'DM Mono',monospace}
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+th.th-sort{cursor:pointer;user-select:none;white-space:nowrap;transition:color .12s ease-out}
+th.th-sort:hover{color:var(--text-1)}
+th.th-sort.th-active{color:var(--text-1)}
+th.th-sort .sort-arrow{margin-left:5px;font-size:9px;color:var(--accent-primary)}
+tr.tbl-filters{display:none}
+tr.tbl-filters.show{display:table-row}
+tr.tbl-filters th{padding:4px 10px 8px;background:var(--bg-surface)}
+tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-xs);border-radius:var(--radius-sm);width:100%;min-width:64px}
+
+/* ═══════════════════════════════════════════════════════ SECTION DIVIDER (merged tabs) */
+.sec-divider{
+  display:flex;align-items:center;gap:10px;margin:26px 0 16px;
+}
+.sec-divider::after{content:"";flex:1;height:1px;background:var(--border-default)}
+.sec-divider h2{
+  font-family:'DM Serif Display',Georgia,serif;font-size:var(--text-xl);
+  font-weight:400;color:var(--text-1);letter-spacing:-0.4px;
+  display:flex;align-items:center;gap:9px;white-space:nowrap;
+}
+.sec-divider .ti{color:var(--accent-primary);font-size:22px}
+
+/* ═══════════════════════════════════════════════════════ CHAT INPUT — WhatsApp style auto-grow textarea */
+.chat-bar{align-items:flex-end}
+.chat-bar textarea#chat-input{
+  flex:1;border:1px solid var(--border-default);background:var(--bg-surface-2);
+  border-radius:22px;padding:11px 17px;font-size:16px;line-height:1.45;
+  font-family:'Sora',system-ui,sans-serif;color:var(--text-1);
+  resize:none;min-height:44px;max-height:168px;overflow-y:auto;
+  white-space:pre-wrap;word-break:break-word;outline:none;transition:border-color .15s ease-out;
+}
+.chat-bar textarea#chat-input:focus{border-color:var(--accent-primary)}
+.chat-bar textarea#chat-input::placeholder{color:var(--text-3)}
+
+/* ═══════════════════════════════════════════════════════ RESPONSIVE TYPOGRAPHY — legible en iPhone y laptop */
+@media(max-width:700px){
+  body{font-size:14px}
+  td{font-size:13px;padding:11px 12px}
+  th{font-size:11px;padding:11px 12px}
+  .msg{font-size:15px;max-width:84%}
+  .card-lbl,.kpi-lbl,.snap-lbl{font-size:11px}
+  .cat-bdg,.tipo-bdg,.badge{font-size:11px}
+  nav a span,.mobile-nav a span{font-size:12px}
+  .tbl-search{max-width:none}
+  .hdr{flex-wrap:wrap;gap:8px}
+}
+@media(min-width:1500px){
+  main{max-width:1500px;margin:0 auto}
+}
 </style>
 </head>
 <body>
@@ -578,13 +643,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
           <i class="ti ti-credit-card"></i><span>Deudas TDC</span>
         </a>
         <a onclick="go('presupuesto')" id="n-presupuesto">
-          <i class="ti ti-report-money"></i><span>Presupuesto</span>
-        </a>
-        <a onclick="go('objetivos')" id="n-objetivos">
-          <i class="ti ti-target"></i><span>Objetivos</span>
-        </a>
-        <a onclick="go('movimientos')" id="n-movimientos">
-          <i class="ti ti-arrows-exchange"></i><span>Movimientos</span>
+          <i class="ti ti-target"></i><span>Presupuesto y Metas</span>
         </a>
         <a onclick="go('calendario')" id="n-calendario">
           <i class="ti ti-calendar"></i><span>Calendario</span>
@@ -595,12 +654,13 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
       </nav>
 
       <div class="side-ft">
-        <!-- Motor de IA -->
+        <!-- Motor de IA — Gemini (gratis), fijo -->
         <div style="margin-bottom:10px">
           <div class="ai-toggle-label">Motor de IA</div>
-          <div class="ct-btns">
-            <button id="btn-claude" class="ct act" onclick="setAI('CLAUDE')">Claude</button>
-            <button id="btn-gemini" class="ct" onclick="setAI('GEMINI')">Gemini</button>
+          <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-md)">
+            <i class="ti ti-sparkles" style="color:var(--accent-primary);font-size:15px"></i>
+            <span style="font-size:var(--text-sm);font-weight:500;color:var(--text-1)">Gemini</span>
+            <span style="font-size:10px;color:var(--color-income);background:rgba(74,222,128,.12);padding:1px 7px;border-radius:var(--radius-pill);margin-left:auto">gratis</span>
           </div>
         </div>
         <!-- Tema -->
@@ -632,8 +692,6 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
       <div id="tab-nidito"      class="tab"></div>
       <div id="tab-deudas"      class="tab"></div>
       <div id="tab-presupuesto" class="tab"></div>
-      <div id="tab-objetivos"   class="tab"></div>
-      <div id="tab-movimientos" class="tab"></div>
       <div id="tab-calendario"  class="tab"></div>
       <div id="tab-chat"        class="tab"></div>
     </main>
@@ -644,7 +702,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
     <a onclick="go('chat')" id="mn-chat"><i class="ti ti-message-circle"></i><span>Chat</span></a>
     <a onclick="go('dashboard')" id="mn-dashboard"><i class="ti ti-layout-dashboard"></i><span>Inicio</span></a>
     <a onclick="go('nidito')" id="mn-nidito"><i class="ti ti-heart-handshake"></i><span>Nidito</span></a>
-    <a onclick="go('movimientos')" id="mn-movimientos"><i class="ti ti-arrows-exchange"></i><span>Movs</span></a>
+    <a onclick="go('presupuesto')" id="mn-presupuesto"><i class="ti ti-target"></i><span>Plan</span></a>
     <a onclick="openMobileMore()" id="mn-mas"><i class="ti ti-grid-dots"></i><span>Más</span></a>
   </div>
 
@@ -660,13 +718,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
           <i class="ti ti-credit-card"></i><span>Deudas TDC</span>
         </div>
         <div class="sheet-item" onclick="go('presupuesto');closeMobileMore()">
-          <i class="ti ti-report-money"></i><span>Presupuesto</span>
-        </div>
-        <div class="sheet-item" onclick="go('objetivos');closeMobileMore()">
-          <i class="ti ti-target"></i><span>Objetivos</span>
-        </div>
-        <div class="sheet-item" onclick="go('movimientos');closeMobileMore()">
-          <i class="ti ti-arrows-exchange"></i><span>Movimientos</span>
+          <i class="ti ti-target"></i><span>Presupuesto y Metas</span>
         </div>
         <div class="sheet-item" onclick="go('calendario');closeMobileMore()">
           <i class="ti ti-calendar"></i><span>Calendario</span>
@@ -813,7 +865,7 @@ async function confirmPhone() {
   let identity = 'B'; // default: usuario normal
   try {
     const r = await api('GET', `/api/whoami/${encodeURIComponent(phone)}`);
-    if (r.role === 'ADMIN') identity = 'A';
+    if (r.role && r.role.toUpperCase().startsWith('ADMIN')) identity = 'A';
   } catch (_) { /* si falla la red, queda como usuario B */ }
 
   S.identity = identity;
@@ -905,9 +957,6 @@ async function load() {
   if (r.success) {
     S.data = r.data || {};
     S.data.despensa = rd.success ? (rd.data || []) : [];
-    const aiPref = S.data.user?.ai_preference || 'CLAUDE';
-    $('btn-claude').classList.toggle('act', aiPref === 'CLAUDE');
-    $('btn-gemini').classList.toggle('act', aiPref === 'GEMINI');
   }
   renderTab(S.tab);
 }
@@ -916,8 +965,8 @@ async function load() {
 async function setAI(pref) {
   const phone = S.ghostMode ? S.adminPhone : S.phone;
   await api('POST', '/api/preferencia', { phone, ai_preference: pref });
-  $('btn-claude').classList.toggle('act', pref === 'CLAUDE');
-  $('btn-gemini').classList.toggle('act', pref === 'GEMINI');
+  $('btn-claude')?.classList.toggle('act', pref === 'CLAUDE');
+  $('btn-gemini')?.classList.toggle('act', pref === 'GEMINI');
 }
 
 async function sendWhatsAppInvite() {
@@ -967,8 +1016,8 @@ async function saveSync(btn) {
 }
 
 function renderTab(t) {
-  ({ dashboard:rDash, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp, objetivos:rObjs,
-     movimientos:rMovs,
+  // Movimientos vive dentro de Dashboard (rDash) y Objetivos dentro de Presupuesto (rPresp).
+  ({ dashboard:rDash, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp,
      calendario:rCal, chat:rChat })[t]?.();
 }
 
@@ -1063,6 +1112,116 @@ function sct(id, t) { S.ct[id]=t; renderTab(S.tab); }
 
 const PIE  = [['Pastel','pie'],['Dona','doughnut'],['Barras','bar'],['Polar','polarArea'],['Radar','radar']];
 const LINE = [['Barras','bar'],['Líneas','line'],['Área','area'],['Horiz.','bar-h']];
+
+// ── MOTOR DE TABLAS: ordenables + filtrables por columna ──────────────────────
+// Reutilizable en todas las pestañas. Repinta solo <tbody>/<thead> para no perder
+// el foco al escribir en los filtros. El estado (orden + filtros) persiste entre
+// recargas de datos.
+S._tables   = {};   // id -> cfg { id, columns, rows, renderRow, empty, limit }
+S._tblState = {};   // id -> { sort:{key,dir}|null, search, filters:{}, showFilters }
+
+function _tblState(id) {
+  if (!S._tblState[id]) S._tblState[id] = { sort:null, search:'', filters:{}, showFilters:false };
+  return S._tblState[id];
+}
+function _tblVal(c, r) { const v = c.value ? c.value(r) : r[c.key]; return v==null ? '' : v; }
+
+function _tblHeadCells(cfg) {
+  const st = _tblState(cfg.id);
+  return cfg.columns.map(c => {
+    const align = c.align ? `text-align:${c.align};` : '';
+    const width = c.width ? `width:${c.width};` : '';
+    if (c.sortable === false) return `<th style="${align}${width}">${c.label||''}</th>`;
+    const active = st.sort && st.sort.key === c.key;
+    const arrow  = active ? (st.sort.dir==='asc'?'▲':'▼') : '<span style="opacity:.3">↕</span>';
+    return `<th class="th-sort${active?' th-active':''}" style="${align}${width}" onclick="toggleTblSort('${cfg.id}','${c.key}')">${c.label||''}<span class="sort-arrow">${arrow}</span></th>`;
+  }).join('');
+}
+function _tblFilterCells(cfg) {
+  const st = _tblState(cfg.id);
+  return cfg.columns.map(c => {
+    if (!c.filter) return '<th></th>';
+    const cur = st.filters[c.key] || '';
+    if (c.filter === 'select') {
+      const vals = [...new Set((cfg.rows||[]).map(r => _tblVal(c,r)).filter(v => v!=='' && v!=null))]
+        .sort((a,b) => String(a).localeCompare(String(b),'es',{numeric:true}));
+      return `<th><select onchange="setTblFilter('${cfg.id}','${c.key}',this.value)"><option value="">Todos</option>${vals.map(v=>`<option${String(cur)===String(v)?' selected':''}>${String(v).replace(/</g,'&lt;')}</option>`).join('')}</select></th>`;
+    }
+    return `<th><input placeholder="filtrar" value="${String(cur).replace(/"/g,'&quot;')}" oninput="setTblFilter('${cfg.id}','${c.key}',this.value)"></th>`;
+  }).join('');
+}
+function _tblFilteredSorted(cfg) {
+  const st = _tblState(cfg.id);
+  let rows = (cfg.rows||[]).slice();
+  for (const [k,val] of Object.entries(st.filters)) {
+    if (!val) continue;
+    const col = cfg.columns.find(c => c.key===k); if (!col) continue;
+    const q = String(val).toLowerCase();
+    rows = rows.filter(r => String(_tblVal(col,r)).toLowerCase().includes(q));
+  }
+  if (st.search) {
+    const q = st.search.toLowerCase();
+    rows = rows.filter(r => cfg.columns.some(c => String(_tblVal(c,r)).toLowerCase().includes(q)));
+  }
+  if (st.sort) {
+    const col = cfg.columns.find(c => c.key===st.sort.key);
+    if (col) rows.sort((a,b) => {
+      let va=_tblVal(col,a), vb=_tblVal(col,b), cmp;
+      if (col.num) cmp = (parseFloat(va)||0) - (parseFloat(vb)||0);
+      else cmp = String(va).localeCompare(String(vb),'es',{numeric:true});
+      return st.sort.dir==='asc' ? cmp : -cmp;
+    });
+  }
+  return rows;
+}
+function _tblBody(cfg) {
+  const rows  = _tblFilteredSorted(cfg);
+  const limit = cfg.limit || rows.length;
+  const shown = rows.slice(0, limit);
+  if (!shown.length) return `<tr><td colspan="${cfg.columns.length}" style="text-align:center;color:var(--muted);padding:26px">${cfg.empty||'Sin datos'}</td></tr>`;
+  let html = shown.map(r => cfg.renderRow(r)).join('');
+  if (rows.length > limit) html += `<tr><td colspan="${cfg.columns.length}" style="text-align:center;color:var(--text-3);padding:10px;font-size:11px">Mostrando ${limit} de ${rows.length}</td></tr>`;
+  return html;
+}
+function mkTable(cfg) {
+  S._tables[cfg.id] = cfg;
+  const st = _tblState(cfg.id);
+  const n  = _tblFilteredSorted(cfg).length;
+  return `<div class="tbl-box" id="${cfg.id}-box">
+    <div class="tbl-toolbar">
+      <button class="tbl-filter-toggle${st.showFilters?' on':''}" onclick="toggleTblFilters('${cfg.id}')" title="Filtrar por columna"><i class="ti ti-filter"></i> Filtros</button>
+      <div class="tbl-search"><i class="ti ti-search"></i><input placeholder="Buscar en la tabla..." value="${(st.search||'').replace(/"/g,'&quot;')}" oninput="setTblSearch('${cfg.id}',this.value)"></div>
+      <span class="tbl-count" id="${cfg.id}-count">${n} fila${n!==1?'s':''}</span>
+    </div>
+    <div class="tbl-scroll"><table style="margin-bottom:0">
+      <thead>
+        <tr id="${cfg.id}-head">${_tblHeadCells(cfg)}</tr>
+        <tr class="tbl-filters${st.showFilters?' show':''}" id="${cfg.id}-filters">${_tblFilterCells(cfg)}</tr>
+      </thead>
+      <tbody id="${cfg.id}-body">${_tblBody(cfg)}</tbody>
+    </table></div>
+  </div>`;
+}
+function paintTable(id) {
+  const cfg = S._tables[id]; if (!cfg) return;
+  const body = $(id+'-body'); if (body) body.innerHTML = _tblBody(cfg);
+  const head = $(id+'-head'); if (head) head.innerHTML = _tblHeadCells(cfg);
+  const cnt  = $(id+'-count'); if (cnt) { const n = _tblFilteredSorted(cfg).length; cnt.textContent = n + ' fila' + (n!==1?'s':''); }
+}
+function toggleTblSort(id, key) {
+  const st = _tblState(id);
+  if (!st.sort || st.sort.key !== key) st.sort = { key, dir:'asc' };
+  else if (st.sort.dir === 'asc')      st.sort = { key, dir:'desc' };
+  else                                 st.sort = null;
+  paintTable(id);
+}
+function setTblSearch(id, val) { _tblState(id).search = val; paintTable(id); }
+function setTblFilter(id, key, val) { _tblState(id).filters[key] = val; paintTable(id); }
+function toggleTblFilters(id) {
+  const st = _tblState(id); st.showFilters = !st.showFilters;
+  const fr  = $(id+'-filters'); if (fr) fr.classList.toggle('show', st.showFilters);
+  const btn = document.querySelector(`#${id}-box .tbl-filter-toggle`); if (btn) btn.classList.toggle('on', st.showFilters);
+}
 
 // ── HELPERS DE DATOS ─────────────────────────────────────────────────────────
 function byKey(arr, k) {
@@ -1778,8 +1937,19 @@ ${rQuincenaPanel('dash')}
 </div>
 ${pats.length ? `
 <h3 style="color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Patrones IA</h3>
-<table><tr><th>Concepto</th><th>Cat.</th><th>Promedio</th><th>Veces</th><th>Último</th><th>Medio habitual</th></tr>
-${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td>${fmt(p.monto_promedio)}</td><td>${p.contador}</td><td>${fd(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>`).join('')}</table>` : ''}`;
+${mkTable({ id:'tbl-pat', limit:50, empty:'Sin patrones registrados aún',
+  columns:[
+    {key:'concepto_clave',label:'Concepto',filter:'text'},
+    {key:'categoria',label:'Cat.',filter:'select',value:p=>p.categoria||'—'},
+    {key:'monto_promedio',label:'Promedio',num:true,align:'right',value:p=>p.monto_promedio||0},
+    {key:'contador',label:'Veces',num:true,align:'right',value:p=>p.contador||0},
+    {key:'ultima_vez',label:'Último',value:p=>fd(p.ultima_vez)},
+    {key:'medio_pago_usual',label:'Medio habitual',filter:'select',value:p=>p.medio_pago_usual||'—'}],
+  rows:pats,
+  renderRow:p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td style="text-align:right">${fmt(p.monto_promedio)}</td><td style="text-align:right">${p.contador}</td><td>${fd(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>` })}` : ''}
+
+<div class="sec-divider"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div>
+<div id="movs-section"></div>`;
 
   const cgRaw=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
   const cg={}; Object.entries(cgRaw).forEach(([k,v])=>{ const nk=k==='Pasajes'?'Transporte':k; cg[nk]=(cg[nk]||0)+v; });
@@ -1795,6 +1965,7 @@ ${pats.slice(0,8).map(p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'�
   const top=pats.slice(0,8);
   if (top.length) mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
   else emptyChart('c-pat','Sin patrones registrados aún');
+  rMovs();   // Movimientos viven dentro del Dashboard
   if (S.identity === 'A') loadCostoAdmin();
 }
 
@@ -1935,6 +2106,7 @@ function rDeudas() {
   const tdcs=S.data.tdc||[];
   const total=tdcs.reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
   S._tdcData = {};
+  tdcs.forEach(t => { S._tdcData[t.id] = t; });
   $('tab-deudas').innerHTML=`
 <div class="hdr">
   <h2><i class="ti ti-credit-card"></i> Deudas TDC</h2>
@@ -1948,9 +2120,18 @@ function rDeudas() {
   <div class="cbox"><h3>Saldo por Tarjeta</h3>${ctBtns('c-tdc',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Pastel','pie']],'bar-h')}<div class="cwrap"><canvas id="c-tdc"></canvas></div><div id="legend-c-tdc" class="chart-legend"></div></div>
   <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h'],['Radar','radar']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div><div id="legend-c-tdc2" class="chart-legend"></div></div>
 </div>
-<table>
-  <tr><th>Tarjeta</th><th>Estado</th><th>A pagar <span style="font-size:9px;color:var(--text-3);font-weight:400">doble clic</span></th><th>Pagado <span style="font-size:9px;color:var(--text-3);font-weight:400">doble clic</span></th><th>Saldo</th><th>Objetivo</th><th>%</th><th></th></tr>
-  ${tdcs.map(t=>{S._tdcData[t.id]=t;const s=Math.max(0,(t.a_pagar||0)-(t.pagado||0));const p=t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0;return`<tr>
+${mkTable({ id:'tbl-tdc', empty:'Sin tarjetas configuradas',
+  columns:[
+    {key:'nombre',label:'Tarjeta',filter:'text',value:t=>t.nombre||''},
+    {key:'estado',label:'Estado',filter:'select',value:t=>t.estado||'activo'},
+    {key:'a_pagar',label:'A pagar <span style="font-size:9px;color:var(--text-3);font-weight:400">·doble clic</span>',num:true,value:t=>t.a_pagar||0},
+    {key:'pagado',label:'Pagado <span style="font-size:9px;color:var(--text-3);font-weight:400">·doble clic</span>',num:true,value:t=>t.pagado||0},
+    {key:'saldo',label:'Saldo',num:true,value:t=>Math.max(0,(t.a_pagar||0)-(t.pagado||0))},
+    {key:'mes_objetivo',label:'Objetivo',filter:'text',value:t=>t.mes_objetivo||'—'},
+    {key:'pct',label:'%',num:true,value:t=>t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0},
+    {key:'_acts',label:'',sortable:false}],
+  rows:tdcs,
+  renderRow:t=>{const s=Math.max(0,(t.a_pagar||0)-(t.pagado||0));const p=t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0;return`<tr>
   <td><strong>${t.nombre}</strong></td>
   <td><span class="badge b-${t.estado||'activo'}">${t.estado||'—'}</span></td>
   <td class="editable" data-tid="${t.id}" data-tfield="a_pagar" ondblclick="inlineEditTDC(this)" title="Doble clic para editar">${fmt(t.a_pagar)}</td>
@@ -1962,8 +2143,7 @@ function rDeudas() {
     <button class="edit-pill-btn" title="Editar" onclick="eTDC(S._tdcData[${t.id}])"><i class="ti ti-pencil" style="font-size:13px"></i></button>
     <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dTDC(${t.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
   </td>
-</tr>`}).join('')}
-</table>`;
+</tr>`} })}`;
   const TDC_CLR_MAP = {'BBVA':'#1D6FA4','HEY':'#FF5733','Liverpool':'#C0392B','AMEX':'#2E86AB','NU':'#820AD1','Rappi':'#FF441F','Palacio':'#B8860B','Débito':'#8A8A8A','Efectivo':'#4A4A4A'};
   const tdcColors = tdcs.map(t => { const k=Object.keys(TDC_CLR_MAP).find(n=>t.nombre.toUpperCase().includes(n.toUpperCase())); return TDC_CLR_MAP[k]||CLR[0]; });
   if (tdcs.length) {
@@ -2002,16 +2182,26 @@ ${qHtml}
   <button class="btn btn-sm" style="font-size:11px;background:rgba(124,106,247,.12);color:var(--accent-primary)" onclick="oAgregarLimitePpto('${cm}')"><i class="ti ti-plus"></i> Agregar categoría</button>
 </div>
 <div id="rebal-container"></div>
-${rows.length ? `<table><tr><th>Categoría</th><th>Real</th><th>Límite</th><th>Disponible</th><th style="min-width:120px">Uso</th><th></th></tr>
-${rows.map(({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;const st=p>=100?'dng':p>=80?'warn':'';const stLbl=p>=100?'<span style="color:var(--color-expense);font-size:10px;font-weight:600">Excedido</span>':p>=80?'<span style="color:var(--color-warning);font-size:10px">Cerca del límite</span>':'';return`<tr>
+${rows.length ? mkTable({ id:'tbl-prsp', empty:'Sin gastos ni límites configurados este mes',
+  columns:[
+    {key:'c',label:'Categoría',filter:'select',value:x=>x.c},
+    {key:'r',label:'Real',num:true,value:x=>x.r},
+    {key:'l',label:'Límite',num:true,value:x=>x.l},
+    {key:'disp',label:'Disponible',num:true,value:x=>x.l>0?(x.l-x.r):0},
+    {key:'uso',label:'Uso',num:true,width:'130px',value:x=>x.l>0?Math.min(100,Math.round(x.r/x.l*100)):0},
+    {key:'_acts',label:'',sortable:false}],
+  rows,
+  renderRow:({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;const st=p>=100?'dng':p>=80?'warn':'';const stLbl=p>=100?'<span style="color:var(--color-expense);font-size:10px;font-weight:600">Excedido</span>':p>=80?'<span style="color:var(--color-warning);font-size:10px">Cerca del límite</span>':'';return`<tr>
   <td style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${c}</td>
   <td class="red">${fmt(r)}</td>
   <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto('${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3);font-size:11px\'>+ límite</span>'}</td>
   <td class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</td>
   <td>${l>0?`<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:600;color:${p>=100?'var(--color-expense)':p>=80?'var(--color-warning)':'var(--text-2)'}">${p}%</span>${stLbl}</div><div class="bpbar"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div></div></div>`:'—'}</td>
   <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
-</tr>`}).join('')}</table>` : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
-<div id="despensa-section" style="margin-top:16px"></div>`;
+</tr>`} }) : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
+<div id="despensa-section" style="margin-top:16px"></div>
+<div class="sec-divider"><h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2></div>
+<div id="objs-section"></div>`;
   if (rows.length) mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[
     {label:'Real',  data:rows.map(x=>x.r), backgroundColor:rows.map(x=>(CAT_CLR[x.c]||'#94a3b8')+'88'), borderColor:rows.map(x=>CAT_CLR[x.c]||'#94a3b8')},
     {label:'Límite',data:rows.map(x=>x.l), backgroundColor:rows.map(x=>(CAT_CLR[x.c]||'#94a3b8')+'33'), borderColor:rows.map(x=>CAT_CLR[x.c]||'#94a3b8')}
@@ -2019,6 +2209,7 @@ ${rows.map(({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;const st=
   else emptyChart('c-prsp','Sin datos de presupuesto este mes');
   rDespensa();
   loadRebalanceo();
+  rObjs();   // Objetivos viven dentro de Presupuesto
 }
 
 // ── REBALANCEO ───────────────────────────────────────────────────────────────
@@ -2081,12 +2272,16 @@ function rObjs() {
   const totalAct = metas.reduce((a,m)=>a+(m.actual||0),0);
   const totalFlt = Math.max(0, totalObj - totalAct);
 
-  // Sort: incomplete first by lowest pct, completed last
-  const sorted = [...metas].sort((a,b) => {
-    const pa = a.meta>0?(a.actual||0)/a.meta:0, pb = b.meta>0?(b.actual||0)/b.meta:0;
-    if (pa>=1&&pb<1) return 1; if (pb>=1&&pa<1) return -1;
-    return pa - pb;
-  });
+  // Orden configurable por el usuario
+  if (!S.metaSort) S.metaSort = 'pct';
+  const sortFns = {
+    pct:    (a,b)=>{const pa=a.meta>0?(a.actual||0)/a.meta:0,pb=b.meta>0?(b.actual||0)/b.meta:0; if(pa>=1&&pb<1)return 1; if(pb>=1&&pa<1)return -1; return pa-pb;},
+    meta:   (a,b)=>(b.meta||0)-(a.meta||0),
+    falta:  (a,b)=>Math.max(0,(b.meta||0)-(b.actual||0))-Math.max(0,(a.meta||0)-(a.actual||0)),
+    nombre: (a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'),
+    fecha:  (a,b)=>String(a.fecha_objetivo||'9999').localeCompare(String(b.fecha_objetivo||'9999')),
+  };
+  const sorted = [...metas].sort(sortFns[S.metaSort] || sortFns.pct);
 
   const goalCards = sorted.map(m => {
     const actual=m.actual||0, objetivo=m.meta||0;
@@ -2149,9 +2344,11 @@ function rObjs() {
 </div>`;
   }).join('');
 
-  $('tab-objetivos').innerHTML=`
-<div class="hdr">
-  <h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2>
+  const ohost = $('objs-section') || $('tab-objetivos');
+  if (!ohost) return;
+  ohost.innerHTML=`
+<div class="hdr" style="margin-bottom:14px">
+  <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-flag"></i> Metas de ahorro y compras — progreso y capacidad</span>
   <button class="btn btn-accent btn-sm" onclick="oMeta()"><i class="ti ti-plus"></i> Nueva Meta</button>
 </div>
 ${metas.length?`
@@ -2186,6 +2383,12 @@ ${dispQ>0?`<div class="cbox" style="margin-bottom:14px;border-left:3px solid var
     </div>
   </div>
 </div>`:''}
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+  <span style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Ordenar por</span>
+  <select onchange="S.metaSort=this.value;rObjs()" style="width:auto;padding:6px 10px;font-size:12px">
+    ${[['pct','Progreso'],['falta','Lo que falta'],['meta','Monto objetivo'],['nombre','Nombre (A-Z)'],['fecha','Fecha límite']].map(([v,l])=>`<option value="${v}"${S.metaSort===v?' selected':''}>${l}</option>`).join('')}
+  </select>
+</div>
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:11px;margin-bottom:14px">
   ${goalCards}
 </div>
@@ -2441,9 +2644,11 @@ function rMovs() {
   const unreviewedCount=allMovs.filter(m=>!m.revisado&&!m.deleted_at).length;
   const unrevBadge=unreviewedCount>0?`<button class="unrev-badge${S.movF.onlyUnread?' active-filter':''}" onclick="toggleUnreadFilter()">${unreviewedCount} sin revisar</button>`:'';
 
-  $('tab-movimientos').innerHTML=`
-<div class="hdr">
-  <h2><i class="ti ti-arrows-exchange"></i> Movimientos ${unrevBadge}</h2>
+  const host = $('movs-section') || $('tab-movimientos');
+  if (!host) return;
+  host.innerHTML=`
+<div class="hdr" style="margin-bottom:14px">
+  <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-list-details"></i> Registros del período filtrado ${unrevBadge}</span>
   <div style="display:flex;gap:6px">
     <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green)" onclick="oMov('INGRESO')"><i class="ti ti-plus"></i> Ingreso</button>
     <button class="btn btn-accent btn-sm" onclick="oMov('GASTO')"><i class="ti ti-plus"></i> Gasto</button>
@@ -2506,22 +2711,19 @@ function rMovs() {
   <div id="legend-mov-chart" class="chart-legend"></div>
 </div>
 
-<div style="overflow-x:auto">
-<table>
-  <tr>
-    <th style="width:36px"></th>
-    <th>Fecha</th><th>Tipo</th><th>Categoría</th>
-    <th>Concepto <span style="font-size:9px;color:var(--muted);font-weight:400">(doble clic para editar)</span></th>
-    <th style="text-align:right">Monto</th>
-    <th>Medio</th>
-    <th style="text-align:center" title="Nota / comentario IA"><i class="ti ti-robot" style="font-size:12px"></i></th>
-    <th></th>
-  </tr>
-  ${filtered.length
-    ? filtered.slice(0,250).map(m=>movRow(m)).join('')
-    : `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:28px">Sin movimientos en el período seleccionado</td></tr>`}
-</table>
-</div>`;
+${mkTable({ id:'tbl-movs', limit:250, empty:'Sin movimientos en el período seleccionado',
+  columns:[
+    {key:'_dot',label:'',sortable:false,width:'36px'},
+    {key:'fecha',label:'Fecha',filter:'text',value:m=>fd(m.fecha)},
+    {key:'tipo',label:'Tipo',filter:'select',value:m=>m.tipo==='GASTO'?'Gasto':'Ingreso'},
+    {key:'categoria',label:'Categoría',filter:'select',value:m=>m.categoria||'—'},
+    {key:'concepto',label:'Concepto <span style="font-size:9px;color:var(--muted);font-weight:400">(doble clic)</span>',filter:'text',value:m=>m.concepto||''},
+    {key:'monto',label:'Monto',num:true,align:'right',value:m=>m.monto||0},
+    {key:'medio_pago',label:'Medio',filter:'select',value:m=>m.medio_pago||'—'},
+    {key:'_nota',label:'<i class="ti ti-robot" style="font-size:12px"></i>',sortable:false,align:'center'},
+    {key:'_acts',label:'',sortable:false}],
+  rows:filtered,
+  renderRow:movRow })}`;
 
   setTimeout(()=>renderMovChart(filtered),60);
 }
@@ -2635,7 +2837,7 @@ function rCal() {
       ${de.map(e=>`<div class="cev" title="${e.titulo}" onclick='eEvt(${JSON.stringify(e)})'>${e.titulo}</div>`).join('')}
     </div>`;
   }
-  const up=evts.filter(e=>fd(e.fecha)>=today).slice(0,10);
+  const up=evts.filter(e=>fd(e.fecha)>=today).slice(0,100);
 
   // Upcoming scheduled payments this quincena
   const qi = getQuincenaInfo(S.qOffset);
@@ -2656,17 +2858,26 @@ ${rQuincenaPanel('cal')}
   <div id="cal-grid">${cells}</div>
 </div>
 <h3 style="color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-clock-hour-4"></i> Próximos eventos</h3>
-<table><tr><th>Fecha</th><th>Hora</th><th>Título</th><th>Tipo</th><th>Recurrente</th><th>Descripción</th><th></th></tr>
-${up.map(e=>`<tr>
+${mkTable({ id:'tbl-cal', limit:60, empty:'Sin eventos próximos',
+  columns:[
+    {key:'fecha',label:'Fecha',filter:'text',value:e=>fd(e.fecha)},
+    {key:'hora',label:'Hora',value:e=>e.hora||'—'},
+    {key:'titulo',label:'Título',filter:'text',value:e=>e.titulo||''},
+    {key:'tipo',label:'Tipo',filter:'select',value:e=>e.tipo||'evento'},
+    {key:'recurrente',label:'Recurrente',filter:'select',value:e=>e.recurrente||'no'},
+    {key:'descripcion',label:'Descripción',filter:'text',value:e=>e.descripcion||''},
+    {key:'_acts',label:'',sortable:false}],
+  rows:up,
+  renderRow:e=>`<tr>
   <td>${fd(e.fecha)}</td><td style="color:var(--muted)">${e.hora||'—'}</td>
   <td><strong>${e.titulo}</strong></td><td>${e.tipo||'evento'}</td>
   <td style="color:var(--muted)">${e.recurrente||'no'}</td>
   <td style="color:var(--muted)">${e.descripcion||''}</td>
   <td class="acts">
-    <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick='eEvt(${JSON.stringify(e)})'><i class="ti ti-pencil"></i></button>
+    <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'><i class="ti ti-pencil"></i></button>
     <button class="btn btn-danger btn-sm" style="padding:4px 7px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
   </td>
-</tr>`).join('')}</table>`;
+</tr>` })}`;
 }
 function calN(d){S.cm+=d;if(S.cm>11){S.cm=0;S.cy++;}if(S.cm<0){S.cm=11;S.cy--;}rCal();}
 
@@ -3090,9 +3301,10 @@ function rChat() {
     <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
       <i class="ti ti-microphone" id="mic-icon"></i>
     </button>
-    <input id="chat-input" placeholder="Escribe un mensaje..." autocomplete="off"
-      inputmode="text" enterkeyhint="send"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}">
+    <textarea id="chat-input" rows="1" placeholder="Escribe un mensaje…  (Shift+Enter = nueva línea)"
+      autocomplete="off" enterkeyhint="send"
+      oninput="autoGrowChat(this)"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
     <button type="submit" class="round-btn send-btn" title="Enviar">
       <i class="ti ti-send"></i>
     </button>
@@ -3156,11 +3368,20 @@ function _showTyping() {
 }
 function _hideTyping() { $('chat-typing')?.remove(); }
 
+// Auto-crecimiento del textarea estilo WhatsApp: crece con el contenido,
+// muestra todo el texto y permite saltos de línea (Shift+Enter), hasta un máximo.
+function autoGrowChat(ta) {
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 168) + 'px';
+}
+
 async function sendChat() {
   const input = $('chat-input');
   const text  = input?.value.trim();
   if (!text) return;
   input.value = '';
+  input.style.height = 'auto';   // vuelve a una sola línea tras enviar
   _appendMsg('user', text);
   await _askBot(text);
 }
