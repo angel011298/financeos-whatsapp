@@ -28,6 +28,26 @@ const gemini    = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const twl       = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
 const WA_FROM   = process.env.TWILIO_WHATSAPP_FROM;
 
+// ── Helper: reintentar llamadas Gemini ante errores 503/429 ─────────────────
+async function geminiWithRetry(fn, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = err?.message || '';
+      const isRetryable = msg.includes('503') || msg.includes('429') ||
+                          msg.includes('Service Unavailable') || msg.includes('overloaded');
+      if (isRetryable && attempt < maxRetries) {
+        const delay = (attempt + 1) * 2000; // 2s, 4s, 6s
+        console.warn(`[Gemini] ${err.message.slice(0,80)} — reintento ${attempt + 1}/${maxRetries} en ${delay}ms`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
 // ── Helper: enviar WhatsApp ──────────────────────────────────────────────────
 async function enviarWhatsApp(to, body) {
   try {
@@ -469,10 +489,10 @@ async function transcribeAudio(mediaBuf, contentType, phone = '') {
     const base64 = mediaBuf.toString('base64');
     const mime   = contentType || 'audio/ogg';
     const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const result = await model.generateContent([
+    const result = await geminiWithRetry(() => model.generateContent([
       { inlineData: { mimeType: mime, data: base64 } },
       'Transcribe exactamente este audio en español. Devuelve solo el texto transcrito, sin comentarios adicionales.'
-    ]);
+    ]));
     logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'vision');
     return result.response.text().trim();
   } catch (e) {
@@ -618,7 +638,7 @@ async function extractIntent(text, phone = '') {
       generationConfig: { responseMimeType: 'application/json' },
       systemInstruction: _extractIntentStaticPrompt.replace(/FECHA_HOY/g, today),
     });
-    const result = await model.generateContent(text);
+    const result = await geminiWithRetry(() => model.generateContent(text));
     logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'extractor');
 
     const json    = JSON.parse(result.response.text());
@@ -727,10 +747,10 @@ async function extractReceiptInfo(b64, mime, phone = '') {
       model:            'gemini-2.5-flash',
       generationConfig: { responseMimeType: 'application/json' },
     });
-    const result = await model.generateContent([
+    const result = await geminiWithRetry(() => model.generateContent([
       { inlineData: { mimeType: mime, data: b64 } },
       'Extrae datos de este ticket/recibo de compra. Si la imagen NO es un recibo o ticket simple (es estado de cuenta bancario, screenshot, foto de comida, etc.) responde {"es_recibo":false}. Si SÍ es un recibo con monto visible responde: {"es_recibo":true,"monto_total":número,"comercio":"nombre","fecha":"YYYY-MM-DD"}',
-    ]);
+    ]));
     logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'vision');
     const data = JSON.parse(result.response.text());
     if (!data.es_recibo || !data.monto_total) return null;
@@ -1045,7 +1065,7 @@ async function callGemini(user, sysBlocks, geminiHistory, text, phone) {
   if (safeHist.length > 0 && safeHist[safeHist.length - 1].role === 'user') safeHist.pop();
 
   const chat = model.startChat({ history: safeHist });
-  const res = await chat.sendMessage(text);
+  const res = await geminiWithRetry(() => chat.sendMessage(text));
   logUsage(phone, user.ai_model || 'gemini-2.5-flash', res.response.usageMetadata, 'conversador');
   const calls = res.response.functionCalls();
 
@@ -1703,10 +1723,10 @@ app.post('/webhook', async (req, res) => {
               model: 'gemini-2.5-flash',
               systemInstruction: sysBlocks.static + '\n\n' + sysBlocks.dynamic,
             });
-            const imgResult = await imageModel.generateContent([
+            const imgResult = await geminiWithRetry(() => imageModel.generateContent([
               { inlineData: { mimeType: mime, data: b64 } },
               'Analiza esta imagen y dime qué relevancia tiene para mis finanzas.',
-            ]);
+            ]));
             logUsage(From, 'gemini-2.5-flash', imgResult.response.usageMetadata, 'vision');
             reply = imgResult.response.text();
           }
@@ -1720,10 +1740,10 @@ app.post('/webhook', async (req, res) => {
             model: 'gemini-2.5-flash',
             systemInstruction: sysBlocks.static + '\n\n' + sysBlocks.dynamic,
           });
-          const pdfResult = await pdfModel.generateContent([
+          const pdfResult = await geminiWithRetry(() => pdfModel.generateContent([
             { inlineData: { mimeType: mime, data: b64 } },
             'Analiza este estado de cuenta. Dame: banco y período, cargos principales, intereses cobrados, algo disputable, y la acción concreta que debo tomar esta semana según mi plan de finanzas.',
-          ]);
+          ]));
           logUsage(From, 'gemini-2.5-flash', pdfResult.response.usageMetadata, 'vision');
           reply = pdfResult.response.text();
         }
@@ -1892,7 +1912,7 @@ ${(items||[]).map(i=>`  • ${i.desc}: esp ${fmt2(i.esp)}, real ${fmt2(i.real)}`
 Instrucciones: sé específico con los números. Si hay overspending en alguna categoría, menciónalo. Usa emojis. Máx 4 puntos breves. No uses markdown de encabezados.`;
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const result = await model.generateContent(prompt);
+    const result = await geminiWithRetry(() => model.generateContent(prompt));
     res.json({ success: true, text: result.response.text() });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
