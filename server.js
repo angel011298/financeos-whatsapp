@@ -11,6 +11,14 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
+// ── Validación de variables de entorno ──────────────────────────────────────
+const REQUIRED_ENV = ['TWILIO_SID','TWILIO_TOKEN','ANTHROPIC_KEY','GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY'];
+const _missingEnv  = REQUIRED_ENV.filter(k => !process.env[k]);
+if (_missingEnv.length) {
+  console.error('[FATAL] Missing env vars:', _missingEnv.join(', '));
+  process.exit(1);
+}
+
 // ── Clientes ────────────────────────────────────────────────────────────────
 const sb        = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
   realtime: { transport: WebSocket }
@@ -456,13 +464,9 @@ async function learnPattern(phone, mov) {
 }
 
 // ── AUDIO TRANSCRIPTION (Gemini multimodal) ───────────────────────────────
-async function transcribeAudio(mediaUrl, contentType, phone = '') {
+async function transcribeAudio(mediaBuf, contentType, phone = '') {
   try {
-    const auth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
-    const res  = await fetch(mediaUrl, { headers: { Authorization: `Basic ${auth}` } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf    = await res.arrayBuffer();
-    const base64 = Buffer.from(buf).toString('base64');
+    const base64 = mediaBuf.toString('base64');
     const mime   = contentType || 'audio/ogg';
     const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const result = await model.generateContent([
@@ -1117,16 +1121,18 @@ app.get('/api/usuarios', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── WHOAMI — detecta si el teléfono es admin o Alicia ─────────────────────
-app.get('/api/whoami/:phone', (req, res) => {
-  // Compara los últimos 10 dígitos (número local sin prefijo de país ni el "1" de México móvil)
-  // Así funciona sin importar si ADMIN_PHONE es +521XXXXXXXXXX, +52XXXXXXXXXX, whatsapp:+521..., etc.
-  const last10 = s => (s || '').replace(/\D/g, '').slice(-10);
-  const adminLast10 = last10(process.env.ADMIN_PHONE);
-  const reqLast10   = last10(req.params.phone);
-  const isAdmin = adminLast10.length === 10 && adminLast10 === reqLast10;
-  console.log(`[whoami] req=${reqLast10} admin=${adminLast10} match=${isAdmin}`);
-  res.json({ role: isAdmin ? 'ADMIN' : 'USER' });
+// ── WHOAMI — detecta rol y preferencias del usuario por teléfono ──────────
+app.get('/api/whoami/:phone', async (req, res) => {
+  try {
+    const raw   = decodeURIComponent(req.params.phone);
+    const phone = 'whatsapp:+' + raw.replace(/\D/g, '');
+    const { data } = await sb.from('usuarios')
+      .select('nombre, role, ai_preference, ai_model')
+      .eq('telefono', phone)
+      .single();
+    if (!data) return res.status(404).json({ error: 'not found' });
+    return res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/movimientos', async (req, res) => {
@@ -1484,11 +1490,27 @@ app.post('/webhook', async (req, res) => {
   const { Body, From, MediaUrl0, MediaContentType0, NumMedia } = req.body;
   if (!From) return;
 
+  const hasMedia = parseInt(NumMedia || 0) > 0;
+
+  // FIX 1: Descargar el media buffer AHORA, antes de cualquier otro await,
+  // para no depender de que la URL de Twilio siga viva (~4 h de TTL).
+  let mediaBuf = null;
+  if (hasMedia && MediaUrl0) {
+    try {
+      const mr = await axios.get(MediaUrl0, {
+        auth: { username: process.env.TWILIO_SID, password: process.env.TWILIO_TOKEN },
+        responseType: 'arraybuffer',
+      });
+      mediaBuf = Buffer.from(mr.data);
+    } catch (e) {
+      console.error('[media-download]', e.message);
+    }
+  }
+
   let reply = '';
   try {
     const usuario = await identificarUsuario(From);
     const lower   = (Body || '').trim().toLowerCase();
-    const hasMedia = parseInt(NumMedia || 0) > 0;
 
     if (lower === 'ayuda' || lower === 'help') {
       reply = `🤖 *Hola ${usuario.nombre}, soy Finn*\n\nTus comandos:\n` +
@@ -1621,12 +1643,12 @@ app.post('/webhook', async (req, res) => {
         reply = `No encontré ningún movimiento para eliminar.`;
       }
 
-    } else if (hasMedia && MediaUrl0) {
+    } else if (hasMedia && mediaBuf) {
       const mime = MediaContentType0 || 'application/octet-stream';
 
       if (mime.startsWith('audio/')) {
         // ── Nota de voz → transcribir → flujo idéntico al texto ──────────────
-        const transcribed = await transcribeAudio(MediaUrl0, mime, From);
+        const transcribed = await transcribeAudio(mediaBuf, mime, From);
         if (!transcribed) {
           reply = '⚠️ No pude transcribir el audio. Intenta de nuevo.';
         } else {
@@ -1660,12 +1682,8 @@ app.post('/webhook', async (req, res) => {
         }
 
       } else {
-        // ── Imagen o PDF — descargar primero ─────────────────────────────────
-        const mediaResp = await axios.get(MediaUrl0, {
-          auth: { username: process.env.TWILIO_SID, password: process.env.TWILIO_TOKEN },
-          responseType: 'arraybuffer',
-        });
-        const b64 = Buffer.from(mediaResp.data).toString('base64');
+        // ── Imagen o PDF — buffer ya descargado arriba ────────────────────────
+        const b64 = mediaBuf.toString('base64');
 
         if (mime.startsWith('image/')) {
           // Intento rápido de extracción de recibo con Haiku
@@ -1865,7 +1883,7 @@ app.post('/api/chat-web', async (req, res) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v5 ✅', build: 'quincenal-panel-full' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v6 ✅', build: 'quincenal-panel-full' }));
 
 // ── QUINCENAL IA — genera recomendaciones para una quincena ──────────────────
 app.post('/api/quincenal-ia', async (req, res) => {
@@ -1969,8 +1987,14 @@ async function seedAdminOnStartup() {
   } catch (e) { console.error('seedAdmin error:', e.message); }
 }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
-  console.log(`OnlyUs v5 — puerto ${PORT}`);
+const PORT   = process.env.PORT || 3000;
+const server = app.listen(PORT, async () => {
+  console.log('[OnlyUs] v6 ready on port', PORT);
   await seedAdminOnStartup();
+});
+
+process.on('SIGTERM', () => {
+  console.log('[shutdown] SIGTERM received');
+  server.close(() => { console.log('[shutdown] HTTP closed'); process.exit(0); });
+  setTimeout(() => process.exit(1), 10_000).unref();
 });
