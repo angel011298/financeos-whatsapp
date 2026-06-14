@@ -569,6 +569,22 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 }
 .sec-divider .ti{color:var(--accent-primary);font-size:22px}
 
+/* ═══════════════════════════════════════════════════════ CENTERED SECTION HEADER */
+.sec-hdr{text-align:center;margin:28px 0 18px}
+.sec-hdr-row{display:flex;align-items:center;justify-content:center;gap:14px}
+.sec-hdr-row::before,.sec-hdr-row::after{
+  content:"";flex:1;max-width:100px;height:1px;
+  background:linear-gradient(to right,transparent,var(--accent-primary));
+}
+.sec-hdr-row::after{background:linear-gradient(to left,transparent,var(--accent-primary))}
+.sec-hdr h2{
+  font-family:'DM Serif Display',Georgia,serif;font-size:var(--text-lg);
+  font-weight:400;color:var(--text-1);letter-spacing:-0.3px;
+  display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+}
+.sec-hdr h2 .ti{color:var(--accent-primary);font-size:18px}
+.sec-hdr-sub{font-size:var(--text-xs);color:var(--text-2);margin-top:5px;letter-spacing:.04em}
+
 /* ═══════════════════════════════════════════════════════ CHAT INPUT — WhatsApp style auto-grow textarea */
 .chat-bar{align-items:flex-end}
 .chat-bar textarea#chat-input{
@@ -1940,13 +1956,14 @@ ${periodoSelectorHTML()}
   </div>
 </div>
 ${rQuincenaPanel('dash')}
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis Gráfico</h2></div><div class="sec-hdr-sub">Gastos, ingresos y patrones del período</div></div>
 <div class="charts-grid">
   <div class="cbox"><h3>Gastos por Categoría — ${r.label}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div><div id="legend-c-cat" class="chart-legend"></div></div>
   <div class="cbox"><h3>Ingresos vs Gastos — últimos 6 meses</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div><div id="legend-c-men" class="chart-legend"></div></div>
   <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div><div id="legend-c-pat" class="chart-legend"></div></div>
 </div>
 ${pats.length ? `
-<h3 style="color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Patrones IA</h3>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-brain"></i> Patrones IA</h2></div><div class="sec-hdr-sub">Hábitos detectados en tus movimientos</div></div>
 ${mkTable({ id:'tbl-pat', limit:50, empty:'Sin patrones registrados aún',
   columns:[
     {key:'concepto_clave',label:'Concepto',filter:'text'},
@@ -1958,7 +1975,7 @@ ${mkTable({ id:'tbl-pat', limit:50, empty:'Sin patrones registrados aún',
   rows:pats,
   renderRow:p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td style="text-align:right">${fmt(p.monto_promedio)}</td><td style="text-align:right">${p.contador}</td><td>${fmtDate(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>` })}` : ''}
 
-<div class="sec-divider"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div></div>
 <div id="movs-section"></div>`;
 
   const cgRaw=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
@@ -2000,9 +2017,7 @@ ${NIDITO_TIPOS.map(tipo => {
   const ts = pending.filter(x => x.tipo === tipo);
   if (!ts.length) return '';
   return `<div style="margin-bottom:20px">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">
-      <i class="ti ${NIDITO_ICONS[tipo]}"></i>${tipo}
-    </div>
+    <div class="sec-hdr" style="margin:0 0 14px"><div class="sec-hdr-row"><h2><i class="ti ${NIDITO_ICONS[tipo]}"></i> ${tipo.charAt(0).toUpperCase()+tipo.slice(1)}</h2></div></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
     ${ts.map(n => `
       <div style="background:var(--card);border:1px solid rgba(249,168,212,.2);border-radius:12px;padding:14px">
@@ -2028,10 +2043,8 @@ ${NIDITO_TIPOS.map(tipo => {
 }).join('')}
 
 ${done.length ? `
-<div style="margin-top:20px;opacity:.5">
-  <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">
-    <i class="ti ti-circle-check"></i> Completados (${done.length})
-  </div>
+<div style="margin-top:20px;opacity:.6">
+  <div class="sec-hdr" style="margin:0 0 14px"><div class="sec-hdr-row"><h2><i class="ti ti-circle-check"></i> Completados (${done.length})</h2></div></div>
   <div style="display:flex;flex-wrap:wrap;gap:8px">
     ${done.map(n=>`<div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;display:flex;align-items:center;gap:7px">
       <i class="ti ${NIDITO_ICONS[n.tipo]||'ti-note'}" style="color:var(--muted)"></i>
@@ -2097,10 +2110,12 @@ function rDeudas() {
   <div class="card"><div class="card-lbl">Deuda Total</div><div class="card-val red">${fmt(total)}</div></div>
   <div class="card"><div class="card-lbl">Tarjetas</div><div class="card-val accent">${tdcs.length}</div></div>
 </div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Distribución de Deuda</h2></div><div class="sec-hdr-sub">Saldo y porcentaje pagado por tarjeta</div></div>
 <div class="charts-grid">
   <div class="cbox"><h3>Saldo por Tarjeta</h3>${ctBtns('c-tdc',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Pastel','pie']],'bar-h')}<div class="cwrap"><canvas id="c-tdc"></canvas></div><div id="legend-c-tdc" class="chart-legend"></div></div>
   <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h'],['Radar','radar']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div><div id="legend-c-tdc2" class="chart-legend"></div></div>
 </div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Detalle de Tarjetas</h2></div></div>
 ${mkTable({ id:'tbl-tdc', empty:'Sin tarjetas configuradas',
   columns:[
     {key:'nombre',label:'Tarjeta',filter:'text',value:t=>t.nombre||''},
@@ -2153,6 +2168,7 @@ function rPresp() {
   </span>
 </div>
 ${qHtml}
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis de Presupuesto</h2></div><div class="sec-hdr-sub">Gasto real vs límites por categoría</div></div>
 <div class="cbox" style="margin-bottom:14px">
   <h3>Presupuesto vs Gasto Real</h3>${ctBtns('c-prsp',LINE,'bar')}
   <div class="cwrap"><canvas id="c-prsp"></canvas></div>
@@ -2163,6 +2179,7 @@ ${qHtml}
   <button class="btn btn-sm" style="font-size:11px;background:rgba(124,106,247,.12);color:var(--accent-primary)" onclick="oAgregarLimitePpto('${cm}')"><i class="ti ti-plus"></i> Agregar categoría</button>
 </div>
 <div id="rebal-container"></div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Gastos vs Límites</h2></div></div>
 ${rows.length ? mkTable({ id:'tbl-prsp', empty:'Sin gastos ni límites configurados este mes',
   columns:[
     {key:'c',label:'Categoría',filter:'select',value:x=>x.c},
@@ -2181,7 +2198,7 @@ ${rows.length ? mkTable({ id:'tbl-prsp', empty:'Sin gastos ni límites configura
   <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
 </tr>`} }) : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
 <div id="despensa-section" style="margin-top:16px"></div>
-<div class="sec-divider"><h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2></div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2></div></div>
 <div id="objs-section"></div>`;
   if (rows.length) mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[
     {label:'Real',  data:rows.map(x=>x.r), backgroundColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'88'), borderColor:rows.map((x,i)=>CAT_CLR[x.c]||CLR[i%CLR.length])},
@@ -2899,6 +2916,7 @@ function rCal() {
   <button class="btn btn-accent btn-sm" onclick="oEvt()"><i class="ti ti-plus"></i> Evento</button>
 </div>
 ${rQuincenaPanel('cal')}
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-calendar-month"></i> Calendario de Eventos</h2></div><div class="sec-hdr-sub">Eventos y pagos programados del mes</div></div>
 <div class="cbox" style="margin-bottom:14px">
   <div class="cal-nav">
     <button class="btn btn-ghost btn-sm" onclick="calN(-1)"><i class="ti ti-chevron-left"></i></button>
@@ -2907,7 +2925,7 @@ ${rQuincenaPanel('cal')}
   </div>
   <div id="cal-grid">${cells}</div>
 </div>
-<h3 style="color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-clock-hour-4"></i> Próximos eventos</h3>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-clock-hour-4"></i> Próximos Eventos</h2></div></div>
 ${mkTable({ id:'tbl-cal', limit:60, empty:'Sin eventos próximos',
   columns:[
     {key:'fecha',label:'Fecha',filter:'text',value:e=>fd(e.fecha)},
