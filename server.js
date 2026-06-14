@@ -1983,6 +1983,85 @@ app.post('/api/chat-web', async (req, res) => {
   }
 });
 
+// ── INSIGHTS IA — consejos financieros personalizados (Dashboard) ─────────────
+app.post('/api/insights', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'phone required' });
+
+    const mes = mesActual();
+    const [patrR, movR, prspR, tdcR] = await Promise.all([
+      sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }).limit(15),
+      sb.from('movimientos').select('*').eq('user_phone', phone).gte('fecha', mes + '-01').is('deleted_at', null),
+      sb.from('presupuesto').select('*').eq('user_phone', phone),
+      sb.from('tdc').select('*').eq('user_phone', phone).is('deleted_at', null),
+    ]);
+
+    const patrones = patrR.data || [];
+    const movs     = movR.data  || [];
+    const presp    = prspR.data || [];
+    const tdc      = tdcR.data  || [];
+
+    const gastos   = movs.filter(m => m.tipo === 'GASTO');
+    const gastoTotal = gastos.reduce((a, m) => a + (m.monto || 0), 0);
+    const ingTotal   = movs.filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0);
+    const deudaTDC   = tdc.reduce((a, t) => a + Math.max(0, (t.a_pagar || 0) - (t.pagado || 0)), 0);
+
+    const porCat = {};
+    gastos.forEach(m => { porCat[m.categoria] = (porCat[m.categoria] || 0) + (m.monto || 0); });
+    const topCats = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([k, v]) => `${k}: ${fmt(v)}`).join(', ');
+
+    const prspLines = presp.length
+      ? presp.map(p => {
+          const gastadoCat = porCat[p.categoria] || 0;
+          const pct = p.monto_limite > 0 ? Math.round(gastadoCat / p.monto_limite * 100) : 0;
+          return `${p.categoria}: gastado ${fmt(gastadoCat)} de ${fmt(p.monto_limite)} (${pct}%)`;
+        }).join(', ')
+      : 'sin presupuesto configurado';
+
+    const patronLines = patrones.length
+      ? patrones.slice(0, 10).map(p =>
+          `${p.concepto_clave}: promedio ${fmt(p.monto_promedio)}, ${p.contador} veces, ${p.medio_pago_usual || '?'}`
+        ).join('\n')
+      : 'sin patrones detectados aún';
+
+    const prompt = `Eres OnlyUs, asesor financiero personal amigable en México.
+Con los datos reales del usuario genera EXACTAMENTE 4 consejos financieros personalizados, concretos y útiles.
+Responde ÚNICAMENTE con JSON válido (sin texto adicional, sin markdown): {"consejos":[...]}
+
+Cada consejo tiene:
+- tipo: "ahorro" | "alerta" | "habito" | "logro"  (elige el que mejor aplique)
+- titulo: máximo 6 palabras, directo y claro
+- cuerpo: 2-3 oraciones en español amigable, menciona cifras reales cuando ayude, da un paso accionable
+
+DATOS DEL USUARIO ESTE MES (${mes}):
+- Gasto total: ${fmt(gastoTotal)}
+- Ingreso registrado: ${fmt(ingTotal)}
+- Balance: ${fmt(ingTotal - gastoTotal)}
+- Deuda TDC actual: ${fmt(deudaTDC)}
+- Gasto por categoría: ${topCats || 'sin movimientos'}
+- Presupuesto vs real: ${prspLines}
+- Hábitos detectados (patrones repetidos):
+${patronLines}
+
+Prioriza: "alerta" si hay categoría excedida o deuda alta, "logro" si el balance es positivo o hay ahorro real, "habito" para mejorar comportamientos recurrentes, "ahorro" para oportunidades concretas de reducir gasto.`;
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: { responseMimeType: 'application/json' },
+    });
+    const result = await geminiWithRetry(() => model.generateContent(prompt));
+    logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'insights');
+
+    const json = JSON.parse(result.response.text());
+    res.json({ success: true, consejos: json.consejos || [] });
+  } catch (e) {
+    console.error('insights error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v6 ✅', build: 'quincenal-panel-full' }));
 
 // ── QUINCENAL IA — genera recomendaciones para una quincena ──────────────────
