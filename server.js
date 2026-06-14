@@ -659,6 +659,110 @@ async function extractIntent(text, phone = '') {
   }
 }
 
+// ── BATCH INTENT EXTRACTION (web chat — extrae TODAS las operaciones de un mensaje) ──
+const _batchIntentPrompt = `Eres un extractor de intents para una app de finanzas personales en México.
+Analiza el mensaje y extrae TODAS las operaciones mencionadas.
+Responde ÚNICAMENTE con JSON válido (sin texto adicional).
+
+INTENTS:
+- REGISTRO    → el usuario reporta uno o MÁS gastos/ingresos con monto explícito
+- EDICION     → quiere corregir un registro existente
+- ELIMINACION → quiere borrar un registro específico
+- CONSULTA    → pregunta por sus finanzas, pide análisis o resúmenes
+- CHARLA      → saludo, agradecimiento, conversación casual
+
+Si el intent es REGISTRO/EDICION/ELIMINACION incluye un array "items" con CADA operación por separado.
+Si es CONSULTA o CHARLA devuelve solo {"intent":"CONSULTA"} o {"intent":"CHARLA"}.
+Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"CONSULTA"}.
+
+TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
+ACCIONES: crear | editar | eliminar
+CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
+MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
+Tipo GASTO: tipo="GASTO", categoria, concepto, monto, medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
+Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
+
+EJEMPLOS:
+"Ayer gasté 50 en tacos y 80 en uber con TDC BBVA" →
+{"intent":"REGISTRO","items":[
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_AYER"}},
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":80,"medio_pago":"TDC BBVA","fecha":"FECHA_AYER"}}
+]}
+"50 tacos" →
+{"intent":"REGISTRO","items":[
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
+]}
+"cuánto gasté este mes" → {"intent":"CONSULTA"}
+"hola cómo estás" → {"intent":"CHARLA"}`;
+
+async function extractIntentBatch(text, phone = '') {
+  const today     = hoy();
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  try {
+    const model = genAI.getGenerativeModel({
+      model:            'gemini-2.5-flash',
+      generationConfig: { responseMimeType: 'application/json' },
+      systemInstruction: _batchIntentPrompt
+        .replace(/FECHA_HOY/g, today)
+        .replace(/FECHA_AYER/g, yesterday),
+    });
+    const result = await geminiWithRetry(() => model.generateContent(text));
+    logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'batch-extractor');
+
+    const json   = JSON.parse(result.response.text());
+    const intent = (json.intent || 'CONSULTA').toUpperCase();
+    let items    = [];
+
+    if (['REGISTRO','EDICION','ELIMINACION'].includes(intent) && Array.isArray(json.items)) {
+      items = json.items
+        .filter(it => it.tabla && it.accion)
+        .map(it => ({
+          tabla:  it.tabla,
+          accion: it.accion,
+          id:     it.id || undefined,
+          datos:  { ...(it.datos || {}), ...(!(it.datos?.fecha) ? { fecha: today } : {}) },
+        }));
+    }
+
+    return { intent, items };
+  } catch (e) {
+    console.error('extractIntentBatch error:', e.message);
+    return { intent: 'CONSULTA', items: [] };
+  }
+}
+
+function buildWebChatReply(execs) {
+  const ok  = execs.filter(e => !e.result.startsWith('❌'));
+  const err = execs.filter(e => e.result.startsWith('❌'));
+
+  if (ok.length === 0) return err.map(e => e.result).join('\n');
+
+  const movs = ok.filter(e => e.item.tabla === 'movimientos' && e.item.accion === 'crear');
+
+  let reply = '';
+  if (movs.length === 1) {
+    const d      = movs[0].item.datos;
+    const icon   = d.tipo === 'INGRESO' ? '💰' : '💸';
+    const cuando = d.fecha === hoy() ? 'hoy' : (d.fecha || 'hoy');
+    reply = `Listo, registré: ${icon} ${fmt(d.monto)} · ${d.categoria} · ${d.concepto} · ${d.medio_pago || 'efectivo'} (${cuando}).`;
+  } else if (movs.length > 1) {
+    const lines = [`Listo, registré ${movs.length} movimientos:`];
+    movs.forEach(e => {
+      const d    = e.item.datos;
+      const icon = d.tipo === 'INGRESO' ? '💰' : '💸';
+      const cuando = d.fecha === hoy() ? 'hoy' : (d.fecha || 'hoy');
+      lines.push(`  ${icon} ${fmt(d.monto)} · ${d.categoria} · ${d.concepto} · ${d.medio_pago || 'efectivo'} (${cuando})`);
+    });
+    lines.push('¿Algo más?');
+    reply = lines.join('\n');
+  } else {
+    reply = ok.map(e => e.result).join('\n');
+  }
+
+  if (err.length) reply += `\n\n⚠️ No pude procesar ${err.length} operación(es): ${err.map(e => e.result).join(', ')}`;
+  return reply;
+}
+
 // ── PROPOSE → CONFIRM ─────────────────────────────────────────────────────
 async function proposeDbAction(phone, arg, textoOriginal) {
   const { tabla, accion, datos } = arg;
@@ -1852,43 +1956,23 @@ app.post('/api/chat-web', async (req, res) => {
     else if (['calendario','agenda','eventos'].includes(lower))  reply = await cmdCalendario(phone);
     else {
       const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
-      const lowerInput = input.toLowerCase().trim();
 
-      // 1) Intercept confirmación / cancelación / deshacer
-      const intercepted = await handlePendingCommand(phone, lowerInput);
-      if (intercepted !== null) {
-        reply = intercepted;
-      } else {
-        // 2) Estado 'editing' — usuario fusiona cambio con acción pendiente
-        const pendingEdit = await getLastPendingAction(phone, 'editing');
-        if (pendingEdit) {
-          const mergedDatos = mergeEditIntent(pendingEdit.datos?.datos || {}, input);
-          const newArg = { ...pendingEdit.datos, datos: mergedDatos };
-          await sb.from('acciones_pendientes').update({ estado: 'cancelled' }).eq('id', pendingEdit.id);
-          const { msg } = await proposeDbAction(phone, newArg, input);
-          reply = msg;
-        } else {
-          // 3) Si hay acción pendiente y el mensaje no es respuesta a ella → cancelar y proceder
-          const existingPending = await getLastPendingAction(phone, 'pending');
-          if (existingPending) {
-            await sb.from('acciones_pendientes').update({ estado: 'cancelada' }).eq('id', existingPending.id);
-          }
+      await guardarMensaje(phone, 'user', input);
+      const { intent, items } = await extractIntentBatch(input, phone);
 
-          // extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
-          const { intent, toolArgs } = await extractIntent(input, phone);
-          if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
-            await guardarMensaje(phone, 'user', input);
-            const { msg } = await proposeDbAction(phone, toolArgs, input);
-            await guardarMensaje(phone, 'assistant', msg);
-            reply = msg;
-          } else {
-            const sysBlocks = await buildSystemPrompt(user, intent);
-            await guardarMensaje(phone, 'user', input);
-            reply = await callIA(user, sysBlocks, input, phone);
-            await guardarMensaje(phone, 'assistant', reply);
-          }
+      if (['REGISTRO', 'EDICION', 'ELIMINACION'].includes(intent) && items.length > 0) {
+        const execs = [];
+        for (const item of items) {
+          const result = await executeDbAction(phone, item, 'web');
+          execs.push({ item, result });
         }
+        reply = buildWebChatReply(execs);
+      } else {
+        const sysBlocks = await buildSystemPrompt(user, intent);
+        reply = await callIA(user, sysBlocks, input, phone);
       }
+
+      await guardarMensaje(phone, 'assistant', reply);
     }
 
     res.json({ reply, transcription: isAudio ? text : undefined });
