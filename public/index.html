@@ -18,7 +18,7 @@
 <script>try{var t=localStorage.getItem('fos_theme');if(t==='light')document.documentElement.classList.add('light');}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════════
    DESIGN TOKENS — OnlyUs Fintech Design System
@@ -54,6 +54,8 @@
   --border:var(--border-default); --text:var(--text-1); --muted:var(--text-2);
   --accent:var(--accent-primary); --green:var(--color-income);
   --red:var(--color-expense); --yellow:var(--color-warning);
+  /* Table alternating row stripe */
+  --row-alt:rgba(255,255,255,.022);
 }
 html.light {
   --bg-app:#F4F4F5; --bg-surface:#FFFFFF; --bg-surface-2:#F0F0F2;
@@ -61,6 +63,7 @@ html.light {
   --accent-primary:#6C5CF6; --accent-couple:#E8903A;
   --text-1:#0F0F0F; --text-2:#6B6B6B; --text-3:#ABABAB;
   --color-income:#16A34A; --color-expense:#DC2626; --color-warning:#D97706;
+  --row-alt:rgba(0,0,0,.028);
 }
 
 /* ═══════════════════════════════════════════════════════ BASE */
@@ -99,7 +102,7 @@ body{
 
 /* ═══════════════════════════════════════════════════════ LAYOUT */
 #app{display:none;height:100vh;overflow:hidden}
-.layout{display:grid;grid-template-columns:220px 1fr;height:100vh;transition:grid-template-columns .22s ease}
+.layout{display:grid;grid-template-columns:252px 1fr;height:100vh;transition:grid-template-columns .22s ease}
 .layout.sb-hidden{grid-template-columns:0px 1fr}
 .layout.sb-hidden aside{opacity:0;pointer-events:none;min-width:0}
 aside{
@@ -223,7 +226,8 @@ textarea{min-height:64px;resize:vertical}
 .card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:20px 24px}
 .card-lbl{font-size:var(--text-xs);color:var(--text-2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
 .card-val{
-  font-family:'DM Mono','Courier New',monospace;font-variant-numeric:tabular-nums;
+  font-family:'JetBrains Mono','DM Mono','Courier New',monospace;
+  font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:'zero' 1;
   font-size:clamp(15px,2vw,22px);font-weight:700;letter-spacing:-0.5px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
@@ -257,17 +261,25 @@ textarea{min-height:64px;resize:vertical}
 /* ═══════════════════════════════════════════════════════ TABLES */
 table{width:100%;border-collapse:collapse;background:var(--bg-surface);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px}
 th{
-  background:var(--bg-surface);padding:12px 14px;text-align:left;
-  font-size:var(--text-xs);color:var(--text-3);font-weight:500;
-  letter-spacing:.04em;border-bottom:1px solid var(--border-default);
+  background:var(--bg-surface-2);padding:11px 14px;text-align:left;
+  font-size:12px;color:var(--text-2);font-weight:600;
+  letter-spacing:.04em;border-bottom:2px solid var(--border-default);
+  position:sticky;top:0;z-index:1;
 }
 td{
-  padding:10px 14px;border-bottom:1px solid var(--border-default);
-  font-family:'DM Mono','Courier New',monospace;font-variant-numeric:tabular-nums;
-  font-size:var(--text-sm);color:var(--text-1);
+  padding:11px 14px;border-bottom:1px solid var(--border-default);
+  font-family:'Sora',system-ui,sans-serif;
+  font-size:14px;color:var(--text-1);
+}
+td.num,td.red,td.green,td.yellow{
+  font-family:'JetBrains Mono','DM Mono','Courier New',monospace;
+  font-variant-numeric:tabular-nums slashed-zero;
+  font-feature-settings:'zero' 1;
+  text-align:right;
 }
 tr:last-child td{border-bottom:none}
-tr:hover td{background:var(--bg-surface-2);transition:background .1s}
+tbody tr:nth-child(even) td{background:var(--row-alt)}
+tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 
 /* ═══════════════════════════════════════════════════════ SEMANTIC COLORS */
 .green{color:var(--color-income);padding-right:3px}
@@ -333,7 +345,8 @@ tr:hover td{background:var(--bg-surface-2);transition:background .1s}
 .qstat{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:12px;text-align:center;border:1px solid var(--border-default)}
 .qstat-lbl{font-size:var(--text-xs);color:var(--text-2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
 .qstat-val{
-  font-family:'DM Mono','Courier New',monospace;font-variant-numeric:tabular-nums;
+  font-family:'JetBrains Mono','DM Mono','Courier New',monospace;
+  font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:'zero' 1;
   font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;
 }
 .qstat-sub{font-size:var(--text-xs);margin-top:3px;color:var(--text-3)}
@@ -346,7 +359,8 @@ tr:hover td{background:var(--bg-surface-2);transition:background .1s}
 .kpi{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:20px 24px}
 .kpi-lbl{font-size:var(--text-xs);color:var(--text-2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
 .kpi-val{
-  font-family:'DM Mono','Courier New',monospace;font-variant-numeric:tabular-nums;
+  font-family:'JetBrains Mono','DM Mono','Courier New',monospace;
+  font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:'zero' 1;
   font-size:var(--text-2xl);font-weight:700;letter-spacing:-0.5px;
 }
 .kpi-sub{font-size:var(--text-xs);color:var(--text-3);margin-top:4px}
@@ -501,7 +515,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .snapshot-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);margin-bottom:16px;display:grid;grid-template-columns:repeat(3,1fr);overflow:hidden}
 .snap-item{padding:16px 20px}
 .snap-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);margin-bottom:5px;display:flex;align-items:center;gap:4px}
-.snap-val{font-family:'DM Mono',monospace;font-size:clamp(14px,2vw,20px);font-weight:700;letter-spacing:-0.4px;line-height:1.2}
+.snap-val{font-family:'JetBrains Mono','DM Mono',monospace;font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:'zero' 1;font-size:clamp(14px,2vw,20px);font-weight:700;letter-spacing:-0.4px;line-height:1.2}
 .snap-sub{font-size:11px;color:var(--text-2);margin-top:3px}
 @media(min-width:701px){.snap-item:nth-child(2){border-left:1px solid var(--border-default);border-right:1px solid var(--border-default)}}
 @media(max-width:700px){.snapshot-card{grid-template-columns:1fr}.snap-item{border-bottom:1px solid var(--border-default)}.snap-item:last-child{border-bottom:none}}
@@ -578,9 +592,6 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   nav a span,.mobile-nav a span{font-size:12px}
   .tbl-search{max-width:none}
   .hdr{flex-wrap:wrap;gap:8px}
-}
-@media(min-width:1500px){
-  main{max-width:1500px;margin:0 auto}
 }
 </style>
 </head>
@@ -779,10 +790,11 @@ const fmt  = n => '$' + Math.round(n||0).toLocaleString('es-MX');
 const fd   = d => d ? d.substring(0,10) : '';
 const fmtPhone = r => { const d=r.replace(/\D/g,''); return 'whatsapp:+'+(d.startsWith('52')?d:'52'+d); };
 const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
 function fmtDate(d) {
   if (!d) return '';
   const [y,m,day] = (d+'').substring(0,10).split('-');
-  return `${parseInt(day)} ${MESES_CORTO[parseInt(m)-1]} ${y}`;
+  return `${String(parseInt(day)).padStart(2,'0')} ${MESES[parseInt(m)-1]} ${y}`;
 }
 function diasRestantes(d) {
   if (!d) return null;
@@ -1044,14 +1056,20 @@ function mkC(id, type, labels, datasets, extra={}) {
   S.ch[id] = new Chart(ctx, {
     type: rt,
     data: { labels, datasets: datasets.map((d,i) => {
-      const catColors = isCatLabels ? labels.map((l,li) => CAT_CLR[l] || CLR[li%CLR.length]) : null;
-      const fallback  = CLR[i%CLR.length];
-      const bgBase    = catColors ? catColors : [fallback];
+      const catColors  = isCatLabels ? labels.map((l,li) => CAT_CLR[l] || CLR[li%CLR.length]) : null;
+      // Single-dataset bar charts with multiple items get distinct palette colors per bar
+      const isMultiBar = (rt==='bar'||isH) && datasets.length===1 && labels.length>1 && !isCatLabels && !rad;
+      const barColors  = isMultiBar ? labels.map((_,li) => CLR[li%CLR.length]) : null;
+      const fallback   = CLR[i%CLR.length];
       const bg = d.backgroundColor !== undefined ? d.backgroundColor
-               : rad ? (catColors ? catColors.map(c=>c+'cc') : [fallback+'bb'])
-               : (catColors ? catColors.map(c=>c+'55') : fallback+'55');
+               : rad    ? (catColors ? catColors.map(c=>c+'cc') : [fallback+'bb'])
+               : catColors ? catColors.map(c=>c+'55')
+               : barColors ? barColors.map(c=>c+'66')
+               : fallback+'55';
       const bd = d.borderColor !== undefined ? d.borderColor
-               : catColors ? catColors : fallback;
+               : catColors  ? catColors
+               : barColors  ? barColors
+               : fallback;
       return { fill:isFill, tension:.35, borderRadius: rt==='bar'?4:0, ...d,
                backgroundColor:bg, borderColor:bd,
                borderWidth: d.borderWidth !== undefined ? d.borderWidth : 1.5 };
@@ -1417,32 +1435,36 @@ function rQuincenaPanel(ctx) {
 
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
-  const compRows = Object.entries(gasMap).map(([nombre, {esp, real, _id, forma_pago}]) => {
-    const monto    = real > 0 ? real : esp;
-    const pagado   = qMovs.find(m => m.concepto === '[Ppto] ' + nombre);
-    const pagadoId = pagado ? pagado.id : null;
-    const nomSafe  = nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    const isAuto   = _id.startsWith('auto-');
+  const gasRows = Object.entries(gasMap).map(([nombre, {esp, real, _id, forma_pago}]) => ({
+    nombre, _id, forma_pago: forma_pago||'',
+    monto: real > 0 ? real : esp,
+    pagado: qMovs.find(m => m.concepto === '[Ppto] ' + nombre) || null
+  }));
+  const renderGasRow = r => {
+    const {nombre, _id, monto, forma_pago} = r;
+    const pagado = r.pagado, pagadoId = pagado ? pagado.id : null;
+    const nomSafe = nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const isAuto = _id.startsWith('auto-');
     const fpEfectivo = forma_pago === 'efectivo';
     const fpDebito   = forma_pago === 'tarjeta_debito';
     const fpNinguna  = !forma_pago;
     return `<tr>
-      <td style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:${CAT_CLR[nombre]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${nombre}</td>
-      <td class="editable" data-gid="${_id}" ondblclick="inlineEditGastoEsp(this)" title="Doble clic para editar">${monto>0?fmt(monto):'—'}</td>
+      <td><div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[nombre]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${nombre}</div></td>
+      <td class="num editable" data-gid="${_id}" ondblclick="inlineEditGastoEsp(this)" title="Doble clic para editar">${monto>0?fmt(monto):'—'}</td>
       <td>
         <div style="display:flex;gap:3px">
           <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
-            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfectivo?'var(--color-income)':'var(--border-default)'};background:${fpEfectivo?'rgba(74,222,128,.15)':'transparent'};color:${fpEfectivo?'var(--color-income)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:10px;white-space:nowrap;transition:.12s">
+            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfectivo?'var(--color-income)':'var(--border-default)'};background:${fpEfectivo?'rgba(74,222,128,.15)':'transparent'};color:${fpEfectivo?'var(--color-income)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Sora',system-ui">
             <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
           </button>
           <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="T. Débito"
-            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebito?'var(--accent-primary)':'var(--border-default)'};background:${fpDebito?'rgba(124,106,247,.15)':'transparent'};color:${fpDebito?'var(--accent-primary)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:10px;white-space:nowrap;transition:.12s">
+            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebito?'var(--accent-primary)':'var(--border-default)'};background:${fpDebito?'rgba(124,106,247,.15)':'transparent'};color:${fpDebito?'var(--accent-primary)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Sora',system-ui">
             <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
           </button>
         </div>
       </td>
       <td><button onclick="marcarPagado('${nomSafe}',${monto},${pagadoId||'null'})"
-          style="padding:3px 10px;border-radius:20px;border:1px solid ${pagadoId?'var(--green)':'var(--border-default)'};background:${pagadoId?'rgba(52,211,153,.13)':'transparent'};color:${pagadoId?'var(--green)':'var(--text-2)'};cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:4px;transition:.12s">
+          style="padding:3px 11px;border-radius:20px;border:1px solid ${pagadoId?'var(--green)':'var(--border-default)'};background:${pagadoId?'rgba(52,211,153,.13)':'transparent'};color:${pagadoId?'var(--green)':'var(--text-2)'};cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:4px;transition:.12s;font-family:'Sora',system-ui">
           <i class="ti ti-${pagadoId?'circle-check-filled':'circle'}"></i>${pagadoId?' Pagado':' Marcar'}
         </button></td>
       <td style="white-space:nowrap">
@@ -1453,13 +1475,19 @@ function rQuincenaPanel(ctx) {
         }
       </td>
     </tr>`;
-  }).join('');
+  };
 
   // Chart (deferred after render)
   const chartLabels = ['Ingresos','Gastos','Balance'];
-  setTimeout(() => mkC(qChId, S.ct[qChId]||'bar', chartLabels, [
-    { label:'Monto', data:[totalIngEsp||totalIngReal, totalGasReal||totalGasEsp, balReal] }
-  ]), 20);
+  setTimeout(() => {
+    const balClr = balReal >= 0 ? '#34d399' : '#f87171';
+    mkC(qChId, S.ct[qChId]||'bar', chartLabels, [{
+      label:'Monto',
+      data:[totalIngEsp||totalIngReal, totalGasReal||totalGasEsp, balReal],
+      backgroundColor:['#34d39966','#f8717166', balClr+'66'],
+      borderColor:    ['#34d399',   '#f87171',   balClr]
+    }]);
+  }, 20);
 
   return `<div class="q-panel">
   <div class="q-hdr">
@@ -1529,10 +1557,17 @@ function rQuincenaPanel(ctx) {
   <!-- Gastos comparison table -->
   <div style="margin-bottom:10px">
     <div class="q-section-lbl"><i class="ti ti-table" style="color:var(--yellow)"></i> Gastos esta quincena</div>
-    ${Object.keys(gasMap).length ? `<div style="overflow-x:auto"><table style="margin:0;min-width:480px">
-      <tr><th>Concepto</th><th>Monto</th><th>Forma de pago</th><th>Pagado</th><th></th></tr>
-      ${compRows}
-    </table></div>` : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
+    ${gasRows.length ? mkTable({
+      id:`tbl-qgas-${ctx}`,empty:'Sin gastos fijos configurados',
+      columns:[
+        {key:'nombre',label:'Concepto',   filter:'text',   value:r=>r.nombre},
+        {key:'monto', label:'Monto',      num:true,         value:r=>r.monto,          width:'120px'},
+        {key:'fp',    label:'Forma de pago',filter:'select',value:r=>r.forma_pago||'Sin asignar',width:'210px'},
+        {key:'pag',   label:'Pagado',     filter:'select', value:r=>r.pagado?'Pagado':'Pendiente',width:'140px'},
+        {key:'_acts', label:'',           sortable:false,   width:'90px'}
+      ],
+      rows:gasRows, renderRow:renderGasRow
+    }) : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
   </div>
 
   <!-- Chart -->
@@ -1897,7 +1932,6 @@ function rDash() {
   const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
 
   $('tab-dashboard').innerHTML = rDailySnapshot() + `
-${S.identity === 'A' ? '<div id="costo-admin"></div>' : ''}
 <div class="hdr">
   <h2><i class="ti ti-layout-dashboard"></i> Dashboard <span style="font-size:13px;color:var(--muted);font-weight:400">${who}</span></h2>
   <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
@@ -1909,7 +1943,7 @@ ${periodoSelectorHTML()}
     <strong style="color:var(--text-1)">${r.label}</strong>
     <span style="color:var(--text-3)">·</span>
     <span>${pMovs.length} movimiento${pMovs.length!==1?'s':''}</span>
-    ${r.from!==r.to?`<span style="color:var(--text-3)">${r.from} → ${r.to}</span>`:''}
+    ${r.from!==r.to?`<span style="color:var(--text-3)">${fmtDate(r.from)} → ${fmtDate(r.to)}</span>`:''}
   </span>
   ${ingShow-gasC>=0
     ? `<span style="font-size:11px;color:var(--color-income);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-up"></i> Balance positivo</span>`
@@ -1946,7 +1980,7 @@ ${mkTable({ id:'tbl-pat', limit:50, empty:'Sin patrones registrados aún',
     {key:'ultima_vez',label:'Último',value:p=>fd(p.ultima_vez)},
     {key:'medio_pago_usual',label:'Medio habitual',filter:'select',value:p=>p.medio_pago_usual||'—'}],
   rows:pats,
-  renderRow:p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td style="text-align:right">${fmt(p.monto_promedio)}</td><td style="text-align:right">${p.contador}</td><td>${fd(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>` })}` : ''}
+  renderRow:p=>`<tr><td>${p.concepto_clave}</td><td>${p.categoria||'—'}</td><td style="text-align:right">${fmt(p.monto_promedio)}</td><td style="text-align:right">${p.contador}</td><td>${fmtDate(p.ultima_vez)}</td><td style="color:var(--muted)">${p.medio_pago_usual||'—'}</td></tr>` })}` : ''}
 
 <div class="sec-divider"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div>
 <div id="movs-section"></div>`;
@@ -1966,35 +2000,6 @@ ${mkTable({ id:'tbl-pat', limit:50, empty:'Sin patrones registrados aún',
   if (top.length) mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
   else emptyChart('c-pat','Sin patrones registrados aún');
   rMovs();   // Movimientos viven dentro del Dashboard
-  if (S.identity === 'A') loadCostoAdmin();
-}
-
-// ── COST CARD (ADMIN_A) ───────────────────────────────────────────────────────
-async function loadCostoAdmin() {
-  const el = $('costo-admin');
-  if (!el) return;
-  const cm = curMes();
-  try {
-    const r = await api('GET', `/api/costos/${cm}?phone=${encodeURIComponent(S.phone)}`);
-    const { totalUSD, breakdown, totalCalls } = r.data;
-    const chips = (breakdown || []).map(b => {
-      const label = b.modelo.includes('haiku') ? 'Haiku' :
-                    b.modelo.includes('sonnet') ? 'Sonnet' :
-                    b.modelo.includes('gemini-2.5') ? 'Gemini 2.5' :
-                    b.modelo.includes('gemini') ? 'Gemini' : b.modelo;
-      return `<span class="cost-chip">${label} · $${b.costUSD.toFixed(4)}</span>`;
-    }).join('');
-    el.innerHTML = `<div class="cost-card">
-      <div>
-        <div class="cost-lbl"><i class="ti ti-cpu" style="font-size:10px"></i> Costo IA — ${cm}</div>
-        <div class="cost-row">
-          <div class="cost-val">$${totalUSD.toFixed(4)}<span style="font-size:11px;font-weight:400;color:var(--text-3);margin-left:2px">USD</span></div>
-        </div>
-        <div style="font-size:10px;color:var(--text-3);margin-top:2px">${totalCalls} llamadas</div>
-      </div>
-      <div class="cost-breakdown">${chips}</div>
-    </div>`;
-  } catch (e) { if (el) el.innerHTML = ''; }
 }
 
 // ── RENDER: NIDITO ────────────────────────────────────────────────────────────
@@ -2160,9 +2165,9 @@ function rPresp() {
   const rows=CATS.map(c=>{const r=movs.filter(m=>m.categoria===c).reduce((a,m)=>a+(m.monto||0),0);const l=(prsp.find(p=>p.categoria===c)||{}).limite||0;return{c,r,l};}).filter(x=>x.r>0||x.l>0);
   // Calcular primer y último día del mes activo
   const [cmY,cmM] = cm.split('-');
-  const primerDia = `01 ${MESES_CORTO[parseInt(cmM)-1]} ${cmY}`;
+  const primerDia = `01 ${MESES[parseInt(cmM)-1]} ${cmY}`;
   const lastDay   = new Date(parseInt(cmY), parseInt(cmM), 0).getDate();
-  const ultimoDia = `${lastDay} ${MESES_CORTO[parseInt(cmM)-1]} ${cmY}`;
+  const ultimoDia = `${String(lastDay).padStart(2,'0')} ${MESES[parseInt(cmM)-1]} ${cmY}`;
   const qHtml = rQuincenaPanel('prsp');
   $('tab-presupuesto').innerHTML=`
 <div class="hdr">
@@ -2192,7 +2197,7 @@ ${rows.length ? mkTable({ id:'tbl-prsp', empty:'Sin gastos ni límites configura
     {key:'_acts',label:'',sortable:false}],
   rows,
   renderRow:({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;const st=p>=100?'dng':p>=80?'warn':'';const stLbl=p>=100?'<span style="color:var(--color-expense);font-size:10px;font-weight:600">Excedido</span>':p>=80?'<span style="color:var(--color-warning);font-size:10px">Cerca del límite</span>':'';return`<tr>
-  <td style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${c}</td>
+  <td><div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${c}</div></td>
   <td class="red">${fmt(r)}</td>
   <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto('${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3);font-size:11px\'>+ límite</span>'}</td>
   <td class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</td>
@@ -2305,7 +2310,7 @@ function rObjs() {
       </div>
       <div>
         <div style="font-weight:600;font-size:14px;color:var(--text-1);line-height:1.2">${m.nombre}</div>
-        <div style="font-size:11px;color:var(--muted)">${m.tipo||'ahorro'}${m.fecha_objetivo?` · hasta ${new Date(m.fecha_objetivo+'T00:00:00').toLocaleDateString('es-MX',{month:'short',year:'numeric'})}`:''}</div>
+        <div style="font-size:11px;color:var(--muted)">${m.tipo||'ahorro'}${m.fecha_objetivo?` · hasta ${fmtDate(m.fecha_objetivo)}`:''}</div>
       </div>
     </div>
     <div style="display:flex;gap:3px;align-items:center">
@@ -2338,7 +2343,7 @@ function rObjs() {
         <div style="font-size:12px;font-weight:700;color:${aportNec?urgency:'var(--text-3)'}">${aportNec?fmt(aportNec):'—'}</div>
       </div>
     </div>
-    ${fechaProj?`<div style="font-size:11px;color:var(--text-3);margin-bottom:7px;display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="color:#818cf8;font-size:11px"></i> Con 20% de ahorro (${fmt(ahorroQ)}/quinc) → <strong style="color:var(--text-2)">${fechaProj.toLocaleDateString('es-MX',{month:'short',year:'numeric'})}</strong></div>`:''}
+    ${fechaProj?`<div style="font-size:11px;color:var(--text-3);margin-bottom:7px;display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="color:#818cf8;font-size:11px"></i> Con 20% de ahorro (${fmt(ahorroQ)}/quinc) → <strong style="color:var(--text-2)">${fmtDate(toISO(fechaProj))}</strong></div>`:''}
     <button onclick="abonarMeta(${m.id},${actual})" style="width:100%;padding:6px;border-radius:7px;border:1px solid #818cf8;background:rgba(129,140,248,.08);color:#818cf8;cursor:pointer;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:4px" onmouseover="this.style.background='rgba(129,140,248,.2)'" onmouseout="this.style.background='rgba(129,140,248,.08)'"><i class="ti ti-circle-plus"></i> Abonar</button>
   </div>`:`<div style="border-top:1px solid rgba(74,222,128,.2);padding-top:8px;text-align:center;font-size:12px;color:var(--green)"><i class="ti ti-trophy"></i> ¡Meta alcanzada!</div>`}
 </div>`;
@@ -2561,7 +2566,7 @@ function movRow(m) {
   const dot=m.revisado?'':`<button class="dot-btn" title="Marcar revisado" onclick="markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
   return `<tr id="mrow-${m.id}">
   <td style="padding:0;width:36px;text-align:center">${dot}</td>
-  <td style="white-space:nowrap;color:var(--muted);font-size:11px">${fd(m.fecha)}</td>
+  <td style="white-space:nowrap;color:var(--muted);font-size:11px">${fmtDate(m.fecha)}</td>
   <td><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
   <td id="catcell-${m.id}" onclick="openCatPicker(${m.id})" style="cursor:pointer"><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
   <td class="editable" data-mid="${m.id}" data-mfield="concepto" ondblclick="inlineEditMov(this)">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
