@@ -586,6 +586,15 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 .sec-hdr h2 .ti{color:var(--accent-primary);font-size:18px}
 .sec-hdr-sub{font-size:var(--text-xs);color:var(--text-2);margin-top:5px;letter-spacing:.04em}
 
+/* ═══════════════════════════════════════════════════════ TABLE FOOTER + MONTO SELECT */
+.tbl-foot-row td{border-top:2px solid var(--border);background:var(--bg-surface-2);padding:5px 8px}
+.monto-sel{cursor:default}
+.monto-sel.sel-hi{background:color-mix(in srgb,var(--accent-primary) 20%,transparent)!important;border-radius:2px}
+.sel-sum-bar{display:none;align-items:center;gap:8px;padding:6px 14px;margin-top:6px;
+  background:var(--card-bg);border:1px solid var(--accent-primary);border-radius:8px;
+  font-size:12px;color:var(--text-2);box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.sel-sum-bar strong{color:var(--text-1);font-weight:700}
+
 /* ═══════════════════════════════════════════════════════ INSIGHT CARDS */
 .insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:4px}
 .insight-card{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:16px 18px 14px;position:relative;overflow:hidden}
@@ -1246,8 +1255,9 @@ function _tblBody(cfg) {
 }
 function mkTable(cfg) {
   S._tables[cfg.id] = cfg;
-  const st = _tblState(cfg.id);
-  const n  = _tblFilteredSorted(cfg).length;
+  const st   = _tblState(cfg.id);
+  const rows = _tblFilteredSorted(cfg);
+  const n    = rows.length;
   return `<div class="tbl-box" id="${cfg.id}-box">
     <div class="tbl-toolbar">
       <button class="tbl-filter-toggle${st.showFilters?' on':''}" onclick="toggleTblFilters('${cfg.id}')" title="Filtrar por columna"><i class="ti ti-filter"></i> Filtros</button>
@@ -1260,14 +1270,21 @@ function mkTable(cfg) {
         <tr class="tbl-filters${st.showFilters?' show':''}" id="${cfg.id}-filters">${_tblFilterCells(cfg)}</tr>
       </thead>
       <tbody id="${cfg.id}-body">${_tblBody(cfg)}</tbody>
+      <tfoot id="${cfg.id}-foot">${cfg.footer ? cfg.footer(rows) : ''}</tfoot>
     </table></div>
+    <div class="sel-sum-bar" id="${cfg.id}-selbar"><i class="ti ti-math-function" style="color:var(--accent-primary)"></i><span class="selbar-txt"></span></div>
   </div>`;
 }
 function paintTable(id) {
-  const cfg = S._tables[id]; if (!cfg) return;
+  const cfg  = S._tables[id]; if (!cfg) return;
+  const rows = _tblFilteredSorted(cfg);
   const body = $(id+'-body'); if (body) body.innerHTML = _tblBody(cfg);
   const head = $(id+'-head'); if (head) head.innerHTML = _tblHeadCells(cfg);
-  const cnt  = $(id+'-count'); if (cnt) { const n = _tblFilteredSorted(cfg).length; cnt.textContent = n + ' fila' + (n!==1?'s':''); }
+  const cnt  = $(id+'-count'); if (cnt) cnt.textContent = rows.length + ' fila' + (rows.length!==1?'s':'');
+  const foot = $(id+'-foot'); if (foot && cfg.footer) foot.innerHTML = cfg.footer(rows);
+  // clear monto selection when filters/sort change
+  document.querySelectorAll(`#${id}-box .monto-sel.sel-hi`).forEach(c => c.classList.remove('sel-hi'));
+  const bar = $(id+'-selbar'); if (bar) bar.style.display = 'none';
 }
 function toggleTblSort(id, key) {
   const st = _tblState(id);
@@ -2633,7 +2650,7 @@ function movRow(m) {
   <td class="editable" onclick="ieMov(this,${m.id},'tipo')" style="cursor:pointer"><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
   <td id="catcell-${m.id}" onclick="openCatPicker(${m.id})" style="cursor:pointer"><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
   <td class="editable" onclick="ieMov(this,${m.id},'concepto')">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
-  <td class="editable" onclick="ieMov(this,${m.id},'monto')" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
+  <td class="editable monto-sel" onclick="ieMov(this,${m.id},'monto')" data-v="${m.monto||0}" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'medio_pago')" style="color:var(--muted);font-size:11px">${m.medio_pago||'—'}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'comentarios')" style="color:var(--muted);font-size:11px;max-width:140px">${m.comentarios||'<em style="color:var(--text-3);font-style:normal">—</em>'}</td>
   <td class="acts">
@@ -2688,6 +2705,7 @@ function ieCell(td, {type='text', value, options, onSave}) {
 
 // ── MOVIMIENTOS — INLINE EDIT ─────────────────────────────────────────────────
 function ieMov(td, id, field) {
+  if (field === 'monto' && _mSel.dragging) return;
   const m=S._movData[String(id)]; if(!m) return;
   const cfg={
     fecha:        {type:'date',   value:fd(m.fecha)},
@@ -2866,7 +2884,26 @@ ${mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
     {key:'_acts',label:'',sortable:false}],
   rows:filtered,
   numbered:true,
-  renderRow:movRow })}`;
+  renderRow:movRow,
+  footer: rows => {
+    const gastos   = rows.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
+    const ingresos = rows.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
+    // cols: # | dot | fecha | tipo | cat | concepto | monto | medio | comentarios | acts
+    const td = (s,extra='') => `<td style="padding:5px 8px;font-size:12px;${extra}">${s}</td>`;
+    return `<tr class="tbl-foot-row">
+      <td class="row-num"></td>${td('')}
+      ${td(rows.length+' mov.','color:var(--text-3)')}${td('')}${td('')}
+      ${td('💸 Gastos','text-align:right;color:var(--text-2)')}
+      ${td(fmt(gastos),'text-align:right;font-weight:700;color:var(--red)')}
+      <td colspan="3"></td>
+    </tr><tr class="tbl-foot-row">
+      <td colspan="5"></td>
+      ${td('💰 Ingresos','text-align:right;color:var(--text-2)')}
+      ${td(fmt(ingresos),'text-align:right;font-weight:700;color:var(--green)')}
+      <td colspan="3"></td>
+    </tr>`;
+  }
+})}`;
 
   setTimeout(()=>renderMovChart(filtered),60);
 }
@@ -3681,6 +3718,50 @@ function _blobToBase64(blob) {
     r.readAsDataURL(blob);
   });
 }
+
+// ── MONTO COLUMN DRAG-SELECT (Excel-style) ────────────────────────────────────
+const _mSel = { start: null, dragging: false, tableId: null };
+
+document.addEventListener('mousedown', e => {
+  const td = e.target.closest('.monto-sel');
+  // Clear any previous highlight
+  document.querySelectorAll('.monto-sel.sel-hi').forEach(c => c.classList.remove('sel-hi'));
+  if (_mSel.tableId) {
+    const b = document.getElementById(_mSel.tableId + '-selbar');
+    if (b) b.style.display = 'none';
+  }
+  if (!td) { _mSel.start = null; _mSel.dragging = false; return; }
+  _mSel.start    = td;
+  _mSel.dragging = false;
+  _mSel.tableId  = (td.closest('.tbl-box')?.id || '').replace('-box', '') || null;
+});
+
+document.addEventListener('mousemove', e => {
+  if (!_mSel.start || !(e.buttons & 1)) return;
+  const td = e.target.closest('.monto-sel');
+  if (!td) return;
+  const table = _mSel.start.closest('table');
+  if (!table || !table.contains(td)) return;
+  _mSel.dragging = true;
+  const all = [...table.querySelectorAll('.monto-sel')];
+  const iA = all.indexOf(_mSel.start), iB = all.indexOf(td);
+  if (iA < 0 || iB < 0) return;
+  const [lo, hi] = iA <= iB ? [iA, iB] : [iB, iA];
+  const sel = all.slice(lo, hi + 1);
+  all.forEach(c => c.classList.remove('sel-hi'));
+  sel.forEach(c => c.classList.add('sel-hi'));
+  const sum = sel.reduce((a, c) => a + (parseFloat(c.dataset.v) || 0), 0);
+  const bar = _mSel.tableId ? document.getElementById(_mSel.tableId + '-selbar') : null;
+  if (bar) {
+    const txt = bar.querySelector('.selbar-txt');
+    if (txt) txt.innerHTML = `${sel.length} fila${sel.length!==1?'s':''} · Suma: <strong>${fmt(sum)}</strong>`;
+    bar.style.display = 'flex';
+  }
+});
+
+document.addEventListener('mouseup', () => { _mSel.start = null; });
+// Reset dragging flag after click fires so ieMov guard works correctly
+document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = false; }, 0));
 
 // ── INICIALIZACIÓN ────────────────────────────────────────────────────────────
 (function init() {
