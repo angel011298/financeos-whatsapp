@@ -2890,6 +2890,8 @@ ${mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
     const ingresos = rows.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
     // cols: # | dot | fecha | tipo | cat | concepto | monto | medio | comentarios | acts
     const td = (s,extra='') => `<td style="padding:5px 8px;font-size:12px;${extra}">${s}</td>`;
+    const balance = ingresos - gastos;
+    const balClr  = balance >= 0 ? 'var(--green)' : 'var(--red)';
     return `<tr class="tbl-foot-row">
       <td class="row-num"></td>${td('')}
       ${td(rows.length+' mov.','color:var(--text-3)')}${td('')}${td('')}
@@ -2900,6 +2902,11 @@ ${mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
       <td colspan="5"></td>
       ${td('💰 Ingresos','text-align:right;color:var(--text-2)')}
       ${td(fmt(ingresos),'text-align:right;font-weight:700;color:var(--green)')}
+      <td colspan="3"></td>
+    </tr><tr class="tbl-foot-row">
+      <td colspan="5"></td>
+      ${td('Balance','text-align:right;color:var(--text-2);font-style:italic')}
+      ${td((balance>=0?'+':'')+fmt(balance),'text-align:right;font-weight:700;color:'+balClr)}
       <td colspan="3"></td>
     </tr>`;
   }
