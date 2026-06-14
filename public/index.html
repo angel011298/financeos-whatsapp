@@ -1450,7 +1450,7 @@ function rQuincenaPanel(ctx) {
     const fpNinguna  = !forma_pago;
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[nombre]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${nombre}</div></td>
-      <td class="num editable" data-gid="${_id}" ondblclick="inlineEditGastoEsp(this)" title="Doble clic para editar">${monto>0?fmt(monto):'—'}</td>
+      <td class="num editable" data-gid="${_id}" onclick="inlineEditGastoEsp(this)">${monto>0?fmt(monto):'—'}</td>
       <td>
         <div style="display:flex;gap:3px">
           <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
@@ -1751,30 +1751,6 @@ function inlineEditMeta(td) {
   inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape'){done=true;renderTab(S.tab);} });
 }
 
-function inlineEditTDC(td) {
-  if (td.querySelector('input')) return;
-  const id = td.dataset.tid, field = td.dataset.tfield;
-  const t = S._tdcData[id]; if (!t) return;
-  const cur = t[field] || 0;
-  const inp = document.createElement('input');
-  inp.type = 'number'; inp.value = cur; inp.step = '0.01';
-  inp.className = 'ie-inp num';
-  td.innerHTML = ''; td.appendChild(inp); inp.focus(); inp.select();
-  let done = false;
-  const save = async () => {
-    if (done) return; done = true;
-    inp.removeEventListener('blur', save);
-    const val = parseFloat(inp.value);
-    if (isNaN(val) || val === parseFloat(cur)) { renderTab(S.tab); return; }
-    try {
-      await api('PUT', `/api/tdc/${id}`, { user_phone: S.phone, [field]: val });
-      await load();
-      toast(`TDC actualizada`);
-    } catch(e) { toast('Error al guardar: ' + e.message, 'error'); renderTab(S.tab); }
-  };
-  inp.addEventListener('blur', save);
-  inp.addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape'){done=true;renderTab(S.tab);} });
-}
 
 function editKpiIngresos(e, el) {
   e.stopPropagation();
@@ -2129,20 +2105,20 @@ ${mkTable({ id:'tbl-tdc', empty:'Sin tarjetas configuradas',
   columns:[
     {key:'nombre',label:'Tarjeta',filter:'text',value:t=>t.nombre||''},
     {key:'estado',label:'Estado',filter:'select',value:t=>t.estado||'activo'},
-    {key:'a_pagar',label:'A pagar <span style="font-size:9px;color:var(--text-3);font-weight:400">·doble clic</span>',num:true,value:t=>t.a_pagar||0},
-    {key:'pagado',label:'Pagado <span style="font-size:9px;color:var(--text-3);font-weight:400">·doble clic</span>',num:true,value:t=>t.pagado||0},
+    {key:'a_pagar',label:'A pagar',num:true,value:t=>t.a_pagar||0},
+    {key:'pagado',label:'Pagado',num:true,value:t=>t.pagado||0},
     {key:'saldo',label:'Saldo',num:true,value:t=>Math.max(0,(t.a_pagar||0)-(t.pagado||0))},
     {key:'mes_objetivo',label:'Objetivo',filter:'text',value:t=>t.mes_objetivo||'—'},
     {key:'pct',label:'%',num:true,value:t=>t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0},
     {key:'_acts',label:'',sortable:false}],
   rows:tdcs,
   renderRow:t=>{const s=Math.max(0,(t.a_pagar||0)-(t.pagado||0));const p=t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0;return`<tr>
-  <td><strong>${t.nombre}</strong></td>
-  <td><span class="badge b-${t.estado||'activo'}">${t.estado||'—'}</span></td>
-  <td class="editable" data-tid="${t.id}" data-tfield="a_pagar" ondblclick="inlineEditTDC(this)" title="Doble clic para editar">${fmt(t.a_pagar)}</td>
-  <td class="editable green" data-tid="${t.id}" data-tfield="pagado" ondblclick="inlineEditTDC(this)" title="Doble clic para actualizar">${fmt(t.pagado||0)}</td>
+  <td class="editable" onclick="ieTDC(this,${t.id},'nombre')"><strong>${t.nombre}</strong></td>
+  <td class="editable" onclick="ieTDC(this,${t.id},'estado')"><span class="badge b-${t.estado||'activo'}">${t.estado||'—'}</span></td>
+  <td class="editable" onclick="ieTDC(this,${t.id},'a_pagar')">${fmt(t.a_pagar)}</td>
+  <td class="editable green" onclick="ieTDC(this,${t.id},'pagado')">${fmt(t.pagado||0)}</td>
   <td class="red">${fmt(s)}</td>
-  <td style="color:var(--muted)">${t.mes_objetivo||'—'}</td>
+  <td class="editable" onclick="ieTDC(this,${t.id},'mes_objetivo')" style="color:var(--muted)">${t.mes_objetivo||'—'}</td>
   <td><div class="pbar" style="width:80px"><div class="pfill${p>=100?' dng':p>=75?' warn':''}" style="width:${p}%"></div></div> ${p}%</td>
   <td style="white-space:nowrap">
     <button class="edit-pill-btn" title="Editar" onclick="eTDC(S._tdcData[${t.id}])"><i class="ti ti-pencil" style="font-size:13px"></i></button>
@@ -2199,7 +2175,7 @@ ${rows.length ? mkTable({ id:'tbl-prsp', empty:'Sin gastos ni límites configura
   renderRow:({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;const st=p>=100?'dng':p>=80?'warn':'';const stLbl=p>=100?'<span style="color:var(--color-expense);font-size:10px;font-weight:600">Excedido</span>':p>=80?'<span style="color:var(--color-warning);font-size:10px">Cerca del límite</span>':'';return`<tr>
   <td><div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${c}</div></td>
   <td class="red">${fmt(r)}</td>
-  <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto('${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3);font-size:11px\'>+ límite</span>'}</td>
+  <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto(this,'${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3);font-size:11px\'>+ límite</span>'}</td>
   <td class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</td>
   <td>${l>0?`<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:600;color:${p>=100?'var(--color-expense)':p>=80?'var(--color-warning)':'var(--text-2)'}">${p}%</span>${stLbl}</div><div class="bpbar"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div></div></div>`:'—'}</td>
   <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
@@ -2566,12 +2542,12 @@ function movRow(m) {
   const dot=m.revisado?'':`<button class="dot-btn" title="Marcar revisado" onclick="markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
   return `<tr id="mrow-${m.id}">
   <td style="padding:0;width:36px;text-align:center">${dot}</td>
-  <td style="white-space:nowrap;color:var(--muted);font-size:11px">${fmtDate(m.fecha)}</td>
-  <td><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
+  <td class="editable" onclick="ieMov(this,${m.id},'fecha')" style="white-space:nowrap;color:var(--muted);font-size:11px">${fmtDate(m.fecha)}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'tipo')" style="cursor:pointer"><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
   <td id="catcell-${m.id}" onclick="openCatPicker(${m.id})" style="cursor:pointer"><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
-  <td class="editable" data-mid="${m.id}" data-mfield="concepto" ondblclick="inlineEditMov(this)">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
-  <td class="editable" data-mid="${m.id}" data-mfield="monto" ondblclick="inlineEditMov(this)" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
-  <td style="color:var(--muted);font-size:11px">${m.medio_pago||'—'}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'concepto')">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'monto')" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'medio_pago')" style="color:var(--muted);font-size:11px">${m.medio_pago||'—'}</td>
   <td style="text-align:center">${nota}</td>
   <td class="acts">
     <button class="btn btn-ghost btn-sm" style="padding:3px 6px" title="Editar" onclick="eMov(S._movData[${m.id}])"><i class="ti ti-pencil"></i></button>
@@ -2581,28 +2557,95 @@ function movRow(m) {
 </tr>`;
 }
 
-// ── MOVIMIENTOS — INLINE EDIT ─────────────────────────────────────────────────
-function inlineEditMov(td) {
-  if (td.querySelector('input')) return;
-  const id=td.dataset.mid, field=td.dataset.mfield;
-  const m=S._movData[id]; if (!m) return;
-  const isNum=field==='monto';
-  const cur=isNum?m.monto:(m.concepto||'');
-  const inp=document.createElement('input');
-  inp.type=isNum?'number':'text'; inp.value=cur; if(isNum)inp.step='0.01';
-  inp.style.cssText='width:100%;background:var(--card2);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;color:var(--text);font-size:12px;text-align:'+(isNum?'right':'left');
-  td.innerHTML=''; td.appendChild(inp); inp.focus(); inp.select();
+// ── INLINE CELL EDITOR (genérico) ────────────────────────────────────────────
+function ieCell(td, {type='text', value, options, onSave}) {
+  if (td.querySelector('input,select')) return;
+  const prev=td.innerHTML;
+  let ctrl;
+  if (type==='select') {
+    ctrl=document.createElement('select');
+    (options||[]).forEach(o=>{
+      const op=document.createElement('option');
+      const [v,l]=Array.isArray(o)?o:[o,o];
+      op.value=v; op.textContent=l;
+      if (String(value)===String(v)) op.selected=true;
+      ctrl.appendChild(op);
+    });
+  } else {
+    ctrl=document.createElement('input');
+    ctrl.type=type==='number'?'number':type==='date'?'date':'text';
+    ctrl.value=value!=null?String(value):'';
+    if (type==='number'){ctrl.step='any';ctrl.min='0';}
+  }
+  ctrl.style.cssText='width:100%;min-width:60px;background:var(--card2);border:1px solid var(--accent);border-radius:4px;padding:3px 6px;color:var(--text);font-size:12px;box-sizing:border-box;outline:none;font-family:inherit';
+  if (type==='number') ctrl.style.textAlign='right';
+  td.innerHTML=''; td.appendChild(ctrl);
+  ctrl.focus();
+  if (type!=='select'&&type!=='date'&&ctrl.select) ctrl.select();
   let done=false;
   const save=async()=>{
     if(done)return; done=true;
-    inp.removeEventListener('blur',save);
-    const val=isNum?parseFloat(inp.value):inp.value.trim();
-    if(val===cur||(isNum&&val===parseFloat(cur))){rMovs();return;}
-    try{ await api('PUT',`/api/movimientos/${id}`,{user_phone:S.phone,[field]:val}); await load(); }
-    catch(e){ toast('Error al guardar: '+e.message,'error'); rMovs(); }
+    ctrl.removeEventListener('blur',save);
+    const val=type==='number'?parseFloat(ctrl.value)||0:ctrl.value;
+    if (val===value||(type==='number'&&val===parseFloat(value))){td.innerHTML=prev;return;}
+    try{ await onSave(val); }
+    catch(e){ toast('Error: '+e.message,'error'); td.innerHTML=prev; }
   };
-  inp.addEventListener('blur',save);
-  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();save();}if(e.key==='Escape'){done=true;rMovs();}});
+  ctrl.addEventListener('blur',save);
+  if (type==='select') ctrl.addEventListener('change',()=>{if(!done)save();});
+  ctrl.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();save();}
+    if(e.key==='Escape'){done=true;td.innerHTML=prev;}
+  });
+}
+
+// ── MOVIMIENTOS — INLINE EDIT ─────────────────────────────────────────────────
+function ieMov(td, id, field) {
+  const m=S._movData[String(id)]; if(!m) return;
+  const cfg={
+    fecha:      {type:'date',   value:fd(m.fecha)},
+    tipo:       {type:'select', value:m.tipo,           options:['GASTO','INGRESO']},
+    concepto:   {type:'text',   value:m.concepto||''},
+    monto:      {type:'number', value:m.monto},
+    medio_pago: {type:'select', value:m.medio_pago||'', options:['', ...MEDIOS]}
+  }[field]; if(!cfg) return;
+  ieCell(td,{...cfg,onSave:async val=>{
+    await api('PUT',`/api/movimientos/${id}`,{user_phone:S.phone,[field]:val});
+    await load();
+  }});
+}
+
+// ── TDC — INLINE EDIT ────────────────────────────────────────────────────────
+function ieTDC(td, id, field) {
+  const t=S._tdcData[String(id)]; if(!t) return;
+  const cfg={
+    nombre:       {type:'text',   value:t.nombre||''},
+    estado:       {type:'select', value:t.estado||'activo', options:['activo','urgente','paralelo','negociar','liquidada']},
+    a_pagar:      {type:'number', value:t.a_pagar||0},
+    pagado:       {type:'number', value:t.pagado||0},
+    mes_objetivo: {type:'text',   value:t.mes_objetivo||''}
+  }[field]; if(!cfg) return;
+  ieCell(td,{...cfg,onSave:async val=>{
+    await api('PUT',`/api/tdc/${id}`,{user_phone:S.phone,[field]:val});
+    await load();
+  }});
+}
+
+// ── CALENDARIO — INLINE EDIT ─────────────────────────────────────────────────
+function ieCal(td, id, field) {
+  const e=(S._calData||{})[String(id)]; if(!e) return;
+  const cfg={
+    fecha:       {type:'date',   value:fd(e.fecha)},
+    hora:        {type:'text',   value:e.hora||''},
+    titulo:      {type:'text',   value:e.titulo||''},
+    tipo:        {type:'select', value:e.tipo||'evento',   options:['evento','recordatorio','pago','tarea']},
+    recurrente:  {type:'select', value:e.recurrente||'no', options:['no','semanal','quincenal','mensual']},
+    descripcion: {type:'text',   value:e.descripcion||''}
+  }[field]; if(!cfg) return;
+  ieCell(td,{...cfg,onSave:async val=>{
+    await api('PUT',`/api/calendario/${id}`,{user_phone:S.phone,[field]:val});
+    await load();
+  }});
 }
 
 // ── MOVIMIENTOS — DUPLICATE ───────────────────────────────────────────────────
@@ -2817,6 +2860,8 @@ async function changeCat(id, newCat) {
 // ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
 function rCal() {
   const evts = S.data.calendario || [];
+  S._calData = {};
+  evts.forEach(e => { S._calData[e.id] = e; });
   const refs = (S.data.user || {}).external_refs || {};
   const y=S.cy, mo=S.cm;
   const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -2874,10 +2919,12 @@ ${mkTable({ id:'tbl-cal', limit:60, empty:'Sin eventos próximos',
     {key:'_acts',label:'',sortable:false}],
   rows:up,
   renderRow:e=>`<tr>
-  <td>${fd(e.fecha)}</td><td style="color:var(--muted)">${e.hora||'—'}</td>
-  <td><strong>${e.titulo}</strong></td><td>${e.tipo||'evento'}</td>
-  <td style="color:var(--muted)">${e.recurrente||'no'}</td>
-  <td style="color:var(--muted)">${e.descripcion||''}</td>
+  <td class="editable" onclick="ieCal(this,${e.id},'fecha')">${fmtDate(e.fecha)}</td>
+  <td class="editable" onclick="ieCal(this,${e.id},'hora')" style="color:var(--muted)">${e.hora||'—'}</td>
+  <td class="editable" onclick="ieCal(this,${e.id},'titulo')"><strong>${e.titulo}</strong></td>
+  <td class="editable" onclick="ieCal(this,${e.id},'tipo')">${e.tipo||'evento'}</td>
+  <td class="editable" onclick="ieCal(this,${e.id},'recurrente')" style="color:var(--muted)">${e.recurrente||'no'}</td>
+  <td class="editable" onclick="ieCal(this,${e.id},'descripcion')" style="color:var(--muted)">${e.descripcion||''}</td>
   <td class="acts">
     <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'><i class="ti ti-pencil"></i></button>
     <button class="btn btn-danger btn-sm" style="padding:4px 7px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
@@ -3135,16 +3182,12 @@ async function setFormaPago(descripcion, formaPago) {
 }
 
 // ── PRESUPUESTO: EDICIÓN INLINE DE LÍMITES ───────────────────────────────────
-async function editLimitePpto(categoria, currentVal, mes) {
-  const newVal = prompt(`Nuevo límite para ${categoria} (actual: ${fmt(currentVal||0)}):`, currentVal||0);
-  if (newVal === null) return;
-  const limite = parseFloat(newVal);
-  if (isNaN(limite) || limite < 0) { toast('Monto inválido','error'); return; }
-  try {
-    await api('PUT', '/api/presupuesto', { user_phone: S.phone, categoria, limite, mes });
+function editLimitePpto(td, categoria, currentVal, mes) {
+  ieCell(td, {type:'number', value:currentVal||0, onSave:async val=>{
+    await api('PUT','/api/presupuesto',{user_phone:S.phone,categoria,limite:val,mes});
     await load();
-    toast(`Límite de ${categoria} actualizado a ${fmt(limite)}`);
-  } catch(e) { toast('Error al guardar: ' + e.message, 'error'); }
+    toast(`Límite de ${categoria} → ${fmt(val)}`);
+  }});
 }
 
 async function deleteLimitePpto(categoria, mes) {
