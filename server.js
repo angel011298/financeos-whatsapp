@@ -1295,6 +1295,15 @@ app.put('/api/tdc/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+app.put('/api/patrones/:id', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    const { data, error } = await sb.from('patrones_ia').update(d).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.delete('/api/tdc/:id', async (req, res) => {
   try {
     const { error } = await sb.from('tdc').delete().eq('id', req.params.id);
