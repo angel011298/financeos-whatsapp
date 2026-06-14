@@ -2677,6 +2677,10 @@ async function duplicarMov(id) {
 // ── RENDER: MOVIMIENTOS (main) ────────────────────────────────────────────────
 function rMovs() {
   initMovF();
+  // Always sync date range to whatever the Dashboard period bar shows
+  const _pr = getPeriodoRange();
+  S.movF.desde = _pr.from;
+  S.movF.hasta = _pr.to;
   S._movData={};
   const f=S.movF;
   const filtered=getMovFiltradas();
@@ -2722,16 +2726,6 @@ function rMovs() {
 
 <div class="mov-filter">
   <div class="mf-row">
-    <span class="mf-lbl">Período</span>
-    ${['hoy:Hoy','quincena:Quincena','mes:Mes','semestre:Semestre','anio:Año'].map(p=>{const[k,l]=p.split(':');return`<button class="f-pill preset" onclick="setMovPreset('${k}')">${l}</button>`;}).join('')}
-  </div>
-  <div class="mf-row">
-    <span class="mf-lbl">Rango</span>
-    <input type="date" id="movf-desde" value="${f.desde||''}" style="width:140px;padding:5px 8px;font-size:12px" onchange="applyMovDates()">
-    <span style="color:var(--muted)">—</span>
-    <input type="date" id="movf-hasta" value="${f.hasta||''}" style="width:140px;padding:5px 8px;font-size:12px" onchange="applyMovDates()">
-  </div>
-  <div class="mf-row">
     <span class="mf-lbl">Categoría</span>
     <div style="display:flex;flex-wrap:wrap;gap:5px">${catPills}</div>
   </div>
@@ -2776,7 +2770,7 @@ function rMovs() {
   <div id="legend-mov-chart" class="chart-legend"></div>
 </div>
 
-${mkTable({ id:'tbl-movs', limit:250, empty:'Sin movimientos en el período seleccionado',
+${mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
   columns:[
     {key:'_dot',label:'',sortable:false,width:'36px'},
     {key:'fecha',label:'Fecha',filter:'text',value:m=>fd(m.fecha)},
