@@ -1051,8 +1051,8 @@ function mkC(id, type, labels, datasets, extra={}) {
   const ctx = $(id)?.getContext('2d');
   if (!ctx) return;
   const rad = ['pie','doughnut','polarArea','radar'].includes(rt);
-  // Auto-apply semantic category colors when any label matches a known category
-  const isCatLabels = labels.length > 0 && labels.some(l => l in CAT_CLR);
+  // Auto-apply semantic category colors only when ALL labels are known categories
+  const isCatLabels = labels.length > 0 && labels.every(l => l in CAT_CLR);
   S.ch[id] = new Chart(ctx, {
     type: rt,
     data: { labels, datasets: datasets.map((d,i) => {
@@ -1480,7 +1480,7 @@ function rQuincenaPanel(ctx) {
   // Chart (deferred after render)
   const chartLabels = ['Ingresos','Gastos','Balance'];
   setTimeout(() => {
-    const balClr = balReal >= 0 ? '#34d399' : '#f87171';
+    const balClr = balReal >= 0 ? '#60a5fa' : '#fbbf24';
     mkC(qChId, S.ct[qChId]||'bar', chartLabels, [{
       label:'Monto',
       data:[totalIngEsp||totalIngReal, totalGasReal||totalGasEsp, balReal],
@@ -2150,7 +2150,7 @@ ${mkTable({ id:'tbl-tdc', empty:'Sin tarjetas configuradas',
   </td>
 </tr>`} })}`;
   const TDC_CLR_MAP = {'BBVA':'#1D6FA4','HEY':'#FF5733','Liverpool':'#C0392B','AMEX':'#2E86AB','NU':'#820AD1','Rappi':'#FF441F','Palacio':'#B8860B','Débito':'#8A8A8A','Efectivo':'#4A4A4A'};
-  const tdcColors = tdcs.map(t => { const k=Object.keys(TDC_CLR_MAP).find(n=>t.nombre.toUpperCase().includes(n.toUpperCase())); return TDC_CLR_MAP[k]||CLR[0]; });
+  const tdcColors = tdcs.map((t,i) => { const k=Object.keys(TDC_CLR_MAP).find(n=>t.nombre.toUpperCase().includes(n.toUpperCase())); return TDC_CLR_MAP[k]||CLR[i%CLR.length]; });
   if (tdcs.length) {
     mkC('c-tdc',S.ct['c-tdc']||'bar-h',tdcs.map(t=>t.nombre),[{label:'Saldo',data:tdcs.map(t=>Math.max(0,(t.a_pagar||0)-(t.pagado||0))),backgroundColor:tdcColors.map(c=>c+'88'),borderColor:tdcColors}]);
     mkC('c-tdc2',S.ct['c-tdc2']||'bar',tdcs.map(t=>t.nombre),[{label:'% Pagado',data:tdcs.map(t=>t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0),backgroundColor:tdcColors.map(c=>c+'66'),borderColor:tdcColors}]);
@@ -2208,8 +2208,8 @@ ${rows.length ? mkTable({ id:'tbl-prsp', empty:'Sin gastos ni límites configura
 <div class="sec-divider"><h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2></div>
 <div id="objs-section"></div>`;
   if (rows.length) mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[
-    {label:'Real',  data:rows.map(x=>x.r), backgroundColor:rows.map(x=>(CAT_CLR[x.c]||'#94a3b8')+'88'), borderColor:rows.map(x=>CAT_CLR[x.c]||'#94a3b8')},
-    {label:'Límite',data:rows.map(x=>x.l), backgroundColor:rows.map(x=>(CAT_CLR[x.c]||'#94a3b8')+'33'), borderColor:rows.map(x=>CAT_CLR[x.c]||'#94a3b8')}
+    {label:'Real',  data:rows.map(x=>x.r), backgroundColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'88'), borderColor:rows.map((x,i)=>CAT_CLR[x.c]||CLR[i%CLR.length])},
+    {label:'Límite',data:rows.map(x=>x.l), backgroundColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'33'), borderColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'88')}
   ]);
   else emptyChart('c-prsp','Sin datos de presupuesto este mes');
   rDespensa();
