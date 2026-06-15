@@ -1595,48 +1595,6 @@ function rQuincenaPanel(ctx) {
 
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
-  const gasRows = Object.entries(gasMap).map(([nombre, {esp, real, _id, forma_pago}]) => ({
-    nombre, _id, forma_pago: forma_pago||'',
-    monto: real > 0 ? real : esp,
-    pagado: qMovs.find(m => m.concepto === '[Ppto] ' + nombre) || null
-  }));
-  const renderGasRow = r => {
-    const {nombre, _id, monto, forma_pago} = r;
-    const pagado = r.pagado, pagadoId = pagado ? pagado.id : null;
-    const nomSafe = nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    const isAuto = _id.startsWith('auto-');
-    const fpEfectivo = forma_pago === 'efectivo';
-    const fpDebito   = forma_pago === 'tarjeta_debito';
-    const fpNinguna  = !forma_pago;
-    return `<tr>
-      <td><div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[nombre]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${nombre}</div></td>
-      <td class="num editable" data-gid="${_id}" onclick="inlineEditGastoEsp(this)">${monto>0?fmt(monto):'—'}</td>
-      <td>
-        <div style="display:flex;gap:3px">
-          <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
-            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfectivo?'var(--color-income)':'var(--border-default)'};background:${fpEfectivo?'rgba(74,222,128,.15)':'transparent'};color:${fpEfectivo?'var(--color-income)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
-            <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
-          </button>
-          <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="T. Débito"
-            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebito?'var(--accent-primary)':'var(--border-default)'};background:${fpDebito?'rgba(124,106,247,.15)':'transparent'};color:${fpDebito?'var(--accent-primary)':fpNinguna?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
-            <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
-          </button>
-        </div>
-      </td>
-      <td><button onclick="marcarPagado('${nomSafe}',${monto},${pagadoId||'null'})"
-          style="padding:3px 11px;border-radius:20px;border:1px solid ${pagadoId?'var(--green)':'var(--border-default)'};background:${pagadoId?'rgba(52,211,153,.13)':'transparent'};color:${pagadoId?'var(--green)':'var(--text-2)'};cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:4px;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
-          <i class="ti ti-${pagadoId?'circle-check-filled':'circle'}"></i>${pagadoId?' Pagado':' Marcar'}
-        </button></td>
-      <td style="white-space:nowrap">
-        ${isAuto
-          ? `<button class="edit-pill-btn" title="Configurar como gasto fijo" onclick="oAddExpItemPre('gastos','${nomSafe}',${monto})"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-             <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar movimientos de esta categoría" onclick="deleteAutoMovs('${nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><i class="ti ti-x" style="font-size:12px"></i></button>`
-          : `<button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>`
-        }
-      </td>
-    </tr>`;
-  };
-
   // Chart (deferred after render)
   const chartLabels = ['Ingresos','Gastos','Balance'];
   setTimeout(() => {
@@ -1713,22 +1671,6 @@ function rQuincenaPanel(ctx) {
   <div style="margin-bottom:10px;padding:10px 14px;border-radius:var(--radius-lg);background:var(--bg-surface-2);border:1px dashed var(--border-default);font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px">
     <i class="ti ti-building-bank"></i> Asigna "Efectivo" a tus gastos fijos para ver cuánto retirar del cajero
   </div>` : ''}
-
-  <!-- Gastos comparison table -->
-  <div style="margin-bottom:10px">
-    <div class="q-section-lbl"><i class="ti ti-table" style="color:var(--yellow)"></i> Gastos esta quincena</div>
-    ${gasRows.length ? mkTable({
-      id:`tbl-qgas-${ctx}`,numbered:true,empty:'Sin gastos fijos configurados',
-      columns:[
-        {key:'nombre',label:'Concepto',   filter:'text',   value:r=>r.nombre},
-        {key:'monto', label:'Monto',      num:true,         value:r=>r.monto,          width:'120px'},
-        {key:'fp',    label:'Forma de pago',filter:'select',value:r=>r.forma_pago||'Sin asignar',width:'210px'},
-        {key:'pag',   label:'Pagado',     filter:'select', value:r=>r.pagado?'Pagado':'Pendiente',width:'140px'},
-        {key:'_acts', label:'',           sortable:false,   width:'90px'}
-      ],
-      rows:gasRows, renderRow:renderGasRow
-    }) : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
-  </div>
 
   <!-- Chart -->
   <div class="cbox" style="margin-bottom:10px">
