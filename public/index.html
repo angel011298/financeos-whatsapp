@@ -81,7 +81,7 @@ body{
 .auth-wrap{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg-app)}
 .auth-box{
   background:var(--bg-surface);padding:40px 36px;border-radius:var(--radius-xl);
-  width:360px;text-align:center;border:1px solid var(--border-default);
+  width:360px;max-width:calc(100vw - 32px);text-align:center;border:1px solid var(--border-default);
 }
 .auth-box h1{
   font-family:'Space Grotesk',system-ui,sans-serif;font-weight:400;
@@ -505,9 +505,9 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .hdr h2{font-size:var(--text-lg)}
   .hdr{margin-bottom:14px}
   .card-val{font-size:var(--text-xl)}
-  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px}
-  .kpi-val{font-size:var(--text-xl)}
-  .kpi{padding:14px 16px}
+  .kpi-grid{grid-template-columns:repeat(3,1fr);gap:6px}
+  .kpi-val{font-size:var(--text-lg)}
+  .kpi{padding:10px 12px}
   /* ── Period selector */
   .periodo-wrap{padding:6px 8px;gap:6px}
   .periodo-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
