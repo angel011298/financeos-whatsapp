@@ -762,41 +762,115 @@ EJEMPLOS:
 
 // Fast path for multi-line gasto lists:  "-112 helados con alicia (débito)\n-216 tacos (efectivo)"
 function tryParseBatch(text, today) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const listLines = lines.filter(l => /^-\s*\d/.test(l));
-  if (listLines.length === 0) return null;
+  const MESES_NUM = { enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
+    julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12 };
+  const CATS_KNOWN = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte'];
 
-  // Optional "DD de MES YYYY" date header
-  let fecha = today;
-  const MESES_NUM = { enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,
-    septiembre:9,octubre:10,noviembre:11,diciembre:12 };
-  for (const line of lines) {
-    const dm = line.match(/^(\d{1,2})\s+de\s+(\w+)\s+(\d{4})$/i);
-    if (dm) {
-      const m = MESES_NUM[dm[2].toLowerCase()];
-      if (m) fecha = `${dm[3]}-${String(m).padStart(2,'0')}-${String(parseInt(dm[1])).padStart(2,'0')}`;
-      break;
-    }
+  function normMedio(s) {
+    const r = s.toLowerCase().trim();
+    if (/tarjeta\s+d[eé]bito|t\.?\s*d[eé]bito|d[eé]bito/.test(r)) return 'débito';
+    if (/efectivo/.test(r))      return 'efectivo';
+    if (/transferencia/.test(r)) return 'transferencia';
+    if (/bbva/.test(r))          return 'TDC BBVA';
+    if (/\bhey\b/.test(r))       return 'TDC HEY';
+    if (/liverpool/.test(r))     return 'TDC Liverpool';
+    if (/amex/.test(r))          return 'TDC AMEX';
+    if (/\bnu\b/.test(r))        return 'TDC NU';
+    if (/rappi/.test(r))         return 'TDC Rappi';
+    if (/palacio/.test(r))       return 'TDC Palacio';
+    if (/tarjeta/.test(r))       return 'débito';
+    return s.trim();
   }
+
+  function normCat(s) {
+    const r = s.toLowerCase().trim();
+    return CATS_KNOWN.find(c => c.toLowerCase() === r) || 'OTROS';
+  }
+
+  function parseMonto(s) {
+    // "3,458.10" → remove thousands comma → "3458.10"
+    let c = s.replace(/,(\d{3}(?:[.,]|$))/g, '$1');
+    // leftover decimal comma "3,45" → "3.45"
+    c = c.replace(',', '.');
+    return parseFloat(c);
+  }
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  // Detect any list line: "N.-" prefix or leading "-"
+  if (!lines.some(l => /^(?:\d+\.-?\s+|-\s*)\d/.test(l))) return null;
 
   const items = [];
-  for (const line of listLines) {
-    // "-112 helados con alicia (tarjeta débito)"  — parentheses capture medio_pago
-    let m = line.match(/^-\s*(\d+(?:[.,]\d+)?)\s+(.+?)\s*\(([^)]+)\)\s*$/);
-    if (m) {
-      items.push({ tabla:'movimientos', accion:'crear', datos:{
-        tipo:'GASTO', categoria:'OTROS', concepto:m[2].trim(),
-        monto:parseFloat(m[1].replace(',','.')), medio_pago:m[3].trim(), fecha } });
-      continue;
+  let currentDate = today;
+
+  for (const line of lines) {
+    // Date header: "11 de junio 2026", "13 junio 2026", "13 junio"
+    const dateM = line.match(/^(\d{1,2})\s+(?:de\s+)?([a-záéíóú]+)(?:\s+(\d{4}))?$/i);
+    if (dateM) {
+      const m = MESES_NUM[dateM[2].toLowerCase()];
+      if (m) {
+        const y = dateM[3] || today.slice(0, 4);
+        currentDate = `${y}-${String(m).padStart(2,'0')}-${String(parseInt(dateM[1])).padStart(2,'0')}`;
+        continue;
+      }
     }
-    // "-216 tacos con alicia con efectivo"
-    m = line.match(/^-\s*(\d+(?:[.,]\d+)?)\s+(.+?)(?:\s+con\s+([\w\s]+?))?$/i);
-    if (m) {
-      items.push({ tabla:'movimientos', accion:'crear', datos:{
-        tipo:'GASTO', categoria:'OTROS', concepto:m[2].trim(),
-        monto:parseFloat(m[1].replace(',','.')), medio_pago:(m[3]||'efectivo').trim(), fecha } });
+
+    // List line: "N.- MONTO rest" or "- MONTO rest"
+    const lineM = line.match(/^(?:\d+\.-?\s+|-\s*)(\d[\d.,]*)\s+(.+)$/);
+    if (!lineM) continue;
+
+    const monto = parseMonto(lineM[1]);
+    if (isNaN(monto) || monto <= 0) continue;
+
+    let rest = lineM[2].trim();
+    let categoria = 'OTROS';
+    let medio_pago = 'efectivo';
+
+    // Extract all (...) groups
+    const parens = [];
+    rest = rest.replace(/\(([^)]+)\)/g, (_, inner) => { parens.push(inner.trim()); return ''; }).trim();
+
+    // Strip trailing "Categoria WORD" or "categoria WORD"
+    const catTrail = rest.match(/\s+[Cc]ategor[ií]a\s+(\w+)$/);
+    if (catTrail) {
+      const c = normCat(catTrail[1]);
+      if (c !== 'OTROS') categoria = c;
+      rest = rest.slice(0, -catTrail[0].length).trim();
+    } else {
+      // Trailing standalone word that matches a category (e.g. "… Ocio", "… PLATINA")
+      const trailCap = rest.match(/\s+([A-ZÁÉÍÓÚa-záéíóú]{3,})$/);
+      if (trailCap) {
+        const c = normCat(trailCap[1]);
+        if (c !== 'OTROS') { categoria = c; rest = rest.slice(0, -trailCap[0].length).trim(); }
+      }
     }
+
+    // Classify each parenthesised group as medio or categoria
+    for (const p of parens) {
+      if (/^(alicia|angel|ángel)$/i.test(p)) continue;
+      const pLow = p.toLowerCase();
+      if (/efectivo|d[eé]bito|transferencia|tdc|tarjeta|bbva|liverpool|amex|\bnu\b|rappi|palacio|\bhey\b/.test(pLow)) {
+        medio_pago = normMedio(p);
+      } else {
+        const c = normCat(p);
+        if (c !== 'OTROS') categoria = c;
+      }
+    }
+
+    // Infer category from first word of concepto when still unknown
+    if (categoria === 'OTROS') {
+      const fw = rest.split(/\s+/)[0];
+      const c = normCat(fw);
+      if (c !== 'OTROS') categoria = c;
+    }
+
+    // Clean concepto: strip trailing "con alicia/angel"
+    const concepto = rest.replace(/\s+con\s+(alicia|angel|ángel)\s*$/i, '').trim() || 'Gasto';
+
+    items.push({ tabla:'movimientos', accion:'crear', datos:{
+      tipo:'GASTO', categoria, concepto, monto, medio_pago, fecha: currentDate
+    }});
   }
+
   return items.length ? { intent:'REGISTRO', items } : null;
 }
 
