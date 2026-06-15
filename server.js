@@ -830,6 +830,14 @@ function buildWebChatReply(execs) {
 
 // ── PROPOSE → CONFIRM ─────────────────────────────────────────────────────
 async function proposeDbAction(phone, arg, textoOriginal) {
+  // Si el texto menciona "Alicia" y es un gasto nuevo, anotarlo en comentarios
+  if (
+    arg.tabla === 'movimientos' && arg.accion === 'crear' &&
+    /alicia/i.test(textoOriginal || '')
+  ) {
+    arg = { ...arg, datos: { ...arg.datos, comentarios: 'Alicia' } };
+  }
+
   const { tabla, accion, datos } = arg;
 
   // Auto-confirm: crear movimiento con patrón conocido (contador≥5, diff≤30%, monto<5000)
