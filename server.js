@@ -760,9 +760,64 @@ EJEMPLOS:
 "cuánto gasté este mes" → {"intent":"CONSULTA"}
 "hola cómo estás" → {"intent":"CHARLA"}`;
 
+// Fast path for multi-line gasto lists:  "-112 helados con alicia (débito)\n-216 tacos (efectivo)"
+function tryParseBatch(text, today) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const listLines = lines.filter(l => /^-\s*\d/.test(l));
+  if (listLines.length === 0) return null;
+
+  // Optional "DD de MES YYYY" date header
+  let fecha = today;
+  const MESES_NUM = { enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,
+    septiembre:9,octubre:10,noviembre:11,diciembre:12 };
+  for (const line of lines) {
+    const dm = line.match(/^(\d{1,2})\s+de\s+(\w+)\s+(\d{4})$/i);
+    if (dm) {
+      const m = MESES_NUM[dm[2].toLowerCase()];
+      if (m) fecha = `${dm[3]}-${String(m).padStart(2,'0')}-${String(parseInt(dm[1])).padStart(2,'0')}`;
+      break;
+    }
+  }
+
+  const items = [];
+  for (const line of listLines) {
+    // "-112 helados con alicia (tarjeta débito)"  — parentheses capture medio_pago
+    let m = line.match(/^-\s*(\d+(?:[.,]\d+)?)\s+(.+?)\s*\(([^)]+)\)\s*$/);
+    if (m) {
+      items.push({ tabla:'movimientos', accion:'crear', datos:{
+        tipo:'GASTO', categoria:'OTROS', concepto:m[2].trim(),
+        monto:parseFloat(m[1].replace(',','.')), medio_pago:m[3].trim(), fecha } });
+      continue;
+    }
+    // "-216 tacos con alicia con efectivo"
+    m = line.match(/^-\s*(\d+(?:[.,]\d+)?)\s+(.+?)(?:\s+con\s+([\w\s]+?))?$/i);
+    if (m) {
+      items.push({ tabla:'movimientos', accion:'crear', datos:{
+        tipo:'GASTO', categoria:'OTROS', concepto:m[2].trim(),
+        monto:parseFloat(m[1].replace(',','.')), medio_pago:(m[3]||'efectivo').trim(), fecha } });
+    }
+  }
+  return items.length ? { intent:'REGISTRO', items } : null;
+}
+
 async function extractIntentBatch(text, phone = '') {
   const today     = hoy();
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+  // Fast path: list of gastos — no Gemini needed
+  const fastBatch = tryParseBatch(text, today);
+  if (fastBatch) return fastBatch;
+
+  // Fast path: single gasté / borrar — regex only, no Gemini
+  const t = text.trim();
+  const SPEND_CON = /^(?:gasté|gaste|pagué|pague)\s+(\d+(?:\.\d+)?)\s+(?:en|de)\s+(.+?)\s+con\s+(.+)$/i;
+  const SPEND     = /^(?:gasté|gaste|pagué|pague)\s+(\d+(?:\.\d+)?)\s+(?:en|de)\s+(.+)$/i;
+  const DEL_MOV   = /^borrar\s+(?:el\s+)?movimiento\s+(\S+)\s*$/i;
+  let mm;
+  if ((mm = t.match(SPEND_CON))) return { intent:'REGISTRO', items:[{ tabla:'movimientos', accion:'crear', datos:{ tipo:'GASTO', categoria:'OTROS', concepto:mm[2].trim(), monto:parseFloat(mm[1]), medio_pago:mm[3].trim(), fecha:today } }] };
+  if ((mm = t.match(SPEND)))     return { intent:'REGISTRO', items:[{ tabla:'movimientos', accion:'crear', datos:{ tipo:'GASTO', categoria:'OTROS', concepto:mm[2].trim(), monto:parseFloat(mm[1]), medio_pago:'efectivo', fecha:today } }] };
+  if ((mm = t.match(DEL_MOV)))   return { intent:'ELIMINACION', items:[{ tabla:'movimientos', accion:'eliminar', id:mm[1], datos:{} }] };
+
   try {
     const model = genAI.getGenerativeModel({
       model:            'gemini-2.5-flash',
@@ -2200,8 +2255,12 @@ app.post('/api/chat-web', async (req, res) => {
       const { intent, items } = await extractIntentBatch(input, phone);
 
       if (['REGISTRO', 'EDICION', 'ELIMINACION'].includes(intent) && items.length > 0) {
+        const mentionsAlicia = /alicia/i.test(input);
         const execs = [];
         for (const item of items) {
+          if (mentionsAlicia && item.tabla === 'movimientos' && item.accion === 'crear') {
+            item.datos = { ...item.datos, comentarios: 'Alicia' };
+          }
           const result = await executeDbAction(phone, item, 'web');
           execs.push({ item, result });
         }
@@ -2218,6 +2277,12 @@ app.post('/api/chat-web', async (req, res) => {
   } catch (e) {
     const detail = `${e.message || e} | status=${e.status} | code=${e.code}`;
     console.error('chat-web error:', detail);
+    const is429 = /429|quota|Too Many Requests/i.test(e.message || '');
+    if (is429) {
+      const friendlyMsg = '⚠️ Gemini está al límite de cuota por ahora. Para registrar gastos escribe: *gasté [monto] en [concepto]* (se procesa sin IA).';
+      try { await guardarMensaje(phone, 'assistant', friendlyMsg); } catch {}
+      return res.json({ reply: friendlyMsg });
+    }
     res.status(500).json({ error: detail.slice(0, 200) });
   }
 });
