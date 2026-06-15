@@ -656,6 +656,9 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 .nd-din-btn{background:rgba(247,162,106,.18);color:var(--accent-couple);border:1px solid rgba(247,162,106,.35)}
 .nd-din-btn:hover{background:rgba(247,162,106,.3)}
 .nd-din-note{font-size:11px;color:var(--text-3);margin-top:6px;display:flex;align-items:center;gap:5px}
+.nd-din-fields{display:flex;flex-direction:column;gap:0;margin-top:4px}
+.nd-din-field-row{padding-bottom:14px}
+.nd-din-field-lbl{font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px;display:flex;align-items:center;gap:5px;text-transform:uppercase;letter-spacing:.05em}
 .nd-sec-hdr{display:flex;align-items:center;justify-content:space-between;margin:24px 0 12px;flex-wrap:wrap;gap:8px}
 .nd-sec-hdr h3{font-family:'Space Grotesk',system-ui,sans-serif;font-size:var(--text-xl);font-weight:400;color:var(--text-1);display:flex;align-items:center;gap:8px}
 .nd-sec-hdr h3 .ti{color:var(--accent-primary);font-size:20px}
@@ -2249,23 +2252,54 @@ function _ndPaint() {
   const proyectos=items.filter(x=>x.tipo==='PROYECTO'&&x.estado!=='COMPLETADO');
   const doneProy=items.filter(x=>x.tipo==='PROYECTO'&&x.estado==='COMPLETADO');
 
+  // Movimientos de esta quincena que mencionen "alicia" en concepto o comentarios
+  const qMovsAlicia=(S.data?.movs||[]).filter(m=>{
+    if (m.deleted_at) return false;
+    if (m.tipo!=='GASTO') return false;
+    const f=m.fecha||'';
+    if (f<q.inicio||f>q.fin) return false;
+    const hay=s=>/alicia/i.test(s||'');
+    return hay(m.concepto)||hay(m.comentarios)||hay(m.descripcion);
+  });
+  const gastado=qMovsAlicia.reduce((a,m)=>a+(m.monto||0),0);
+  const restante=din-gastado;
+
   el.innerHTML=`
 <div class="hdr"><h2 style="color:#f9a8d4"><i class="ti ti-heart-handshake" style="color:#f9a8d4"></i> Nidito</h2></div>
 
 <div class="nd-din-card">
-  <div class="nd-din-ttl"><i class="ti ti-coins"></i> Dinerito de novios — ${q.label}</div>
+  <div class="nd-din-ttl"><i class="ti ti-coins"></i> Dinerito de novios</div>
   <div class="nd-q-pills">
     <button class="nd-q-pill" onclick='ndPickQ(${JSON.stringify(prevQ)})'>← ${prevQ.label}</button>
     <button class="nd-q-pill act">${q.label}</button>
     <button class="nd-q-pill" onclick='ndPickQ(${JSON.stringify(nextQ)})'>${nextQ.label} →</button>
   </div>
-  <div class="nd-din-row">
-    <span class="nd-din-sign">$</span>
-    <input type="number" class="nd-din-inp" id="nd-din-val" value="${din}" min="0" step="100" placeholder="0">
-    <button class="btn btn-sm nd-din-btn" onclick="ndSaveDin()"><i class="ti ti-device-floppy"></i> Guardar</button>
+
+  <div class="nd-din-fields">
+    <div class="nd-din-field-row">
+      <div class="nd-din-field-lbl"><i class="ti ti-wallet" style="color:var(--accent-couple)"></i> Monto asignado</div>
+      <div class="nd-din-row" style="margin-bottom:0">
+        <span class="nd-din-sign">$</span>
+        <input type="number" class="nd-din-inp" id="nd-din-val" value="${din}" min="0" step="100" placeholder="0">
+        <button class="btn btn-sm nd-din-btn" onclick="ndSaveDin()"><i class="ti ti-device-floppy"></i> Guardar</button>
+      </div>
+    </div>
+    <div class="nd-din-field-row" style="padding-top:14px;border-top:1px solid rgba(247,162,106,.15)">
+      <div class="nd-din-field-lbl"><i class="ti ti-receipt" style="color:${restante>=0?'var(--green)':'var(--red)'}"></i> Monto restante</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px">
+        <span style="font-size:28px;font-weight:700;font-family:'Space Grotesk',system-ui,sans-serif;color:${restante>=0?'var(--color-income)':'var(--color-expense)'}">${fmt(Math.abs(restante))}</span>
+        ${restante<0?`<span style="font-size:12px;color:var(--red);font-weight:600">excedido</span>`:''}
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:3px">${fmt(din)} asignado − ${fmt(gastado)} gastado con Alicia</div>
+      ${qMovsAlicia.length?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px">
+        ${qMovsAlicia.map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-2);padding:5px 10px;background:rgba(0,0,0,.06);border-radius:var(--radius-md)">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%">${m.concepto||m.descripcion||'—'}</span>
+          <span style="flex-shrink:0;color:var(--red);font-weight:600;margin-left:8px">−${fmt(m.monto)}</span>
+        </div>`).join('')}
+      </div>`:'<div style="font-size:11px;color:var(--text-3);margin-top:6px;opacity:.7">Sin gastos con Alicia esta quincena</div>'}
+    </div>
   </div>
-  ${comprQ>0?`<div class="nd-din-note"><i class="ti ti-target" style="color:var(--accent-primary)"></i> Compromiso quincenal total al Nidito: <strong style="color:var(--accent-primary)">${fmt(comprQ)}</strong></div>`:''}
-  <div class="nd-din-note"><i class="ti ti-info-circle"></i> Por ahora solo Ángel registra el aporte — próximamente ambos</div>
+  ${comprQ>0?`<div class="nd-din-note" style="margin-top:14px"><i class="ti ti-target" style="color:var(--accent-primary)"></i> Compromiso quincenal total al Nidito: <strong style="color:var(--accent-primary)">${fmt(comprQ)}</strong></div>`:''}
 </div>
 
 <div class="nd-sec-hdr">
