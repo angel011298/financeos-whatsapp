@@ -1434,6 +1434,19 @@ function getQuincenaInfo(off) {
   return { from, to, label, q: is2nd ? 2 : 1, month, year, fromDay: is2nd ? 16 : 1, toDay: is2nd ? lastDay : 15 };
 }
 
+function getQKey(qi) {
+  return `${qi.year}-${String(qi.month + 1).padStart(2, '0')}-${qi.q === 2 ? 'B' : 'A'}`;
+}
+
+function getQuincenaOffsetFromDate(dateStr) {
+  if (!dateStr) return 0;
+  const d = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  const curQ = now.getFullYear() * 24 + now.getMonth() * 2 + (now.getDate() > 15 ? 1 : 0);
+  const tgtQ = d.getFullYear() * 24 + d.getMonth() * 2 + (d.getDate() > 15 ? 1 : 0);
+  return tgtQ - curQ;
+}
+
 function getPeriodoRange() {
   const { tipo, offset } = S.periodo;
   const now = new Date();
@@ -1474,7 +1487,11 @@ function filterMovs(movs, from, to) {
   return (movs || []).filter(m => { const f = m.fecha || ''; return f >= from && f <= to; });
 }
 
-function getIngresosEsperados(refs) {
+function getIngresosEsperados(refs, qKey) {
+  if (qKey) {
+    const qb = (refs.budget_q || {})[qKey];
+    if (qb) return Array.isArray(qb.ingresos) ? qb.ingresos : [];
+  }
   if (Array.isArray(refs.ingresos_esperados) && refs.ingresos_esperados.length)
     return refs.ingresos_esperados;
   const list = [];
@@ -1483,7 +1500,11 @@ function getIngresosEsperados(refs) {
   return list;
 }
 
-function getGastosEsperados(refs) {
+function getGastosEsperados(refs, qKey) {
+  if (qKey) {
+    const qb = (refs.budget_q || {})[qKey];
+    if (qb) return Array.isArray(qb.gastos) ? qb.gastos : [];
+  }
   if (Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length)
     return refs.gastos_esperados;
   return Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }));
@@ -1539,20 +1560,31 @@ function navPeriodo(dir, mode) { if (mode==='reset') S.periodo.offset=0; else S.
 // ── QUINCENAL PANEL ──────────────────────────────────────────────────────────
 function rQuincenaPanel(ctx) {
   const refs   = (S.data.user || {}).external_refs || {};
-  const qOff   = S.periodo.tipo === 'quincena' ? S.periodo.offset : 0;
+  // Derive quincena offset from the selected period
+  let qOff;
+  if (S.periodo.tipo === 'quincena') {
+    qOff = S.periodo.offset;
+  } else {
+    const pr = getPeriodoRange();
+    qOff = getQuincenaOffsetFromDate(pr.from);
+  }
   S.qOffset    = qOff;
   const qi     = getQuincenaInfo(qOff);
+  const qKey   = getQKey(qi);
+  S.currentQKey = qKey;
+
   const movs   = S.data.movs || [];
   const qMovs  = filterMovs(movs, qi.from, qi.to);
 
-  const allIngEsp = getIngresosEsperados(refs);
-  const gasEsp    = getGastosEsperados(refs);
+  // Use per-quincena budget if it exists, else fall back to global template
+  const hasQBudget = (refs.budget_q || {})[qKey] != null;
+  const allIngEsp = getIngresosEsperados(refs, qKey);
+  const gasEsp    = getGastosEsperados(refs, qKey);
 
-  // Populate lookup for inline editing
-  // Items stored by bot may lack _id — fall back to descripcion as key
+  // Populate lookup for inline editing; tag items with their storage key
   S._expItemData = {};
-  allIngEsp.forEach(i => { const k = i._id || i.id || i.descripcion; if (k) S._expItemData[k] = { ...i, _tipo: 'ingresos' }; });
-  gasEsp.forEach(g => { const k = g._id || g.id || g.descripcion; if (k) S._expItemData[k] = { ...g, _tipo: 'gastos' }; });
+  allIngEsp.forEach(i => { const k = i._id || i.id || i.descripcion; if (k) S._expItemData[k] = { ...i, _tipo: 'ingresos', _qKey: hasQBudget ? qKey : null }; });
+  gasEsp.forEach(g => { const k = g._id || g.id || g.descripcion; if (k) S._expItemData[k] = { ...g, _tipo: 'gastos', _qKey: hasQBudget ? qKey : null }; });
 
   // Sueldo quincenal → mostrar en TODA quincena; beca/mensual → solo si día 1 cae en la quincena
   const ingEspQ = allIngEsp.filter(ing => {
@@ -1593,6 +1625,7 @@ function rQuincenaPanel(ctx) {
 
   return `<div class="q-panel">
   <div class="q-hdr">
+    <span style="font-size:12px;font-weight:600;color:var(--text-2)">${qi.label}</span>
     <div style="display:flex;gap:5px;flex-wrap:wrap">
       <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
       <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);font-size:11px" onclick="oAddExpItem('gastos')"><i class="ti ti-plus"></i> Gasto fijo</button>
@@ -1757,7 +1790,14 @@ function oAddExpItemPre(tipo, desc, monto) {
 
 async function removeExpItem(field, id) {
   if (!confirm('¿Eliminar este elemento?')) return;
-  await api('POST', '/api/update-refs', { phone: S.phone, field, action: 'remove', itemId: id });
+  const meta = S._expItemData?.[id];
+  const qKey = meta?._qKey;
+  if (qKey) {
+    const tipo = field === 'gastos_esperados' ? 'gastos' : 'ingresos';
+    await api('POST', '/api/update-refs', { phone: S.phone, field: 'budget_q', qKey, tipo, action: 'remove', itemId: id });
+  } else {
+    await api('POST', '/api/update-refs', { phone: S.phone, field, action: 'remove', itemId: id });
+  }
   await load();
 }
 
@@ -3596,16 +3636,26 @@ async function saveM() {
     const monto = parseFloat($('ei-monto')?.value) || 0;
     if (!desc)  { alert('Ingresa una descripción'); return; }
     if (!monto) { alert('Ingresa el monto'); return; }
-    const field = ctx.tipo === 'ingresos' ? 'ingresos_esperados' : 'gastos_esperados';
     const item  = { descripcion: desc, monto };
     if (ctx.tipo === 'ingresos') {
       const diasRaw = ($('ei-dias')?.value || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0 && n <= 31);
       item.dias = diasRaw.length ? diasRaw : [];
     }
     const action = ctx.mode === 'edit-exp-item' ? 'update' : 'add';
-    const body = { phone: S.phone, field, action, item };
-    if (ctx.mode === 'edit-exp-item') body.itemId = ctx.itemId;
-    const res = await api('POST', '/api/update-refs', body);
+    const qKey = S.currentQKey || null;
+    let body, res;
+    if (qKey) {
+      // Save to per-quincena budget slot
+      const tipo = ctx.tipo === 'ingresos' ? 'ingresos' : 'gastos';
+      body = { phone: S.phone, field: 'budget_q', qKey, tipo, action, item };
+      if (ctx.mode === 'edit-exp-item') body.itemId = ctx.itemId;
+    } else {
+      // Save to global template
+      const field = ctx.tipo === 'ingresos' ? 'ingresos_esperados' : 'gastos_esperados';
+      body = { phone: S.phone, field, action, item };
+      if (ctx.mode === 'edit-exp-item') body.itemId = ctx.itemId;
+    }
+    res = await api('POST', '/api/update-refs', body);
     if (res?.success === false) { alert('Error: ' + (res.error || '')); return; }
     closeM(); await load(); return;
   }

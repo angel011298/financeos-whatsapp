@@ -2510,6 +2510,39 @@ app.post('/api/update-refs', async (req, res) => {
     if (field === 'forma_pago_gastos' && action === 'set') {
       if (!refs.forma_pago_gastos) refs.forma_pago_gastos = {};
       refs.forma_pago_gastos[itemId] = item || '';  // itemId=descripcion, item='efectivo'|'tarjeta_debito'|''
+    } else if (field === 'budget_q') {
+      const { qKey, tipo } = req.body;
+      if (!qKey || !tipo) return res.status(400).json({ success: false, error: 'qKey and tipo required for budget_q' });
+      if (!refs.budget_q) refs.budget_q = {};
+      if (!refs.budget_q[qKey]) refs.budget_q[qKey] = { gastos: [], ingresos: [] };
+      const { items: replaceItems } = req.body;
+      if (action === 'replace' && Array.isArray(replaceItems)) {
+        refs.budget_q[qKey][tipo] = replaceItems;
+      } else {
+        let arr = Array.isArray(refs.budget_q[qKey][tipo]) ? [...refs.budget_q[qKey][tipo]] : [];
+        if (action === 'add') {
+          // Auto-init from global template on first add
+          if (arr.length === 0 && tipo === 'gastos' && Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length) {
+            arr = refs.gastos_esperados.map(g => ({ ...g }));
+          }
+          if (arr.length === 0 && tipo === 'ingresos' && Array.isArray(refs.ingresos_esperados) && refs.ingresos_esperados.length) {
+            arr = refs.ingresos_esperados.map(i => ({ ...i }));
+          }
+          arr.push({ ...item, _id: Date.now().toString() });
+          refs.budget_q[qKey][tipo] = arr;
+        } else if (action === 'remove') {
+          let idx = arr.findIndex(x => (x._id || x.id) === itemId);
+          if (idx === -1) idx = arr.findIndex(x => x.descripcion === itemId);
+          if (idx > -1) { arr.splice(idx, 1); refs.budget_q[qKey][tipo] = arr; }
+        } else if (action === 'update') {
+          let idx = arr.findIndex(x => (x._id || x.id) === itemId);
+          if (idx === -1) idx = arr.findIndex(x => x.descripcion === itemId);
+          if (idx > -1) {
+            arr[idx] = { _id: arr[idx]._id || arr[idx].id || Date.now().toString(), ...arr[idx], ...item };
+            refs.budget_q[qKey][tipo] = arr;
+          }
+        }
+      }
     } else if (field === 'ingresos_esperados' || field === 'gastos_esperados') {
       const { items: replaceItems } = req.body;
       if (action === 'replace' && Array.isArray(replaceItems)) {
