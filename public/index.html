@@ -336,7 +336,7 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 }
 .ptab:hover{color:var(--text-1);background:var(--bg-surface-3)}
 .ptab.act{background:var(--text-1);color:var(--bg-app);font-weight:500}
-.p-range{flex:1;text-align:center;font-size:var(--text-sm);font-weight:600;color:var(--text-1);min-width:120px;white-space:nowrap}
+.p-range{flex:1;text-align:center;font-size:var(--text-sm);font-weight:600;color:var(--text-1);min-width:120px;white-space:nowrap;text-transform:uppercase;letter-spacing:.03em}
 
 /* ═══════════════════════════════════════════════════════ QUINCENAL PANEL */
 .q-panel{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px}
@@ -1454,14 +1454,14 @@ function getPeriodoRange() {
     from = toISO(d);
     to   = toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
     short= `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    label= `${MESES_CORTO[d.getMonth()]} ${d.getFullYear()}`;
+    label= `${MESES[d.getMonth()]} ${d.getFullYear()}`;
   } else if (tipo === 'trimestre') {
     const qN = Math.floor(now.getMonth() / 3) + offset;
     const yr = now.getFullYear() + Math.floor(qN / 4);
     const q  = ((qN % 4) + 4) % 4;
     from = toISO(new Date(yr, q*3, 1));
     to   = toISO(new Date(yr, q*3 + 3, 0));
-    label= `Q${q+1} ${yr}`;
+    label= `${q+1}° TRIMESTRE ${yr}`;
   } else { // año
     const yr = now.getFullYear() + offset;
     from = `${yr}-01-01`; to = `${yr}-12-31`;
