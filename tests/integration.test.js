@@ -606,6 +606,26 @@ test('FinanceOS Integration Tests', { timeout: 900_000 }, async (t) => {
       }
     });
 
+    await run('T28 GET /api/dashboard/:phone → campo nidito.total_quincenal presente para Ángel', async () => {
+      const phone = encodeURIComponent(ANGEL);
+      const res = await fetch(`${BASE}/api/dashboard/${phone}`);
+      assert.equal(res.status, 200, 'GET /api/dashboard no devolvió 200 en T28');
+      const body = await res.json();
+      assert.ok(body.success, 'GET /api/dashboard falló en T28');
+      const nid = body.data?.nidito;
+      assert.ok(nid && typeof nid === 'object', 'Campo nidito ausente o no es objeto');
+      assert.ok(typeof nid.compromiso_quincenal === 'number', 'nidito.compromiso_quincenal no es número');
+      assert.ok(typeof nid.dinerito_quincenal   === 'number', 'nidito.dinerito_quincenal no es número');
+      assert.ok(typeof nid.total_quincenal       === 'number', 'nidito.total_quincenal no es número');
+      // Item fue soft-deleted en T26 → no debe sumar al compromiso
+      assert.equal(nid.compromiso_quincenal, 0, 'compromiso_quincenal debe ser 0 tras soft-delete de T26');
+      assert.equal(
+        nid.total_quincenal,
+        nid.compromiso_quincenal + nid.dinerito_quincenal,
+        'total_quincenal debe ser la suma de sus partes',
+      );
+    });
+
   } finally {
     // ── CLEANUP ──────────────────────────────────────────────────────────────
     try {

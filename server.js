@@ -1271,7 +1271,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
-    const [tdc, movs, metas, user, cal, pat, presp, nidito, nidAsig, nidDin] = await Promise.all([
+    const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
       sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).limit(500),
       sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
@@ -1279,12 +1279,25 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha'),
       sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }),
       sb.from('presupuesto').select('*').eq('user_phone', phone),
-      sb.from('nidito').select('*').is('deleted_at', null).order('completado').order('prioridad', { ascending: false }),
-      sb.from('nidito_asignaciones').select('monto_quincenal').eq('user_phone', phone),
+      sb.from('nidito_asignaciones')
+        .select('monto_quincenal, nidito_items!inner(deleted_at)')
+        .eq('user_phone', phone)
+        .is('nidito_items.deleted_at', null),
       sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', getQuincenaActual().key).maybeSingle(),
     ]);
-    const nidito_compromiso = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
-    res.json({ success: true, data: { tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data, calendario: cal.data, patrones: pat.data, presupuesto: presp.data, nidito: nidito.data, nidito_compromiso, nidito_dinerito: nidDin.data?.monto || 0 } });
+    const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
+    const nidito_dinerito_val = nidDin.data?.monto || 0;
+    res.json({ success: true, data: {
+      tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data,
+      calendario: cal.data, patrones: pat.data, presupuesto: presp.data,
+      nidito: {
+        compromiso_quincenal: nidito_compromiso,
+        dinerito_quincenal:   nidito_dinerito_val,
+        total_quincenal:      nidito_compromiso + nidito_dinerito_val,
+      },
+      nidito_compromiso,
+      nidito_dinerito: nidito_dinerito_val,
+    }});
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
