@@ -2209,9 +2209,9 @@ app.post('/webhook', async (req, res) => {
 // ── CHAT WEB (PWA) ────────────────────────────────────────────────────────────
 // Mismo motor que WhatsApp pero para el chat integrado en el dashboard
 app.post('/api/chat-web', async (req, res) => {
+  const { phone, message, audio_b64, audio_mime } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Missing phone' });
   try {
-    const { phone, message, audio_b64, audio_mime } = req.body;
-    if (!phone) return res.status(400).json({ error: 'Missing phone' });
 
     let text    = (message || '').trim();
     let isAudio = false;
