@@ -38,7 +38,20 @@ async function geminiWithRetry(fn, maxRetries = 3) {
       const isRetryable = msg.includes('503') || msg.includes('429') ||
                           msg.includes('Service Unavailable') || msg.includes('overloaded');
       if (isRetryable && attempt < maxRetries) {
-        const delay = (attempt + 1) * 2000; // 2s, 4s, 6s
+        // On 429, honor Gemini's suggested retryDelay (token bucket refill)
+        // instead of the default exponential backoff which is too short
+        let delay = (attempt + 1) * 2000;
+        if (msg.includes('429')) {
+          try {
+            const retryInfo = (err.errorDetails || []).find(
+              d => typeof d['@type'] === 'string' && d['@type'].includes('RetryInfo')
+            );
+            if (retryInfo?.retryDelay) {
+              const secs = parseFloat(retryInfo.retryDelay);
+              if (secs > 0) delay = Math.min((secs + 5) * 1000, 90_000);
+            }
+          } catch {}
+        }
         console.warn(`[Gemini] ${err.message.slice(0,80)} — reintento ${attempt + 1}/${maxRetries} en ${delay}ms`);
         await new Promise(r => setTimeout(r, delay));
       } else {
@@ -667,6 +680,23 @@ EJEMPLOS:
 
 async function extractIntent(text, phone = '') {
   const today = hoy();
+
+  // Fast path: handle unambiguous simple patterns without calling Gemini (avoids rate limits)
+  const t = text.trim();
+  const SPEND_CON = /^(?:gasté|gaste|pagué|pague)\s+(\d+(?:\.\d+)?)\s+(?:en|de)\s+(.+?)\s+con\s+(.+)$/i;
+  const SPEND     = /^(?:gasté|gaste|pagué|pague)\s+(\d+(?:\.\d+)?)\s+(?:en|de)\s+(.+)$/i;
+  const DEL_MOV   = /^borrar\s+(?:el\s+)?movimiento\s+(\S+)\s*$/i;
+  let m;
+  if ((m = t.match(SPEND_CON))) {
+    return { intent: 'REGISTRO', toolArgs: { tabla: 'movimientos', accion: 'crear', datos: { tipo: 'GASTO', categoria: 'OTROS', concepto: m[2].trim(), monto: parseFloat(m[1]), medio_pago: m[3].trim(), fecha: today } } };
+  }
+  if ((m = t.match(SPEND))) {
+    return { intent: 'REGISTRO', toolArgs: { tabla: 'movimientos', accion: 'crear', datos: { tipo: 'GASTO', categoria: 'OTROS', concepto: m[2].trim(), monto: parseFloat(m[1]), medio_pago: 'efectivo', fecha: today } } };
+  }
+  if ((m = t.match(DEL_MOV))) {
+    return { intent: 'ELIMINACION', toolArgs: { tabla: 'movimientos', accion: 'eliminar', id: m[1], datos: {} } };
+  }
+
   try {
     const model = genAI.getGenerativeModel({
       model:            'gemini-2.5-flash',
@@ -867,13 +897,14 @@ async function proposeDbAction(phone, arg, textoOriginal) {
     propuesta = `Ejecutar: ${tabla}.${accion}\n\n*1* Sí · *3* No`;
   }
 
-  await sb.from('acciones_pendientes').insert({
+  const { error: insertErr } = await sb.from('acciones_pendientes').insert({
     user_phone: phone,
     tipo:       'db_action',
     datos:      { ...arg, texto_original: textoOriginal },
     estado:     'pending',
     expira_at:  new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   });
+  if (insertErr) console.error('[proposeDbAction] insert error:', insertErr.message, JSON.stringify(arg).slice(0,120));
 
   return { auto: false, msg: propuesta };
 }
@@ -1240,7 +1271,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
-    const [tdc, movs, metas, user, cal, pat, presp, nidito, nidAsig, nidDin] = await Promise.all([
+    const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
       sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).limit(500),
       sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
@@ -1248,12 +1279,25 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha'),
       sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }),
       sb.from('presupuesto').select('*').eq('user_phone', phone),
-      sb.from('nidito').select('*').is('deleted_at', null).order('completado').order('prioridad', { ascending: false }),
-      sb.from('nidito_asignaciones').select('monto_quincenal').eq('user_phone', phone),
+      sb.from('nidito_asignaciones')
+        .select('monto_quincenal, nidito_items!inner(deleted_at)')
+        .eq('user_phone', phone)
+        .is('nidito_items.deleted_at', null),
       sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', getQuincenaActual().key).maybeSingle(),
     ]);
-    const nidito_compromiso = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
-    res.json({ success: true, data: { tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data, calendario: cal.data, patrones: pat.data, presupuesto: presp.data, nidito: nidito.data, nidito_compromiso, nidito_dinerito: nidDin.data?.monto || 0 } });
+    const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
+    const nidito_dinerito_val = nidDin.data?.monto || 0;
+    res.json({ success: true, data: {
+      tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data,
+      calendario: cal.data, patrones: pat.data, presupuesto: presp.data,
+      nidito: {
+        compromiso_quincenal: nidito_compromiso,
+        dinerito_quincenal:   nidito_dinerito_val,
+        total_quincenal:      nidito_compromiso + nidito_dinerito_val,
+      },
+      nidito_compromiso,
+      nidito_dinerito: nidito_dinerito_val,
+    }});
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1357,13 +1401,6 @@ app.post('/api/preferencia', async (req, res) => {
 
 // ── NIDITO v8 — items, asignaciones, comentarios, dinerito ───────────────────
 
-app.get('/api/nidito/quincena', (req, res) => {
-  try {
-    const q = req.query.fecha ? getQuincena(req.query.fecha) : getQuincenaActual();
-    res.json({ success: true, ...q });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
 app.get('/api/nidito/items', async (req, res) => {
   try {
     const { tipo, estado, phone } = req.query;
@@ -1418,11 +1455,19 @@ app.patch('/api/nidito/items/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+app.get('/api/nidito/quincena', async (req, res) => {
+  try {
+    const { fecha } = req.query;
+    const q = fecha ? getQuincena(fecha) : getQuincenaActual();
+    res.json({ success: true, data: q });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.delete('/api/nidito/items/:id', async (req, res) => {
   try {
     const { user_phone } = req.body;
     const { data: before } = await sb.from('nidito_items').select('*').eq('id', req.params.id).single();
-    const { error } = await sb.from('nidito_items').delete().eq('id', req.params.id);
+    const { error } = await sb.from('nidito_items').update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
     if (error) return res.status(400).json({ success: false, error: error.message });
     await writeAuditLog(user_phone, 'nidito_items', 'eliminar', req.params.id, before, null, 'web');
     res.json({ success: true });
@@ -1475,10 +1520,16 @@ app.get('/api/nidito/dinerito', async (req, res) => {
     const { phone, quincena } = req.query;
     const qKey = quincena || getQuincenaActual().key;
     let q = sb.from('nidito_dinerito').select('*').eq('quincena_key', qKey);
-    if (phone) q = q.eq('user_phone', phone);
-    const { data, error } = await q;
-    if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, data, quincena_key: qKey });
+    if (phone) {
+      q = q.eq('user_phone', phone);
+      const { data, error } = await q.maybeSingle();
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      res.json({ success: true, data, quincena_key: qKey });
+    } else {
+      const { data, error } = await q;
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      res.json({ success: true, data, quincena_key: qKey });
+    }
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

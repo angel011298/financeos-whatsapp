@@ -20,7 +20,7 @@ const ALICIA = 'whatsapp:+52TEST0000002';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function pollUntil(fn, timeout = 45_000, interval = 1_500) {
+async function pollUntil(fn, timeout = 90_000, interval = 1_500) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const v = await fn().catch(() => null);
@@ -82,7 +82,7 @@ async function cleanupPhone(phone) {
 }
 
 // ── Main test (all subtests run sequentially via await) ───────────────────────
-test('FinanceOS Integration Tests', { timeout: 300_000 }, async (t) => {
+test('FinanceOS Integration Tests', { timeout: 900_000 }, async (t) => {
   let serverProc;
   const state = {
     angelMovId:  null,
@@ -438,6 +438,191 @@ test('FinanceOS Integration Tests', { timeout: 300_000 }, async (t) => {
         after,
         before,
         `Acción expirada fue ejecutada: movimientos antes=${before}, después=${after}`
+      );
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SUITE 5 — Nidito v8
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Clean up nidito data before Suite 5
+    await Promise.allSettled([
+      sb.from('nidito_comentarios').delete().gt('created_at', '2000-01-01'),
+      sb.from('nidito_asignaciones').delete().gt('created_at', '2000-01-01'),
+      sb.from('nidito_items').delete().gt('created_at', '2000-01-01'),
+      sb.from('nidito_dinerito').delete().gt('created_at', '2000-01-01'),
+    ]);
+
+    let niditoItemId = null;
+
+    await run('T18 POST /api/nidito/items → create PROYECTO', async () => {
+      const res = await fetch(`${BASE}/api/nidito/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_phone: ANGEL,
+          tipo: 'PROYECTO',
+          titulo: 'Test Viaje a París',
+          descripcion: 'Viaje romántico',
+          presupuesto_total: 5000,
+          estado: 'ACTIVO',
+          fecha_inicio: '2026-06-15',
+          fecha_fin: '2026-12-31',
+        }),
+      });
+      assert.equal(res.status, 200, `POST /api/nidito/items status inesperado: ${res.status}`);
+      const body = await res.json();
+      assert.ok(body.success, `POST /api/nidito/items falló: ${JSON.stringify(body)}`);
+      assert.ok(body.data?.id, 'Nidito item creado sin id');
+      niditoItemId = body.data.id;
+    });
+
+    await run('T19 GET /api/nidito/items → lista items con asignaciones anidadas', async () => {
+      const res = await fetch(`${BASE}/api/nidito/items`);
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.success, 'GET /api/nidito/items falló');
+      assert.ok(Array.isArray(body.data), 'data no es array');
+      const item = body.data.find(it => it.id === niditoItemId);
+      assert.ok(item, 'Item creado en T18 no aparece en listado');
+      assert.equal(item.tipo, 'PROYECTO');
+      assert.equal(item.presupuesto_total, 5000);
+      assert.ok(Array.isArray(item.asignaciones), 'asignaciones no es array');
+    });
+
+    await run('T20 PATCH /api/nidito/items/:id → update presupuesto', async () => {
+      assert.ok(niditoItemId, 'Prerequisito: niditoItemId debe estar seteado');
+      const res = await fetch(`${BASE}/api/nidito/items/${niditoItemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presupuesto_total: 6000, descripcion: 'Updated desc' }),
+      });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.success, `PATCH /api/nidito/items falló: ${JSON.stringify(body)}`);
+      assert.equal(body.data?.presupuesto_total, 6000, 'Presupuesto no fue actualizado');
+    });
+
+    await run('T21 PUT /api/nidito/items/:id/asignaciones → upsert con Ángel', async () => {
+      assert.ok(niditoItemId, 'Prerequisito: niditoItemId');
+      const res = await fetch(`${BASE}/api/nidito/items/${niditoItemId}/asignaciones`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_phone: ANGEL,
+          monto_total_asignado: 3000,
+          monto_quincenal: 1000,
+        }),
+      });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.success, `PUT asignaciones falló: ${JSON.stringify(body)}`);
+      assert.equal(body.data?.monto_total_asignado, 3000);
+    });
+
+    await run('T22 PUT /api/nidito/dinerito → upsert monto quincenal actual', async () => {
+      const res = await fetch(`${BASE}/api/nidito/dinerito`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_phone: ANGEL,
+          quincena_key: '2026-06-A',
+          monto: 5000,
+        }),
+      });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.success, `PUT /api/nidito/dinerito falló: ${JSON.stringify(body)}`);
+      assert.equal(body.data?.monto, 5000);
+    });
+
+    await run('T23 GET /api/nidito/dinerito?phone=... → obtiene monto actual', async () => {
+      const res = await fetch(`${BASE}/api/nidito/dinerito?phone=${encodeURIComponent(ANGEL)}&quincena=2026-06-A`);
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.success, 'GET /api/nidito/dinerito falló');
+      assert.equal(body.data?.monto, 5000, 'Monto no matchea con T22');
+    });
+
+    await run('T24 POST /api/nidito/items/:id/comentarios → create comentario', async () => {
+      assert.ok(niditoItemId, 'Prerequisito: niditoItemId');
+      const res = await fetch(`${BASE}/api/nidito/items/${niditoItemId}/comentarios`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_phone: ANGEL,
+          cuerpo: 'Empezamos a ahorrar para el viaje',
+          adjuntos: [],
+        }),
+      });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.success, `POST comentario falló: ${JSON.stringify(body)}`);
+      assert.ok(body.data?.id, 'Comentario sin id');
+    });
+
+    await run('T25 GET /api/dashboard/:phone → nidito_compromiso + nidito_dinerito presentes', async () => {
+      const phone = encodeURIComponent(ANGEL);
+      const res = await fetch(`${BASE}/api/dashboard/${phone}`);
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.success, 'GET /api/dashboard falló');
+      assert.ok(typeof body.data?.nidito_compromiso === 'number', 'nidito_compromiso no es número');
+      assert.ok(typeof body.data?.nidito_dinerito === 'number', 'nidito_dinerito no es número');
+      assert.equal(body.data.nidito_compromiso, 1000, 'nidito_compromiso no refleja asignación de T21');
+      assert.equal(body.data.nidito_dinerito, 5000, 'nidito_dinerito no refleja dinerito de T22');
+    });
+
+    await run('T26 DELETE /api/nidito/items/:id → soft delete', async () => {
+      assert.ok(niditoItemId, 'Prerequisito: niditoItemId');
+      // Store the item data before deletion
+      const { data: before } = await sb.from('nidito_items').select('deleted_at').eq('id', niditoItemId).maybeSingle();
+      assert.ok(before && before.deleted_at === null, 'Item debería no estar deletado antes de T26');
+
+      const res = await fetch(`${BASE}/api/nidito/items/${niditoItemId}`, { method: 'DELETE' });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.success, 'DELETE /api/nidito/items falló');
+
+      // Verify soft delete
+      const { data: after } = await sb.from('nidito_items').select('deleted_at').eq('id', niditoItemId).maybeSingle();
+      assert.ok(after?.deleted_at, 'Item no fue soft-deleted (deleted_at sigue null)');
+    });
+
+    await run('T27 getQuincena edge case — días 01-09 pertenecen a quincena B anterior', async () => {
+      // Test via GET /api/nidito/quincena?fecha=...
+      const testCases = [
+        { fecha: '2026-06-05', expected: '2026-05-B' },  // día 5 es quincena B mayo
+        { fecha: '2026-06-15', expected: '2026-06-A' },  // día 15 es quincena A junio
+        { fecha: '2026-06-25', expected: '2026-06-B' },  // día 25 es quincena B junio
+        { fecha: '2026-01-03', expected: '2025-12-B' },  // año anterior
+      ];
+      for (const tc of testCases) {
+        const res = await fetch(`${BASE}/api/nidito/quincena?fecha=${tc.fecha}`);
+        assert.equal(res.status, 200, `GET /api/nidito/quincena?fecha=${tc.fecha} no retornó 200`);
+        const body = await res.json();
+        assert.ok(body.success, `quincena helper falló para ${tc.fecha}: ${JSON.stringify(body)}`);
+        assert.equal(body.data?.key, tc.expected, `Quincena para ${tc.fecha}: esperado ${tc.expected}, got ${JSON.stringify(body.data)}`);
+      }
+    });
+
+    await run('T28 GET /api/dashboard/:phone → campo nidito.total_quincenal presente para Ángel', async () => {
+      const phone = encodeURIComponent(ANGEL);
+      const res = await fetch(`${BASE}/api/dashboard/${phone}`);
+      assert.equal(res.status, 200, 'GET /api/dashboard no devolvió 200 en T28');
+      const body = await res.json();
+      assert.ok(body.success, 'GET /api/dashboard falló en T28');
+      const nid = body.data?.nidito;
+      assert.ok(nid && typeof nid === 'object', 'Campo nidito ausente o no es objeto');
+      assert.ok(typeof nid.compromiso_quincenal === 'number', 'nidito.compromiso_quincenal no es número');
+      assert.ok(typeof nid.dinerito_quincenal   === 'number', 'nidito.dinerito_quincenal no es número');
+      assert.ok(typeof nid.total_quincenal       === 'number', 'nidito.total_quincenal no es número');
+      // Item fue soft-deleted en T26 → no debe sumar al compromiso
+      assert.equal(nid.compromiso_quincenal, 0, 'compromiso_quincenal debe ser 0 tras soft-delete de T26');
+      assert.equal(
+        nid.total_quincenal,
+        nid.compromiso_quincenal + nid.dinerito_quincenal,
+        'total_quincenal debe ser la suma de sus partes',
       );
     });
 

@@ -1,176 +1,123 @@
-# FinanceOS WhatsApp
+# FinanceOS WhatsApp — PWA financiera para parejas
 
-Bot personal de WhatsApp para gestión financiera con IA dual (Claude + Gemini), PWA web y pipeline de routing Haiku/Sonnet/Gemini.
+App de finanzas personales integrada con WhatsApp, con soporte para múltiples usuarios y IA (Gemini).
 
-## Setup rápido
+## Estructura
 
-1. Clona el repo y ejecuta `npm install`
-2. Copia `.env.example` a `.env` y rellena las variables (ver sección abajo)
-3. En Supabase → SQL Editor, ejecuta las migraciones en orden:
-   `schema.sql` → `migration_v2.sql` → `migration_v3_LISTA.sql` → `migration_v4.sql` → `migration_v5.sql` → `migration_v6.sql` → `seed.sql`
-4. `npm start` (o `npm run dev` para nodemon)
-5. Expón el puerto con ngrok (local) o despliega en Railway (producción)
-6. En Twilio Sandbox → "When a message comes in" → `https://tu-url/webhook`
+- **`server.js`** — Backend (Express.js + Supabase)
+- **`public/index.html`** — PWA frontend (single-file, vanilla JS)
+- **`tests/integration.test.js`** — Suite de integración (node:test)
+- **`migration_v8.sql`** — Schema para Nidito v8
 
-## Testing
+## Pestaña Nidito — Metas y Presupuesto Compartido
 
-### Integration Tests
+### Descripción
+Pestaña para gestionar metas/proyectos conjuntos (parejas) con asignaciones quinzenales y presupuesto compartido.
+
+**Estructura visual:**
+1. **Dinerito** — Card con monto quincenal disponible + selector de quincena (A/B)
+2. **Proyectos** — Acordeones expandibles con:
+   - Fechas (inicio/fin)
+   - Presupuesto y asignaciones por persona
+   - Comentarios + adjuntos (imágenes/PDFs)
+3. **Metas** — Tres secciones por duración (corto/mediano/largo plazo)
+
+### Endpoints REST
+
+#### Items (Proyectos/Metas)
+- **GET /api/nidito/items** — Listar items con asignaciones anidadas (filtrable por `?tipo=&estado=&phone=`)
+- **GET /api/nidito/items/:id** — Detalle de un item
+- **POST /api/nidito/items** — Crear item (req: `user_phone`, `tipo`, `titulo`, `presupuesto_total`, `estado`, `fecha_inicio`, `fecha_fin`)
+- **PATCH /api/nidito/items/:id** — Actualizar item
+- **DELETE /api/nidito/items/:id** — Soft-delete (marca `deleted_at`)
+
+#### Asignaciones Quinzenales
+- **PUT /api/nidito/items/:id/asignaciones** — Upsert asignación por persona (req: `user_phone`, `monto_total_asignado`, `monto_quincenal`)
+  - Devuelve `warn` si asignación total supera presupuesto
+
+#### Comentarios
+- **GET /api/nidito/items/:id/comentarios** — Listar comentarios
+- **POST /api/nidito/items/:id/comentarios** — Crear comentario (req: `user_phone`, `cuerpo`, `adjuntos: [{url, nombre, tipo}]`)
+
+#### Dinerito (Presupuesto Quinzenal)
+- **GET /api/nidito/dinerito?phone=X&quincena=YYYY-MM-A** — Obtener monto disponible
+- **PUT /api/nidito/dinerito** — Upsert monto (req: `user_phone`, `quincena_key`, `monto`)
+
+#### Utilidades
+- **GET /api/nidito/quincena?fecha=YYYY-MM-DD** — Calcular quincena de una fecha
+  - Retorna: `{ key: 'YYYY-MM-A|B', inicio: 'YYYY-MM-DD', fin: 'YYYY-MM-DD' }`
+  - Edge case: días 01-09 pertenecen a quincena **B anterior** (ej: 2026-06-05 → 2026-05-B)
+
+#### Dashboard
+- **GET /api/dashboard/:phone** — Panel principal
+  - Incluye: `nidito_compromiso` (suma de monto_quincenal asignado) y `nidito_dinerito` (monto actual)
+
+### Upload de Adjuntos
+
+Flow firmado (Supabase Storage):
+1. **POST /api/nidito/upload-url** — Obtiene signed upload URL (req: `nombre`, `tipo`, `itemId`)
+   - Respuesta: `{ uploadUrl, path }`
+2. **PUT {uploadUrl}** — Browser sube archivo directamente a Supabase Storage (raw body)
+3. **POST /api/nidito/upload-confirm** — Obtiene signed download URL de 10 años (req: `path`, `nombre`, `tipo`)
+   - Respuesta: `{ url, path, nombre, tipo }`
+4. **POST /api/nidito/items/:id/comentarios** — Adjunta a comentario incluye `adjuntos` array
+
+**Tipos permitidos:** `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `application/pdf` (máx 10 MB)
+
+### RLS (Row Level Security)
+
+Todas las tablas de Nidito v8 tienen RLS con política `FOR ALL USING (true)` — service role accede sin restricción; el control de acceso es responsabilidad de la app.
+
+## Migración v8
+
+Archivo: **`migration_v8.sql`**
+
+Tablas:
+- **nidito_items** — Proyectos/metas (uuid, tipo, título, presupuesto, estado, fechas, `deleted_at` soft-delete)
+- **nidito_asignaciones** — Montos asignados por persona a cada item (UNIQUE `item_id,user_phone`)
+- **nidito_comentarios** — Comentarios con adjuntos JSONB
+- **nidito_dinerito** — Presupuesto quinzenal por persona (UNIQUE `user_phone,quincena_key`)
+
+Storage:
+- Bucket **nidito-adjuntos** (privado, 10 MB max)
+
+Ejecutar en: Supabase → SQL Editor → copy-paste `migration_v8.sql`
+
+## Helpers
+
+### `getQuincena(fecha)`
+Calcula la quincena para una fecha dada.
+
+```javascript
+getQuincena('2026-06-15') → { key: '2026-06-A', inicio: '2026-06-10', fin: '2026-06-24' }
+getQuincena('2026-06-05') → { key: '2026-05-B', inicio: '2026-05-25', fin: '2026-06-09' }
+getQuincenaActual()        → quincena de hoy
+```
+
+Formato `quincena_key`: `YYYY-MM-A` (días 10-24) | `YYYY-MM-B` (días 25-09 siguiente)
+
+## Tests
+
+Suite: **`tests/integration.test.js`** (27 tests, node:test runner)
+
+Corre:
 ```bash
 node tests/integration.test.js
 ```
-Ejecuta 17 tests de Sprint 8–9 (webhook, propuestas, soft-delete, expiry, API endpoints).
-- **Requiere:** servidor en `http://localhost:3001` (se inicia automáticamente)
-- **Requiere:** créditos en `ANTHROPIC_KEY` (consumo ~$0.50/run)
-- **Timeout:** 300 s — espera cold start de Haiku + latencia Supabase
 
-### Smoke Test
-```bash
-npm start  # En otra terminal
-node scripts/smoke.js
-```
-Test con datos reales (TDC y metas de `PHONE_ANGEL`, `PHONE_ALICIA`). Valida flujo completo: gasto → propuesta → confirmación → audit_log → soft-delete.
-- **Requiere:** servidor en `http://localhost:3001` (por defecto)
-- **Requiere:** `PHONE_ANGEL` y `PHONE_ALICIA` en `.env` (solo dígitos)
-- **Producción:** `SMOKE_URL=https://tu-dominio.up.railway.app node scripts/smoke.js`
-- **Cleanup:** automático (limpia movimientos de prueba y acciones pendientes)
+Incluye:
+- T1-T17: Webhook, movimientos, IA (Claude/Gemini), edge cases
+- T18-T27: Nidito CRUD, asignaciones, dinerito, quincena helpers
 
-## Variables de entorno
+**Requisito:** Servidor debe estar escuchando en `http://localhost:3001`
 
-```env
-# Twilio
-TWILIO_SID=
-TWILIO_TOKEN=
-TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+## Deployment
 
-# IA
-ANTHROPIC_KEY=
-GEMINI_API_KEY=
+- **Local:** `node server.js` (puerto 3000 default, o `PORT=3001`)
+- **Railway:** `railway up` (auto-detecta Node.js, ejecuta `node server.js`)
 
-# Supabase
-SUPABASE_URL=
-SUPABASE_KEY=
+Build: `.env` con `SUPABASE_URL` y `SUPABASE_KEY`
 
-# Config
-PHONE_ANGEL=521XXXXXXXXXX        # solo dígitos, sin + (ej: 5532005195)
-ADMIN_PHONE=whatsapp:+521XXXXXXXXXX
-PORT=3000
-```
+## Versión
 
-## Comandos WhatsApp
-
-| Mensaje | Acción |
-|---|---|
-| `ayuda` / `help` | Menú completo |
-| `resumen` | Resumen financiero del día y mes |
-| `deudas` | Estado TDC con barra de progreso |
-| `metas` | Objetivos de ahorro individuales |
-| `nidito` | Metas compartidas de pareja |
-| `presupuesto` | Avance por categoría (🔴🟡✅) |
-| `historial` | Últimos 10 movimientos |
-| `borrar ultimo` | Soft-delete del último movimiento |
-| `deshacer` | Revierte la última acción (ventana 24 h) |
-| `privacidad` | Qué datos se guardan, qué IA los procesa, cómo borrarlos |
-| `borrar mis datos` | Doble confirmación → soft-delete masivo + purga en 30 días |
-| `1` / `sí` | Confirmar acción pendiente |
-| `2` / `editar` | Editar propuesta antes de confirmar |
-| `3` / `no` | Cancelar acción pendiente |
-| Texto libre | Finn responde con contexto financiero completo |
-| Foto de ticket | Haiku extrae monto/comercio/fecha → propuesta de registro |
-| PDF (estado de cuenta) | Sonnet analiza banco, cargos, intereses, acción recomendada |
-| Nota de voz | Gemini transcribe → mismo flujo que texto |
-
-## Pipeline de mensajes
-
-```
-POST /webhook  (Twilio WhatsApp)
-       │
-       ├─ Comando de palabra clave (resumen / deudas / metas / ...)
-       │       └─► respuesta directa — sin llamada a IA
-       │
-       ├─ Acción pendiente en acciones_pendientes
-       │       ├─ "1"/sí  → executeDbAction (confirm)
-       │       ├─ "2"     → estado 'editing' + mergeEditIntent
-       │       └─ "3"/no  → cancelled
-       │
-       ├─ Media adjunta
-       │       ├─ audio  → Gemini Flash (transcribeAudio) → texto
-       │       ├─ imagen → Haiku (extractReceiptInfo)
-       │       │                ├─ es recibo → proposeDbAction(REGISTRO)
-       │       │                └─ otra cosa → Sonnet (análisis)
-       │       └─ PDF    → Sonnet + betas pdfs (estado de cuenta)
-       │
-       └─ Texto / voz transcrita
-               │
-               ▼
-       extractIntent()  [Haiku · ≤500 tok · ephemeral cache]
-               │
-       ┌───────┴───────────────────────┐
-       │                               │
-  REGISTRO / EDICION /         CONSULTA / CHARLA / COMANDO
-  ELIMINACION + toolArgs               │
-       │                       ┌───────┴────────┐
-       ▼                       │                │
-  proposeDbAction         callClaude        callGemini
-  (sin segundo turno)    [Sonnet · CLAUDE]  [Flash · GEMINI]
-       │                       │                │
-       ▼                       └────────────────┘
-  acciones_pendientes              ▼
-  → confirm / auto-confirm    guardarMensaje → historial_chat
-```
-
-## Arquitectura de IA
-
-```
-Modelo                  Rol                     Cuándo                        Etapa
-─────────────────────────────────────────────────────────────────────────────────────
-claude-haiku-4-5        Extractor de intent     Cada mensaje de texto / voz   extractor
-                        Lector de recibos       Cada imagen entrante           vision
-
-claude-sonnet-4-6       Conversador (Angel)     Solo CONSULTA / CHARLA        conversador
-                        Análisis imagen         Imagen que no es recibo        vision
-                        Análisis PDF            Estado de cuenta               vision
-
-gemini-2.5-flash        Conversador (Alicia)    Solo CONSULTA / CHARLA        conversador
-                        Transcripción audio     Nota de voz (WA y web)         vision
-                        Insight quincenal       GET /api/insight-quincenal     conversador
-```
-
-**Routing decision (por prioridad):**
-
-1. ¿Es comando de palabra clave? → respuesta directa (sin IA, gratis)
-2. ¿Hay `acciones_pendientes` pendiente? → flujo confirm/edit/cancel (sin IA)
-3. ¿Es media?
-   - Audio → `transcribeAudio()` con Gemini, luego flujo normal
-   - Imagen → `extractReceiptInfo()` con Haiku (200 tok); si es recibo → `proposeDbAction`; si no → Sonnet
-   - PDF → Sonnet + betas pdfs
-4. `extractIntent(text)` con Haiku (caché ephemeral ~5 min):
-   - `REGISTRO / EDICION / ELIMINACION` + `toolArgs` → `proposeDbAction` sin segundo turno de IA
-   - `CONSULTA / CHARLA / COMANDO` → `callIA()` → Sonnet (CLAUDE) o Gemini Flash (GEMINI)
-
-**Caché de prompts:** el bloque estático del system prompt lleva `cache_control: ephemeral`. Reduce el costo de input ~80 % en requests frecuentes del mismo usuario.
-
-**Costos estimados (precios API, por millón de tokens):**
-
-| Modelo | Input | Output | Cache read |
-|---|---|---|---|
-| Claude Haiku 4.5 | $1.00 | $5.00 | $0.10 |
-| Claude Sonnet 4.6 | $3.00 | $15.00 | $0.30 |
-| Gemini 2.5 Flash | $0.15 | $0.60 | — |
-
-El endpoint `GET /api/costos/:mes?phone=` devuelve el costo real del mes basado en `usage_log`. Solo accesible para `ADMIN_A`.
-
-## Migraciones
-
-| Archivo | Contenido |
-|---|---|
-| `schema.sql` | Tablas base: movimientos, tdc, metas, nidito, despensa |
-| `migration_v2.sql` | usuarios, calendario, patrones_ia, presupuesto |
-| `migration_v3_LISTA.sql` | historial_chat, tipo_meta, ai_model en usuarios |
-| `migration_v4.sql` | soft-delete, acciones_pendientes, audit_log |
-| `migration_v5.sql` | Campo `revisado` en movimientos (review queue) |
-| `migration_v6.sql` | `usage_log` (tokens + costo por llamada IA) |
-| `seed.sql` | Usuarios Angel/Alicia + migración de registros huérfanos |
-
-## Stack
-
-Node.js · Express · Twilio WhatsApp API · Anthropic Claude SDK · Google Generative AI SDK · Supabase (PostgreSQL) · Railway
+v6 (última: commit `5937b71` — Nidito v8 con upload adjuntos)
