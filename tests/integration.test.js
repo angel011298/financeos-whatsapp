@@ -20,7 +20,7 @@ const ALICIA = 'whatsapp:+52TEST0000002';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function pollUntil(fn, timeout = 45_000, interval = 1_500) {
+async function pollUntil(fn, timeout = 90_000, interval = 1_500) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const v = await fn().catch(() => null);

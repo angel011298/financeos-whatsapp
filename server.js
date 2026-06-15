@@ -38,7 +38,20 @@ async function geminiWithRetry(fn, maxRetries = 3) {
       const isRetryable = msg.includes('503') || msg.includes('429') ||
                           msg.includes('Service Unavailable') || msg.includes('overloaded');
       if (isRetryable && attempt < maxRetries) {
-        const delay = (attempt + 1) * 2000; // 2s, 4s, 6s
+        // On 429, honor Gemini's suggested retryDelay (token bucket refill)
+        // instead of the default exponential backoff which is too short
+        let delay = (attempt + 1) * 2000;
+        if (msg.includes('429')) {
+          try {
+            const retryInfo = (err.errorDetails || []).find(
+              d => typeof d['@type'] === 'string' && d['@type'].includes('RetryInfo')
+            );
+            if (retryInfo?.retryDelay) {
+              const secs = parseFloat(retryInfo.retryDelay);
+              if (secs > 0) delay = Math.min((secs + 5) * 1000, 90_000);
+            }
+          } catch {}
+        }
         console.warn(`[Gemini] ${err.message.slice(0,80)} — reintento ${attempt + 1}/${maxRetries} en ${delay}ms`);
         await new Promise(r => setTimeout(r, delay));
       } else {
