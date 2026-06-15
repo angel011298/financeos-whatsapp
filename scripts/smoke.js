@@ -249,12 +249,15 @@ async function runSmoke() {
   // S3's movimiento was soft-deleted by S4, so we create a fresh one first.
   await sendMsg(PHONE_ANGEL, 'gasté 50 en gasolina');
   const s12prep = await waitPending(PHONE_ANGEL);
+  let s12MovId = null;
   if (s12prep) {
     await sendMsg(PHONE_ANGEL, '1');
-    await waitMovimiento(PHONE_ANGEL, 50);
+    const s12Mov = await waitMovimiento(PHONE_ANGEL, 50);
+    s12MovId = s12Mov?.id;
     await sleep(2000);
   }
-  const s12 = await sendMsg(PHONE_ANGEL, 'borrar el último movimiento');
+  const s12Msg = s12MovId ? `borrar movimiento ${s12MovId}` : 'borrar el último movimiento';
+  const s12 = await sendMsg(PHONE_ANGEL, s12Msg);
   const s12Pending = await waitPending(PHONE_ANGEL);
   const s12Pass = !!s12Pending;
   addResult(12, '"borrar movimiento" → propuesta (no borra directo)', s12Pass, s12Pass ? `ID: ${s12Pending?.id}` : 'No pending');
