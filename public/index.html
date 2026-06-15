@@ -1658,13 +1658,24 @@ function rQuincenaPanel(ctx) {
   <div style="margin-bottom:10px">
     <div class="q-section-lbl"><i class="ti ti-wallet" style="color:var(--yellow)"></i> Gastos esta quincena</div>
     ${gasEsp.length ? gasEsp.map(g => {
-      const fp  = fpMap[g.descripcion] || g.forma_pago || '';
-      const _id = g._id || g.id || g.descripcion;
+      const fp       = fpMap[g.descripcion] || g.forma_pago || '';
+      const _id      = g._id || g.id || g.descripcion;
+      const nomSafe  = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const fpEfect  = fp === 'efectivo';
+      const fpDebit  = fp === 'tarjeta_debito';
+      const fpNone   = !fp;
       return `<div class="q-item-row">
         <span style="font-size:12px">${g.descripcion}</span>
-        <div style="display:flex;align-items:center;gap:6px">
-          ${fp ? `<span style="font-size:11px;color:var(--muted);background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:12px;padding:1px 8px">${fp}</span>` : ''}
-          <span class="red" style="font-weight:600">${fmt(g.monto)}</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
+            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfect?'var(--color-income)':'var(--border-default)'};background:${fpEfect?'rgba(74,222,128,.15)':'transparent'};color:${fpEfect?'var(--color-income)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
+            <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
+          </button>
+          <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="T. Débito"
+            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebit?'var(--accent-primary)':'var(--border-default)'};background:${fpDebit?'rgba(124,106,247,.15)':'transparent'};color:${fpDebit?'var(--accent-primary)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
+            <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
+          </button>
+          <span class="red" style="font-weight:600;margin-left:4px">${fmt(g.monto)}</span>
           <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
           <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
         </div>
