@@ -680,6 +680,23 @@ EJEMPLOS:
 
 async function extractIntent(text, phone = '') {
   const today = hoy();
+
+  // Fast path: handle unambiguous simple patterns without calling Gemini (avoids rate limits)
+  const t = text.trim();
+  const SPEND_CON = /^(?:gasté|gaste|pagué|pague)\s+(\d+(?:\.\d+)?)\s+(?:en|de)\s+(.+?)\s+con\s+(.+)$/i;
+  const SPEND     = /^(?:gasté|gaste|pagué|pague)\s+(\d+(?:\.\d+)?)\s+(?:en|de)\s+(.+)$/i;
+  const DEL_MOV   = /^borrar\s+(?:el\s+)?movimiento\s+(\S+)\s*$/i;
+  let m;
+  if ((m = t.match(SPEND_CON))) {
+    return { intent: 'REGISTRO', toolArgs: { tabla: 'movimientos', accion: 'crear', datos: { tipo: 'GASTO', categoria: 'OTROS', concepto: m[2].trim(), monto: parseFloat(m[1]), medio_pago: m[3].trim(), fecha: today } } };
+  }
+  if ((m = t.match(SPEND))) {
+    return { intent: 'REGISTRO', toolArgs: { tabla: 'movimientos', accion: 'crear', datos: { tipo: 'GASTO', categoria: 'OTROS', concepto: m[2].trim(), monto: parseFloat(m[1]), medio_pago: 'efectivo', fecha: today } } };
+  }
+  if ((m = t.match(DEL_MOV))) {
+    return { intent: 'ELIMINACION', toolArgs: { tabla: 'movimientos', accion: 'eliminar', id: m[1], datos: {} } };
+  }
+
   try {
     const model = genAI.getGenerativeModel({
       model:            'gemini-2.5-flash',
@@ -880,13 +897,14 @@ async function proposeDbAction(phone, arg, textoOriginal) {
     propuesta = `Ejecutar: ${tabla}.${accion}\n\n*1* Sí · *3* No`;
   }
 
-  await sb.from('acciones_pendientes').insert({
+  const { error: insertErr } = await sb.from('acciones_pendientes').insert({
     user_phone: phone,
     tipo:       'db_action',
     datos:      { ...arg, texto_original: textoOriginal },
     estado:     'pending',
     expira_at:  new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   });
+  if (insertErr) console.error('[proposeDbAction] insert error:', insertErr.message, JSON.stringify(arg).slice(0,120));
 
   return { auto: false, msg: propuesta };
 }
