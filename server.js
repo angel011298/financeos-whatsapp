@@ -1357,13 +1357,6 @@ app.post('/api/preferencia', async (req, res) => {
 
 // ── NIDITO v8 — items, asignaciones, comentarios, dinerito ───────────────────
 
-app.get('/api/nidito/quincena', (req, res) => {
-  try {
-    const q = req.query.fecha ? getQuincena(req.query.fecha) : getQuincenaActual();
-    res.json({ success: true, ...q });
-  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
 app.get('/api/nidito/items', async (req, res) => {
   try {
     const { tipo, estado, phone } = req.query;
@@ -1418,11 +1411,19 @@ app.patch('/api/nidito/items/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+app.get('/api/nidito/quincena', async (req, res) => {
+  try {
+    const { fecha } = req.query;
+    const q = fecha ? getQuincena(fecha) : getQuincenaActual();
+    res.json({ success: true, data: q });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.delete('/api/nidito/items/:id', async (req, res) => {
   try {
     const { user_phone } = req.body;
     const { data: before } = await sb.from('nidito_items').select('*').eq('id', req.params.id).single();
-    const { error } = await sb.from('nidito_items').delete().eq('id', req.params.id);
+    const { error } = await sb.from('nidito_items').update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
     if (error) return res.status(400).json({ success: false, error: error.message });
     await writeAuditLog(user_phone, 'nidito_items', 'eliminar', req.params.id, before, null, 'web');
     res.json({ success: true });
@@ -1475,10 +1476,16 @@ app.get('/api/nidito/dinerito', async (req, res) => {
     const { phone, quincena } = req.query;
     const qKey = quincena || getQuincenaActual().key;
     let q = sb.from('nidito_dinerito').select('*').eq('quincena_key', qKey);
-    if (phone) q = q.eq('user_phone', phone);
-    const { data, error } = await q;
-    if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, data, quincena_key: qKey });
+    if (phone) {
+      q = q.eq('user_phone', phone);
+      const { data, error } = await q.maybeSingle();
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      res.json({ success: true, data, quincena_key: qKey });
+    } else {
+      const { data, error } = await q;
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      res.json({ success: true, data, quincena_key: qKey });
+    }
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
