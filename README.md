@@ -81,7 +81,14 @@ Tablas:
 Storage:
 - Bucket **nidito-adjuntos** (privado, 10 MB max)
 
-Ejecutar en: Supabase → SQL Editor → copy-paste `migration_v8.sql`
+### Cómo aplicar en producción
+
+1. **Supabase Dashboard** → SQL Editor
+2. Copy-paste contenido de `migration_v8.sql`
+3. **Run** (botón verde)
+4. Verificar en Tables: `nidito_items`, `nidito_asignaciones`, `nidito_comentarios`, `nidito_dinerito` creadas
+5. Verificar en Storage → Buckets: `nidito-adjuntos` creado
+6. Deploy app (incluye los nuevos endpoints y frontend)
 
 ## Helpers
 
@@ -98,7 +105,7 @@ Formato `quincena_key`: `YYYY-MM-A` (días 10-24) | `YYYY-MM-B` (días 25-09 sig
 
 ## Tests
 
-Suite: **`tests/integration.test.js`** (27 tests, node:test runner)
+Suite: **`tests/integration.test.js`** (28 tests, node:test runner)
 
 Corre:
 ```bash
@@ -106,10 +113,11 @@ node tests/integration.test.js
 ```
 
 Incluye:
-- T1-T17: Webhook, movimientos, IA (Claude/Gemini), edge cases
+- T1-T17: Webhook, movimientos, IA (Gemini), edge cases
 - T18-T27: Nidito CRUD, asignaciones, dinerito, quincena helpers
+- T28: Dashboard nidito.total_quincenal con soft-delete de items
 
-**Requisito:** Servidor debe estar escuchando en `http://localhost:3001`
+**Requisito:** Servidor debe estar escuchando en `http://localhost:3000` (o `PORT=...`)
 
 ## Deployment
 
@@ -120,4 +128,4 @@ Build: `.env` con `SUPABASE_URL` y `SUPABASE_KEY`
 
 ## Versión
 
-v6 (última: commit `5937b71` — Nidito v8 con upload adjuntos)
+v6.1 (última: Nidito v8 — 28/28 tests, dashboard total_quincenal, soft-delete items)
