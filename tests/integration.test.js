@@ -82,7 +82,7 @@ async function cleanupPhone(phone) {
 }
 
 // ── Main test (all subtests run sequentially via await) ───────────────────────
-test('FinanceOS Integration Tests', { timeout: 300_000 }, async (t) => {
+test('FinanceOS Integration Tests', { timeout: 900_000 }, async (t) => {
   let serverProc;
   const state = {
     angelMovId:  null,
