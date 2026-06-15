@@ -1568,30 +1568,12 @@ function rQuincenaPanel(ctx) {
   const balEsp   = totalIngEsp - totalGasEsp;
   const balReal  = totalIngEsp - totalGasReal; // balance = ingreso esperado - gasto real
 
-  // Build gastos comparison map (incluyendo forma_pago por descripción)
+  // Forma de pago por descripción de gasto fijo
   const fpMap = ((S.data.user || {}).external_refs || {}).forma_pago_gastos || {};
-  const gasMap = {};
-  gasEsp.forEach(g => {
-    const fp = fpMap[g.descripcion] || g.forma_pago || '';
-    gasMap[g.descripcion] = { esp: g.monto, real: 0, _id: g._id || g.id || g.descripcion, forma_pago: fp };
-  });
-  qMovs.filter(m => m.tipo==='GASTO').forEach(m => {
-    const key = m.concepto || m.categoria || '';
-    const match = gasEsp.find(g =>
-      key.toLowerCase().includes(g.descripcion.toLowerCase()) ||
-      g.descripcion.toLowerCase().includes(key.toLowerCase())
-    );
-    if (match) gasMap[match.descripcion].real += (m.monto || 0);
-    else {
-      const k2 = (m.categoria === 'Pasajes' ? 'Transporte' : m.categoria) || 'Otros';
-      if (!gasMap[k2]) gasMap[k2] = { esp: 0, real: 0, _id: 'auto-'+k2, forma_pago: '' };
-      gasMap[k2].real += (m.monto || 0);
-    }
-  });
-  // Retiro de efectivo = suma de gastos esperados marcados como efectivo
-  const retiroEfectivo = Object.values(gasMap)
-    .filter(v => v.esp > 0 && v.forma_pago === 'efectivo')
-    .reduce((a, v) => a + v.esp, 0);
+  // Retiro de efectivo = gastos fijos presupuestados marcados como efectivo
+  const retiroEfectivo = gasEsp
+    .filter(g => (fpMap[g.descripcion] || g.forma_pago || '') === 'efectivo')
+    .reduce((a, g) => a + (g.monto || 0), 0);
 
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
@@ -1667,10 +1649,28 @@ function rQuincenaPanel(ctx) {
       </div>
     </div>
     <div style="font-size:22px;font-weight:700;color:var(--color-warning);font-family:'Space Grotesk',system-ui,sans-serif">${fmt(retiroEfectivo)}</div>
-  </div>` : Object.keys(gasMap).length && Object.values(gasMap).some(v=>v.esp>0) ? `
+  </div>` : gasEsp.length > 0 ? `
   <div style="margin-bottom:10px;padding:10px 14px;border-radius:var(--radius-lg);background:var(--bg-surface-2);border:1px dashed var(--border-default);font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px">
     <i class="ti ti-building-bank"></i> Asigna "Efectivo" a tus gastos fijos para ver cuánto retirar del cajero
   </div>` : ''}
+
+  <!-- Gastos presupuestados esta quincena -->
+  <div style="margin-bottom:10px">
+    <div class="q-section-lbl"><i class="ti ti-wallet" style="color:var(--yellow)"></i> Gastos esta quincena</div>
+    ${gasEsp.length ? gasEsp.map(g => {
+      const fp  = fpMap[g.descripcion] || g.forma_pago || '';
+      const _id = g._id || g.id || g.descripcion;
+      return `<div class="q-item-row">
+        <span style="font-size:12px">${g.descripcion}</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${fp ? `<span style="font-size:11px;color:var(--muted);background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:12px;padding:1px 8px">${fp}</span>` : ''}
+          <span class="red" style="font-weight:600">${fmt(g.monto)}</span>
+          <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+          <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
+        </div>
+      </div>`;
+    }).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
+  </div>
 
   <!-- Chart -->
   <div class="cbox" style="margin-bottom:10px">
