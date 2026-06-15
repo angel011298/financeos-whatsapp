@@ -491,18 +491,54 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 
 /* ═══════════════════════════════════════════════════════ RESPONSIVE */
 @media(max-width:700px){
+  /* ── Layout */
   .layout{grid-template-columns:1fr}
   aside{display:none}
   #sb-float{display:none!important}
-  main{padding:16px 14px calc(82px + env(safe-area-inset-bottom,0px))}
+  main{padding:calc(16px + env(safe-area-inset-top,0px)) 14px calc(82px + env(safe-area-inset-bottom,0px))}
   .mobile-nav{display:flex}
+  /* ── Charts */
   .charts-grid{grid-template-columns:1fr}
+  .cwrap{height:180px}
+  .cwrap-lg{height:200px}
+  /* ── Cards & KPI */
   .hdr h2{font-size:var(--text-lg)}
+  .hdr{margin-bottom:14px}
   .card-val{font-size:var(--text-xl)}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px}
   .kpi-val{font-size:var(--text-xl)}
-  .chat-wrap{height:calc(100svh - 148px)}
-  .kpi-grid{grid-template-columns:1fr;gap:8px}
+  .kpi{padding:14px 16px}
+  /* ── Period selector */
+  .periodo-wrap{padding:6px 8px;gap:6px}
+  .periodo-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .ptab{padding:5px 10px;font-size:12px}
+  .p-range{font-size:12px}
+  /* ── Quincena panel */
+  .q-panel{padding:14px}
+  .q-stats{grid-template-columns:repeat(2,1fr)}
+  .qstat-val{font-size:1.1rem}
+  .q-item-row{flex-wrap:wrap;gap:6px;padding:8px 10px}
+  /* ── Modal → bottom sheet */
+  .ovl{align-items:flex-end}
+  .modal{border-radius:var(--radius-xl) var(--radius-xl) 0 0;max-height:90vh;width:100%;max-width:100%;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+  /* ── Forms */
+  .f2{grid-template-columns:1fr}
+  /* ── Chat */
+  .chat-wrap{height:calc(100svh - 148px - env(safe-area-inset-top,0px))}
   .chat-bar input{font-size:16px!important}
+  /* ── Movimientos filter */
+  .mf-lbl{width:auto;flex-shrink:0}
+  .mov-filter{padding:14px}
+  .mov-cbox{padding:14px}
+  /* ── Calendar */
+  .cd{min-height:44px;padding:3px}
+  .ch{padding:4px}
+  /* ── Nidito dinerito */
+  .nd-din-inp{width:auto;min-width:90px;flex:1}
+  .nd-din-row{flex-wrap:wrap}
+  /* ── Section header decoration */
+  .sec-hdr-row::before,.sec-hdr-row::after{max-width:40px}
+  /* ── FAB */
   .fab-save{bottom:90px}
 }
 @media(min-width:701px){#mobile-nav{display:none!important}}
@@ -631,14 +667,16 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 /* ═══════════════════════════════════════════════════════ RESPONSIVE TYPOGRAPHY — legible en iPhone y laptop */
 @media(max-width:700px){
   body{font-size:14px}
-  td{font-size:13px;padding:11px 12px}
-  th{font-size:11px;padding:11px 12px}
-  .msg{font-size:15px;max-width:84%}
+  td{font-size:13px;padding:8px 10px}
+  th{font-size:11px;padding:8px 10px}
+  .msg{font-size:15px;max-width:88%}
   .card-lbl,.kpi-lbl,.snap-lbl{font-size:11px}
   .cat-bdg,.tipo-bdg,.badge{font-size:11px}
   nav a span,.mobile-nav a span{font-size:12px}
   .tbl-search{max-width:none}
   .hdr{flex-wrap:wrap;gap:8px}
+  .mbtns{flex-wrap:wrap}
+  .mbtns .btn{flex:1;justify-content:center;min-height:40px}
 }
 
 /* ═══════════════════════════════════════════════════════ NIDITO v8 */
@@ -727,6 +765,9 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   .nd-asig-inp{width:86px}
   .nd-date-pair{flex-direction:column}
   .nd-sec-hdr h3{font-size:var(--text-lg)}
+  .nd-din-card{padding:14px 16px}
+  .nd-acc-body{padding:10px 12px 12px}
+  .nd-meta-hdr{flex-direction:column;gap:6px}
 }
 </style>
 </head>
