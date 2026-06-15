@@ -1539,7 +1539,9 @@ function navPeriodo(dir, mode) { if (mode==='reset') S.periodo.offset=0; else S.
 // ── QUINCENAL PANEL ──────────────────────────────────────────────────────────
 function rQuincenaPanel(ctx) {
   const refs   = (S.data.user || {}).external_refs || {};
-  const qi     = getQuincenaInfo(S.qOffset);
+  const qOff   = S.periodo.tipo === 'quincena' ? S.periodo.offset : 0;
+  S.qOffset    = qOff;
+  const qi     = getQuincenaInfo(qOff);
   const movs   = S.data.movs || [];
   const qMovs  = filterMovs(movs, qi.from, qi.to);
 
@@ -1591,12 +1593,6 @@ function rQuincenaPanel(ctx) {
 
   return `<div class="q-panel">
   <div class="q-hdr">
-    <div class="q-nav">
-      <button class="btn btn-ghost btn-sm" onclick="navQ(-1)"><i class="ti ti-chevron-left"></i></button>
-      <span class="q-nav-lbl">${qi.label}</span>
-      <button class="btn btn-ghost btn-sm" onclick="navQ(1)"><i class="ti ti-chevron-right"></i></button>
-      ${S.qOffset!==0?`<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="navQ(0,'reset')"><i class="ti ti-home-2"></i></button>`:''}
-    </div>
     <div style="display:flex;gap:5px;flex-wrap:wrap">
       <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
       <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);font-size:11px" onclick="oAddExpItem('gastos')"><i class="ti ti-plus"></i> Gasto fijo</button>
