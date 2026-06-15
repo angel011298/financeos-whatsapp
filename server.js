@@ -62,6 +62,41 @@ const fmt       = n => '$' + Math.round(Math.abs(+n || 0)).toLocaleString('es-MX
 const hoy       = () => new Date().toISOString().split('T')[0];
 const mesActual = () => new Date().toISOString().slice(0, 7);
 
+function getQuincena(fecha) {
+  const d   = (fecha instanceof Date) ? fecha : new Date(fecha + 'T12:00:00');
+  const day = d.getDate();
+  const y   = d.getFullYear();
+  const m   = d.getMonth(); // 0-indexed
+  if (day >= 10 && day <= 24) {
+    const mm = String(m + 1).padStart(2, '0');
+    return { key: `${y}-${mm}-A`, inicio: `${y}-${mm}-10`, fin: `${y}-${mm}-24` };
+  }
+  if (day >= 25) {
+    const mm  = String(m + 1).padStart(2, '0');
+    const nm  = m === 11 ? 0 : m + 1;
+    const ny  = m === 11 ? y + 1 : y;
+    const nmm = String(nm + 1).padStart(2, '0');
+    return { key: `${y}-${mm}-B`, inicio: `${y}-${mm}-25`, fin: `${ny}-${nmm}-09` };
+  }
+  // day 01-09 → quincena B del mes anterior
+  const pm  = m === 0 ? 11 : m - 1;
+  const py  = m === 0 ? y - 1 : y;
+  const pmm = String(pm + 1).padStart(2, '0');
+  const mm  = String(m + 1).padStart(2, '0');
+  return { key: `${py}-${pmm}-B`, inicio: `${py}-${pmm}-25`, fin: `${y}-${mm}-09` };
+}
+const getQuincenaActual = () => getQuincena(new Date());
+
+// Asserts de quincena — lanzan en startup si hay regresión
+;[
+  ['2026-06-15', '2026-06-A'], ['2026-06-10', '2026-06-A'], ['2026-06-24', '2026-06-A'],
+  ['2026-06-05', '2026-05-B'], ['2026-01-03', '2025-12-B'],
+  ['2026-06-25', '2026-06-B'], ['2026-06-30', '2026-06-B'],
+].forEach(([f, k]) => {
+  const got = getQuincena(f).key;
+  if (got !== k) throw new Error(`getQuincena assert: ${f} → ${got} (esperado ${k})`);
+});
+
 // ── Compatibilidad con código existente ──────────────────────────────────────
 const path    = require('path');
 // index.html sin caché (debe ir ANTES del static middleware)
@@ -1205,7 +1240,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
-    const [tdc, movs, metas, user, cal, pat, presp, nidito] = await Promise.all([
+    const [tdc, movs, metas, user, cal, pat, presp, nidito, nidAsig, nidDin] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
       sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).limit(500),
       sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
@@ -1214,8 +1249,11 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }),
       sb.from('presupuesto').select('*').eq('user_phone', phone),
       sb.from('nidito').select('*').is('deleted_at', null).order('completado').order('prioridad', { ascending: false }),
+      sb.from('nidito_asignaciones').select('monto_quincenal').eq('user_phone', phone),
+      sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', getQuincenaActual().key).maybeSingle(),
     ]);
-    res.json({ success: true, data: { tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data, calendario: cal.data, patrones: pat.data, presupuesto: presp.data, nidito: nidito.data } });
+    const nidito_compromiso = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
+    res.json({ success: true, data: { tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data, calendario: cal.data, patrones: pat.data, presupuesto: presp.data, nidito: nidito.data, nidito_compromiso, nidito_dinerito: nidDin.data?.monto || 0 } });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1317,7 +1355,149 @@ app.post('/api/preferencia', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── NIDITO (espacio compartido) ───────────────────────────────────────────────
+// ── NIDITO v8 — items, asignaciones, comentarios, dinerito ───────────────────
+
+app.get('/api/nidito/quincena', (req, res) => {
+  try {
+    const q = req.query.fecha ? getQuincena(req.query.fecha) : getQuincenaActual();
+    res.json({ success: true, ...q });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/nidito/items', async (req, res) => {
+  try {
+    const { tipo, estado, phone } = req.query;
+    let q = sb.from('nidito_items').select('*, nidito_asignaciones(*), nidito_comentarios(id)').order('orden');
+    if (tipo)   q = q.eq('tipo', tipo);
+    if (estado) q = q.eq('estado', estado);
+    const { data, error } = await q;
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    const rows = (data || []).map(item => {
+      const { nidito_comentarios, nidito_asignaciones, ...base } = item;
+      return {
+        ...base,
+        asignaciones: nidito_asignaciones || [],
+        mi_asignacion: phone ? (nidito_asignaciones || []).find(a => a.user_phone === phone) || null : null,
+        comentarios_count: (nidito_comentarios || []).length,
+      };
+    });
+    res.json({ success: true, data: rows });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/nidito/items/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('nidito_items')
+      .select('*, nidito_asignaciones(*), nidito_comentarios(*)')
+      .eq('id', req.params.id).single();
+    if (error) return res.status(404).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/nidito/items', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    const { data, error } = await sb.from('nidito_items').insert(d).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    await writeAuditLog(user_phone, 'nidito_items', 'crear', data.id, null, data, 'web');
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.patch('/api/nidito/items/:id', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    const { data: before } = await sb.from('nidito_items').select('*').eq('id', req.params.id).single();
+    const { data, error } = await sb.from('nidito_items')
+      .update({ ...d, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    await writeAuditLog(user_phone, 'nidito_items', 'editar', data.id, before, data, 'web');
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/nidito/items/:id', async (req, res) => {
+  try {
+    const { user_phone } = req.body;
+    const { data: before } = await sb.from('nidito_items').select('*').eq('id', req.params.id).single();
+    const { error } = await sb.from('nidito_items').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    await writeAuditLog(user_phone, 'nidito_items', 'eliminar', req.params.id, before, null, 'web');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/nidito/items/:id/asignaciones', async (req, res) => {
+  try {
+    const { user_phone, monto_total_asignado, monto_quincenal } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+    const { data: item } = await sb.from('nidito_items').select('presupuesto_total').eq('id', req.params.id).single();
+    const warn = (item && monto_total_asignado !== undefined && monto_total_asignado > (item.presupuesto_total || 0))
+      ? `⚠️ El monto asignado (${fmt(monto_total_asignado)}) supera el presupuesto total del ítem (${fmt(item.presupuesto_total)})`
+      : null;
+    const payload = { item_id: req.params.id, user_phone, updated_at: new Date().toISOString() };
+    if (monto_total_asignado !== undefined) payload.monto_total_asignado = monto_total_asignado;
+    if (monto_quincenal      !== undefined) payload.monto_quincenal      = monto_quincenal;
+    const { data, error } = await sb.from('nidito_asignaciones')
+      .upsert(payload, { onConflict: 'item_id,user_phone' }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    await writeAuditLog(user_phone, 'nidito_asignaciones', 'upsert', data.id, null, data, 'web');
+    res.json({ success: true, data, warn });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/nidito/items/:id/comentarios', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('nidito_comentarios')
+      .select('*').eq('item_id', req.params.id).order('created_at', { ascending: false });
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/nidito/items/:id/comentarios', async (req, res) => {
+  try {
+    const { user_phone, cuerpo, adjuntos } = req.body;
+    if (!user_phone || !cuerpo?.trim()) return res.status(400).json({ success: false, error: 'Faltan campos requeridos' });
+    const { data, error } = await sb.from('nidito_comentarios')
+      .insert({ item_id: req.params.id, user_phone, cuerpo: cuerpo.trim(), adjuntos: adjuntos || [] })
+      .select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    await writeAuditLog(user_phone, 'nidito_comentarios', 'crear', data.id, null, data, 'web');
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/nidito/dinerito', async (req, res) => {
+  try {
+    const { phone, quincena } = req.query;
+    const qKey = quincena || getQuincenaActual().key;
+    let q = sb.from('nidito_dinerito').select('*').eq('quincena_key', qKey);
+    if (phone) q = q.eq('user_phone', phone);
+    const { data, error } = await q;
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data, quincena_key: qKey });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/nidito/dinerito', async (req, res) => {
+  try {
+    const { user_phone, monto, quincena } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+    const qKey = quincena || getQuincenaActual().key;
+    const { data, error } = await sb.from('nidito_dinerito')
+      .upsert({ user_phone, quincena_key: qKey, monto: monto || 0, updated_at: new Date().toISOString() },
+               { onConflict: 'user_phone,quincena_key' })
+      .select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    await writeAuditLog(user_phone, 'nidito_dinerito', 'upsert', data.id, null, data, 'web');
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── NIDITO (espacio compartido — tabla legacy) ────────────────────────────────
 app.get('/api/nidito', async (_req, res) => {
   try {
     const { data, error } = await sb.from('nidito').select('*').order('completado').order('prioridad', { ascending: false });
@@ -1345,7 +1525,7 @@ app.put('/api/nidito/:id', async (req, res) => {
 
 app.delete('/api/nidito/:id', async (req, res) => {
   try {
-    const { error } = await sb.from('nidito').delete().eq('id', req.params.id);
+    const { error } = await sb.from('nidito').update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -2058,6 +2238,35 @@ Prioriza: "alerta" si hay categoría excedida o deuda alta, "logro" si el balanc
     res.json({ success: true, consejos: json.consejos || [] });
   } catch (e) {
     console.error('insights error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── NIDITO STORAGE ─────────────────────────────────────────────────────────
+const UPLOAD_ALLOWED = new Set(['image/jpeg','image/png','image/gif','image/webp','application/pdf']);
+app.post('/api/nidito/upload-url', async (req, res) => {
+  try {
+    const { nombre, tipo, itemId } = req.body;
+    if (!nombre || !tipo || !itemId) return res.status(400).json({ error: 'nombre, tipo, itemId requeridos' });
+    if (!UPLOAD_ALLOWED.has(tipo)) return res.status(400).json({ error: 'Tipo no permitido (imagen o PDF)' });
+    const ext = (nombre.split('.').pop()||'bin').toLowerCase().slice(0,10);
+    const path = `${itemId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { data, error } = await sb.storage.from('nidito-adjuntos').createSignedUploadUrl(path);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, uploadUrl: data.signedUrl, path });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/nidito/upload-confirm', async (req, res) => {
+  try {
+    const { path, nombre, tipo } = req.body;
+    if (!path) return res.status(400).json({ error: 'path requerido' });
+    const { data, error } = await sb.storage.from('nidito-adjuntos').createSignedUrl(path, 315360000);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, url: data.signedUrl, path, nombre: nombre || path.split('/').pop(), tipo: tipo || 'application/octet-stream' });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });

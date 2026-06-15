@@ -638,6 +638,91 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   .tbl-search{max-width:none}
   .hdr{flex-wrap:wrap;gap:8px}
 }
+
+/* ═══════════════════════════════════════════════════════ NIDITO v8 */
+.nd-din-card{background:linear-gradient(135deg,rgba(247,162,106,.12),rgba(124,106,247,.07));border:1px solid rgba(247,162,106,.28);border-radius:var(--radius-xl);padding:20px 22px;margin-bottom:20px;position:relative;overflow:hidden}
+.nd-din-card::before{content:'💕';position:absolute;top:-8px;right:8px;font-size:72px;opacity:.06;pointer-events:none;line-height:1}
+.nd-din-ttl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent-couple);font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px}
+.nd-q-pills{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px}
+.nd-q-pill{padding:5px 11px;border-radius:var(--radius-pill);border:1px solid var(--border-default);background:transparent;color:var(--text-2);cursor:pointer;font-family:'Sora',system-ui;font-size:var(--text-xs);font-weight:500;transition:.15s;white-space:nowrap}
+.nd-q-pill:hover{border-color:var(--accent-couple);color:var(--accent-couple)}
+.nd-q-pill.act{background:var(--accent-couple);color:#fff;border-color:var(--accent-couple)}
+.nd-din-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.nd-din-sign{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--accent-couple);flex-shrink:0}
+.nd-din-inp{width:150px;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--accent-couple);background:var(--bg-surface);border:1px solid rgba(247,162,106,.3);border-radius:var(--radius-md);outline:none;transition:border-color .15s}
+.nd-din-inp:focus{border-color:var(--accent-couple)}
+.nd-din-btn{background:rgba(247,162,106,.18);color:var(--accent-couple);border:1px solid rgba(247,162,106,.35)}
+.nd-din-btn:hover{background:rgba(247,162,106,.3)}
+.nd-din-note{font-size:11px;color:var(--text-3);margin-top:6px;display:flex;align-items:center;gap:5px}
+.nd-sec-hdr{display:flex;align-items:center;justify-content:space-between;margin:24px 0 12px;flex-wrap:wrap;gap:8px}
+.nd-sec-hdr h3{font-family:'DM Serif Display',Georgia,serif;font-size:var(--text-xl);font-weight:400;color:var(--text-1);display:flex;align-items:center;gap:8px}
+.nd-sec-hdr h3 .ti{color:var(--accent-primary);font-size:20px}
+/* Accordion */
+.nd-acc-item{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:8px;transition:border-color .15s}
+.nd-acc-item.nd-open{border-color:rgba(124,106,247,.4)}
+.nd-acc-head{display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;user-select:none;transition:background .12s}
+.nd-acc-head:hover,.nd-acc-head.nd-open{background:var(--bg-surface-2)}
+.nd-acc-chev{font-size:15px;color:var(--text-3);flex-shrink:0;transition:transform .2s;line-height:1}
+.nd-acc-head.nd-open .nd-acc-chev{transform:rotate(90deg)}
+.nd-acc-title{font-size:14px;font-weight:600}
+.nd-acc-body{display:none;padding:14px 16px 16px;border-top:1px solid var(--border-default)}
+.nd-acc-head.nd-open~.nd-acc-body,.nd-acc-body.nd-open{display:block}
+/* Progress */
+.nd-pbar{background:var(--bg-surface-2);border-radius:var(--radius-pill);height:7px;width:100%;overflow:hidden;margin:6px 0}
+.nd-pfill{height:100%;border-radius:var(--radius-pill);background:var(--accent-primary);transition:width .4s}
+.nd-pfill.warn{background:var(--color-warning)}.nd-pfill.dng{background:var(--color-expense)}
+/* Fields */
+.nd-field-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:3px}
+.nd-date-pair{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.nd-date-pair>div{flex:1;min-width:120px}
+.nd-date-inp{padding:7px 10px;font-size:var(--text-sm)}
+/* Assignment table */
+.nd-asig-tbl{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:13px}
+.nd-asig-tbl th{font-size:10px;color:var(--text-3);font-weight:600;letter-spacing:.04em;padding:3px 6px;text-transform:uppercase;border-bottom:1px solid var(--border-default);background:transparent;position:static}
+.nd-asig-tbl td{padding:5px 6px;vertical-align:middle;border:none}
+.nd-asig-inp{width:108px;padding:5px 8px;font-family:'DM Mono',monospace;font-size:13px;border-radius:var(--radius-sm);background:var(--bg-surface-2);border:1px solid var(--border-default);color:var(--text-1);outline:none;transition:border-color .15s}
+.nd-asig-inp:focus{border-color:var(--accent-primary)}
+.nd-asig-btn{background:rgba(124,106,247,.12);color:var(--accent-primary);border:1px solid rgba(124,106,247,.25);padding:0 9px;height:28px}
+.nd-asig-btn:hover{background:rgba(124,106,247,.25)}
+.nd-warn{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.28);border-radius:var(--radius-md);padding:8px 12px;font-size:12px;color:var(--color-warning);display:flex;align-items:center;gap:6px;margin:6px 0}
+.nd-suger{background:rgba(124,106,247,.07);border:1px solid rgba(124,106,247,.18);border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--text-2);margin:8px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.nd-suger strong{color:var(--accent-primary)}
+/* Meta cards */
+.nd-meta-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:18px 20px;margin-bottom:12px;border-left:4px solid transparent}
+.nd-meta-card.corto{border-left-color:var(--color-income)}
+.nd-meta-card.mediano{border-left-color:var(--accent-primary)}
+.nd-meta-card.largo{border-left-color:var(--accent-couple)}
+.nd-meta-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.nd-meta-title{font-size:15px;font-weight:700;line-height:1.3}
+.nd-meta-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.nd-meta-chip{display:inline-flex;align-items:center;gap:3px;background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);padding:3px 9px;color:var(--text-2);font-size:11px;white-space:nowrap}
+.nd-meta-chip .val{color:var(--text-1);font-family:'DM Mono',monospace;font-weight:600}
+.nd-meta-chip.hi{background:rgba(124,106,247,.1);border-color:rgba(124,106,247,.25);color:var(--accent-primary)}
+.nd-meta-chip.hi .val{color:var(--accent-primary)}
+/* Comments */
+.nd-comment{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:9px 12px;margin-bottom:5px;border:1px solid var(--border-default)}
+.nd-comment-who{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-primary);margin-bottom:3px}
+.nd-comment-body{font-size:13px;color:var(--text-1);line-height:1.55;word-break:break-word}
+.nd-comment-time{font-size:10px;color:var(--text-3);margin-top:3px}
+.nd-cmnt-box{display:flex;gap:7px;margin-top:10px;align-items:flex-end}
+.nd-cmnt-box textarea{flex:1;min-height:50px;max-height:110px;resize:vertical;font-size:13px;padding:8px 11px}
+.nd-staged{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;min-height:0}
+.nd-staged-chip{display:flex;align-items:center;gap:5px;background:rgba(124,106,247,.1);border:1px solid rgba(124,106,247,.25);border-radius:20px;padding:3px 8px 3px 7px;font-size:11px;color:var(--text-1);max-width:160px}
+.nd-staged-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.nd-staged-chip button{background:none;border:none;cursor:pointer;padding:0;color:var(--text-3);line-height:1;flex-shrink:0;display:flex}
+.nd-staged-chip button:hover{color:var(--red)}
+.nd-adj-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.nd-adj-img{max-width:100%;max-height:150px;border-radius:var(--radius-md);object-fit:cover;cursor:pointer;border:1px solid var(--border-default);display:block}
+.nd-adj-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:20px;padding:3px 10px 3px 8px;font-size:11px;color:var(--accent-primary);text-decoration:none;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nd-adj-chip:hover{border-color:var(--accent-primary)}
+.nd-divider{border:none;border-top:1px solid var(--border-default);margin:12px 0}
+.nd-empty{text-align:center;padding:20px 16px;color:var(--text-3);border:1px dashed var(--border-default);border-radius:var(--radius-lg);font-size:13px}
+@media(max-width:700px){
+  .nd-asig-tbl th:nth-child(3),.nd-asig-tbl td:nth-child(3){display:none}
+  .nd-asig-inp{width:86px}
+  .nd-date-pair{flex-direction:column}
+  .nd-sec-hdr h3{font-size:var(--text-lg)}
+}
 </style>
 </head>
 <body>
@@ -2082,103 +2167,465 @@ async function fetchInsights(force=false) {
 }
 
 // ── RENDER: NIDITO ────────────────────────────────────────────────────────────
-const NIDITO_TIPOS = ['meta','idea','wishlist','plan','nota'];
-const NIDITO_ICONS = { meta:'ti-target', idea:'ti-bulb', wishlist:'ti-shopping-bag', plan:'ti-clipboard-list', nota:'ti-note' };
+// ═══════════════════════════════════════════════════════
+// NIDITO v8 — items, asignaciones, comentarios, dinerito
+// ═══════════════════════════════════════════════════════
 
-function rNidito() {
-  const items   = S.data.nidito || [];
-  const pending = items.filter(x => !x.completado);
-  const done    = items.filter(x =>  x.completado);
+const ND_ICON  = { PROYECTO:'ti-briefcase', META_CORTO:'ti-bolt', META_MEDIANO:'ti-clock', META_LARGO:'ti-stars' };
+const ND_LABEL = { PROYECTO:'Proyectos', META_CORTO:'Metas a corto plazo', META_MEDIANO:'Metas a mediano plazo', META_LARGO:'Metas a largo plazo' };
+const ND_CLS   = { META_CORTO:'corto', META_MEDIANO:'mediano', META_LARGO:'largo' };
 
-  $('tab-nidito').innerHTML = `
-<div class="hdr">
-  <h2 style="color:#f9a8d4"><i class="ti ti-heart-handshake" style="color:#f9a8d4"></i> Nidito</h2>
-  <button class="btn btn-sm" style="background:rgba(249,168,212,.15);color:#f9a8d4;border:1px solid rgba(249,168,212,.3)" onclick="oNidito()">
-    <i class="ti ti-plus"></i> Agregar
-  </button>
-</div>
-<p style="color:var(--muted);font-size:12px;margin-bottom:16px">Espacio compartido entre Ángel y Alicia — metas, ideas, deseos y planes juntos</p>
-
-${NIDITO_TIPOS.map(tipo => {
-  const ts = pending.filter(x => x.tipo === tipo);
-  if (!ts.length) return '';
-  return `<div style="margin-bottom:20px">
-    <div class="sec-hdr" style="margin:0 0 14px"><div class="sec-hdr-row"><h2><i class="ti ${NIDITO_ICONS[tipo]}"></i> ${tipo.charAt(0).toUpperCase()+tipo.slice(1)}</h2></div></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
-    ${ts.map(n => `
-      <div style="background:var(--card);border:1px solid rgba(249,168,212,.2);border-radius:12px;padding:14px">
-        <div style="display:flex;align-items:flex-start;gap:10px">
-          <span style="font-size:22px;line-height:1.2">${n.emoji || `<i class="ti ${NIDITO_ICONS[n.tipo]||'ti-sparkles'}" style="font-size:20px;color:var(--accent)"></i>`}</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:13px;margin-bottom:3px">${n.titulo}</div>
-            ${n.descripcion ? `<div style="color:var(--muted);font-size:11px;margin-bottom:4px">${n.descripcion}</div>` : ''}
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
-              ${n.monto > 0 ? `<span style="color:var(--green);font-size:12px;display:flex;align-items:center;gap:3px"><i class="ti ti-coin"></i>${fmt(n.monto)}</span>` : ''}
-              ${badgeFecha(n.fecha_objetivo)}
-            </div>
-          </div>
-          <div class="acts" style="flex-shrink:0">
-            <button class="btn btn-sm" style="padding:4px 7px;background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.2)" onclick="toggleNidito(${n.id},true)" title="Completar"><i class="ti ti-check"></i></button>
-            <button class="btn btn-ghost btn-sm" style="padding:4px 7px" onclick="eNidito(${n.id})" title="Editar"><i class="ti ti-pencil"></i></button>
-            <button class="btn btn-danger btn-sm" style="padding:4px 7px" onclick="dNidito(${n.id})" title="Eliminar"><i class="ti ti-trash"></i></button>
-          </div>
-        </div>
-      </div>`).join('')}
-    </div>
-  </div>`;
-}).join('')}
-
-${done.length ? `
-<div style="margin-top:20px;opacity:.6">
-  <div class="sec-hdr" style="margin:0 0 14px"><div class="sec-hdr-row"><h2><i class="ti ti-circle-check"></i> Completados (${done.length})</h2></div></div>
-  <div style="display:flex;flex-wrap:wrap;gap:8px">
-    ${done.map(n=>`<div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;display:flex;align-items:center;gap:7px">
-      <i class="ti ${NIDITO_ICONS[n.tipo]||'ti-note'}" style="color:var(--muted)"></i>
-      <span style="text-decoration:line-through;color:var(--muted)">${n.titulo}</span>
-      <button class="btn btn-ghost btn-sm" onclick="toggleNidito(${n.id},false)" title="Reabrir" style="padding:2px 6px;font-size:10px"><i class="ti ti-arrow-back-up"></i></button>
-      <button class="btn btn-danger btn-sm" onclick="dNidito(${n.id})" style="padding:2px 6px;font-size:10px"><i class="ti ti-trash"></i></button>
-    </div>`).join('')}
-  </div>
-</div>` : ''}
-
-${!items.length ? `<div style="text-align:center;padding:60px 20px;color:var(--muted)">
-  <i class="ti ti-heart-handshake" style="font-size:48px;display:block;margin-bottom:12px;color:#f9a8d4"></i>
-  <div style="font-size:15px;margin-bottom:6px">Nidito está vacío</div>
-  <div style="font-size:12px">Agrega metas, ideas o deseos que quieran lograr juntos</div>
-</div>` : ''}`;
+function _ndQ(d) {
+  d = d || new Date();
+  const day=d.getDate(), y=d.getFullYear(), m=d.getMonth();
+  const mm=n=>String(n+1).padStart(2,'0'), MC=MESES_CORTO;
+  if (day>=10&&day<=24) return {key:`${y}-${mm(m)}-A`,label:`10–24 ${MC[m]} ${y}`,inicio:`${y}-${mm(m)}-10`,fin:`${y}-${mm(m)}-24`};
+  if (day>=25) { const nm=m===11?0:m+1,ny=m===11?y+1:y; return {key:`${y}-${mm(m)}-B`,label:`25 ${MC[m]}–09 ${MC[nm]} ${ny}`,inicio:`${y}-${mm(m)}-25`,fin:`${ny}-${mm(nm)}-09`}; }
+  const pm=m===0?11:m-1,py=m===0?y-1:y;
+  return {key:`${py}-${mm(pm)}-B`,label:`25 ${MC[pm]}–09 ${MC[m]} ${y}`,inicio:`${py}-${mm(pm)}-25`,fin:`${y}-${mm(m)}-09`};
+}
+function _ndPrev(q) {
+  const [ys,ms,h]=q.key.split('-'),y=+ys,m=+ms-1;
+  return h==='A'?_ndQ(new Date(m===0?y-1:y,m===0?11:m-1,28)):_ndQ(new Date(y,m,15));
+}
+function _ndNext(q) {
+  const [ys,ms,h]=q.key.split('-'),y=+ys,m=+ms-1;
+  return h==='A'?_ndQ(new Date(y,m,28)):_ndQ(new Date(m===11?y+1:y,m===11?0:m+1,15));
+}
+function _ndQR(fin) {
+  if (!fin) return null;
+  const d=Math.ceil((new Date(fin+'T00:00:00')-new Date())/86400000);
+  return d<=0?0:Math.ceil(d/15);
+}
+function _ndNombre(phone) {
+  const ap=S.adminPhone||localStorage.getItem('fos_phone_A');
+  return (ap&&phone===ap)?'Ángel':'Alicia';
+}
+function _ndPct(asig, pres) {
+  const total=asig.reduce((a,x)=>a+(x.monto_total_asignado||0),0);
+  const pct=pres>0?Math.min(100,Math.round(total/pres*100)):0;
+  return {total,pct,cls:pct>=100?'dng':pct>=80?'warn':''};
 }
 
-function oNidito(item={}) {
-  S.mctx = { mode: item.id ? 'edit-nidito' : 'new-nidito', item };
-  $('m-title').textContent = item.id ? 'Editar Nidito' : 'Agregar al Nidito';
-  $('m-body').innerHTML = `
-<div class="fr"><label>Título *</label><input id="nd-titulo" value="${item.titulo||''}" placeholder="Ej: Viaje a Europa, Sillón nuevo..."></div>
-<div class="fr"><label>Tipo</label><select id="nd-tipo">
-  ${NIDITO_TIPOS.map(t=>`<option value="${t}"${(item.tipo||'idea')===t?' selected':''}>${t}</option>`).join('')}
-</select></div>
-<div class="f2">
-  <div class="fr"><label>Emoji (opcional)</label><input id="nd-emoji" value="${item.emoji||''}" placeholder="💫" style="font-size:20px;text-align:center"></div>
-  <div class="fr"><label>Monto (opcional)</label><input id="nd-monto" type="number" value="${item.monto||0}" placeholder="0"></div>
+async function rNidito() {
+  const el=$('tab-nidito'); if(!el) return;
+  if (!S._niditoQ)  S._niditoQ=_ndQ();
+  if (!S._ndOpen)   S._ndOpen=new Set();
+  if (!S._ndCmts)   S._ndCmts={};
+  if (!S._ndStaged) S._ndStaged={};
+  if (!S._niditoItems) {
+    el.innerHTML=`<div class="hdr"><h2 style="color:#f9a8d4"><i class="ti ti-heart-handshake" style="color:#f9a8d4"></i> Nidito</h2></div>
+      ${[1,2,3].map(()=>`<div class="nd-acc-item"><div class="nd-acc-head"><div style="height:13px;width:50%;background:var(--bg-surface-2);border-radius:4px;animation:ins-pulse 1.4s infinite"></div></div></div>`).join('')}`;
+    await _ndFetch();
+  }
+  _ndPaint();
+}
+
+async function _ndFetch() {
+  try {
+    const qKey=(S._niditoQ||_ndQ()).key;
+    const [ri,rd]=await Promise.all([
+      api('GET',`/api/nidito/items?phone=${encodeURIComponent(S.phone)}`),
+      api('GET',`/api/nidito/dinerito?phone=${encodeURIComponent(S.phone)}&quincena=${qKey}`)
+    ]);
+    S._niditoItems=ri.data||[];
+    S._ndDin=(rd.data||[]).find(x=>x.user_phone===S.phone)?.monto||0;
+  } catch(e) { S._niditoItems=[]; S._ndDin=0; }
+}
+
+function _ndPaint() {
+  const el=$('tab-nidito'); if(!el) return;
+  const items=S._niditoItems||[];
+  const q=S._niditoQ||_ndQ();
+  const prevQ=_ndPrev(q), nextQ=_ndNext(q);
+  const din=S._ndDin||0;
+  const comprQ=S.data?.nidito_compromiso||0;
+  const angelPh=S.adminPhone||localStorage.getItem('fos_phone_A')||S.phone;
+  const aliciaPh=localStorage.getItem('fos_phone_B')||(S.phone!==angelPh?S.phone:null);
+  const proyectos=items.filter(x=>x.tipo==='PROYECTO'&&x.estado!=='COMPLETADO');
+  const doneProy=items.filter(x=>x.tipo==='PROYECTO'&&x.estado==='COMPLETADO');
+
+  el.innerHTML=`
+<div class="hdr"><h2 style="color:#f9a8d4"><i class="ti ti-heart-handshake" style="color:#f9a8d4"></i> Nidito</h2></div>
+
+<div class="nd-din-card">
+  <div class="nd-din-ttl"><i class="ti ti-coins"></i> Dinerito de novios — ${q.label}</div>
+  <div class="nd-q-pills">
+    <button class="nd-q-pill" onclick='ndPickQ(${JSON.stringify(prevQ)})'>← ${prevQ.label}</button>
+    <button class="nd-q-pill act">${q.label}</button>
+    <button class="nd-q-pill" onclick='ndPickQ(${JSON.stringify(nextQ)})'>${nextQ.label} →</button>
+  </div>
+  <div class="nd-din-row">
+    <span class="nd-din-sign">$</span>
+    <input type="number" class="nd-din-inp" id="nd-din-val" value="${din}" min="0" step="100" placeholder="0">
+    <button class="btn btn-sm nd-din-btn" onclick="ndSaveDin()"><i class="ti ti-device-floppy"></i> Guardar</button>
+  </div>
+  ${comprQ>0?`<div class="nd-din-note"><i class="ti ti-target" style="color:var(--accent-primary)"></i> Compromiso quincenal total al Nidito: <strong style="color:var(--accent-primary)">${fmt(comprQ)}</strong></div>`:''}
+  <div class="nd-din-note"><i class="ti ti-info-circle"></i> Por ahora solo Ángel registra el aporte — próximamente ambos</div>
 </div>
-<div class="fr"><label>Descripción</label><textarea id="nd-desc" placeholder="Detalles, notas...">${item.descripcion||''}</textarea></div>
-<div class="fr"><label>Fecha objetivo <span style="color:var(--muted);font-size:11px">(opcional)</span></label><input id="nd-fecha" type="date" value="${item.fecha_objetivo?fd(item.fecha_objetivo):''}"></div>`;
+
+<div class="nd-sec-hdr">
+  <h3><i class="ti ti-briefcase"></i> Proyectos</h3>
+  <button class="btn btn-sm btn-ghost" onclick="ndNewItem('PROYECTO')"><i class="ti ti-plus"></i> Nuevo</button>
+</div>
+${proyectos.length?proyectos.map(it=>_ndAcc(it,angelPh,aliciaPh)).join(''):`<div class="nd-empty">Sin proyectos — <a style="color:var(--accent-primary);cursor:pointer" onclick="ndNewItem('PROYECTO')">agregar uno</a></div>`}
+${doneProy.length?`<div style="margin:8px 0 4px;opacity:.6"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:6px;display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> Completados (${doneProy.length})</div><div style="display:flex;flex-wrap:wrap;gap:6px">${doneProy.map(it=>`<span style="background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);padding:4px 12px;font-size:12px;display:flex;align-items:center;gap:6px"><i class="ti ti-briefcase" style="color:var(--text-3)"></i>${it.titulo}</span>`).join('')}</div></div>`:''}
+
+${['META_CORTO','META_MEDIANO','META_LARGO'].map(tipo=>{
+  const ms=items.filter(x=>x.tipo===tipo);
+  return `<div class="nd-sec-hdr" style="margin-top:28px">
+    <h3><i class="ti ${ND_ICON[tipo]}"></i> ${ND_LABEL[tipo]}</h3>
+    <button class="btn btn-sm btn-ghost" onclick="ndNewItem('${tipo}')"><i class="ti ti-plus"></i> Nueva</button>
+  </div>
+  ${ms.length?ms.map(it=>_ndMetaCard(it,angelPh,aliciaPh)).join(''):`<div class="nd-empty">Sin ${ND_LABEL[tipo].toLowerCase()}</div>`}`;
+}).join('')}`;
+
+  S._ndOpen.forEach(id=>{
+    const h=$('ndh-'+id),b=$('ndb-'+id),w=$('nditem-'+id);
+    if(h){h.classList.add('nd-open');b?.classList.add('nd-open');w?.classList.add('nd-open');}
+  });
+}
+
+function _ndAcc(item, angelPh, aliciaPh) {
+  const asig=item.asignaciones||[];
+  const {total,pct,cls}=_ndPct(asig,item.presupuesto_total||0);
+  return `<div class="nd-acc-item" id="nditem-${item.id}">
+    <div class="nd-acc-head" id="ndh-${item.id}" onclick="ndToggle('${item.id}')">
+      <i class="ti ti-chevron-right nd-acc-chev"></i>
+      <div style="flex:1;min-width:0">
+        <div class="nd-acc-title">${item.titulo}</div>
+        <div class="nd-pbar"><div class="nd-pfill ${cls}" style="width:${pct}%"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:1px">
+          <span>${fmt(total)} asignado</span><span>${fmt(item.presupuesto_total||0)} total · ${pct}%</span>
+        </div>
+      </div>
+      <div class="acts" style="flex-shrink:0" onclick="event.stopPropagation()">
+        <button class="edit-pill-btn" onclick="ndEditItem('${item.id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+        <button class="edit-pill-btn" style="color:var(--red)" onclick="ndDelItem('${item.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+      </div>
+    </div>
+    <div class="nd-acc-body" id="ndb-${item.id}">${_ndAccBody(item,angelPh,aliciaPh)}</div>
+  </div>`;
+}
+
+function _ndAccBody(item, angelPh, aliciaPh) {
+  const asig=item.asignaciones||[];
+  const angelA=asig.find(x=>x.user_phone===angelPh)||{monto_total_asignado:0,monto_quincenal:0};
+  const aliciaA=aliciaPh?asig.find(x=>x.user_phone===aliciaPh)||{monto_total_asignado:0,monto_quincenal:0}:null;
+  const totalAsig=(angelA.monto_total_asignado||0)+(aliciaA?.monto_total_asignado||0);
+  const ovr=totalAsig>(item.presupuesto_total||0)&&(item.presupuesto_total||0)>0;
+  const qr=_ndQR(item.fecha_fin);
+  const suggA=qr>0?Math.ceil((angelA.monto_total_asignado||0)/qr):null;
+  const suggB=aliciaA&&qr>0?Math.ceil((aliciaA.monto_total_asignado||0)/qr):null;
+  const cmts=S._ndCmts[item.id];
+  return `
+<div class="nd-date-pair">
+  <div><div class="nd-field-lbl">Inicio</div><input type="date" class="nd-date-inp" value="${fd(item.fecha_inicio)}" onchange="ndPatchF('${item.id}','fecha_inicio',this.value)"></div>
+  <div><div class="nd-field-lbl">Fin</div><input type="date" class="nd-date-inp" value="${fd(item.fecha_fin)}" onchange="ndPatchF('${item.id}','fecha_fin',this.value)"></div>
+</div>
+<div class="nd-field-lbl" style="margin-bottom:4px">Presupuesto total</div>
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px">
+  <input type="number" class="nd-date-inp" style="width:140px;font-family:'DM Mono',monospace" id="nd-pres-${item.id}" value="${item.presupuesto_total||0}" min="0">
+  <button class="btn btn-sm nd-asig-btn" onclick="ndPatchPres('${item.id}')"><i class="ti ti-check"></i></button>
+</div>
+<div class="nd-field-lbl" style="margin-bottom:6px">Aportación por persona</div>
+${ovr?`<div class="nd-warn"><i class="ti ti-alert-triangle"></i> Total asignado (${fmt(totalAsig)}) supera el presupuesto (${fmt(item.presupuesto_total||0)})</div>`:''}
+<table class="nd-asig-tbl">
+  <thead><tr><th>Persona</th><th>Total a aportar</th><th>Quincenal</th><th></th></tr></thead>
+  <tbody>
+    ${_ndAsigRow('Ángel',item.id,angelPh,angelA,suggA)}
+    ${aliciaA!==null?_ndAsigRow('Alicia',item.id,aliciaPh,aliciaA,suggB):''}
+  </tbody>
+</table>
+${qr!==null&&qr>0?`<div class="nd-suger"><i class="ti ti-bulb" style="color:var(--accent-primary)"></i> <strong>${qr} quincenas</strong> restantes hasta ${fd(item.fecha_fin)}${suggA!==null?` · Sugerencia Ángel: <strong>${fmt(suggA)}/quinc.</strong>`:''}${suggB!==null?` · Alicia: <strong>${fmt(suggB)}/quinc.</strong>`:''}</div>`:''}
+${qr===0?`<div class="nd-warn"><i class="ti ti-calendar-x"></i> Fecha fin alcanzada</div>`:''}
+<hr class="nd-divider">
+<div class="nd-field-lbl" style="margin-bottom:6px">Comentarios${item.comentarios_count>0?` (${item.comentarios_count})`:''}</div>
+<div id="nd-cmts-${item.id}">${cmts!==undefined?_ndCmtsHtml(cmts,item.id):`<button class="btn btn-sm btn-ghost" onclick="ndLoadCmts('${item.id}')"><i class="ti ti-refresh"></i> Cargar comentarios</button>`}</div>`;
+}
+
+function _ndAsigRow(nombre, itemId, phone, asig, sugg) {
+  const iid=`${itemId}-${nombre.toLowerCase()}`;
+  return `<tr>
+    <td style="font-weight:600;white-space:nowrap">${nombre}</td>
+    <td><input type="number" class="nd-asig-inp" id="nda-tot-${iid}" value="${asig.monto_total_asignado||0}" min="0" placeholder="0"></td>
+    <td><input type="number" class="nd-asig-inp" id="nda-q-${iid}" value="${asig.monto_quincenal||0}" min="0" placeholder="0">
+      ${sugg!==null&&sugg!==undefined?`<div style="font-size:10px;color:var(--accent-primary);margin-top:2px">↑ ${fmt(sugg)}</div>`:''}</td>
+    <td><button class="btn btn-sm nd-asig-btn" onclick="ndSaveAsig('${itemId}','${phone||''}','${iid}')"><i class="ti ti-check"></i></button></td>
+  </tr>`;
+}
+
+function _ndAdjView(adjs) {
+  if (!adjs || !adjs.length) return '';
+  return `<div class="nd-adj-row">${adjs.map(a => {
+    const isImg = a.tipo && a.tipo.startsWith('image/');
+    if (isImg) return `<a href="${a.url}" target="_blank" rel="noopener"><img class="nd-adj-img" src="${a.url}" alt="${(a.nombre||'imagen').replace(/"/g,'')}" loading="lazy"></a>`;
+    const icon = a.tipo === 'application/pdf' ? 'ti-file-type-pdf' : 'ti-link';
+    const lbl = (a.nombre || a.url || '').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    return `<a class="nd-adj-chip" href="${a.url}" target="_blank" rel="noopener"><i class="ti ${icon}"></i><span>${lbl}</span></a>`;
+  }).join('')}</div>`;
+}
+
+function _ndStagedHtml(itemId) {
+  const staged = S._ndStaged[itemId] || [];
+  if (!staged.length) return '';
+  return staged.map((f, i) => `<div class="nd-staged-chip">
+    <i class="ti ${f.tipo && f.tipo.startsWith('image/') ? 'ti-photo' : 'ti-file'}" style="font-size:11px;flex-shrink:0"></i>
+    <span title="${(f.nombre||'').replace(/"/g,'')}">${(f.nombre||'archivo').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>
+    <button onclick="ndUnstage('${itemId}',${i})" title="Quitar"><i class="ti ti-x" style="font-size:10px"></i></button>
+  </div>`).join('');
+}
+
+function _ndRefreshStaged(itemId) {
+  const el = $('nd-staged-' + itemId);
+  if (el) el.innerHTML = _ndStagedHtml(itemId);
+}
+
+function ndUnstage(itemId, idx) {
+  if (!S._ndStaged[itemId]) return;
+  S._ndStaged[itemId].splice(idx, 1);
+  _ndRefreshStaged(itemId);
+}
+
+async function ndAttach(input, itemId) {
+  const file = input.files[0]; input.value = '';
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { toast('Archivo demasiado grande (máx 10 MB)', 'error'); return; }
+  const allowed = ['image/jpeg','image/png','image/gif','image/webp','application/pdf'];
+  if (!allowed.includes(file.type)) { toast('Solo imágenes (jpg/png/gif/webp) o PDF', 'error'); return; }
+  const lbl = input.closest('label');
+  if (lbl) { lbl.style.opacity = '0.5'; lbl.style.pointerEvents = 'none'; }
+  try {
+    const r1 = await api('POST', '/api/nidito/upload-url', { nombre: file.name, tipo: file.type, itemId });
+    if (!r1.success) throw new Error(r1.error || 'No se pudo obtener URL de subida');
+    const up = await fetch(r1.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!up.ok) throw new Error(`Error al subir archivo (${up.status})`);
+    const r2 = await api('POST', '/api/nidito/upload-confirm', { path: r1.path, nombre: file.name, tipo: file.type });
+    if (!r2.success) throw new Error(r2.error || 'No se pudo confirmar subida');
+    if (!S._ndStaged[itemId]) S._ndStaged[itemId] = [];
+    S._ndStaged[itemId].push({ url: r2.url, path: r1.path, nombre: file.name, tipo: file.type });
+    _ndRefreshStaged(itemId);
+    toast('Archivo listo · haz clic en enviar', 'success');
+  } catch (e) { toast('Subida fallida: ' + e.message, 'error'); }
+  if (lbl) { lbl.style.opacity = ''; lbl.style.pointerEvents = ''; }
+}
+
+function _ndCmtsHtml(cmts, itemId) {
+  const escBody = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener" style="color:var(--accent-primary)">$1</a>');
+  const list = cmts.length ? cmts.map(c => `<div class="nd-comment">
+    <div class="nd-comment-who">${_ndNombre(c.user_phone)}</div>
+    <div class="nd-comment-body">${escBody(c.cuerpo)}</div>
+    ${_ndAdjView(c.adjuntos)}
+    <div class="nd-comment-time">${fmtDate(fd(c.created_at))}</div>
+  </div>`).join('') : `<div style="font-size:12px;color:var(--text-3);padding:4px 0">Sin comentarios aún</div>`;
+  return `${list}<div class="nd-cmnt-box">
+    <div style="flex:1;min-width:0">
+      <textarea id="nd-cmt-${itemId}" placeholder="Escribe un comentario o pega un link…" rows="2"></textarea>
+      <div id="nd-staged-${itemId}" class="nd-staged"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;align-self:flex-end">
+      <button class="btn btn-sm btn-accent" onclick="ndPostCmt('${itemId}')"><i class="ti ti-send"></i></button>
+      <label class="btn btn-sm btn-ghost" title="Adjuntar imagen o PDF (máx 10 MB)" style="cursor:pointer">
+        <i class="ti ti-paperclip"></i>
+        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" style="display:none" onchange="ndAttach(this,'${itemId}')">
+      </label>
+    </div>
+  </div>`;
+}
+
+function _ndMetaCard(item, angelPh, aliciaPh) {
+  const asig=item.asignaciones||[];
+  const {total,pct,cls}=_ndPct(asig,item.presupuesto_total||0);
+  const dias=item.fecha_fin?diasRestantes(item.fecha_fin):null;
+  const qr=_ndQR(item.fecha_fin);
+  const tipoCls=ND_CLS[item.tipo]||'';
+  const angelA=asig.find(x=>x.user_phone===angelPh)||{monto_total_asignado:0,monto_quincenal:0};
+  const aliciaA=aliciaPh?asig.find(x=>x.user_phone===aliciaPh)||{monto_total_asignado:0,monto_quincenal:0}:null;
+  const totalAsig=(angelA.monto_total_asignado||0)+(aliciaA?.monto_total_asignado||0);
+  const ovr=totalAsig>(item.presupuesto_total||0)&&(item.presupuesto_total||0)>0;
+  return `<div class="nd-meta-card ${tipoCls}">
+    <div class="nd-meta-hdr">
+      <div style="flex:1;min-width:0">
+        <div class="nd-meta-title">${item.titulo}</div>
+        ${item.descripcion?`<div style="font-size:12px;color:var(--text-2);margin-top:3px;line-height:1.5">${item.descripcion}</div>`:''}
+      </div>
+      <div class="acts" style="flex-shrink:0">
+        <button class="edit-pill-btn" onclick="ndEditItem('${item.id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+        <button class="edit-pill-btn" style="color:var(--red)" onclick="ndDelItem('${item.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+      </div>
+    </div>
+    <div class="nd-meta-chips">
+      ${item.presupuesto_total>0?`<span class="nd-meta-chip">Presupuesto: <span class="val">${fmt(item.presupuesto_total)}</span></span>`:''}
+      ${total>0?`<span class="nd-meta-chip">Asignado: <span class="val">${fmt(total)}</span></span>`:''}
+      ${item.fecha_fin?`<span class="nd-meta-chip ${dias!==null&&dias<=30?'hi':''}"><i class="ti ti-calendar-due"></i> ${fd(item.fecha_fin)}${dias!==null?` · ${dias<0?'VENCIDA':dias===0?'hoy':dias+'d'}`:''}${qr!==null&&qr>0?` (${qr} quinc.)`:''}</span>`:''}
+      ${item.fecha_inicio?`<span class="nd-meta-chip"><i class="ti ti-calendar-event"></i> Inicio: ${fd(item.fecha_inicio)}</span>`:''}
+    </div>
+    ${item.presupuesto_total>0?`<div class="nd-pbar"><div class="nd-pfill ${cls}" style="width:${pct}%"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:3px;margin-bottom:12px"><span>${fmt(total)} de ${fmt(item.presupuesto_total)}</span><span>${pct}%</span></div>`:''}
+    ${ovr?`<div class="nd-warn" style="margin-bottom:10px"><i class="ti ti-alert-triangle"></i> Total asignado supera el presupuesto</div>`:''}
+    <table class="nd-asig-tbl">
+      <thead><tr><th>Persona</th><th>Total</th><th>Quincenal</th><th></th></tr></thead>
+      <tbody>
+        ${_ndAsigRow('Ángel',item.id,angelPh,angelA,null)}
+        ${aliciaA!==null?_ndAsigRow('Alicia',item.id,aliciaPh,aliciaA,null):''}
+      </tbody>
+    </table>
+    ${item.comentarios_count>0?`<div style="font-size:11px;color:var(--text-2);margin-top:4px;display:flex;align-items:center;gap:4px"><i class="ti ti-message-2"></i> ${item.comentarios_count} comentario${item.comentarios_count!==1?'s':''}</div>`:''}
+  </div>`;
+}
+
+// ── Acciones Nidito ───────────────────────────────────
+function ndToggle(id) {
+  const h=$('ndh-'+id), b=$('ndb-'+id), w=$('nditem-'+id);
+  if (!h||!b) return;
+  const opening=!h.classList.contains('nd-open');
+  [h,b,w].forEach(el=>el?.classList.toggle('nd-open'));
+  if (opening) {
+    S._ndOpen.add(id);
+    if (S._ndCmts[id]===undefined) ndLoadCmts(id);
+  } else {
+    S._ndOpen.delete(id);
+  }
+}
+
+async function ndPickQ(q) {
+  S._niditoQ=q;
+  try {
+    const rd=await api('GET',`/api/nidito/dinerito?phone=${encodeURIComponent(S.phone)}&quincena=${q.key}`);
+    S._ndDin=(rd.data||[]).find(x=>x.user_phone===S.phone)?.monto||0;
+  } catch(e) { S._ndDin=0; }
+  _ndPaint();
+}
+
+async function ndSaveDin() {
+  const val=parseFloat($('nd-din-val')?.value)||0;
+  try {
+    await api('PUT','/api/nidito/dinerito',{user_phone:S.phone,monto:val,quincena:S._niditoQ?.key});
+    S._ndDin=val;
+    toast(`Dinerito guardado: ${fmt(val)}`);
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+async function ndSaveAsig(itemId, phone, iid) {
+  if (!phone) { toast('Teléfono de Alicia no registrado aún','warn'); return; }
+  const tot=parseFloat($('nda-tot-'+iid)?.value)||0;
+  const q=parseFloat($('nda-q-'+iid)?.value)||0;
+  try {
+    const r=await api('PUT',`/api/nidito/items/${itemId}/asignaciones`,{user_phone:phone,monto_total_asignado:tot,monto_quincenal:q});
+    if (r.warn) toast(r.warn,'warn'); else toast('Asignación guardada');
+    S._niditoItems=null;
+    await _ndFetch();
+    _ndPaint();
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+async function ndPatchF(itemId, field, val) {
+  try {
+    await api('PATCH',`/api/nidito/items/${itemId}`,{user_phone:S.phone,[field]:val||null});
+    const it=S._niditoItems?.find(x=>x.id===itemId);
+    if (it) { it[field]=val||null; }
+    const b=$('ndb-'+itemId);
+    const ap=S.adminPhone||localStorage.getItem('fos_phone_A')||S.phone;
+    const alic=localStorage.getItem('fos_phone_B')||(S.phone!==ap?S.phone:null);
+    if (b&&it) b.innerHTML=_ndAccBody(it,ap,alic);
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+async function ndPatchPres(itemId) {
+  const val=parseFloat($('nd-pres-'+itemId)?.value)||0;
+  try {
+    await api('PATCH',`/api/nidito/items/${itemId}`,{user_phone:S.phone,presupuesto_total:val});
+    const it=S._niditoItems?.find(x=>x.id===itemId);
+    if (it) it.presupuesto_total=val;
+    const ap=S.adminPhone||localStorage.getItem('fos_phone_A')||S.phone;
+    const alic=localStorage.getItem('fos_phone_B')||(S.phone!==ap?S.phone:null);
+    const b=$('ndb-'+itemId);
+    if (b&&it) b.innerHTML=_ndAccBody(it,ap,alic);
+    toast('Presupuesto actualizado');
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+async function ndLoadCmts(itemId) {
+  const el=$('nd-cmts-'+itemId);
+  if (el) el.innerHTML='<span style="font-size:12px;color:var(--text-3)">Cargando…</span>';
+  try {
+    const r=await api('GET',`/api/nidito/items/${itemId}/comentarios`);
+    S._ndCmts[itemId]=r.data||[];
+    if (el) el.innerHTML=_ndCmtsHtml(S._ndCmts[itemId],itemId);
+  } catch(e) { if(el) el.innerHTML=`<span style="color:var(--red);font-size:12px">Error al cargar</span>`; }
+}
+
+async function ndPostCmt(itemId) {
+  const inp = $('nd-cmt-' + itemId);
+  const txt = inp?.value.trim();
+  const staged = S._ndStaged[itemId] || [];
+  if (!txt && !staged.length) return;
+  inp.disabled = true;
+  try {
+    const linkRx = /(https?:\/\/[^\s]+)/g;
+    const links = [...(txt.matchAll(linkRx))].map(m => ({ url: m[1], nombre: m[1], tipo: 'text/uri-list' }));
+    const adjuntos = [...staged.map(({ url, nombre, tipo }) => ({ url, nombre, tipo })), ...links];
+    const r = await api('POST', `/api/nidito/items/${itemId}/comentarios`, { user_phone: S.phone, cuerpo: txt || '', adjuntos });
+    if (!S._ndCmts[itemId]) S._ndCmts[itemId] = [];
+    S._ndCmts[itemId].unshift(r.data);
+    const it = S._niditoItems?.find(x => x.id === itemId);
+    if (it) it.comentarios_count = (it.comentarios_count || 0) + 1;
+    inp.value = '';
+    S._ndStaged[itemId] = [];
+    const el = $('nd-cmts-' + itemId);
+    if (el) el.innerHTML = _ndCmtsHtml(S._ndCmts[itemId], itemId);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+  inp.disabled = false;
+}
+
+function ndNewItem(tipo) {
+  S.mctx={mode:'nd-item-new',tipo};
+  $('m-title').textContent=tipo==='PROYECTO'?'Nuevo Proyecto':`Nueva Meta — ${ND_LABEL[tipo]||tipo}`;
+  $('m-body').innerHTML=`
+<div class="fr"><label>Título *</label><input id="ndi-titulo" placeholder="Ej: Viaje a París, Sala nueva…"></div>
+<div class="fr"><label>Descripción</label><textarea id="ndi-desc" placeholder="Detalles, notas…"></textarea></div>
+<div class="f2">
+  <div class="fr"><label>Presupuesto total</label><input id="ndi-pres" type="number" min="0" placeholder="0"></div>
+  <div class="fr"><label>Estado</label><select id="ndi-est"><option value="ACTIVO">Activo</option><option value="PAUSADO">Pausado</option></select></div>
+</div>
+<div class="f2">
+  <div class="fr"><label>Fecha inicio</label><input id="ndi-ini" type="date"></div>
+  <div class="fr"><label>Fecha fin</label><input id="ndi-fin" type="date"></div>
+</div>`;
   $('ovl').classList.add('open');
 }
 
-function eNidito(id) {
-  const item = (S.data.nidito||[]).find(x=>x.id===id);
-  if (item) oNidito(item);
+function ndEditItem(id) {
+  const it=S._niditoItems?.find(x=>x.id===id); if(!it) return;
+  S.mctx={mode:'nd-item-edit',id,tipo:it.tipo};
+  $('m-title').textContent=it.tipo==='PROYECTO'?'Editar Proyecto':`Editar Meta`;
+  $('m-body').innerHTML=`
+<div class="fr"><label>Título *</label><input id="ndi-titulo" value="${(it.titulo||'').replace(/"/g,'&quot;')}"></div>
+<div class="fr"><label>Descripción</label><textarea id="ndi-desc">${it.descripcion||''}</textarea></div>
+<div class="f2">
+  <div class="fr"><label>Presupuesto total</label><input id="ndi-pres" type="number" min="0" value="${it.presupuesto_total||0}"></div>
+  <div class="fr"><label>Estado</label><select id="ndi-est">
+    <option value="ACTIVO"${it.estado==='ACTIVO'?' selected':''}>Activo</option>
+    <option value="PAUSADO"${it.estado==='PAUSADO'?' selected':''}>Pausado</option>
+    <option value="COMPLETADO"${it.estado==='COMPLETADO'?' selected':''}>Completado</option>
+  </select></div>
+</div>
+<div class="f2">
+  <div class="fr"><label>Fecha inicio</label><input id="ndi-ini" type="date" value="${fd(it.fecha_inicio)}"></div>
+  <div class="fr"><label>Fecha fin</label><input id="ndi-fin" type="date" value="${fd(it.fecha_fin)}"></div>
+</div>`;
+  $('ovl').classList.add('open');
 }
 
-async function toggleNidito(id, completado) {
-  await api('PUT', `/api/nidito/${id}`, { completado });
-  await load();
-}
-
-async function dNidito(id) {
-  if (!confirm('¿Eliminar del Nidito?')) return;
-  await api('DELETE', `/api/nidito/${id}`);
-  await load();
+async function ndDelItem(id) {
+  if (!confirm('¿Eliminar este ítem del Nidito?')) return;
+  try {
+    await api('DELETE',`/api/nidito/items/${id}`,{user_phone:S.phone});
+    S._niditoItems=null; delete S._ndCmts[id]; S._ndOpen.delete(id);
+    await _ndFetch();
+    _ndPaint();
+    toast('Ítem eliminado');
+  } catch(e) { toast('Error: '+e.message,'error'); }
 }
 
 // ── RENDER: DEUDAS TDC ───────────────────────────────────────────────────────
@@ -3227,6 +3674,28 @@ async function saveM() {
       if (r.data) { if (!S.data.despensa) S.data.despensa = []; S.data.despensa.unshift(r.data); }
       closeM(); rDespensa(); toast(`"${nombre}" agregado a la despensa`);
     } catch(e) { alert('Error: ' + e.message); }
+    return;
+  }
+
+  if (ctx.mode==='nd-item-new' || ctx.mode==='nd-item-edit') {
+    const titulo=($('ndi-titulo')?.value||'').trim();
+    if (!titulo) { alert('Ingresa un título'); return; }
+    const body={user_phone:S.phone,titulo,
+      descripcion:($('ndi-desc')?.value||'').trim()||null,
+      presupuesto_total:parseFloat($('ndi-pres')?.value)||0,
+      estado:$('ndi-est')?.value||'ACTIVO',
+      fecha_inicio:$('ndi-ini')?.value||null,
+      fecha_fin:$('ndi-fin')?.value||null,
+      tipo:ctx.tipo||null};
+    if (ctx.mode==='nd-item-edit')
+      r=await api('PATCH',`/api/nidito/items/${ctx.id}`,body);
+    else
+      r=await api('POST','/api/nidito/items',body);
+    if (r?.success===false) { alert('Error: '+(r.error||'')); return; }
+    S._niditoItems=null;
+    closeM();
+    await _ndFetch();
+    _ndPaint();
     return;
   }
 
