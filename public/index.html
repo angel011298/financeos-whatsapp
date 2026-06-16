@@ -2764,23 +2764,17 @@ ${mkTable({ id:'tbl-tdc', numbered:true, empty:'Sin tarjetas configuradas',
 
 // ── RENDER: PRESUPUESTO ──────────────────────────────────────────────────────
 function rPresp() {
-  const cm=curMes();
-  const movs=(S.data.movs||[]).filter(m=>m.tipo==='GASTO'&&(m.fecha||'').startsWith(cm));
+  const r = getPeriodoRange();
+  const cm = r.short || r.from.substring(0, 7);
+  const movs = filterMovs(S.data.movs||[], r.from, r.to).filter(m=>m.tipo==='GASTO');
   const prsp=(S.data.presupuesto||[]).filter(p=>p.mes===cm);
-  const rows=CATS.map(c=>{const r=movs.filter(m=>m.categoria===c).reduce((a,m)=>a+(m.monto||0),0);const l=(prsp.find(p=>p.categoria===c)||{}).limite||0;return{c,r,l};}).filter(x=>x.r>0||x.l>0);
-  // Calcular primer y último día del mes activo
-  const [cmY,cmM] = cm.split('-');
-  const primerDia = `01 ${MESES[parseInt(cmM)-1]} ${cmY}`;
-  const lastDay   = new Date(parseInt(cmY), parseInt(cmM), 0).getDate();
-  const ultimoDia = `${String(lastDay).padStart(2,'0')} ${MESES[parseInt(cmM)-1]} ${cmY}`;
+  const rows=CATS.map(c=>{const rv=movs.filter(m=>m.categoria===c).reduce((a,m)=>a+(m.monto||0),0);const l=(prsp.find(p=>p.categoria===c)||{}).limite||0;return{c,r:rv,l};}).filter(x=>x.r>0||x.l>0);
   const qHtml = rQuincenaPanel('prsp');
   $('tab-presupuesto').innerHTML=`
 <div class="hdr">
-  <h2><i class="ti ti-report-money"></i> Presupuesto — ${cm}</h2>
-  <span style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px">
-    <i class="ti ti-calendar-event"></i>${primerDia} – ${ultimoDia}
-  </span>
+  <h2><i class="ti ti-report-money"></i> Presupuesto y Metas</h2>
 </div>
+${periodoSelectorHTML()}
 ${qHtml}
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis de Presupuesto</h2></div><div class="sec-hdr-sub">Gasto real vs límites por categoría</div></div>
 <div class="cbox" style="margin-bottom:14px">
