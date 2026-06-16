@@ -5,6 +5,7 @@ const { createClient } = require('@supabase/supabase-js');
 const WebSocket        = require('ws');
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { google } = require('googleapis');
 const axios     = require('axios');
 
 const app = express();
@@ -2581,6 +2582,147 @@ app.post('/api/update-refs', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── GOOGLE CALENDAR ─────────────────────────────────────────────────────────
+function _gcalAuth() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+}
+
+async function _gcalClient(phone) {
+  const { data: user } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+  const tok = user?.external_refs?.google_calendar;
+  if (!tok?.refresh_token) return null;
+  const auth = _gcalAuth();
+  auth.setCredentials(tok);
+  auth.on('tokens', async (fresh) => {
+    const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const refs = u?.external_refs || {};
+    refs.google_calendar = { ...(refs.google_calendar || {}), ...fresh };
+    await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+  });
+  return google.calendar({ version: 'v3', auth });
+}
+
+app.get('/auth/gcal/start', (req, res) => {
+  if (!process.env.GOOGLE_CLIENT_ID) return res.status(503).send('Google Calendar no configurado');
+  const url = _gcalAuth().generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/calendar'],
+    state: req.query.phone || '',
+    prompt: 'consent'
+  });
+  res.redirect(url);
+});
+
+app.get('/auth/gcal/callback', async (req, res) => {
+  const { code, state: phone } = req.query;
+  if (!code) return res.status(400).send('Falta código');
+  try {
+    const auth = _gcalAuth();
+    const { tokens } = await auth.getToken(code);
+    auth.setCredentials(tokens);
+    const { data: info } = await google.oauth2({ version: 'v2', auth }).userinfo.get();
+    const { data: user } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const refs = user?.external_refs || {};
+    refs.google_calendar = { ...tokens, email: info.email };
+    await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui;text-align:center;padding:40px;background:#0f0f0f;color:#fff">
+<div style="max-width:400px;margin:0 auto;background:#1a1a1a;padding:32px;border-radius:16px;border:1px solid #333">
+<div style="font-size:48px;margin-bottom:16px">✅</div>
+<h2 style="margin:0 0 8px;color:#a78bfa">Google Calendar conectado</h2>
+<p style="color:#999;margin:0 0 16px">${info.email}</p>
+<p style="color:#666;font-size:13px">Puedes cerrar esta ventana.</p>
+</div>
+<script>if(window.opener){window.opener.postMessage('gcal_connected','*');setTimeout(()=>window.close(),1800);}</script>
+</body></html>`);
+  } catch(e) {
+    console.error('[gcal/callback]', e.message);
+    res.status(500).send('Error al conectar: ' + e.message);
+  }
+});
+
+app.get('/api/gcal/status', async (req, res) => {
+  const { phone } = req.query;
+  if (!phone) return res.json({ connected: false });
+  try {
+    const { data: user } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const gc = user?.external_refs?.google_calendar;
+    res.json({ connected: !!(gc?.refresh_token), email: gc?.email || null });
+  } catch(e) {
+    res.json({ connected: false });
+  }
+});
+
+app.get('/api/gcal/events', async (req, res) => {
+  const { phone, from, to } = req.query;
+  try {
+    const cal = await _gcalClient(phone);
+    if (!cal) return res.json({ events: [] });
+    const { data } = await cal.events.list({
+      calendarId: 'primary',
+      timeMin: from ? new Date(from + 'T00:00:00').toISOString() : new Date().toISOString(),
+      timeMax: to   ? new Date(to   + 'T23:59:59').toISOString() : undefined,
+      maxResults: 250,
+      singleEvents: true,
+      orderBy: 'startTime'
+    });
+    res.json({ events: data.items || [] });
+  } catch(e) {
+    console.error('[gcal/events]', e.message);
+    res.status(500).json({ error: e.message, events: [] });
+  }
+});
+
+app.post('/api/gcal/events', async (req, res) => {
+  const { phone, titulo, fecha, hora, descripcion } = req.body;
+  try {
+    const cal = await _gcalClient(phone);
+    if (!cal) return res.status(400).json({ error: 'Google Calendar no conectado' });
+    const ev = {
+      summary: titulo,
+      description: descripcion || '',
+      start: hora ? { dateTime: `${fecha}T${hora}:00`, timeZone: 'America/Mexico_City' } : { date: fecha },
+      end:   hora ? { dateTime: `${fecha}T${hora}:00`, timeZone: 'America/Mexico_City' } : { date: fecha }
+    };
+    const { data } = await cal.events.insert({ calendarId: 'primary', resource: ev });
+    res.json({ success: true, gcalId: data.id });
+  } catch(e) {
+    console.error('[gcal/create]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/gcal/events/:eventId', async (req, res) => {
+  const { phone } = req.query;
+  try {
+    const cal = await _gcalClient(phone);
+    if (!cal) return res.status(400).json({ error: 'No conectado' });
+    await cal.events.delete({ calendarId: 'primary', eventId: req.params.eventId });
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/gcal/disconnect', async (req, res) => {
+  const { phone } = req.query;
+  try {
+    const { data: user } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const refs = user?.external_refs || {};
+    if (refs.google_calendar?.access_token) {
+      try { const a = _gcalAuth(); a.setCredentials(refs.google_calendar); await a.revokeCredentials(); } catch(_) {}
+    }
+    delete refs.google_calendar;
+    await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

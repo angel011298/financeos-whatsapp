@@ -428,6 +428,12 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .cd.today{border-color:var(--accent-primary)}.cd.oth{opacity:.3}
 .cdn{font-size:9px;color:var(--text-3);margin-bottom:2px}
 .cev{background:var(--accent-primary);color:#fff;border-radius:3px;padding:1px 4px;margin-bottom:1px;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.cev.cev-gc{background:#4285F4}
+.gcal-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:14px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);font-size:var(--text-sm)}
+.gcal-dot{width:10px;height:10px;border-radius:50%;background:#4285F4;flex-shrink:0}
+.gcal-lbl{color:var(--text-2);flex:1}
+.gcal-lbl strong{color:var(--text-1)}
+.src-gc{display:inline-flex;align-items:center;gap:3px;background:rgba(66,133,244,.12);color:#4285F4;border:1px solid rgba(66,133,244,.25);border-radius:var(--radius-pill);padding:1px 6px;font-size:10px;font-weight:600;white-space:nowrap}
 .cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .cal-nav h3{flex:1;font-size:var(--text-base);font-weight:600;color:var(--text-1)}
 
@@ -957,7 +963,11 @@ const S = {
   _metaData:      {},    // id → meta lookup
   _tdcData:       {},    // id → tdc lookup
   _expItemData:   {},    // _id → ingreso/gasto esperado lookup
-  _openCatPicker: null   // id of movimiento whose cat picker is open
+  _openCatPicker: null,  // id of movimiento whose cat picker is open
+  gcalConnected: false,
+  gcalEmail: null,
+  gcalEvents: [],
+  _gcalMonth: null
 };
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -1089,6 +1099,7 @@ function showApp(id, firstTime = false) {
   const isPWA = window.navigator.standalone === true ||
                 window.matchMedia('(display-mode: standalone)').matches;
   load().then(() => {
+    _checkGCalStatus().catch(()=>{});
     if (S._autoGhost) {
       S._autoGhost = false;
       setTimeout(() => toggleGhost(), 120); // activa ghost mode para ver a Alicia
@@ -3523,83 +3534,196 @@ async function changeCat(id, newCat) {
 }
 
 // ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
+function _calGridHTML(evts, gcEvts, y, mo, refs) {
+  const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const first=new Date(y,mo,1), last=new Date(y,mo+1,0);
+  const today=new Date().toISOString().split('T')[0];
+  const mm=String(mo+1).padStart(2,'0');
+  const ingDays=new Set((getIngresosEsperados(refs)).flatMap(i=>i.dias||[]));
+  const payDays=(refs.dias_pago||[]);
+  let cells='<div class="ch">Dom</div><div class="ch">Lun</div><div class="ch">Mar</div><div class="ch">Mié</div><div class="ch">Jue</div><div class="ch">Vie</div><div class="ch">Sáb</div>';
+  for(let i=0;i<first.getDay();i++) cells+=`<div class="cd oth"></div>`;
+  for(let d=1;d<=last.getDate();d++){
+    const ds=`${y}-${mm}-${String(d).padStart(2,'0')}`;
+    const de=evts.filter(e=>fd(e.fecha)===ds);
+    const dg=gcEvts.filter(e=>e.fecha===ds);
+    const isPay=payDays.includes(d)||ingDays.has(d);
+    cells+=`<div class="cd${ds===today?' today':''}">
+      <div class="cdn" style="${isPay?'color:var(--green);font-weight:700':''}">${d}${isPay?'💰':''}</div>
+      ${de.map(e=>`<div class="cev" title="${e.titulo}" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'>${e.titulo}</div>`).join('')}
+      ${dg.map(e=>`<div class="cev cev-gc" title="${e.titulo} (Google Calendar)" onclick='eGCalEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'>${e.titulo}</div>`).join('')}
+    </div>`;
+  }
+  return `
+<div class="cbox" style="margin-bottom:14px">
+  <div class="cal-nav">
+    <button class="btn btn-ghost btn-sm" onclick="calN(-1)"><i class="ti ti-chevron-left"></i></button>
+    <h3>${MN[mo]} ${y}<span style="font-size:11px;color:var(--muted);margin-left:8px">${payDays.length?'💰 cobro: días '+payDays.join(', '):''}</span></h3>
+    <button class="btn btn-ghost btn-sm" onclick="calN(1)"><i class="ti ti-chevron-right"></i></button>
+  </div>
+  <div id="cal-grid">${cells}</div>
+</div>`;
+}
+
+function _calUpcomingHTML(evts, gcEvts) {
+  const today=new Date().toISOString().split('T')[0];
+  const up=evts.filter(e=>fd(e.fecha)>=today).slice(0,100);
+  const upGc=gcEvts.filter(e=>e.fecha>=today);
+  const upAll=[...up,...upGc].sort((a,b)=>(fd(a.fecha)||'').localeCompare(fd(b.fecha)||''));
+  return mkTable({ id:'tbl-cal', numbered:true, limit:80, empty:'Sin eventos próximos',
+    columns:[
+      {key:'fecha',label:'Fecha',filter:'text',value:e=>fd(e.fecha)||e.fecha||''},
+      {key:'hora',label:'Hora',value:e=>e.hora||'—'},
+      {key:'titulo',label:'Título',filter:'text',value:e=>e.titulo||''},
+      {key:'tipo',label:'Tipo',filter:'select',value:e=>e.tipo||'evento'},
+      {key:'descripcion',label:'Descripción',filter:'text',value:e=>e.descripcion||''},
+      {key:'_src',label:'',sortable:false},
+      {key:'_acts',label:'',sortable:false}],
+    rows:upAll,
+    renderRow:e=>e._gcalId ? `<tr>
+  <td>${fmtDate(e.fecha)}</td>
+  <td style="color:var(--muted)">${e.hora||'—'}</td>
+  <td><strong>${e.titulo}</strong></td>
+  <td style="color:var(--muted)">${e.tipo||'evento'}</td>
+  <td style="color:var(--muted)">${e.descripcion||''}</td>
+  <td><span class="src-gc"><i class="ti ti-brand-google"></i> Google</span></td>
+  <td class="acts">
+    <button class="btn btn-danger" style="padding:6px 10px" onclick="dGCalEvt('${e._gcalId}')"><i class="ti ti-trash"></i></button>
+  </td>
+</tr>` : `<tr>
+  <td class="editable" onclick="ieCal(this,${e.id},'fecha')">${fmtDate(e.fecha)}</td>
+  <td class="editable" onclick="ieCal(this,${e.id},'hora')" style="color:var(--muted)">${e.hora||'—'}</td>
+  <td class="editable" onclick="ieCal(this,${e.id},'titulo')"><strong>${e.titulo}</strong></td>
+  <td class="editable" onclick="ieCal(this,${e.id},'tipo')" style="color:var(--muted)">${e.tipo||'evento'}</td>
+  <td class="editable" onclick="ieCal(this,${e.id},'descripcion')" style="color:var(--muted)">${e.descripcion||''}</td>
+  <td></td>
+  <td class="acts">
+    <button class="btn btn-ghost" style="padding:6px 10px" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'><i class="ti ti-pencil"></i></button>
+    <button class="btn btn-danger" style="padding:6px 10px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
+  </td>
+</tr>`});
+}
+
 function rCal() {
   const evts = S.data.calendario || [];
   S._calData = {};
   evts.forEach(e => { S._calData[e.id] = e; });
   const refs = (S.data.user || {}).external_refs || {};
   const y=S.cy, mo=S.cm;
-  const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const first=new Date(y,mo,1), last=new Date(y,mo+1,0);
-  const today=new Date().toISOString().split('T')[0];
-  const mm = String(mo+1).padStart(2,'0');
 
-  // Mark days with expected income/expenses
-  const ingEsp = getIngresosEsperados(refs);
-  const gasEsp = getGastosEsperados(refs);
-  const ingDays = new Set(ingEsp.flatMap(i => i.dias || []));
-  // Pay days for current month
-  const payDays = (refs.dias_pago || []);
-
-  let cells='<div class="ch">Dom</div><div class="ch">Lun</div><div class="ch">Mar</div><div class="ch">Mié</div><div class="ch">Jue</div><div class="ch">Vie</div><div class="ch">Sáb</div>';
-  for (let i=0;i<first.getDay();i++) cells+=`<div class="cd oth"></div>`;
-  for (let d=1;d<=last.getDate();d++) {
-    const ds=`${y}-${mm}-${String(d).padStart(2,'0')}`;
-    const de=evts.filter(e=>fd(e.fecha)===ds);
-    const isPay = payDays.includes(d) || ingDays.has(d);
-    cells+=`<div class="cd${ds===today?' today':''}">
-      <div class="cdn" style="${isPay?'color:var(--green);font-weight:700':''}">${d}${isPay?'💰':''}</div>
-      ${de.map(e=>`<div class="cev" title="${e.titulo}" onclick='eEvt(${JSON.stringify(e)})'>${e.titulo}</div>`).join('')}
-    </div>`;
-  }
-  const up=evts.filter(e=>fd(e.fecha)>=today).slice(0,100);
-
-  // Upcoming scheduled payments this quincena
-  const qi = getQuincenaInfo(S.qOffset);
-  const qEvts = evts.filter(e => { const f=fd(e.fecha); return f>=qi.from && f<=qi.to; });
+  const gcBar = S.gcalConnected
+    ? `<div class="gcal-bar">
+        <div class="gcal-dot"></div>
+        <div class="gcal-lbl"><strong>${S.gcalEmail||'Google Calendar'}</strong> conectado — eventos en <span style="color:#4285F4">azul</span></div>
+        <button class="btn btn-ghost btn-sm" onclick="disconnectGCal()" style="font-size:11px;color:var(--muted)"><i class="ti ti-unlink"></i> Desconectar</button>
+      </div>`
+    : `<div class="gcal-bar">
+        <i class="ti ti-brand-google" style="color:#4285F4;font-size:18px;flex-shrink:0"></i>
+        <div class="gcal-lbl" style="color:var(--text-2)">Conecta tu Google Calendar para ver todos tus eventos en un solo lugar</div>
+        <button class="btn btn-ghost btn-sm" onclick="connectGCal()" style="border-color:#4285F4;color:#4285F4;white-space:nowrap"><i class="ti ti-brand-google"></i> Conectar</button>
+      </div>`;
 
   $('tab-calendario').innerHTML=`
 <div class="hdr">
   <h2><i class="ti ti-calendar"></i> Calendario</h2>
   <button class="btn btn-accent btn-sm" onclick="oEvt()"><i class="ti ti-plus"></i> Evento</button>
 </div>
-${rQuincenaPanel('cal')}
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-calendar-month"></i> Calendario de Eventos</h2></div><div class="sec-hdr-sub">Eventos y pagos programados del mes</div></div>
-<div class="cbox" style="margin-bottom:14px">
-  <div class="cal-nav">
-    <button class="btn btn-ghost btn-sm" onclick="calN(-1)"><i class="ti ti-chevron-left"></i></button>
-    <h3>${MN[mo]} ${y} <span style="font-size:11px;color:var(--muted);margin-left:6px">${payDays.length?'💰 cobro: días '+payDays.join(', '):''}</span></h3>
-    <button class="btn btn-ghost btn-sm" onclick="calN(1)"><i class="ti ti-chevron-right"></i></button>
-  </div>
-  <div id="cal-grid">${cells}</div>
-</div>
+${gcBar}
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-calendar-month"></i> Calendario de Eventos</h2></div><div class="sec-hdr-sub">Eventos personales y de Google Calendar</div></div>
+<div id="cal-month-wrap">${_calGridHTML(evts, S.gcalEvents, y, mo, refs)}</div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-clock-hour-4"></i> Próximos Eventos</h2></div></div>
-${mkTable({ id:'tbl-cal', numbered:true, limit:60, empty:'Sin eventos próximos',
-  columns:[
-    {key:'fecha',label:'Fecha',filter:'text',value:e=>fd(e.fecha)},
-    {key:'hora',label:'Hora',value:e=>e.hora||'—'},
-    {key:'titulo',label:'Título',filter:'text',value:e=>e.titulo||''},
-    {key:'tipo',label:'Tipo',filter:'select',value:e=>e.tipo||'evento'},
-    {key:'recurrente',label:'Recurrente',filter:'select',value:e=>e.recurrente||'no'},
-    {key:'descripcion',label:'Descripción',filter:'text',value:e=>e.descripcion||''},
-    {key:'notas',label:'Comentarios',filter:'text',value:e=>e.notas||''},
-    {key:'_acts',label:'',sortable:false}],
-  rows:up,
-  renderRow:e=>`<tr>
-  <td class="editable" onclick="ieCal(this,${e.id},'fecha')">${fmtDate(e.fecha)}</td>
-  <td class="editable" onclick="ieCal(this,${e.id},'hora')" style="color:var(--muted)">${e.hora||'—'}</td>
-  <td class="editable" onclick="ieCal(this,${e.id},'titulo')"><strong>${e.titulo}</strong></td>
-  <td class="editable" onclick="ieCal(this,${e.id},'tipo')">${e.tipo||'evento'}</td>
-  <td class="editable" onclick="ieCal(this,${e.id},'recurrente')" style="color:var(--muted)">${e.recurrente||'no'}</td>
-  <td class="editable" onclick="ieCal(this,${e.id},'descripcion')" style="color:var(--muted)">${e.descripcion||''}</td>
-  <td class="editable" onclick="ieCal(this,${e.id},'notas')" style="color:var(--muted);font-size:11px;max-width:140px">${e.notas||'<em style="color:var(--text-3);font-style:normal">—</em>'}</td>
-  <td class="acts">
-    <button class="btn btn-ghost" style="padding:6px 10px" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'><i class="ti ti-pencil"></i></button>
-    <button class="btn btn-danger" style="padding:6px 10px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
-  </td>
-</tr>` })}`;
+<div id="cal-upcoming-wrap">${_calUpcomingHTML(evts, S.gcalEvents)}</div>`;
+
+  _loadGCalEvents();
 }
-function calN(d){S.cm+=d;if(S.cm>11){S.cm=0;S.cy++;}if(S.cm<0){S.cm=11;S.cy--;}rCal();}
+
+function calN(d){
+  S.cm+=d;
+  if(S.cm>11){S.cm=0;S.cy++;}
+  if(S.cm<0){S.cm=11;S.cy--;}
+  S._gcalMonth=null;
+  rCal();
+}
+
+// ── GOOGLE CALENDAR HELPERS ──────────────────────────────────────────────────
+function _normalizeGCalEvt(g) {
+  const fecha = g.start?.date || (g.start?.dateTime||'').split('T')[0];
+  const hora  = g.start?.dateTime ? (g.start.dateTime.split('T')[1]||'').slice(0,5) : null;
+  return { _gcalId:g.id, titulo:g.summary||'(sin título)', fecha, hora, tipo:'evento', descripcion:g.description||'', recurrente:'no', _source:'google' };
+}
+
+async function _loadGCalEvents() {
+  if (!S.gcalConnected) return;
+  const tag = `${S.cy}-${String(S.cm+1).padStart(2,'0')}`;
+  if (S._gcalMonth === tag) return;
+  try {
+    const from = `${S.cy}-${String(S.cm+1).padStart(2,'0')}-01`;
+    const lastDay = new Date(S.cy, S.cm+1, 0).getDate();
+    const to   = `${S.cy}-${String(S.cm+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    const r = await api('GET', `/api/gcal/events?phone=${encodeURIComponent(S.phone)}&from=${from}&to=${to}`);
+    S.gcalEvents = (r.events||[]).map(_normalizeGCalEvt);
+    S._gcalMonth = tag;
+    const refs = (S.data.user||{}).external_refs||{};
+    const evts = S.data.calendario||[];
+    const mw = $('cal-month-wrap');
+    const uw = $('cal-upcoming-wrap');
+    if (mw) mw.innerHTML = _calGridHTML(evts, S.gcalEvents, S.cy, S.cm, refs);
+    if (uw) uw.innerHTML = _calUpcomingHTML(evts, S.gcalEvents);
+  } catch(e) { console.error('[gcal load]', e); }
+}
+
+async function _checkGCalStatus() {
+  if (!S.phone) return;
+  try {
+    const r = await api('GET', `/api/gcal/status?phone=${encodeURIComponent(S.phone)}`);
+    S.gcalConnected = r.connected || false;
+    S.gcalEmail     = r.email || null;
+  } catch(_) {}
+}
+
+function connectGCal() {
+  const popup = window.open(`/auth/gcal/start?phone=${encodeURIComponent(S.phone)}`, 'gcal_auth', 'width=520,height=640,left=200,top=100');
+  const handler = async (e) => {
+    if (e.data !== 'gcal_connected') return;
+    window.removeEventListener('message', handler);
+    if (popup && !popup.closed) popup.close();
+    S.gcalConnected = true;
+    S._gcalMonth = null;
+    await _checkGCalStatus();
+    rCal();
+  };
+  window.addEventListener('message', handler);
+}
+
+async function disconnectGCal() {
+  if (!confirm('¿Desconectar Google Calendar?')) return;
+  await api('DELETE', `/api/gcal/disconnect?phone=${encodeURIComponent(S.phone)}`);
+  S.gcalConnected = false;
+  S.gcalEmail = null;
+  S.gcalEvents = [];
+  S._gcalMonth = null;
+  rCal();
+}
+
+function eGCalEvt(e) {
+  const safe = JSON.stringify(e).replace(/'/g,"&#39;");
+  alert(`📅 ${e.titulo}\n📆 ${fmtDate(e.fecha)}${e.hora?' ⏰ '+e.hora:''}\n${e.descripcion?'📝 '+e.descripcion:''}\n\n(Evento de Google Calendar — editable desde Google Calendar)`);
+}
+
+async function dGCalEvt(gcalId) {
+  if (!confirm('¿Eliminar este evento de Google Calendar?')) return;
+  try {
+    await api('DELETE', `/api/gcal/events/${gcalId}?phone=${encodeURIComponent(S.phone)}`);
+    S.gcalEvents = S.gcalEvents.filter(e => e._gcalId !== gcalId);
+    S._gcalMonth = null;
+    const refs = (S.data.user||{}).external_refs||{};
+    const evts = S.data.calendario||[];
+    const mw = $('cal-month-wrap');
+    const uw = $('cal-upcoming-wrap');
+    if (mw) mw.innerHTML = _calGridHTML(evts, S.gcalEvents, S.cy, S.cm, refs);
+    if (uw) uw.innerHTML = _calUpcomingHTML(evts, S.gcalEvents);
+  } catch(e) { alert('Error al eliminar: ' + e.message); }
+}
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
 function oMov(tipo='GASTO', rec=null) {
@@ -3830,9 +3954,14 @@ async function saveM() {
   if (ctx.tabla==='movimientos')
     r = isE ? await api('PUT',`/api/movimientos/${ctx.id}`,{user_phone:S.phone,...datos})
             : await api('POST','/api/movimientos',{user_phone:S.phone,...datos});
-  else if (ctx.tabla==='calendario')
+  else if (ctx.tabla==='calendario') {
     r = isE ? await api('PUT',`/api/calendario/${ctx.id}`,{user_phone:S.phone,...datos})
             : await api('POST','/api/calendario',{user_phone:S.phone,...datos});
+    if (!isE && S.gcalConnected && datos.titulo && datos.fecha) {
+      api('POST','/api/gcal/events',{phone:S.phone,...datos}).catch(()=>{});
+      S._gcalMonth = null;
+    }
+  }
   else
     r = isE ? await api('PUT',`/api/metas/${ctx.id}`,{user_phone:S.phone,...datos})
             : await api('POST','/api/metas',{user_phone:S.phone,...datos});
