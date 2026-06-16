@@ -653,6 +653,10 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
 const _extractIntentStaticPrompt = `Eres un extractor de intents para una app de finanzas personales en México.
 Analiza el mensaje del usuario y responde ÚNICAMENTE con JSON válido (sin texto adicional).
 
+FECHA ACTUAL: FECHA_HOY (año FECHA_YEAR)
+- "hoy" o sin fecha → FECHA_HOY
+- Fechas sin año ("25 de julio") → usa año FECHA_YEAR
+
 INTENTS disponibles:
 - REGISTRO   → el usuario reporta un gasto, ingreso u operación con monto explícito
 - EDICION    → quiere corregir/modificar un registro existente (menciona ID o "el último")
@@ -701,7 +705,9 @@ async function extractIntent(text, phone = '') {
     const model = genAI.getGenerativeModel({
       model:            'gemini-2.5-flash',
       generationConfig: { responseMimeType: 'application/json' },
-      systemInstruction: _extractIntentStaticPrompt.replace(/FECHA_HOY/g, today),
+      systemInstruction: _extractIntentStaticPrompt
+        .replace(/FECHA_HOY/g, today)
+        .replace(/FECHA_YEAR/g, today.slice(0, 4)),
     });
     const result = await geminiWithRetry(() => model.generateContent(text));
     logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'extractor');
@@ -711,10 +717,16 @@ async function extractIntent(text, phone = '') {
     let toolArgs  = null;
 
     if (['REGISTRO','EDICION','ELIMINACION'].includes(intent) && json.tabla && json.accion) {
-      toolArgs = { tabla: json.tabla, accion: json.accion, id: json.id || undefined, datos: json.datos || {} };
-      if (!toolArgs.datos?.fecha) {
-        toolArgs = { ...toolArgs, datos: { ...toolArgs.datos, fecha: today } };
+      const datos = { ...(json.datos || {}) };
+      if (!datos.fecha) {
+        datos.fecha = today;
+      } else if (json.accion === 'crear' && json.tabla === 'movimientos') {
+        const itemYear = parseInt(datos.fecha.slice(0, 4), 10);
+        if (itemYear < parseInt(today.slice(0, 4), 10)) {
+          datos.fecha = today.slice(0, 4) + datos.fecha.slice(4);
+        }
       }
+      toolArgs = { tabla: json.tabla, accion: json.accion, id: json.id || undefined, datos };
     }
 
     return { intent, toolArgs };
@@ -728,6 +740,12 @@ async function extractIntent(text, phone = '') {
 const _batchIntentPrompt = `Eres un extractor de intents para una app de finanzas personales en México.
 Analiza el mensaje y extrae TODAS las operaciones mencionadas.
 Responde ÚNICAMENTE con JSON válido (sin texto adicional).
+
+FECHA ACTUAL: FECHA_HOY (año FECHA_YEAR)
+- "hoy" o sin fecha especificada → FECHA_HOY
+- "ayer" → FECHA_AYER
+- Fechas sin año ("25 de julio", "quincena 10 de agosto") → usa año FECHA_YEAR
+- Fechas futuras ("quincena 10 de julio siguiente") → FECHA_YEAR si el mes aún no pasó, FECHA_YEAR+1 si ya pasó
 
 INTENTS:
 - REGISTRO    → el usuario reporta uno o MÁS gastos/ingresos con monto explícito
@@ -892,13 +910,16 @@ async function extractIntentBatch(text, phone = '') {
   if ((mm = t.match(SPEND)))     return { intent:'REGISTRO', items:[{ tabla:'movimientos', accion:'crear', datos:{ tipo:'GASTO', categoria:'OTROS', concepto:mm[2].trim(), monto:parseFloat(mm[1]), medio_pago:'efectivo', fecha:today } }] };
   if ((mm = t.match(DEL_MOV)))   return { intent:'ELIMINACION', items:[{ tabla:'movimientos', accion:'eliminar', id:mm[1], datos:{} }] };
 
+  const currentYear = today.slice(0, 4);
+
   try {
     const model = genAI.getGenerativeModel({
       model:            'gemini-2.5-flash',
       generationConfig: { responseMimeType: 'application/json' },
       systemInstruction: _batchIntentPrompt
         .replace(/FECHA_HOY/g, today)
-        .replace(/FECHA_AYER/g, yesterday),
+        .replace(/FECHA_AYER/g, yesterday)
+        .replace(/FECHA_YEAR/g, currentYear),
     });
     const result = await geminiWithRetry(() => model.generateContent(text));
     logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'batch-extractor');
@@ -910,12 +931,19 @@ async function extractIntentBatch(text, phone = '') {
     if (['REGISTRO','EDICION','ELIMINACION'].includes(intent) && Array.isArray(json.items)) {
       items = json.items
         .filter(it => it.tabla && it.accion)
-        .map(it => ({
-          tabla:  it.tabla,
-          accion: it.accion,
-          id:     it.id || undefined,
-          datos:  { ...(it.datos || {}), ...(!(it.datos?.fecha) ? { fecha: today } : {}) },
-        }));
+        .map(it => {
+          const datos = { ...(it.datos || {}) };
+          // Fallback: si no tiene fecha, usar hoy
+          if (!datos.fecha) datos.fecha = today;
+          // Corrección de año: si Gemini devuelve un año anterior al actual en un mov nuevo, corregir
+          else if (datos.fecha && it.accion === 'crear' && it.tabla === 'movimientos') {
+            const itemYear = parseInt(datos.fecha.slice(0, 4), 10);
+            if (itemYear < parseInt(currentYear, 10)) {
+              datos.fecha = currentYear + datos.fecha.slice(4);
+            }
+          }
+          return { tabla: it.tabla, accion: it.accion, id: it.id || undefined, datos };
+        });
     }
 
     return { intent, items };
