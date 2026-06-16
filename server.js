@@ -650,12 +650,35 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
 // ── INTENT EXTRACTION (Gemini Flash — todos los usuarios) ────────────────────
 // extractIntent usa siempre Gemini con JSON estructurado, sin depender de Anthropic.
 // Solo la CONVERSACIÓN (CONSULTA/CHARLA) respeta ai_preference del usuario.
-const _extractIntentStaticPrompt = `Eres un extractor de intents para una app de finanzas personales en México.
+const _extractIntentStaticPrompt = `Eres un extractor de intents para una app de finanzas personales de una pareja mexicana (Ángel y Alicia).
 Analiza el mensaje del usuario y responde ÚNICAMENTE con JSON válido (sin texto adicional).
 
 FECHA ACTUAL: FECHA_HOY (año FECHA_YEAR)
 - "hoy" o sin fecha → FECHA_HOY
 - Fechas sin año ("25 de julio") → usa año FECHA_YEAR
+
+VOCABULARIO COLOQUIAL MX:
+- "varo/lana/feria/bil/billete" → dinero/monto
+- "hay que sacar/le saqué/le metí/le di" → gasto
+- "me cayeron/me cayó" → ingreso
+- "agarré la BBVA/cargué a la AMEX" → medio de pago
+- Tolerar errores ortográficos: "gaste/pague" sin acento = equivalente
+
+CONTEXTO DE PAREJA:
+- "Alicia/ella/mi novia/nosotros/fuimos" en un gasto → comentarios:"con Alicia"
+- "Platina" → coche de la pareja → categoria:"Platina"
+- Alicia/Ángel/Angel como (paréntesis) → NO son medios de pago
+
+CATEGORIZACIÓN:
+Transporte: Uber, DiDi, Beat, Lyft, metro, metrobús, combi, taxi, caseta
+Platina:    gasolina, aceite, afinación, suspensión, verificación, tenencia, seguro coche, llanta, refacción auto
+Comida:     tacos, taquería, restaurante, fonda, torta, burger, sushi, pizza, café, McDonald's, KFC, Starbucks, antojitos, alitas
+Despensa:   Walmart/Wally, Chedraui, Soriana, Costco, Oxxo, 7-Eleven, mercado, abarrotes, súper, frutas, verduras
+Hogar:      renta, luz, agua, gas hogar, internet, cable, predial, mueble, electrodoméstico
+Ocio:       Netflix, Spotify, Disney+, HBO, cine, teatro, concierto, bar, antro, videojuego, Steam
+Personales: doctor, farmacia, medicina, gym, spa, peluquería, barbería, cosméticos, ropa, zapatos
+TDC:        pago mínimo tarjeta, abono TDC
+Hormiga:    Amazon, Mercado Libre, Shein, suscripción, app, compra online pequeña
 
 INTENTS disponibles:
 - REGISTRO   → el usuario reporta un gasto, ingreso u operación con monto explícito
@@ -672,12 +695,14 @@ TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
 MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
-Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
+Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "con Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
 EJEMPLOS:
 "50 tacos" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
 "gasté 350 uber con TDC BBVA" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":350,"medio_pago":"TDC BBVA","fecha":"FECHA_HOY"}}
+"350 de gasolina" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"gasolina","monto":350,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
+"fuimos al cine con alicia 280" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"con Alicia","fecha":"FECHA_HOY"}}
 "recibí mi sueldo $14,000" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"INGRESO","categoria":"OTROS","concepto":"Sueldo","monto":14000,"fecha":"FECHA_HOY"}}
 "cuánto gasté este mes" → {"intent":"CONSULTA"}
 "hola cómo estás" → {"intent":"CHARLA"}`;
@@ -737,7 +762,7 @@ async function extractIntent(text, phone = '') {
 }
 
 // ── BATCH INTENT EXTRACTION (web chat — extrae TODAS las operaciones de un mensaje) ──
-const _batchIntentPrompt = `Eres un extractor de intents para una app de finanzas personales en México.
+const _batchIntentPrompt = `Eres un extractor de intents para una app de finanzas personales de una pareja mexicana (Ángel y Alicia).
 Analiza el mensaje y extrae TODAS las operaciones mencionadas.
 Responde ÚNICAMENTE con JSON válido (sin texto adicional).
 
@@ -746,6 +771,32 @@ FECHA ACTUAL: FECHA_HOY (año FECHA_YEAR)
 - "ayer" → FECHA_AYER
 - Fechas sin año ("25 de julio", "quincena 10 de agosto") → usa año FECHA_YEAR
 - Fechas futuras ("quincena 10 de julio siguiente") → FECHA_YEAR si el mes aún no pasó, FECHA_YEAR+1 si ya pasó
+
+VOCABULARIO COLOQUIAL MX:
+- "varo/lana/feria/bil/billete/biyuyo" → dinero; interpreta como monto en contexto
+- "hay que sacar/le saqué/le metí/le di/le eché" → gasto
+- "me cayeron/me cayó/me entraron" → ingreso
+- "agarré la BBVA/cargué a la AMEX/lo puse en la NU" → medio de pago específico
+- "del súper/del Wally/del Oxxo" → Despensa
+- Tolerar errores ortográficos: "gaste/pague/compre" sin acento = equivalente con acento
+
+CONTEXTO DE PAREJA:
+- "Alicia/ella/mi novia" mencionada en un gasto → agregar comentarios:"con Alicia"
+- "nosotros/fuimos juntos/fuimos los dos/pagamos/gastamos juntos" → agregar comentarios:"con Alicia"
+- "le presté/le di a Alicia" → comentarios:"a Alicia", categoria según tipo de gasto
+- "Platina" → coche de la pareja → categoria:"Platina" siempre
+- Nombres propios (Alicia, Ángel, Angel) como (paréntesis) → NO son medios de pago, ignorarlos
+
+CATEGORIZACIÓN AUTOMÁTICA:
+Transporte:  Uber, DiDi, Beat, Lyft, Cabify, Rappi traslado, metro, metrobús, tren suburbano, combi, camión, taxi, caseta (sin Platina)
+Platina:     gasolina, aceite, afinación, suspensión, verificación, tenencia, seguro auto, llanta, frenos, batería, refacción carro
+Comida:      tacos, taquería, restaurante, fonda, comida corrida, torta, burger, hamburguesa, sushi, pizza, café, Starbucks, McDonald's, KFC, Domino's, Subway, antojitos, alitas, helado, nieve, panadería, VIPS, El Portón, Wings
+Despensa:    Walmart/Wally, Chedraui, Soriana, Costco, Sam's, Bodega Aurrera, La Comer, City Market, Oxxo, 7-Eleven, Circle K, mercado, tianguis, abarrotes, súper, frutas, verduras, papel de baño, limpieza
+Hogar:       renta, luz, agua, gas (hogar), internet, cable, teléfono fijo, predial, mantenimiento depto, mueble, electrodoméstico, HomeDepot, Sodimac, IKEA
+Ocio:        Netflix, Spotify, Disney+, HBO, Prime Video, Apple TV, YouTube Premium, Paramount+, cine, teatro, concierto, bar, antro, botanero, cover, videojuego, Steam, PlayStation, Xbox, viaje, hotel, Airbnb, parque, excursión, regalo, flores
+Personales:  doctor, dentista, psicólogo/psico, farmacia, medicina, pastilla, gym, gimnasio, spa, peluquería, barbería, cosméticos, ropa, zapatos, lentes, Farmacias del Ahorro, Simi, Benavides
+TDC:         pago mínimo tarjeta, abono TDC, pago [banco] tarjeta, corte
+Hormiga:     Amazon, Mercado Libre, Shein, AliExpress, suscripción, app, dominio, compra online pequeña
 
 INTENTS:
 - REGISTRO    → el usuario reporta uno o MÁS gastos/ingresos con monto explícito
@@ -762,7 +813,7 @@ TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
 MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
-Tipo GASTO: tipo="GASTO", categoria, concepto, monto, medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
+Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "con Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
 EJEMPLOS:
@@ -770,6 +821,14 @@ EJEMPLOS:
 {"intent":"REGISTRO","items":[
   {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_AYER"}},
   {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":80,"medio_pago":"TDC BBVA","fecha":"FECHA_AYER"}}
+]}
+"350 de gasolina para el carro" →
+{"intent":"REGISTRO","items":[
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"gasolina","monto":350,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
+]}
+"fuimos al cine con alicia 280 pesos" →
+{"intent":"REGISTRO","items":[
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"con Alicia","fecha":"FECHA_HOY"}}
 ]}
 "50 tacos" →
 {"intent":"REGISTRO","items":[
@@ -803,6 +862,20 @@ function tryParseBatch(text, today) {
   function normCat(s) {
     const r = s.toLowerCase().trim();
     return CATS_KNOWN.find(c => c.toLowerCase() === r) || 'OTROS';
+  }
+
+  function inferCatFromText(text) {
+    const t = text.toLowerCase();
+    if (/\b(gasolina|aceite|afina|suspensi|verificaci|tenencia|seguro.?coche|seguro.?auto|llanta|freno|bater[ií]a|refacci|platina)\b/.test(t)) return 'Platina';
+    if (/\b(uber|didi|beat|lyft|cabify|metro\b|metrobus|metrobús|tren\b|combi\b|cami[oó]n\b|taxi\b|caseta)\b/.test(t)) return 'Transporte';
+    if (/\b(taco|taqueria|taquería|restaur|fonda|torta|burger|hambur|sushi|pizza|café|cafe\b|starbucks|mc|kfc|domin|subway|antojito|alita|helado|nieve|pastor|carnitas|birria)\b/.test(t)) return 'Comida';
+    if (/\b(walmart|wally|walties|chedraui|soriana|costco|sam.?s|bodega aurrera|la comer|city market|oxxo|7.?eleven|circle.?k|mercado\b|tianguis|abarrotes|super\b|súper\b|frutas|verduras|papel\b|jabón|jab[oó]n)\b/.test(t)) return 'Despensa';
+    if (/\b(netflix|spotify|disney|hbo|prime.?video|apple.?tv|youtube.?premium|cine\b|teatro\b|concierto|bar\b|antro\b|botanero|cover\b|videojuego|steam\b|playstation|xbox|viaje\b|hotel\b|airbnb|regalo\b|flores\b)\b/.test(t)) return 'Ocio';
+    if (/\b(doctor|dentista|psico|farmacia|medicina|pastilla|gym\b|gimnasio|spa\b|peluquer|barber|cosm[eé]tico|ropa\b|zapato|lentes\b|farmacias.?del.?ahorro|simi\b)\b/.test(t)) return 'Personales';
+    if (/\b(renta\b|luz\b|agua\b|gas\b|internet\b|cable\b|predial|mantenimiento|home.?depot|ikea\b)\b/.test(t)) return 'Hogar';
+    if (/\b(amazon\b|mercado.?libre|shein\b|aliexpress|suscripci[oó]n|app\b|dominio)\b/.test(t)) return 'Hormiga';
+    if (/\b(m[ií]nimo|abono.?tdc|pago.?tarjeta|corte\b|adeudo)\b/.test(t)) return 'TDC';
+    return 'OTROS';
   }
 
   function parseMonto(s) {
@@ -862,9 +935,13 @@ function tryParseBatch(text, today) {
       }
     }
 
+    // Track Alicia mention for couple context
+    let conAlicia = false;
+
     // Classify each parenthesised group as medio or categoria
     for (const p of parens) {
-      if (/^(alicia|angel|ángel)$/i.test(p)) continue;
+      if (/^(alicia)$/i.test(p)) { conAlicia = true; continue; }
+      if (/^(angel|ángel)$/i.test(p)) continue;
       const pLow = p.toLowerCase();
       if (/efectivo|d[eé]bito|transferencia|tdc|tarjeta|bbva|liverpool|amex|\bnu\b|rappi|palacio|\bhey\b/.test(pLow)) {
         medio_pago = normMedio(p);
@@ -874,19 +951,21 @@ function tryParseBatch(text, today) {
       }
     }
 
-    // Infer category from first word of concepto when still unknown
+    // Infer category from concepto when still unknown
     if (categoria === 'OTROS') {
       const fw = rest.split(/\s+/)[0];
       const c = normCat(fw);
       if (c !== 'OTROS') categoria = c;
+      else categoria = inferCatFromText(rest);
     }
 
-    // Clean concepto: strip trailing "con alicia/angel"
+    // Clean concepto: strip trailing "con alicia/angel" and detect Alicia mention
+    if (/\bcon\s+(alicia)\b/i.test(rest)) conAlicia = true;
     const concepto = rest.replace(/\s+con\s+(alicia|angel|ángel)\s*$/i, '').trim() || 'Gasto';
 
-    items.push({ tabla:'movimientos', accion:'crear', datos:{
-      tipo:'GASTO', categoria, concepto, monto, medio_pago, fecha: currentDate
-    }});
+    const datos = { tipo:'GASTO', categoria, concepto, monto, medio_pago, fecha: currentDate };
+    if (conAlicia) datos.comentarios = 'con Alicia';
+    items.push({ tabla:'movimientos', accion:'crear', datos });
   }
 
   return items.length ? { intent:'REGISTRO', items } : null;
@@ -1162,6 +1241,32 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
   // ── Bloque estático (cacheable) — reglas y esquemas que no cambian ─────────
   const staticBlock = `Eres Finn, el asistente financiero personal de Ángel.
 
+CONTEXTO DE PAREJA:
+- Usuario: Ángel. Novia: Alicia. Comparten vida y gastos cotidianos.
+- "Platina" = su coche (Nissan). Gasolina, aceite, afinación, refacciones, verificación → categoria:"Platina".
+- "ella/Alicia/mi novia/nosotros/fuimos juntos/fuimos los dos/gastamos" en un gasto → comentarios:"con Alicia".
+- "le presté/le di a Alicia" → comentarios:"a Alicia", categoria según el tipo de gasto.
+- Nunca trates a Alicia o Ángel como medio de pago; son personas mencionadas en el contexto.
+
+VOCABULARIO COLOQUIAL MX:
+- "varo/lana/feria/bil/billete/biyuyo" = dinero; interpreta como monto en contexto.
+- "hay que sacar/le saqué/le metí/le di/le eché" = gasto.
+- "me cayeron/me cayó/me entraron" = ingreso.
+- "agarré la BBVA/cargué a la AMEX/lo puse en la NU" = medio de pago concreto.
+- "del Wally/del Walties" = Walmart → Despensa.
+- Tolerar ortografía: "gaste/pague/compre" (sin acento) = equivalente con acento.
+
+CATEGORIZACIÓN AUTOMÁTICA:
+Transporte:  Uber, DiDi, Beat, Lyft, Cabify, metro, metrobús, tren, combi, camión, taxi, caseta peaje
+Platina:     gasolina, aceite, afinación, suspensión, verificación, tenencia, seguro coche, llanta, frenos, batería, refacción auto
+Comida:      tacos, taquería, restaurante, fonda, comida corrida, torta, burger, sushi, pizza, café, Starbucks, McDonald's, KFC, Domino's, antojitos, alitas, helado, panadería
+Despensa:    Walmart, Wally, Chedraui, Soriana, Costco, Sam's, Bodega Aurrera, La Comer, City Market, Oxxo, 7-Eleven, mercado, abarrotes, súper, frutas, verduras, papel, limpieza hogar
+Hogar:       renta, luz, agua, gas (hogar), internet, cable, teléfono, predial, mantenimiento depto, mueble, electrodoméstico, HomeDepot, IKEA
+Ocio:        Netflix, Spotify, Disney+, HBO, Prime, Apple TV, YouTube Premium, cine, teatro, concierto, bar, antro, botanero, cover, videojuego, Steam, PlayStation, Xbox, viaje, hotel, Airbnb, regalo, flores
+Personales:  doctor, dentista, psicólogo, farmacia, medicina, pastilla, gym, spa, peluquería, barbería, cosméticos, ropa, zapatos, lentes, Farmacias del Ahorro, Simi
+TDC:         pago mínimo tarjeta, abono TDC, corte [banco]
+Hormiga:     Amazon, Mercado Libre, Shein, AliExpress, suscripción, app, dominio, compra online pequeña
+
 TONO Y ESTILO:
 - Respuestas cortas y directas. Sin relleno. Sin cascadas de emojis.
 - Un emoji máximo por respuesta; omítelo si el contexto no lo pide.
@@ -1182,7 +1287,7 @@ CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   tipo: "GASTO"
   categoria: una de [${CATEGORIAS.join(', ')}]
   concepto: producto/servicio específico ("Uber", "McDonald's", "mínimo BBVA")
-  comentarios: observaciones — puede estar vacío
+  comentarios: observaciones — puede estar vacío; usa "con Alicia" cuando corresponda
   monto: número
   medio_pago: uno de [${MEDIOS_PAGO.join(', ')}] — default "efectivo"
   fecha: YYYY-MM-DD
