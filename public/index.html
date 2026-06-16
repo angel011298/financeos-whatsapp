@@ -2806,7 +2806,9 @@ ${rows.length ? mkTable({ id:'tbl-prsp', numbered:true, empty:'Sin gastos ni lí
   <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
 </tr>`} }) : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
 <div id="despensa-section" style="margin-top:16px"></div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2></div></div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-heart-handshake" style="color:var(--accent-couple)"></i> Proyectos y Metas del Nidito</h2><div class="sec-hdr-sub"><a style="font-size:11px;color:var(--accent-couple);cursor:pointer" onclick="go('nidito')">Ver detalle →</a></div></div></div>
+<div id="nidito-prsp-section"></div>
+<div class="sec-hdr" style="margin-top:16px"><div class="sec-hdr-row"><h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2></div></div>
 <div id="objs-section"></div>`;
   if (rows.length) mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[
     {label:'Real',  data:rows.map(x=>x.r), backgroundColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'88'), borderColor:rows.map((x,i)=>CAT_CLR[x.c]||CLR[i%CLR.length])},
@@ -2815,7 +2817,8 @@ ${rows.length ? mkTable({ id:'tbl-prsp', numbered:true, empty:'Sin gastos ni lí
   else emptyChart('c-prsp','Sin datos de presupuesto este mes');
   rDespensa();
   loadRebalanceo();
-  rObjs();   // Objetivos viven dentro de Presupuesto
+  rNiditoPresp();
+  rObjs();
 }
 
 // ── REBALANCEO ───────────────────────────────────────────────────────────────
@@ -2856,6 +2859,56 @@ async function aplicarRebalanceo(de, hacia, monto, idx) {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Aplicar'; }
     toast('Error: ' + e.message, 'error');
   }
+}
+
+// ── RENDER: NIDITO EN PRESUPUESTO ────────────────────────────────────────────
+async function rNiditoPresp() {
+  const el = $('nidito-prsp-section');
+  if (!el) return;
+  el.innerHTML = `<div style="display:flex;gap:8px;padding:14px 0 6px">${[1,2,3].map(()=>`<div style="height:56px;flex:1;background:var(--bg-surface-2);border-radius:var(--radius-md);animation:ins-pulse 1.4s infinite"></div>`).join('')}</div>`;
+  if (!S._niditoItems) {
+    if (!S._niditoQ) S._niditoQ = _ndQ();
+    await _ndFetch();
+  }
+  const items = (S._niditoItems || []).filter(x => !x.deleted_at);
+  const activos = items.filter(x => x.estado !== 'COMPLETADO');
+  if (!activos.length) {
+    el.innerHTML = `<div class="cbox" style="text-align:center;padding:20px;color:var(--text-3);font-size:12px"><i class="ti ti-heart-handshake" style="font-size:28px;display:block;margin-bottom:8px;color:var(--accent-couple);opacity:.5"></i>Sin proyectos ni metas — <a style="color:var(--accent-couple);cursor:pointer" onclick="go('nidito')">crea uno en Nidito</a></div>`;
+    return;
+  }
+  const proyectos = activos.filter(x => x.tipo === 'PROYECTO');
+  const metas = activos.filter(x => x.tipo?.startsWith('META_'));
+  const otros  = activos.filter(x => x.tipo !== 'PROYECTO' && !x.tipo?.startsWith('META_'));
+
+  function ndMiniBar(item) {
+    const {total, pct, cls} = _ndPct(item.asignaciones || [], item.presupuesto_total || 0);
+    const pres = item.presupuesto_total || 0;
+    return `
+<div class="cbox" style="padding:12px 14px;margin-bottom:8px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+    <span style="font-size:15px">${item.emoji || (item.tipo === 'PROYECTO' ? '📁' : '🎯')}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.titulo}</div>
+      <div style="font-size:10px;color:var(--text-3)">${ND_LABEL[item.tipo] || item.tipo || ''}</div>
+    </div>
+    ${pres > 0 ? `<span style="font-size:12px;font-weight:700;font-family:'Space Grotesk',system-ui,sans-serif;color:${pct>=100?'var(--color-income)':'var(--text-2)'}">${pct}%</span>` : ''}
+  </div>
+  ${pres > 0 ? `<div class="nd-pbar" style="height:5px"><div class="nd-pfill${cls?' '+cls:''}" style="width:${pct}%"></div></div>
+  <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:3px"><span>${fmt(total)} asignado</span><span>meta: ${fmt(pres)}</span></div>` : ''}
+  ${item.fecha_fin ? `<div style="font-size:10px;color:var(--text-3);margin-top:4px"><i class="ti ti-calendar-due" style="font-size:10px"></i> ${item.fecha_fin}</div>` : ''}
+</div>`;
+  }
+
+  function ndMiniChip(item) {
+    return `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);padding:4px 10px;font-size:12px;cursor:pointer" onclick="go('nidito')">${item.emoji || '💡'} ${item.titulo}</span>`;
+  }
+
+  el.innerHTML = `
+${proyectos.length ? `<div style="margin-bottom:4px;font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:5px"><i class="ti ti-briefcase"></i> Proyectos</div>
+${proyectos.map(ndMiniBar).join('')}` : ''}
+${metas.length ? `<div style="margin:${proyectos.length?'8px':0} 0 4px;font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:5px"><i class="ti ti-target"></i> Metas</div>
+${metas.map(ndMiniBar).join('')}` : ''}
+${otros.length ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">${otros.map(ndMiniChip).join('')}</div>` : ''}`;
 }
 
 // ── RENDER: OBJETIVOS ────────────────────────────────────────────────────────

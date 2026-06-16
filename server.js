@@ -665,8 +665,8 @@ VOCABULARIO COLOQUIAL MX:
 - Tolerar errores ortográficos: "gaste/pague" sin acento = equivalente
 
 CONTEXTO DE PAREJA:
-- "Alicia/ella/mi novia/nosotros/fuimos" en un gasto → comentarios:"con Alicia"
-- "Platina" → coche de la pareja → categoria:"Platina"
+- "Alicia/ella/mi novia/nosotros/fuimos/fueron" → comentarios:"Alicia" + categoria:"Ocio" automático
+- "Platina" → coche de la pareja → categoria:"Platina" (tiene prioridad sobre Ocio)
 - Alicia/Ángel/Angel como (paréntesis) → NO son medios de pago
 
 CATEGORIZACIÓN:
@@ -695,14 +695,14 @@ TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
 MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
-Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "con Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
+Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
 EJEMPLOS:
 "50 tacos" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
 "gasté 350 uber con TDC BBVA" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":350,"medio_pago":"TDC BBVA","fecha":"FECHA_HOY"}}
 "350 de gasolina" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"gasolina","monto":350,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
-"fuimos al cine con alicia 280" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"con Alicia","fecha":"FECHA_HOY"}}
+"fuimos al cine con alicia 280" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"Alicia","fecha":"FECHA_HOY"}}
 "recibí mi sueldo $14,000" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"INGRESO","categoria":"OTROS","concepto":"Sueldo","monto":14000,"fecha":"FECHA_HOY"}}
 "cuánto gasté este mes" → {"intent":"CONSULTA"}
 "hola cómo estás" → {"intent":"CHARLA"}`;
@@ -781,10 +781,9 @@ VOCABULARIO COLOQUIAL MX:
 - Tolerar errores ortográficos: "gaste/pague/compre" sin acento = equivalente con acento
 
 CONTEXTO DE PAREJA:
-- "Alicia/ella/mi novia" mencionada en un gasto → agregar comentarios:"con Alicia"
-- "nosotros/fuimos juntos/fuimos los dos/pagamos/gastamos juntos" → agregar comentarios:"con Alicia"
-- "le presté/le di a Alicia" → comentarios:"a Alicia", categoria según tipo de gasto
-- "Platina" → coche de la pareja → categoria:"Platina" siempre
+- "Alicia/ella/mi novia/nosotros/fuimos/fueron" → comentarios:"Alicia" + categoria:"Ocio" automático
+- "le presté/le di a Alicia" → comentarios:"Alicia", categoria "Ocio" (o la más apropiada si es obvia)
+- "Platina" → coche de la pareja → categoria:"Platina" siempre (tiene prioridad sobre Ocio)
 - Nombres propios (Alicia, Ángel, Angel) como (paréntesis) → NO son medios de pago, ignorarlos
 
 CATEGORIZACIÓN AUTOMÁTICA:
@@ -813,7 +812,7 @@ TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
 MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
-Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "con Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
+Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
 EJEMPLOS:
@@ -828,7 +827,7 @@ EJEMPLOS:
 ]}
 "fuimos al cine con alicia 280 pesos" →
 {"intent":"REGISTRO","items":[
-  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"con Alicia","fecha":"FECHA_HOY"}}
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"Alicia","fecha":"FECHA_HOY"}}
 ]}
 "50 tacos" →
 {"intent":"REGISTRO","items":[
@@ -960,11 +959,14 @@ function tryParseBatch(text, today) {
     }
 
     // Clean concepto: strip trailing "con alicia/angel" and detect Alicia mention
-    if (/\bcon\s+(alicia)\b/i.test(rest)) conAlicia = true;
+    if (/\b(alicia|con\s+alicia|nosotros|fuimos|fueron)\b/i.test(rest)) conAlicia = true;
     const concepto = rest.replace(/\s+con\s+(alicia|angel|ángel)\s*$/i, '').trim() || 'Gasto';
 
+    // Alicia → Ocio (Platina keeps priority if already set)
+    if (conAlicia && categoria !== 'Platina') categoria = 'Ocio';
+
     const datos = { tipo:'GASTO', categoria, concepto, monto, medio_pago, fecha: currentDate };
-    if (conAlicia) datos.comentarios = 'con Alicia';
+    if (conAlicia) datos.comentarios = 'Alicia';
     items.push({ tabla:'movimientos', accion:'crear', datos });
   }
 
@@ -1244,8 +1246,8 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
 CONTEXTO DE PAREJA:
 - Usuario: Ángel. Novia: Alicia. Comparten vida y gastos cotidianos.
 - "Platina" = su coche (Nissan). Gasolina, aceite, afinación, refacciones, verificación → categoria:"Platina".
-- "ella/Alicia/mi novia/nosotros/fuimos juntos/fuimos los dos/gastamos" en un gasto → comentarios:"con Alicia".
-- "le presté/le di a Alicia" → comentarios:"a Alicia", categoria según el tipo de gasto.
+- "Alicia/ella/mi novia/nosotros/fuimos/fueron" → comentarios:"Alicia" + categoria:"Ocio" automático.
+- "Platina" tiene prioridad sobre la regla de Ocio (un gasto de coche no es Ocio).
 - Nunca trates a Alicia o Ángel como medio de pago; son personas mencionadas en el contexto.
 
 VOCABULARIO COLOQUIAL MX:
@@ -1287,7 +1289,7 @@ CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   tipo: "GASTO"
   categoria: una de [${CATEGORIAS.join(', ')}]
   concepto: producto/servicio específico ("Uber", "McDonald's", "mínimo BBVA")
-  comentarios: observaciones — puede estar vacío; usa "con Alicia" cuando corresponda
+  comentarios: observaciones — puede estar vacío; usa "Alicia" cuando corresponda
   monto: número
   medio_pago: uno de [${MEDIOS_PAGO.join(', ')}] — default "efectivo"
   fecha: YYYY-MM-DD
