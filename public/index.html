@@ -4397,8 +4397,36 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
   }
 
   // Registrar Service Worker para PWA
+  // updateViaCache:'none' → el browser NUNCA usa su caché HTTP para buscar el sw.js
+  // Esto garantiza que en cada visita se detecte el SW actualizado por Railway
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    let _swRefreshing = false;
+    const _hadController = !!navigator.serviceWorker.controller;
+
+    // Cuando un nuevo SW toma el control, recargar para servir el index.html fresco
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!_swRefreshing && _hadController) {
+        _swRefreshing = true;
+        window.location.reload();
+      }
+    });
+
+    // Escuchar mensaje SW_UPDATED del service worker (activado en nuevo deploy)
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'SW_UPDATED' && _hadController && !_swRefreshing) {
+        _swRefreshing = true;
+        window.location.reload();
+      }
+    });
+
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+      .then(reg => {
+        // Verificar actualizaciones al abrir la app
+        reg.update().catch(() => {});
+        // Y cada 2 minutos mientras la app está abierta
+        setInterval(() => reg.update().catch(() => {}), 2 * 60 * 1000);
+      })
+      .catch(() => {});
   }
 
   document.addEventListener('click', e => {

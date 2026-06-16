@@ -112,6 +112,28 @@ const getQuincenaActual = () => getQuincena(new Date());
 
 // ── Compatibilidad con código existente ──────────────────────────────────────
 const path    = require('path');
+// Timestamp único por despliegue — cambia el nombre del caché del SW en cada Railway deploy
+const DEPLOY_TS = Date.now().toString(36);
+
+// sw.js con DEPLOY_TS inyectado — debe ir ANTES de express.static
+// Esto garantiza que el browser detecte un SW nuevo en cada deploy y limpie el caché viejo
+app.get('/sw.js', (_req, res) => {
+  const fs = require('fs');
+  const sw = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8')
+               .replace(/DEPLOY_TS/g, DEPLOY_TS);
+  res.set({
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Service-Worker-Allowed': '/',
+  });
+  res.send(sw);
+});
+
+// Versión actual — el cliente puede consultar esto para saber si hay actualización
+app.get('/api/version', (_req, res) => {
+  res.json({ v: DEPLOY_TS, ts: Date.now() });
+});
+
 // index.html sin caché (debe ir ANTES del static middleware)
 app.get('/', (_req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
