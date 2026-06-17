@@ -592,6 +592,58 @@ async function checkAndSendReminders(phone) {
 const TABLAS_VALIDAS = ['movimientos','metas','calendario','tdc','presupuesto','nidito','usuarios'];
 const TABLAS_SOFT_DELETE = ['movimientos','metas','calendario','nidito'];
 
+// ── GASTOS PROGRAMADOS → PRESUPUESTO (no movimientos) ────────────────────────
+// Un gasto futuro o explícitamente "programado" NO es un movimiento ya hecho:
+// se guarda en external_refs.budget_q[quincena].gastos para que aparezca en
+// "Presupuesto y Metas" en la quincena correspondiente, hasta que el usuario lo
+// registre como gasto realizado (chat IA o manual) en su debido momento.
+function medioToFormaPago(medio) {
+  const m = (medio || '').toLowerCase();
+  if (m === 'efectivo') return 'efectivo';
+  if (m.includes('débito') || m.includes('debito')) return 'tarjeta_debito';
+  return ''; // TDC / transferencia → no afecta el cálculo de retiro de efectivo
+}
+
+// Detecta si un GASTO debe tratarse como programado (presupuesto) y no como movimiento real.
+function esGastoProgramado(datos, today) {
+  if (!datos || datos.tipo !== 'GASTO') return false;
+  if (datos.programado === true) return true;
+  // Un gasto con fecha futura no puede ser un movimiento "ya hecho".
+  if (datos.fecha && datos.fecha > today) return true;
+  return false;
+}
+
+// Etiqueta legible de quincena: "2026-06-B" → "2ª quincena de junio"
+function labelQuincena(qKey) {
+  const m = String(qKey || '').match(/^(\d{4})-(\d{2})-([AB])$/);
+  if (!m) return qKey;
+  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const nom = meses[parseInt(m[2], 10) - 1] || m[2];
+  return (m[3] === 'A' ? '1ª' : '2ª') + ` quincena de ${nom}`;
+}
+
+async function addGastoProgramado(phone, datos, origen, texto_original) {
+  const fecha = datos.fecha || hoy();
+  const qKey  = getQuincena(fecha).key;
+  const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+  const refs = { ...(cur?.external_refs || {}) };
+  if (!refs.budget_q) refs.budget_q = {};
+  if (!refs.budget_q[qKey]) refs.budget_q[qKey] = { gastos: [], ingresos: [] };
+  if (!Array.isArray(refs.budget_q[qKey].gastos)) refs.budget_q[qKey].gastos = [];
+  const item = {
+    _id: 'pg-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+    descripcion: datos.concepto || datos.descripcion || 'Gasto programado',
+    monto: Number(datos.monto) || 0,
+  };
+  const fp = medioToFormaPago(datos.medio_pago);
+  if (fp) item.forma_pago = fp;
+  refs.budget_q[qKey].gastos.push(item);
+  const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+  if (error) return { error: error.message };
+  await writeAuditLog(phone, 'usuarios', 'gasto_programado', phone, null, { qKey, item }, origen, texto_original);
+  return { qKey, item, fecha };
+}
+
 async function executeDbAction(phone, arg, origen = 'whatsapp') {
   const { tabla, accion, id, datos, texto_original } = arg;
   try {
@@ -639,11 +691,19 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
     }
 
     if (accion === 'crear') {
-      const { data, error } = await sb.from(tabla).insert({ ...datos, user_phone: phone }).select().single();
+      // ── Gasto programado/futuro → Presupuesto, NO movimiento real ──────────
+      if (tabla === 'movimientos' && esGastoProgramado(datos, hoy())) {
+        const r = await addGastoProgramado(phone, datos, origen, texto_original);
+        if (r.error) return `❌ Error: ${r.error}`;
+        arg._programado = true; arg._qKey = r.qKey;   // marca para el resumen del chat
+        return `✅📅 Gasto programado en Presupuesto: ${datos.concepto || ''} · ${fmt(datos.monto || 0)} → ${labelQuincena(r.qKey)}`;
+      }
+      const { programado, ...cleanDatos } = datos || {};   // 'programado' no es columna de la tabla
+      const { data, error } = await sb.from(tabla).insert({ ...cleanDatos, user_phone: phone }).select().single();
       if (error) return `❌ Error: ${error.message}`;
-      if (tabla === 'movimientos' && datos?.tipo === 'GASTO') {
-        await learnPattern(phone, datos);
-        await verificarLimitePresupuesto(phone, datos.categoria, mesActual()).catch(() => null);
+      if (tabla === 'movimientos' && cleanDatos?.tipo === 'GASTO') {
+        await learnPattern(phone, cleanDatos);
+        await verificarLimitePresupuesto(phone, cleanDatos.categoria, mesActual()).catch(() => null);
       }
       await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen, texto_original);
       return `✅ ${tabla === 'calendario' ? 'Evento agendado' : 'Registrado'} ✓ ID: ${data?.id}`;
@@ -720,8 +780,16 @@ MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC R
 Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
+GASTO PROGRAMADO vs GASTO HECHO (¡MUY IMPORTANTE!):
+- Gasto YA HECHO (pasado/hoy): "gasté/pagué/compré 200 en tacos" → registro normal de movimiento.
+- Gasto PROGRAMADO/FUTURO: el usuario PLANEA un gasto que aún NO ocurre. Señales: "voy a / planeo / programa / presupuesta / agenda / para la quincena del X / el 25 de junio pago / próximo mes / en julio", o cualquier fecha FUTURA (posterior a FECHA_HOY).
+  → Agrega "programado":true en datos. NO es un movimiento ya hecho; el sistema lo guarda en el Presupuesto de la quincena correspondiente a su fecha.
+  → Usa la fecha del gasto. "quincena del 25 de junio" → fecha "FECHA_YEAR-06-25". "quincena del 10 de julio" → "FECHA_YEAR-07-10".
+
 EJEMPLOS:
 "50 tacos" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
+"programa airbnb 8000 para la quincena del 25 de junio" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"AIRBNB / HOTEL","monto":8000,"programado":true,"fecha":"FECHA_YEAR-06-25"}}
+"voy a pagar 2500 de afinación de la platina el 25 de junio en efectivo" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"Afinacion platina","monto":2500,"medio_pago":"efectivo","programado":true,"fecha":"FECHA_YEAR-06-25"}}
 "gasté 350 uber con TDC BBVA" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":350,"medio_pago":"TDC BBVA","fecha":"FECHA_HOY"}}
 "350 de gasolina" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"gasolina","monto":350,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
 "fuimos al cine con alicia 280" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"Alicia","fecha":"FECHA_HOY"}}
@@ -837,11 +905,25 @@ MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC R
 Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
+GASTO PROGRAMADO vs GASTO HECHO (¡CRÍTICO — no confundir!):
+- Gasto YA HECHO (pasado/hoy): "gasté/pagué/compré/le saqué" → movimiento normal.
+- Gasto PROGRAMADO/FUTURO: el usuario PLANEA o PRESUPUESTA un gasto que aún NO ocurre. Señales: "programa(dos)/voy a/planeo/presupuesta/agenda/para la quincena del X/el 25 de junio pago/próximo mes/en julio", encabezados como "Gastos PROGRAMADOS:", o CUALQUIER fecha posterior a FECHA_HOY.
+  → Añade "programado":true en datos de ese item. NO es un movimiento ya hecho.
+  → El sistema lo guarda en el Presupuesto de la quincena correspondiente a su fecha (hasta que el usuario lo registre como gasto realizado).
+  → Mapea la fecha al día indicado: "quincena 25 de junio" → "FECHA_YEAR-06-25"; "quincena 10 de julio" → "FECHA_YEAR-07-10"; "quincena 10 de agosto" → "FECHA_YEAR-08-10".
+  → forma de pago entre paréntesis ("(efectivo)", "(tarjeta débito)") → medio_pago correspondiente.
+
 EJEMPLOS:
 "Ayer gasté 50 en tacos y 80 en uber con TDC BBVA" →
 {"intent":"REGISTRO","items":[
   {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_AYER"}},
   {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":80,"medio_pago":"TDC BBVA","fecha":"FECHA_AYER"}}
+]}
+"Gastos PROGRAMADOS:\nAIRBNB 8000 (quincena 25 de junio)\nAfinacion platina 2500 (quincena 25 de junio) (efectivo)\nEscritorio 6100 (quincena 10 de septiembre) (tarjeta débito)" →
+{"intent":"REGISTRO","items":[
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"AIRBNB / HOTEL","monto":8000,"programado":true,"fecha":"FECHA_YEAR-06-25"}},
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"Afinacion platina","monto":2500,"medio_pago":"efectivo","programado":true,"fecha":"FECHA_YEAR-06-25"}},
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Hogar","concepto":"Escritorio","monto":6100,"medio_pago":"débito","programado":true,"fecha":"FECHA_YEAR-09-10"}}
 ]}
 "350 de gasolina para el carro" →
 {"intent":"REGISTRO","items":[
@@ -907,9 +989,22 @@ function tryParseBatch(text, today) {
     return parseFloat(c);
   }
 
+  // Reconoce una fecha dentro de un texto: "quincena 25 de junio", "10 de agosto", "10 agosto 2026"
+  function parseFechaEnTexto(s) {
+    const m = s.match(/(\d{1,2})\s+(?:de\s+)?([a-záéíóú]+)(?:\s+(\d{4}))?/i);
+    if (!m) return null;
+    const mes = MESES_NUM[m[2].toLowerCase()];
+    if (!mes) return null;
+    const y = m[3] || today.slice(0, 4);
+    return `${y}-${String(mes).padStart(2,'0')}-${String(parseInt(m[1])).padStart(2,'0')}`;
+  }
+
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   // Detect any list line: "N.-" prefix or leading "-"
   if (!lines.some(l => /^(?:\d+\.-?\s+|-\s*)\d/.test(l))) return null;
+
+  // ¿El bloque completo habla de gastos programados/presupuestados?
+  const programadoCtx = /\bprogramad|\bpresupuest|\bplaneado|\bagendad|\bpr[oó]xim/i.test(text);
 
   const items = [];
   let currentDate = today;
@@ -958,12 +1053,16 @@ function tryParseBatch(text, today) {
 
     // Track Alicia mention for couple context
     let conAlicia = false;
+    let itemDate = currentDate;   // fecha específica de este renglón (puede venir en paréntesis)
 
-    // Classify each parenthesised group as medio or categoria
+    // Classify each parenthesised group as medio, categoria o fecha
     for (const p of parens) {
       if (/^(alicia)$/i.test(p)) { conAlicia = true; continue; }
       if (/^(angel|ángel)$/i.test(p)) continue;
       const pLow = p.toLowerCase();
+      // Fecha en paréntesis: "(quincena 25 de junio)", "(10 de agosto)"
+      const fp = parseFechaEnTexto(p);
+      if (fp && /quincena|\d{1,2}\s+(?:de\s+)?[a-záéíóú]+/i.test(pLow)) { itemDate = fp; continue; }
       if (/efectivo|d[eé]bito|transferencia|tdc|tarjeta|bbva|liverpool|amex|\bnu\b|rappi|palacio|\bhey\b/.test(pLow)) {
         medio_pago = normMedio(p);
       } else {
@@ -987,8 +1086,10 @@ function tryParseBatch(text, today) {
     // Alicia → Ocio (Platina keeps priority if already set)
     if (conAlicia && categoria !== 'Platina') categoria = 'Ocio';
 
-    const datos = { tipo:'GASTO', categoria, concepto, monto, medio_pago, fecha: currentDate };
+    const datos = { tipo:'GASTO', categoria, concepto, monto, medio_pago, fecha: itemDate };
     if (conAlicia) datos.comentarios = 'Alicia';
+    // Gasto programado: contexto explícito o fecha futura → va al Presupuesto, no a movimientos
+    if (programadoCtx || itemDate > today) datos.programado = true;
     items.push({ tabla:'movimientos', accion:'crear', datos });
   }
 
@@ -1062,14 +1163,18 @@ function buildWebChatReply(execs) {
 
   if (ok.length === 0) return err.map(e => e.result).join('\n');
 
-  const movs = ok.filter(e => e.item.tabla === 'movimientos' && e.item.accion === 'crear');
+  // Gastos programados (van a Presupuesto, no a movimientos)
+  const prog = ok.filter(e => e.item._programado);
+  // Movimientos reales (ya hechos)
+  const movs = ok.filter(e => e.item.tabla === 'movimientos' && e.item.accion === 'crear' && !e.item._programado);
 
-  let reply = '';
+  const sections = [];
+
   if (movs.length === 1) {
     const d      = movs[0].item.datos;
     const icon   = d.tipo === 'INGRESO' ? '💰' : '💸';
     const cuando = d.fecha === hoy() ? 'hoy' : (d.fecha || 'hoy');
-    reply = `Listo, registré: ${icon} ${fmt(d.monto)} · ${d.categoria} · ${d.concepto} · ${d.medio_pago || 'efectivo'} (${cuando}).`;
+    sections.push(`Listo, registré: ${icon} ${fmt(d.monto)} · ${d.categoria} · ${d.concepto} · ${d.medio_pago || 'efectivo'} (${cuando}).`);
   } else if (movs.length > 1) {
     const lines = [`Listo, registré ${movs.length} movimientos:`];
     movs.forEach(e => {
@@ -1078,12 +1183,26 @@ function buildWebChatReply(execs) {
       const cuando = d.fecha === hoy() ? 'hoy' : (d.fecha || 'hoy');
       lines.push(`  ${icon} ${fmt(d.monto)} · ${d.categoria} · ${d.concepto} · ${d.medio_pago || 'efectivo'} (${cuando})`);
     });
-    lines.push('¿Algo más?');
-    reply = lines.join('\n');
-  } else {
-    reply = ok.map(e => e.result).join('\n');
+    sections.push(lines.join('\n'));
   }
 
+  if (prog.length === 1) {
+    const d = prog[0].item.datos;
+    sections.push(`📅 Programé en tu Presupuesto: ${fmt(d.monto)} · ${d.concepto} → ${labelQuincena(prog[0].item._qKey)}.\n_Aún no cuenta como gasto hecho; cuando lo pagues, dímelo y lo registro._`);
+  } else if (prog.length > 1) {
+    const lines = [`📅 Programé ${prog.length} gastos en tu Presupuesto:`];
+    prog.forEach(e => {
+      const d = e.item.datos;
+      lines.push(`  ${fmt(d.monto)} · ${d.concepto} → ${labelQuincena(e.item._qKey)}`);
+    });
+    lines.push('_Aún no cuentan como gastos hechos; cuando los pagues, dímelo y los registro._');
+    sections.push(lines.join('\n'));
+  }
+
+  // Otras operaciones (metas, calendario, nidito, ediciones, etc.) sin resumen específico
+  if (!movs.length && !prog.length) sections.push(ok.map(e => e.result).join('\n'));
+
+  let reply = sections.join('\n\n');
   if (err.length) reply += `\n\n⚠️ No pude procesar ${err.length} operación(es): ${err.map(e => e.result).join(', ')}`;
   return reply;
 }
@@ -1100,8 +1219,11 @@ async function proposeDbAction(phone, arg, textoOriginal) {
 
   const { tabla, accion, datos } = arg;
 
+  const programado = accion === 'crear' && tabla === 'movimientos' && esGastoProgramado(datos, hoy());
+
   // Auto-confirm: crear movimiento con patrón conocido (contador≥5, diff≤30%, monto<5000)
-  if (accion === 'crear' && tabla === 'movimientos' && (datos?.monto || 0) < 5000) {
+  // Nunca auto-confirmar un gasto programado: siempre se confirma explícitamente.
+  if (!programado && accion === 'crear' && tabla === 'movimientos' && (datos?.monto || 0) < 5000) {
     const concepto = (datos?.concepto || '').toLowerCase().trim();
     if (concepto) {
       const { data: patron } = await sb.from('patrones_ia')
@@ -1124,7 +1246,9 @@ async function proposeDbAction(phone, arg, textoOriginal) {
   if (accion === 'crear') {
     let resumen;
     const d = datos || {};
-    if (tabla === 'movimientos') {
+    if (tabla === 'movimientos' && programado) {
+      resumen = `📅 Gasto PROGRAMADO (va a tu Presupuesto, no como gasto hecho):\n${fmt(d.monto || 0)} · ${d.concepto || ''} → ${labelQuincena(getQuincena(d.fecha || hoy()).key)}`;
+    } else if (tabla === 'movimientos') {
       const fechaStr = d.fecha === hoy() ? 'hoy' : (d.fecha || hoy());
       const icon = d.tipo === 'INGRESO' ? '💰' : '💸';
       resumen = `${icon} ${fmt(d.monto || 0)} · ${d.categoria || 'OTROS'} · ${d.concepto || ''} · ${d.medio_pago || 'efectivo'} · ${fechaStr}`;
@@ -1315,6 +1439,12 @@ CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   monto: número
   medio_pago: uno de [${MEDIOS_PAGO.join(', ')}] — default "efectivo"
   fecha: YYYY-MM-DD
+  programado: true SOLO si es un gasto FUTURO/planeado (ver regla abajo)
+
+GASTO PROGRAMADO vs GASTO YA HECHO (¡importante!):
+- Gasto ya hecho (pasado/hoy): "gasté/pagué/compré X" → movimiento normal (sin programado).
+- Gasto PROGRAMADO/futuro: el usuario PLANEA o PRESUPUESTA un gasto que aún no ocurre ("voy a / programa / presupuesta / para la quincena del 25 / el próximo mes" o cualquier fecha futura).
+  → Añade programado:true y la fecha del gasto. El sistema lo guarda en el Presupuesto de la quincena correspondiente, NO como gasto hecho. Cuando el usuario lo pague de verdad, se registra como movimiento normal en ese momento.
 
 Para INGRESO: tipo="INGRESO", categoria="OTROS", concepto=fuente del ingreso, monto, fecha.
 Para calendario.crear: titulo, fecha (YYYY-MM-DD), hora (HH:MM), tipo, descripcion.
