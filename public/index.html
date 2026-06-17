@@ -421,15 +421,25 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .mbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
 
-/* ═══════════════════════════════════════════════════════ CALENDAR */
-#cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-.ch{text-align:center;padding:6px;font-size:var(--text-xs);color:var(--text-3);font-weight:500}
-.cd{min-height:56px;background:var(--bg-surface-2);border-radius:var(--radius-sm);padding:4px;font-size:var(--text-xs);border:1px solid transparent}
-.cd.today{border-color:var(--accent-primary)}.cd.oth{opacity:.3}
-.cdn{font-size:9px;color:var(--text-3);margin-bottom:2px}
-.cev{background:var(--accent-primary);color:#fff;border-radius:3px;padding:1px 4px;margin-bottom:1px;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+/* ═══════════════════════════════════════════════════════ CALENDAR macOS */
+.cal-wrap{display:flex;gap:16px;align-items:flex-start}
+.cal-main{flex:1;min-width:0}
+#cal-grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:14px}
+.ch{text-align:center;padding:8px 2px;font-size:10px;color:var(--text-3);font-weight:600;letter-spacing:.06em;background:var(--bg-surface-2);border-bottom:1px solid var(--border-default)}
+.cd{min-height:76px;background:var(--bg-base);padding:4px 5px;border-right:1px solid var(--border-default);border-bottom:1px solid var(--border-default);cursor:pointer;transition:background .1s;box-sizing:border-box;font-size:var(--text-xs)}
+.cd:nth-child(7n){border-right:none}.cd:hover{background:var(--bg-surface-2)}.cd.oth{opacity:.3;pointer-events:none}
+.cd.today .cdn{background:var(--accent-primary);color:#fff;border-radius:50%}
+.cd.cal-sel{background:rgba(124,106,247,.09)}
+.cdn{font-size:11px;font-weight:600;color:var(--text-2);width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:2px}
+.cev-bar{display:block;width:100%;padding:1px 4px;border-radius:3px;font-size:9px;line-height:1.5;margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:#fff}
+.cev-bar.cev-event{background:var(--accent-primary)}.cev-bar.cev-nidito{background:var(--accent-couple)}
+.cev-more{font-size:9px;color:var(--text-3);padding:0 4px;font-weight:500}
+.cal-pay-dot{display:inline-block;width:5px;height:5px;background:var(--green);border-radius:50%;margin-left:3px;vertical-align:middle;flex-shrink:0}
 .cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .cal-nav h3{flex:1;font-size:var(--text-base);font-weight:600;color:var(--text-1)}
+.cal-day-panel{display:none;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:16px;width:240px;flex-shrink:0}
+.cal-day-panel.open{display:block}
+#cal-day-ov{display:none;position:fixed;inset:0;z-index:199;background:rgba(0,0,0,.55)}
 
 /* ═══════════════════════════════════════════════════════ MOBILE NAV */
 .mobile-nav{
@@ -471,7 +481,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 /* ═══════════════════════════════════════════════════════ CHAT */
 .chat-wrap{display:flex;flex-direction:column;height:calc(100svh - 80px)}
 @supports not (height:100svh){.chat-wrap{height:calc(100dvh - 80px)}}
-.chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;min-height:0}
 .msg{max-width:78%;padding:10px 14px;font-size:var(--text-sm);line-height:1.6;word-break:break-word;animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .msg-user{align-self:flex-end;background:var(--accent-primary);color:#fff;border-radius:var(--radius-lg) var(--radius-sm) var(--radius-lg) var(--radius-lg)}
@@ -538,16 +548,18 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .nd-din-row{flex-wrap:wrap}
   /* ── Section header decoration */
   .sec-hdr-row::before,.sec-hdr-row::after{max-width:40px}
-  /* ── FAB */
-  .fab-save{bottom:90px}
+  /* ── Chat mode: nav hidden, full-height chat */
+  .chat-mode #mobile-nav{display:none!important}
+  .chat-mode main{padding-bottom:env(safe-area-inset-bottom,0px)!important}
+  .chat-mode .chat-wrap{height:calc(100svh - 16px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
+  /* ── Calendar day panel: bottom sheet on mobile */
+  .cal-wrap{flex-direction:column}
+  .cal-day-panel{display:block;position:fixed;bottom:0;left:0;right:0;width:auto!important;border-radius:var(--radius-xl) var(--radius-xl) 0 0;border-bottom:none;z-index:200;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));max-height:72svh;overflow-y:auto;transform:translateY(110%);transition:transform .28s cubic-bezier(.32,1,.56,1)}
+  .cal-day-panel:not(.open){transform:translateY(110%)}
+  .cal-day-panel.open{transform:translateY(0)}
 }
 @media(min-width:701px){#mobile-nav{display:none!important}}
 
-/* ── FLOATING SAVE BUTTON */
-.fab-save{position:fixed;right:20px;bottom:24px;z-index:80;display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:var(--radius-pill);background:var(--accent-primary);color:#fff;border:none;cursor:pointer;font-size:13px;font-family:'Space Grotesk',system-ui,sans-serif;font-weight:600;box-shadow:0 4px 20px rgba(124,106,247,.4);transition:all .18s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
-.fab-save:hover{opacity:.9;transform:translateY(-2px)}
-.fab-save:active{transform:scale(.96)}
-.fab-save.saving{opacity:.7;pointer-events:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── DAILY SNAPSHOT */
@@ -950,7 +962,7 @@ const S = {
   phone: '', identity: null, adminPhone: '', ghostMode: false,
   data: { movs:[], tdc:[], metas:[], calendario:[], presupuesto:[], patrones:[], nidito:[], despensa:[] },
   ch: {}, ct: {}, tab: 'dashboard', cy: 0, cm: 0, mctx: null,
-  periodo: { tipo: 'mes', offset: 0 },
+  periodo: { tipo: 'quincena', offset: 0 },
   qOffset: 0,
   movF: null,          // filter state for Movimientos tab
   _movData:       {},    // id → movimiento lookup
@@ -1199,22 +1211,10 @@ function go(t) {
   $('n-'+t)?.classList.add('active');
   $('mn-'+t)?.classList.add('active');
   S.tab = t;
+  document.body.classList.toggle('chat-mode', t === 'chat');
   renderTab(t);
-  const fab = $('fab-save');
-  if (fab) fab.style.display = t === 'chat' ? 'none' : 'flex';
 }
 
-async function saveSync(btn) {
-  const fab = $('fab-save');
-  if (fab) { fab.classList.add('saving'); fab.innerHTML = '<i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i> Guardando…'; }
-  try {
-    await load();
-    toast('Guardado — datos actualizados en todas las pestañas');
-  } catch(e) { toast('Error al guardar: ' + e.message, 'error'); }
-  finally {
-    if (fab) { fab.classList.remove('saving'); fab.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar'; }
-  }
-}
 
 function renderTab(t) {
   // Movimientos vive dentro de Dashboard (rDash) y Objetivos dentro de Presupuesto (rPresp).
@@ -3570,33 +3570,55 @@ async function changeCat(id, newCat) {
 }
 
 // ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
-function _calGridHTML(evts, y, mo, refs) {
+function _calGridHTML(evts, y, mo, refs, niditoItems) {
   const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const first=new Date(y,mo,1), last=new Date(y,mo+1,0);
   const today=new Date().toISOString().split('T')[0];
   const mm=String(mo+1).padStart(2,'0');
-  const ingDays=new Set((getIngresosEsperados(refs)).flatMap(i=>i.dias||[]));
-  const payDays=(refs.dias_pago||[]);
-  let cells='<div class="ch">Dom</div><div class="ch">Lun</div><div class="ch">Mar</div><div class="ch">Mié</div><div class="ch">Jue</div><div class="ch">Vie</div><div class="ch">Sáb</div>';
+  const payDays=new Set([...(refs.dias_pago||[]),...getIngresosEsperados(refs).flatMap(i=>i.dias||[])]);
+  // Build per-day event map
+  const evtMap={};
+  for(const e of evts){
+    const d=fd(e.fecha); if(!d||!d.startsWith(`${y}-${mm}`)) continue;
+    const day=+d.split('-')[2];
+    (evtMap[day]||(evtMap[day]=[])).push({...e,_type:'event'});
+  }
+  for(const it of (niditoItems||[])){
+    if(!it.titulo||it.deleted_at) continue;
+    for(const f of ['fecha_inicio','fecha_fin']){
+      const d=fd(it[f]); if(!d||!d.startsWith(`${y}-${mm}`)) continue;
+      const day=+d.split('-')[2];
+      (evtMap[day]||(evtMap[day]=[])).push({...it,_type:'nidito',_df:f});
+    }
+  }
+  const DAYS=['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
+  let cells=DAYS.map(d=>`<div class="ch">${d}</div>`).join('');
   for(let i=0;i<first.getDay();i++) cells+=`<div class="cd oth"></div>`;
   for(let d=1;d<=last.getDate();d++){
     const ds=`${y}-${mm}-${String(d).padStart(2,'0')}`;
-    const de=evts.filter(e=>fd(e.fecha)===ds);
-    const isPay=payDays.includes(d)||ingDays.has(d);
-    cells+=`<div class="cd${ds===today?' today':''}">
-      <div class="cdn" style="${isPay?'color:var(--green);font-weight:700':''}">${d}${isPay?'💰':''}</div>
-      ${de.map(e=>`<div class="cev" title="${e.titulo}" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'>${e.titulo}</div>`).join('')}
-    </div>`;
+    const de=evtMap[d]||[];
+    const isPay=payDays.has(d);
+    const MAX=3;
+    const bars=de.slice(0,MAX).map(e=>{
+      const cls=e._type==='nidito'?'cev-nidito':'cev-event';
+      const lbl=(e.titulo||'').replace(/"/g,'&quot;');
+      const act=e._type==='nidito'?`calDay('${ds}')`:`eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})`;
+      return `<span class="cev-bar ${cls}" onclick="event.stopPropagation();${act}" title="${lbl}">${e.titulo||''}</span>`;
+    }).join('');
+    const more=de.length>MAX?`<span class="cev-more">+${de.length-MAX}</span>`:'';
+    const payDot=isPay?`<span class="cal-pay-dot" title="Día de cobro"></span>`:'';
+    cells+=`<div class="cd${ds===today?' today':''}${S._calSel===ds?' cal-sel':''}" onclick="calDay('${ds}')"><div style="display:flex;align-items:center;margin-bottom:2px"><div class="cdn">${d}</div>${payDot}</div>${bars}${more}</div>`;
   }
+  const total=first.getDay()+last.getDate();
+  const rem=total%7; if(rem>0) for(let i=rem;i<7;i++) cells+=`<div class="cd oth"></div>`;
+  const payList=[...payDays].sort((a,b)=>a-b).join(', ');
   return `
-<div class="cbox" style="margin-bottom:14px">
-  <div class="cal-nav">
-    <button class="btn btn-ghost btn-sm" onclick="calN(-1)"><i class="ti ti-chevron-left"></i></button>
-    <h3>${MN[mo]} ${y}<span style="font-size:11px;color:var(--muted);margin-left:8px">${payDays.length?'💰 cobro: días '+payDays.join(', '):''}</span></h3>
-    <button class="btn btn-ghost btn-sm" onclick="calN(1)"><i class="ti ti-chevron-right"></i></button>
-  </div>
-  <div id="cal-grid">${cells}</div>
-</div>`;
+<div class="cal-nav">
+  <button class="btn btn-ghost btn-sm" onclick="calN(-1)"><i class="ti ti-chevron-left"></i></button>
+  <h3>${MN[mo]} ${y}<span style="font-size:11px;color:var(--muted);margin-left:8px">${payDays.size?'💰 cobro: días '+payList:''}</span></h3>
+  <button class="btn btn-ghost btn-sm" onclick="calN(1)"><i class="ti ti-chevron-right"></i></button>
+</div>
+<div id="cal-grid">${cells}</div>`;
 }
 
 function _calUpcomingHTML(evts) {
@@ -3624,28 +3646,91 @@ function _calUpcomingHTML(evts) {
 </tr>`});
 }
 
-function rCal() {
-  const evts = S.data.calendario || [];
-  S._calData = {};
-  evts.forEach(e => { S._calData[e.id] = e; });
-  const refs = (S.data.user || {}).external_refs || {};
-  const y=S.cy, mo=S.cm;
+async function rCal() {
+  const evts=S.data.calendario||[];
+  S._calData={}; evts.forEach(e=>{S._calData[e.id]=e;});
+  const refs=(S.data.user||{}).external_refs||{};
+  if(!S._niditoItems) await _ndFetch();
+  const nd=S._niditoItems||[];
   $('tab-calendario').innerHTML=`
 <div class="hdr">
   <h2><i class="ti ti-calendar"></i> Calendario</h2>
   <button class="btn btn-accent btn-sm" onclick="oEvt()"><i class="ti ti-plus"></i> Evento</button>
 </div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-calendar-month"></i> Calendario de Eventos</h2></div></div>
-<div id="cal-month-wrap">${_calGridHTML(evts, y, mo, refs)}</div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-clock-hour-4"></i> Próximos Eventos</h2></div></div>
-<div id="cal-upcoming-wrap">${_calUpcomingHTML(evts)}</div>`;
+<div id="cal-day-ov" onclick="closeCalDay()"></div>
+<div class="cal-wrap">
+  <div class="cal-main">
+    <div id="cal-month-wrap">${_calGridHTML(evts,S.cy,S.cm,refs,nd)}</div>
+    <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-clock-hour-4"></i> Próximos Eventos</h2></div></div>
+    <div id="cal-upcoming-wrap">${_calUpcomingHTML(evts)}</div>
+  </div>
+  <div class="cal-day-panel" id="cal-day-panel"></div>
+</div>`;
+}
+
+function calDay(ds) {
+  S._calSel=ds;
+  const evts=S.data.calendario||[];
+  const refs=(S.data.user||{}).external_refs||{};
+  const nd=S._niditoItems||[];
+  const wrap=$('cal-month-wrap');
+  if(wrap) wrap.innerHTML=_calGridHTML(evts,S.cy,S.cm,refs,nd);
+  const [y,m,d]=ds.split('-').map(Number);
+  const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const dayEvts=evts.filter(e=>fd(e.fecha)===ds);
+  const dayNd=nd.filter(it=>!it.deleted_at&&(fd(it.fecha_inicio)===ds||fd(it.fecha_fin)===ds));
+  const payDays=new Set([...(refs.dias_pago||[]),...getIngresosEsperados(refs).flatMap(i=>i.dias||[])]);
+  let html=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+  <strong style="font-size:14px;color:var(--text-1)">${d} de ${MN[m-1]} ${y}</strong>
+  <button class="icon-btn" onclick="closeCalDay()"><i class="ti ti-x"></i></button>
+</div>`;
+  if(payDays.has(d)) html+=`<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--green);margin-bottom:10px"><i class="ti ti-coin" style="font-size:14px"></i> Día de cobro / ingreso</div>`;
+  if(!dayEvts.length&&!dayNd.length&&!payDays.has(d)){
+    html+=`<p style="color:var(--text-3);font-size:12px;margin:0 0 14px">Sin eventos este día.</p>`;
+  }
+  dayEvts.forEach(e=>{
+    html+=`<div style="background:var(--accent-primary);color:#fff;border-radius:var(--radius-md);padding:9px 12px;margin-bottom:8px">
+  <div style="font-weight:600;font-size:13px">${e.titulo}</div>
+  ${e.hora?`<div style="opacity:.75;font-size:11px;margin-top:2px"><i class="ti ti-clock" style="font-size:10px"></i> ${e.hora}</div>`:''}
+  ${e.descripcion?`<div style="opacity:.8;font-size:11px;margin-top:3px">${e.descripcion}</div>`:''}
+  <div style="margin-top:8px;display:flex;gap:5px">
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:none;padding:4px 10px;font-size:11px" onclick="closeCalDay();eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})"><i class="ti ti-pencil"></i> Editar</button>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:4px 8px;font-size:11px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
+  </div>
+</div>`;
+  });
+  dayNd.forEach(it=>{
+    const isStart=fd(it.fecha_inicio)===ds;
+    html+=`<div style="background:var(--accent-couple);color:#fff;border-radius:var(--radius-md);padding:9px 12px;margin-bottom:8px">
+  <div style="font-size:9px;opacity:.75;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Nidito — ${isStart?'Inicio':'Fin'}</div>
+  <div style="font-weight:600;font-size:13px">${it.titulo}</div>
+  ${it.tipo?`<div style="opacity:.75;font-size:11px;margin-top:2px">${it.tipo}</div>`:''}
+</div>`;
+  });
+  html+=`<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:4px" onclick="oEvt({fecha:'${ds}'})"><i class="ti ti-plus"></i> Agregar evento</button>`;
+  const panel=$('cal-day-panel');
+  if(panel){panel.innerHTML=html;panel.classList.add('open');}
+  const ov=$('cal-day-ov');
+  if(ov) ov.style.display='block';
+}
+
+function closeCalDay() {
+  S._calSel=null;
+  const panel=$('cal-day-panel'); if(panel) panel.classList.remove('open');
+  const ov=$('cal-day-ov'); if(ov) ov.style.display='none';
+  const wrap=$('cal-month-wrap');
+  if(wrap){const evts=S.data.calendario||[];const refs=(S.data.user||{}).external_refs||{};wrap.innerHTML=_calGridHTML(evts,S.cy,S.cm,refs,S._niditoItems||[]);}
 }
 
 function calN(d){
   S.cm+=d;
   if(S.cm>11){S.cm=0;S.cy++;}
   if(S.cm<0){S.cm=11;S.cy--;}
-  rCal();
+  closeCalDay();
+  const evts=S.data.calendario||[];const refs=(S.data.user||{}).external_refs||{};
+  const wrap=$('cal-month-wrap');
+  if(wrap) wrap.innerHTML=_calGridHTML(evts,S.cy,S.cm,refs,S._niditoItems||[]);
+  else rCal();
 }
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
@@ -3715,7 +3800,7 @@ function eMov(rec) { oMov(rec.tipo||'GASTO', rec); }
 
 function oEvt(rec=null) {
   S.mctx = { tabla:'calendario', id:rec?.id||null };
-  $('m-title').textContent = rec ? 'Editar Evento' : 'Nuevo Evento';
+  $('m-title').textContent = rec?.id ? 'Editar Evento' : 'Nuevo Evento';
   const today=new Date().toISOString().split('T')[0];
   $('m-body').innerHTML=`
 <div class="fr"><label>Título</label><input id="f-titulo" value="${rec?.titulo||''}" placeholder="Pago BBVA, cumpleaños, cepillo de dientes…"></div>
@@ -4484,12 +4569,17 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       }
     });
   }
+
+  // Left-edge swipe → go to dashboard (when in chat tab, like Messenger)
+  let _swipeX = 0;
+  document.addEventListener('touchstart', e => { _swipeX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (S.tab !== 'chat') return;
+    const dx = e.changedTouches[0].clientX - _swipeX;
+    if (_swipeX < 35 && dx > 65) go('dashboard');
+  }, { passive: true });
 })();
 </script>
 
-<!-- Floating save button (hidden in chat tab) -->
-<button class="fab-save" id="fab-save" onclick="saveSync()" style="display:none">
-  <i class="ti ti-device-floppy"></i> Guardar
-</button>
 </body>
 </html>
