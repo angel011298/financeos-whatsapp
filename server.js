@@ -72,8 +72,8 @@ async function enviarWhatsApp(to, body) {
 
 // ── Helpers: formato y fechas ────────────────────────────────────────────────
 const fmt       = n => '$' + Math.round(Math.abs(+n || 0)).toLocaleString('es-MX');
-const hoy       = () => new Date().toISOString().split('T')[0];
-const mesActual = () => new Date().toISOString().slice(0, 7);
+const hoy       = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+const mesActual = () => hoy().slice(0, 7);
 
 function getQuincena(fecha) {
   const d   = (fecha instanceof Date) ? fecha : new Date(fecha + 'T12:00:00');
@@ -98,7 +98,7 @@ function getQuincena(fecha) {
   const mm  = String(m + 1).padStart(2, '0');
   return { key: `${py}-${pmm}-B`, inicio: `${py}-${pmm}-25`, fin: `${y}-${mm}-09` };
 }
-const getQuincenaActual = () => getQuincena(new Date());
+const getQuincenaActual = () => getQuincena(hoy());
 
 // Asserts de quincena — lanzan en startup si hay regresión
 ;[
@@ -573,8 +573,8 @@ async function transcribeAudio(mediaBuf, contentType, phone = '') {
 
 // ── PROACTIVE REMINDERS ────────────────────────────────────────────────────
 async function checkAndSendReminders(phone) {
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-  const tStr = tomorrow.toISOString().split('T')[0];
+  const _tm = new Date(hoy() + 'T12:00:00'); _tm.setDate(_tm.getDate() + 1);
+  const tStr = _tm.toISOString().split('T')[0];
   const { data: evs } = await sb.from('calendario').select('*')
     .eq('user_phone', phone).eq('fecha', tStr).eq('notificado', false);
   for (const ev of (evs || [])) {
@@ -1098,7 +1098,8 @@ function tryParseBatch(text, today) {
 
 async function extractIntentBatch(text, phone = '') {
   const today     = hoy();
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const _yd = new Date(today + 'T12:00:00'); _yd.setDate(_yd.getDate() - 1);
+  const yesterday = _yd.toISOString().split('T')[0];
 
   // Fast path: list of gastos — no Gemini needed
   const fastBatch = tryParseBatch(text, today);
