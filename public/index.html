@@ -493,6 +493,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .chat-bar input{flex:1;border-radius:var(--radius-pill);padding:12px 18px;font-size:16px}
 .round-btn{width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;transition:.15s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .send-btn{background:var(--accent-primary);color:#fff}.send-btn:hover{opacity:.9}
+.chat-nav-back{display:none;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-default);flex-shrink:0}
 .mic-btn{background:var(--bg-surface-2);color:var(--text-2);border:1px solid var(--border-default)}
 .mic-btn:hover{color:var(--text-1);border-color:var(--text-2)}
 .mic-btn.recording{background:var(--color-expense);color:#fff;border-color:var(--color-expense);animation:pulse 1s infinite}
@@ -551,8 +552,9 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .sec-hdr-row::before,.sec-hdr-row::after{max-width:40px}
   /* ── Chat mode: nav hidden, full-height chat */
   .chat-mode #mobile-nav{display:none!important}
-  .chat-mode main{padding-bottom:env(safe-area-inset-bottom,0px)!important}
-  .chat-mode .chat-wrap{height:calc(100dvh - 16px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
+  .chat-mode main{padding-bottom:0!important}
+  .chat-mode .chat-wrap{height:calc(var(--vvh,100svh) - env(safe-area-inset-top,0px) - 16px)}
+  .chat-mode .chat-nav-back{display:flex}
   /* ── Calendar day panel: bottom sheet on mobile */
   .cal-wrap{flex-direction:column}
   .cal-day-panel{display:block;position:fixed;bottom:0;left:0;right:0;width:auto!important;border-radius:var(--radius-xl) var(--radius-xl) 0 0;border-bottom:none;z-index:200;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));max-height:72svh;overflow-y:auto;transform:translateY(110%);transition:transform .28s cubic-bezier(.32,1,.56,1)}
@@ -4209,6 +4211,10 @@ function rChat() {
   if (!msgs || msgs.dataset.phone !== S.phone) {
     tab.innerHTML = `
 <div class="chat-wrap">
+  <div class="chat-nav-back">
+    <button class="round-btn" onclick="go('dash')" style="background:var(--bg-surface-2)" title="Inicio"><i class="ti ti-arrow-left"></i></button>
+    <span style="font-weight:600;font-size:var(--text-sm)">Asistente IA ✨</span>
+  </div>
   <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"></div></div>
   <form class="chat-bar" onsubmit="event.preventDefault();sendChat()">
     <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
@@ -4224,16 +4230,6 @@ function rChat() {
   </form>
 </div>`;
     _loadChatHistory();
-    // Keyboard-aware scroll: re-scroll when iOS keyboard opens/closes
-    if (!S._chatVPInited) {
-      S._chatVPInited = true;
-      window.visualViewport?.addEventListener('resize', () => {
-        if (S.tab === 'chat') _scrollChat();
-      }, { passive: true });
-      document.addEventListener('focusin', e => {
-        if (e.target?.id === 'chat-input') setTimeout(_scrollChat, 350);
-      }, { passive: true });
-    }
   }
   _scrollChat();
 }
@@ -4283,6 +4279,23 @@ function _scrollChat() {
     setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 120);
   }));
 }
+
+// --vvh: visual viewport height updated on keyboard open/close (iOS Safari fix)
+(function () {
+  function _syncVVH() {
+    document.documentElement.style.setProperty('--vvh',
+      (window.visualViewport?.height ?? window.innerHeight) + 'px');
+  }
+  _syncVVH();
+  window.visualViewport?.addEventListener('resize', () => {
+    _syncVVH();
+    if (typeof S !== 'undefined' && S?.tab === 'chat') _scrollChat();
+  }, { passive: true });
+  window.addEventListener('resize', _syncVVH, { passive: true });
+  document.addEventListener('focusin', e => {
+    if (e.target?.id === 'chat-input') setTimeout(_scrollChat, 350);
+  }, { passive: true });
+})();
 
 function _showTyping() {
   const msgs = $('chat-msgs');
