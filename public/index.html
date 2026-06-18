@@ -550,10 +550,11 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .nd-din-row{flex-wrap:wrap}
   /* ── Section header decoration */
   .sec-hdr-row::before,.sec-hdr-row::after{max-width:40px}
-  /* ── Chat mode: nav hidden, full-height chat (position:fixed evita scroll de documento iOS) */
+  /* ── Chat mode: documento BLOQUEADO + chat anclado al visual viewport (recipe iOS Safari) */
+  .chat-mode{position:fixed;inset:0;width:100%;overflow:hidden}
   .chat-mode #mobile-nav{display:none!important}
-  .chat-mode main{padding:0!important;overflow:hidden}
-  .chat-mode .chat-wrap{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;height:calc(var(--vvh,100svh) - env(safe-area-inset-top,0px));padding:0 14px;background:var(--bg-base);z-index:100;box-sizing:border-box}
+  .chat-mode main{padding:0!important;overflow:hidden;height:100%}
+  .chat-mode .chat-wrap{position:fixed;left:0;right:0;top:var(--vvtop,0px);height:var(--vvh,100svh);padding:0 14px;background:var(--bg-app);z-index:100;box-sizing:border-box}
   .chat-mode .chat-nav-back{display:flex}
   /* ── Calendar day panel: bottom sheet on mobile */
   .cal-wrap{flex-direction:column}
@@ -4280,20 +4281,26 @@ function _scrollChat() {
   }));
 }
 
-// --vvh: visual viewport height updated on keyboard open/close (iOS Safari fix)
+// Visual viewport tracking: --vvh (altura) y --vvtop (offset) para anclar el chat
+// al área visible cuando el teclado iOS abre/cierra. visualViewport es el ÚNICO
+// API que refleja el teclado (svh/dvh NO cambian con el teclado en iOS Safari).
 (function () {
-  function _syncVVH() {
-    document.documentElement.style.setProperty('--vvh',
-      (window.visualViewport?.height ?? window.innerHeight) + 'px');
-  }
-  _syncVVH();
-  window.visualViewport?.addEventListener('resize', () => {
-    _syncVVH();
+  const vv = window.visualViewport;
+  const root = document.documentElement;
+  function _syncVV() {
+    root.style.setProperty('--vvh',   (vv?.height   ?? window.innerHeight) + 'px');
+    root.style.setProperty('--vvtop', (vv?.offsetTop ?? 0) + 'px');
     if (typeof S !== 'undefined' && S?.tab === 'chat') _scrollChat();
-  }, { passive: true });
-  window.addEventListener('resize', _syncVVH, { passive: true });
+  }
+  _syncVV();
+  if (vv) {
+    vv.addEventListener('resize', _syncVV, { passive: true });
+    vv.addEventListener('scroll', _syncVV, { passive: true });
+  }
+  window.addEventListener('resize', _syncVV, { passive: true });
+  window.addEventListener('orientationchange', _syncVV, { passive: true });
   document.addEventListener('focusin', e => {
-    if (e.target?.id === 'chat-input') setTimeout(_scrollChat, 350);
+    if (e.target?.id === 'chat-input') { _syncVV(); setTimeout(_scrollChat, 300); }
   }, { passive: true });
 })();
 
@@ -4619,15 +4626,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
   // Primera vez — pantalla neutral, el servidor detecta quién eres
   showPhoneInput(null);
 
-  // iOS keyboard: scroll chat to bottom when virtual keyboard resizes viewport
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', () => {
-      const msgs = $('chat-msgs');
-      if (msgs && S.tab === 'chat') {
-        requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
-      }
-    });
-  }
+  // (El tracking de teclado/visualViewport vive en el IIFE _syncVV, junto a _scrollChat)
 
   // Left-edge swipe → go to dashboard (when in chat tab, like Messenger)
   let _swipeX = 0;
