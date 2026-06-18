@@ -550,10 +550,10 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .nd-din-row{flex-wrap:wrap}
   /* ── Section header decoration */
   .sec-hdr-row::before,.sec-hdr-row::after{max-width:40px}
-  /* ── Chat mode: nav hidden, full-height chat */
+  /* ── Chat mode: nav hidden, full-height chat (position:fixed evita scroll de documento iOS) */
   .chat-mode #mobile-nav{display:none!important}
-  .chat-mode main{padding-bottom:0!important}
-  .chat-mode .chat-wrap{height:calc(var(--vvh,100svh) - env(safe-area-inset-top,0px) - 16px)}
+  .chat-mode main{padding:0!important;overflow:hidden}
+  .chat-mode .chat-wrap{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;height:calc(var(--vvh,100svh) - env(safe-area-inset-top,0px));padding:0 14px;background:var(--bg-base);z-index:100;box-sizing:border-box}
   .chat-mode .chat-nav-back{display:flex}
   /* ── Calendar day panel: bottom sheet on mobile */
   .cal-wrap{flex-direction:column}
@@ -4212,7 +4212,7 @@ function rChat() {
     tab.innerHTML = `
 <div class="chat-wrap">
   <div class="chat-nav-back">
-    <button class="round-btn" onclick="go('dash')" style="background:var(--bg-surface-2)" title="Inicio"><i class="ti ti-arrow-left"></i></button>
+    <button class="round-btn" onclick="go('dashboard')" style="background:var(--bg-surface-2)" title="Inicio"><i class="ti ti-arrow-left"></i></button>
     <span style="font-weight:600;font-size:var(--text-sm)">Asistente IA ✨</span>
   </div>
   <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"></div></div>
