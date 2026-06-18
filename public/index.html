@@ -482,7 +482,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .chat-wrap{display:flex;flex-direction:column;height:calc(100svh - 80px)}
 @supports not (height:100svh){.chat-wrap{height:calc(100dvh - 80px)}}
 .chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
-.chat-msgs::before{content:'';flex:1 1 0}
+#chat-spacer{flex:1 1 0}
 .msg{max-width:78%;padding:10px 14px;font-size:var(--text-sm);line-height:1.6;word-break:break-word;animation:fadeIn .2s ease;flex-shrink:0}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .msg-user{align-self:flex-end;background:var(--accent-primary);color:#fff;border-radius:var(--radius-lg) var(--radius-sm) var(--radius-lg) var(--radius-lg)}
@@ -535,7 +535,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   /* ── Forms */
   .f2{grid-template-columns:1fr}
   /* ── Chat */
-  .chat-wrap{height:calc(100svh - 148px - env(safe-area-inset-top,0px))}
+  .chat-wrap{height:calc(100dvh - 148px - env(safe-area-inset-top,0px))}
   .chat-bar input{font-size:16px!important}
   /* ── Movimientos filter */
   .mf-lbl{width:auto;flex-shrink:0}
@@ -552,7 +552,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   /* ── Chat mode: nav hidden, full-height chat */
   .chat-mode #mobile-nav{display:none!important}
   .chat-mode main{padding-bottom:env(safe-area-inset-bottom,0px)!important}
-  .chat-mode .chat-wrap{height:calc(100svh - 16px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
+  .chat-mode .chat-wrap{height:calc(100dvh - 16px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
   /* ── Calendar day panel: bottom sheet on mobile */
   .cal-wrap{flex-direction:column}
   .cal-day-panel{display:block;position:fixed;bottom:0;left:0;right:0;width:auto!important;border-radius:var(--radius-xl) var(--radius-xl) 0 0;border-bottom:none;z-index:200;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));max-height:72svh;overflow-y:auto;transform:translateY(110%);transition:transform .28s cubic-bezier(.32,1,.56,1)}
@@ -4209,7 +4209,7 @@ function rChat() {
   if (!msgs || msgs.dataset.phone !== S.phone) {
     tab.innerHTML = `
 <div class="chat-wrap">
-  <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"></div>
+  <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"></div></div>
   <form class="chat-bar" onsubmit="event.preventDefault();sendChat()">
     <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
       <i class="ti ti-microphone" id="mic-icon"></i>
@@ -4224,6 +4224,16 @@ function rChat() {
   </form>
 </div>`;
     _loadChatHistory();
+    // Keyboard-aware scroll: re-scroll when iOS keyboard opens/closes
+    if (!S._chatVPInited) {
+      S._chatVPInited = true;
+      window.visualViewport?.addEventListener('resize', () => {
+        if (S.tab === 'chat') _scrollChat();
+      }, { passive: true });
+      document.addEventListener('focusin', e => {
+        if (e.target?.id === 'chat-input') setTimeout(_scrollChat, 350);
+      }, { passive: true });
+    }
   }
   _scrollChat();
 }
@@ -4268,9 +4278,9 @@ function _appendMsg(role, text, ts = null, save = true) {
 function _scrollChat() {
   const msgs = $('chat-msgs');
   if (!msgs) return;
-  // Doble rAF: iOS Safari necesita dos ciclos para completar el layout flex
   requestAnimationFrame(() => requestAnimationFrame(() => {
     msgs.scrollTop = msgs.scrollHeight;
+    setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 120);
   }));
 }
 
