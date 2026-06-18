@@ -693,10 +693,10 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   .hdr{flex-wrap:wrap;gap:8px}
   .mbtns{flex-wrap:wrap}
   .mbtns .btn{flex:1;justify-content:center;min-height:40px}
-  /* Movimientos table: hide Tipo(4), Categoría(5), Comentarios(9) on mobile */
-  #tbl-movs-box th:nth-child(4),#tbl-movs-box td:nth-child(4),
-  #tbl-movs-box th:nth-child(5),#tbl-movs-box td:nth-child(5),
-  #tbl-movs-box th:nth-child(9),#tbl-movs-box td:nth-child(9){display:none}
+  /* Movimientos y Deudas: TODAS las columnas visibles en móvil con scroll
+     horizontal y ancho mínimo legible (antes se ocultaba Categoría — corregido) */
+  #tbl-movs-box table{min-width:760px}
+  #tbl-tdc-box table{min-width:720px}
 }
 
 /* ═══════════════════════════════════════════════════════ NIDITO v8 */
@@ -781,8 +781,10 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 .nd-divider{border:none;border-top:1px solid var(--border-default);margin:12px 0}
 .nd-empty{text-align:center;padding:20px 16px;color:var(--text-3);border:1px dashed var(--border-default);border-radius:var(--radius-lg);font-size:13px}
 @media(max-width:700px){
-  .nd-asig-tbl th:nth-child(3),.nd-asig-tbl td:nth-child(3){display:none}
-  .nd-asig-inp{width:86px}
+  /* Asignación nidito: mostrar también "Quincenal" (col 3) en móvil; inputs compactos */
+  .nd-asig-tbl{font-size:12px}
+  .nd-asig-tbl th,.nd-asig-tbl td{padding:3px 4px}
+  .nd-asig-inp{width:62px;padding:5px 6px}
   .nd-date-pair{flex-direction:column}
   .nd-sec-hdr h3{font-size:var(--text-lg)}
   .nd-din-card{padding:14px 16px}

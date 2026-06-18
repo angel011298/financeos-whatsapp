@@ -613,6 +613,37 @@ function esGastoProgramado(datos, today) {
   return false;
 }
 
+// Reglas DETERMINISTAS de categorización por palabra clave (chat IA web + WhatsApp).
+// Se aplican a GASTOS sin importar lo que devuelva Gemini, para garantizar consistencia.
+// Mutan `datos` en sitio. Precedencia: transporte (concreto) > Platina > Alicia/golosinas.
+function aplicarReglasCategoria(datos, textoOriginal = '') {
+  if (!datos || datos.tipo !== 'GASTO') return datos;
+  const norm = s => String(s || '').toLowerCase()
+    .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
+    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u');   // minúsculas + sin acentos
+  const blob = norm(`${datos.concepto || ''} ${datos.comentarios || ''} ${textoOriginal || ''}`);
+  const has  = re => re.test(blob);
+
+  // 1) Transporte público — define categoría Y medio de pago
+  if (has(/\b(camion|micro|combi)\b/)) {
+    datos.categoria  = 'Transporte';
+    datos.medio_pago = 'efectivo';
+  } else if (has(/\b(metro|metrobus)\b/)) {
+    datos.categoria  = 'Transporte';
+    datos.medio_pago = 'débito';
+  }
+
+  // 2) Alicia / golosinas → Ocio (salvo gasto de la Platina o ya marcado Transporte)
+  if (has(/\b(alicia|golosina|golosinas)\b/) &&
+      datos.categoria !== 'Platina' && datos.categoria !== 'Transporte') {
+    datos.categoria = 'Ocio';
+  }
+  // "alicia" siempre deja rastro en comentarios (contexto pareja)
+  if (has(/\balicia\b/) && !datos.comentarios) datos.comentarios = 'Alicia';
+
+  return datos;
+}
+
 // Etiqueta legible de quincena: "2026-06-B" → "2ª quincena de junio"
 function labelQuincena(qKey) {
   const m = String(qKey || '').match(/^(\d{4})-(\d{2})-([AB])$/);
@@ -691,6 +722,8 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
     }
 
     if (accion === 'crear') {
+      // ── Reglas deterministas de categorización (palabras clave) ────────────
+      if (tabla === 'movimientos') aplicarReglasCategoria(datos, texto_original);
       // ── Gasto programado/futuro → Presupuesto, NO movimiento real ──────────
       if (tabla === 'movimientos' && esGastoProgramado(datos, hoy())) {
         const r = await addGastoProgramado(phone, datos, origen, texto_original);
@@ -750,6 +783,11 @@ CONTEXTO DE PAREJA:
 - "Alicia/ella/mi novia/nosotros/fuimos/fueron" → comentarios:"Alicia" + categoria:"Ocio" automático
 - "Platina" → coche de la pareja → categoria:"Platina" (tiene prioridad sobre Ocio)
 - Alicia/Ángel/Angel como (paréntesis) → NO son medios de pago
+
+REGLAS FIJAS POR PALABRA (obligatorias):
+- "alicia" o "golosinas" → categoria:"Ocio"
+- "camión/camion", "micro" o "combi" → categoria:"Transporte" + medio_pago:"efectivo"
+- "metro" o "metrobús" → categoria:"Transporte" + medio_pago:"débito"
 
 CATEGORIZACIÓN:
 Transporte: Uber, DiDi, Beat, Lyft, metro, metrobús, combi, taxi, caseta
@@ -875,6 +913,11 @@ CONTEXTO DE PAREJA:
 - "le presté/le di a Alicia" → comentarios:"Alicia", categoria "Ocio" (o la más apropiada si es obvia)
 - "Platina" → coche de la pareja → categoria:"Platina" siempre (tiene prioridad sobre Ocio)
 - Nombres propios (Alicia, Ángel, Angel) como (paréntesis) → NO son medios de pago, ignorarlos
+
+REGLAS FIJAS POR PALABRA (obligatorias, anulan otra categorización salvo Platina):
+- "alicia" o "golosinas" → categoria:"Ocio"
+- "camión/camion", "micro" o "combi" → categoria:"Transporte" + medio_pago:"efectivo"
+- "metro" o "metrobús" → categoria:"Transporte" + medio_pago:"débito"
 
 CATEGORIZACIÓN AUTOMÁTICA:
 Transporte:  Uber, DiDi, Beat, Lyft, Cabify, Rappi traslado, metro, metrobús, tren suburbano, combi, camión, taxi, caseta (sin Platina)
