@@ -481,8 +481,9 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 /* ═══════════════════════════════════════════════════════ CHAT */
 .chat-wrap{display:flex;flex-direction:column;height:calc(100svh - 80px)}
 @supports not (height:100svh){.chat-wrap{height:calc(100dvh - 80px)}}
-.chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;min-height:0}
-.msg{max-width:78%;padding:10px 14px;font-size:var(--text-sm);line-height:1.6;word-break:break-word;animation:fadeIn .2s ease}
+.chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.chat-msgs::before{content:'';flex:1 1 0}
+.msg{max-width:78%;padding:10px 14px;font-size:var(--text-sm);line-height:1.6;word-break:break-word;animation:fadeIn .2s ease;flex-shrink:0}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .msg-user{align-self:flex-end;background:var(--accent-primary);color:#fff;border-radius:var(--radius-lg) var(--radius-sm) var(--radius-lg) var(--radius-lg)}
 .msg-bot{align-self:flex-start;background:var(--bg-surface-2);border:1px solid var(--border-default);color:var(--text-1);border-radius:var(--radius-sm) var(--radius-lg) var(--radius-lg) var(--radius-lg)}
@@ -689,6 +690,10 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   .hdr{flex-wrap:wrap;gap:8px}
   .mbtns{flex-wrap:wrap}
   .mbtns .btn{flex:1;justify-content:center;min-height:40px}
+  /* Movimientos table: hide Tipo(4), Categoría(5), Comentarios(9) on mobile */
+  #tbl-movs-box th:nth-child(4),#tbl-movs-box td:nth-child(4),
+  #tbl-movs-box th:nth-child(5),#tbl-movs-box td:nth-child(5),
+  #tbl-movs-box th:nth-child(9),#tbl-movs-box td:nth-child(9){display:none}
 }
 
 /* ═══════════════════════════════════════════════════════ NIDITO v8 */
@@ -2162,18 +2167,19 @@ ${periodoSelectorHTML()}
   </div>
 </div>
 ${rQuincenaPanel('dash')}
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div></div>
+<div id="movs-section"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis Gráfico</h2></div><div class="sec-hdr-sub">Gastos, ingresos y patrones del período</div></div>
 <div class="charts-grid">
   <div class="cbox"><h3>Gastos por Categoría — ${r.label}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div><div id="legend-c-cat" class="chart-legend"></div></div>
   <div class="cbox"><h3>Ingresos vs Gastos — últimos 6 meses</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div><div id="legend-c-men" class="chart-legend"></div></div>
   <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div><div id="legend-c-pat" class="chart-legend"></div></div>
 </div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div></div>
-<div id="movs-section"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-brain"></i> Consejos IA</h2></div><div class="sec-hdr-sub">Análisis personalizado de tus hábitos financieros</div></div>
 <div id="insights-section"></div>
 `;
 
+  rMovs();
   const cgRaw=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
   const cg={}; Object.entries(cgRaw).forEach(([k,v])=>{ const nk=k==='Pasajes'?'Transporte':k; cg[nk]=(cg[nk]||0)+v; });
   const ck=Object.keys(cg).sort((a,b)=>cg[b]-cg[a]);
@@ -2188,7 +2194,6 @@ ${rQuincenaPanel('dash')}
   const top=pats.slice(0,8);
   if (top.length) mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
   else emptyChart('c-pat','Sin patrones registrados aún');
-  rMovs();
   fetchInsights();
 }
 
@@ -4262,7 +4267,11 @@ function _appendMsg(role, text, ts = null, save = true) {
 
 function _scrollChat() {
   const msgs = $('chat-msgs');
-  if (msgs) requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
+  if (!msgs) return;
+  // Doble rAF: iOS Safari necesita dos ciclos para completar el layout flex
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    msgs.scrollTop = msgs.scrollHeight;
+  }));
 }
 
 function _showTyping() {
