@@ -1022,13 +1022,22 @@ function badgeFecha(d) {
 }
 
 async function api(m, p, b) {
-  const r = await fetch(p, { method:m, headers:{'Content-Type':'application/json'}, body:b?JSON.stringify(b):undefined });
-  if (r.status === 413) throw new Error('Audio demasiado largo. Graba menos de 60 segundos.');
-  const text = await r.text();
-  let json;
-  try { json = JSON.parse(text); } catch { throw new Error('Respuesta inválida del servidor'); }
-  if (!r.ok || json?.success === false) throw new Error(json?.error || `Error ${r.status}`);
-  return json;
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), 28000);   // 28s: Railway timeout is 30s
+  try {
+    const r = await fetch(p, { method:m, headers:{'Content-Type':'application/json'}, body:b?JSON.stringify(b):undefined, signal:ctrl.signal });
+    clearTimeout(tid);
+    if (r.status === 413) throw new Error('Audio demasiado largo. Graba menos de 60 segundos.');
+    const text = await r.text();
+    let json;
+    try { json = JSON.parse(text); } catch { throw new Error('Respuesta inválida del servidor'); }
+    if (!r.ok || json?.success === false) throw new Error(json?.error || `Error ${r.status}`);
+    return json;
+  } catch (e) {
+    clearTimeout(tid);
+    if (e.name === 'AbortError') throw new Error('Sin respuesta del servidor. Intenta de nuevo.');
+    throw e;
+  }
 }
 
 // Normaliza teléfono a formato whatsapp:+52XXXXXXXXXX

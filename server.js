@@ -147,6 +147,10 @@ const mes     = mesActual;   // alias — código legacy usa mes()
 const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
 const MEDIOS_PAGO = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito'];
 
+// Corre `promise` pero si tarda más de `ms` devuelve `fallback` en lugar de colgar.
+const withTimeout = (promise, ms, fallback) =>
+  Promise.race([promise, new Promise(resolve => setTimeout(() => resolve(fallback), ms))]);
+
 // ── Identificar usuario por número de teléfono ──────────────────────────────
 async function identificarUsuario(phoneFrom) {
   let { data: usuario } = await sb
@@ -861,7 +865,7 @@ async function extractIntent(text, phone = '') {
   try {
     const model = genAI.getGenerativeModel({
       model:            'gemini-2.5-flash',
-      generationConfig: { responseMimeType: 'application/json' },
+      generationConfig: { responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
       systemInstruction: _extractIntentStaticPrompt
         .replace(/FECHA_HOY/g, today)
         .replace(/FECHA_YEAR/g, today.slice(0, 4)),
@@ -1168,7 +1172,7 @@ async function extractIntentBatch(text, phone = '') {
   try {
     const model = genAI.getGenerativeModel({
       model:            'gemini-2.5-flash',
-      generationConfig: { responseMimeType: 'application/json' },
+      generationConfig: { responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
       systemInstruction: _batchIntentPrompt
         .replace(/FECHA_HOY/g, today)
         .replace(/FECHA_AYER/g, yesterday)
@@ -1715,6 +1719,7 @@ async function callGemini(user, sysBlocks, geminiHistory, text, phone, direct = 
     model: user.ai_model || 'gemini-2.5-flash',
     tools: geminiTools,
     systemInstruction,
+    generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
   });
 
   // Garantizar alternancia user→model
@@ -2685,7 +2690,11 @@ app.post('/api/chat-web', async (req, res) => {
       const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
 
       await guardarMensaje(phone, 'user', input);
-      const { intent, items } = await extractIntentBatch(input, phone);
+      const { intent, items } = await withTimeout(
+        extractIntentBatch(input, phone),
+        12000,
+        { intent: 'CONSULTA', items: [] }
+      );
 
       if (['REGISTRO', 'EDICION', 'ELIMINACION'].includes(intent) && items.length > 0) {
         const mentionsAlicia = /alicia/i.test(input);
@@ -2700,7 +2709,11 @@ app.post('/api/chat-web', async (req, res) => {
         reply = buildWebChatReply(execs);
       } else {
         const sysBlocks = await buildSystemPrompt(user, intent);
-        reply = await callIA(user, sysBlocks, input, phone, true);   // direct=true → registros sin menú
+        reply = await withTimeout(
+          callIA(user, sysBlocks, input, phone, true),
+          12000,
+          '⚠️ Gemini tardó demasiado en responder. Intenta de nuevo, o escribe "gasté [monto] en [concepto]" para registrar directo.'
+        );   // direct=true → registros sin menú
       }
 
       await guardarMensaje(phone, 'assistant', reply);
