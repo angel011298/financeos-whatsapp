@@ -641,6 +641,9 @@ function aplicarReglasCategoria(datos, textoOriginal = '') {
   // "alicia" siempre deja rastro en comentarios (contexto pareja)
   if (has(/\balicia\b/) && !datos.comentarios) datos.comentarios = 'Alicia';
 
+  // 3) "transferencia" → siempre se guarda como pagado con tarjeta de débito
+  if (has(/\btransfer(?:encia|i)\b/)) datos.medio_pago = 'débito';
+
   return datos;
 }
 
@@ -788,6 +791,7 @@ REGLAS FIJAS POR PALABRA (obligatorias):
 - "alicia" o "golosinas" → categoria:"Ocio"
 - "camión/camion", "micro" o "combi" → categoria:"Transporte" + medio_pago:"efectivo"
 - "metro" o "metrobús" → categoria:"Transporte" + medio_pago:"débito"
+- "transferencia" (en un gasto) → medio_pago:"débito"
 
 CATEGORIZACIÓN:
 Transporte: Uber, DiDi, Beat, Lyft, metro, metrobús, combi, taxi, caseta
@@ -918,6 +922,7 @@ REGLAS FIJAS POR PALABRA (obligatorias, anulan otra categorización salvo Platin
 - "alicia" o "golosinas" → categoria:"Ocio"
 - "camión/camion", "micro" o "combi" → categoria:"Transporte" + medio_pago:"efectivo"
 - "metro" o "metrobús" → categoria:"Transporte" + medio_pago:"débito"
+- "transferencia" (en un gasto) → medio_pago:"débito"
 
 CATEGORIZACIÓN AUTOMÁTICA:
 Transporte:  Uber, DiDi, Beat, Lyft, Cabify, Rappi traslado, metro, metrobús, tren suburbano, combi, camión, taxi, caseta (sin Platina)
@@ -1633,15 +1638,29 @@ const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", de
 
 // ── LLM ENGINE ─────────────────────────────────────────────────────────────
 
-// Claude con tool calling — proposeDbAction intercepts; sin segundo turno de IA
-async function callClaude(user, sysBlocks, messages, text, phone) {
+// Ejecuta tool calls DIRECTAMENTE (sin confirmación) y devuelve el resumen estilo web.
+// Usado por el chat web (PWA/móvil): los registros son inmediatos, sin menú interactivo.
+async function execToolsDirect(phone, argsList, textoOriginal = '') {
+  const execs = [];
+  for (const args of argsList) {
+    // Mismo objeto a executeDbAction y a execs: así se preserva el flag _programado
+    // que executeDbAction marca en sitio (lo usa buildWebChatReply).
+    const item = { ...args, texto_original: textoOriginal };
+    const result = await executeDbAction(phone, item, 'web');
+    execs.push({ item, result });
+  }
+  return buildWebChatReply(execs);
+}
+
+// Claude con tool calling — direct=true ejecuta sin confirmación (web); false propone (WhatsApp)
+async function callClaude(user, sysBlocks, messages, text, phone, direct = false) {
   if (!anthropic) {
     // Fallback a Gemini si Anthropic no está configurado
     const geminiHistory = messages.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
-    return callGemini(user, sysBlocks, geminiHistory, text, phone);
+    return callGemini(user, sysBlocks, geminiHistory, text, phone, direct);
   }
   const model = user.ai_model || 'claude-sonnet-4-6';
   const msgs = [...messages, { role: 'user', content: text }];
@@ -1671,7 +1690,12 @@ async function callClaude(user, sysBlocks, messages, text, phone) {
   }
 
   if (toolUses.length > 0) {
-    // proposeDbAction decide auto-confirm o propuesta — short-circuit sin segundo turno
+    if (direct) {
+      // Web: ejecutar directo, sin menú de confirmación
+      const directReply = await execToolsDirect(phone, toolUses.map(t => t.input), text);
+      return [aiText.trim(), directReply].filter(Boolean).join('\n\n');
+    }
+    // WhatsApp: proposeDbAction decide auto-confirm o propuesta — short-circuit sin segundo turno
     const results = await Promise.all(toolUses.map(t => proposeDbAction(phone, t.input, text)));
     const proposalMsg = results.map(r => r.msg).join('\n');
     return [aiText.trim(), proposalMsg].filter(Boolean).join('\n\n');
@@ -1680,8 +1704,8 @@ async function callClaude(user, sysBlocks, messages, text, phone) {
   return aiText;
 }
 
-// Gemini con function calling — proposeDbAction intercepts; sin segundo turno de IA
-async function callGemini(user, sysBlocks, geminiHistory, text, phone) {
+// Gemini con function calling — direct=true ejecuta sin confirmación (web); false propone (WhatsApp)
+async function callGemini(user, sysBlocks, geminiHistory, text, phone, direct = false) {
   // sysBlocks puede ser { static, dynamic } (Sprint 2) o string legado
   const systemInstruction = (sysBlocks && typeof sysBlocks === 'object' && sysBlocks.static)
     ? sysBlocks.static + '\n\n' + sysBlocks.dynamic
@@ -1708,6 +1732,9 @@ async function callGemini(user, sysBlocks, geminiHistory, text, phone) {
   const calls = res.response.functionCalls();
 
   if (calls?.length) {
+    // Web: ejecutar directo, sin menú de confirmación
+    if (direct) return await execToolsDirect(phone, calls.map(c => c.args), text);
+    // WhatsApp: proponer confirmación
     const results = await Promise.all(calls.map(c => proposeDbAction(phone, c.args, text)));
     return results.map(r => r.msg).join('\n');
   }
@@ -1715,18 +1742,19 @@ async function callGemini(user, sysBlocks, geminiHistory, text, phone) {
   return res.response.text();
 }
 
-// Dispatcher que enruta por preferencia del usuario
-async function callIA(user, sysBlocks, text, phone) {
+// Dispatcher que enruta por preferencia del usuario. direct=true → ejecuta sin
+// confirmación (chat web/PWA); false → propone con menú (WhatsApp).
+async function callIA(user, sysBlocks, text, phone, direct = false) {
   const dbHistory = await cargarHistorial(phone);
 
   if (user.ai_preference === 'CLAUDE') {
-    return callClaude(user, sysBlocks, dbHistory, text, phone);
+    return callClaude(user, sysBlocks, dbHistory, text, phone, direct);
   } else {
     const geminiHistory = dbHistory.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
-    return callGemini(user, sysBlocks, geminiHistory, text, phone);
+    return callGemini(user, sysBlocks, geminiHistory, text, phone, direct);
   }
 }
 
@@ -2646,7 +2674,7 @@ app.post('/api/chat-web', async (req, res) => {
     const lower = text.toLowerCase().trim();
     // El chat web SIEMPRE usa Gemini (gratis), sin importar la preferencia guardada.
     const user  = { ...(await getOrCreateUser(phone)), ai_preference: 'GEMINI' };
-    await checkAndSendReminders(phone).catch(() => {});
+    checkAndSendReminders(phone).catch(() => {});   // no-bloqueante: no retrasa la respuesta del chat
 
     let reply = '';
     if (['resumen','summary','balance'].includes(lower))         reply = await cmdResumen(phone);
@@ -2672,7 +2700,7 @@ app.post('/api/chat-web', async (req, res) => {
         reply = buildWebChatReply(execs);
       } else {
         const sysBlocks = await buildSystemPrompt(user, intent);
-        reply = await callIA(user, sysBlocks, input, phone);
+        reply = await callIA(user, sysBlocks, input, phone, true);   // direct=true → registros sin menú
       }
 
       await guardarMensaje(phone, 'assistant', reply);

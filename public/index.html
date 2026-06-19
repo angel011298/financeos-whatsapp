@@ -4347,8 +4347,9 @@ async function _askBot(message, audioB64 = null, audioMime = null) {
     if (r.error) { _appendMsg('bot', '❌ Error servidor: ' + r.error); return; }
     if (r.transcription) _appendMsg('user', '🎤 ' + r.transcription);
     _appendMsg('bot', r.reply || '...');
-    // Refresca datos si Claude hizo cambios en la DB (await para que el tab activo ya muestre datos frescos)
-    await load().catch(() => {});
+    // Refresca datos en SEGUNDO PLANO (sin await): el chat queda libre al instante;
+    // el dashboard se actualiza solo cuando termina la recarga.
+    load().catch(() => {});
   } catch (e) {
     _hideTyping();
     const msg = e.message?.includes('demasiado') ? `❌ ${e.message}`
