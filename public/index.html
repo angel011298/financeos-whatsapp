@@ -2202,15 +2202,15 @@ ${periodoSelectorHTML()}
   </div>
 </div>
 ${rQuincenaPanel('dash')}
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2><button id="btn-movs-toggle" onclick="toggleMovsCollapsed()" class="btn" style="margin-left:auto;font-size:12px;padding:5px 14px;gap:6px"><i class="ti ti-chevron-${S._movsCollapsed?'down':'up'}"></i> ${S._movsCollapsed?'Expandir tabla':'Contraer tabla'}</button></div></div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div></div>
 <div id="movs-section"></div>
+<div id="movs-table-section"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis Gráfico</h2></div><div class="sec-hdr-sub">Gastos, ingresos y patrones del período</div></div>
 <div class="charts-grid">
   <div class="cbox"><h3>Gastos por Categoría — ${r.label}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div><div id="legend-c-cat" class="chart-legend"></div></div>
   <div class="cbox"><h3>Ingresos vs Gastos — últimos 6 meses</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div><div id="legend-c-men" class="chart-legend"></div></div>
   <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div><div id="legend-c-pat" class="chart-legend"></div></div>
 </div>
-<div id="movs-table-section"></div>
 <div class="sec-hdr" style="margin-top:16px"><div class="sec-hdr-row"><h2><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Lista de Despensa</h2></div></div>
 <div id="despensa-section"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-brain"></i> Consejos IA</h2></div><div class="sec-hdr-sub">Análisis personalizado de tus hábitos financieros</div></div>
@@ -3618,12 +3618,7 @@ function toggleUnreadFilter() {
 
 function toggleMovsCollapsed() {
   S._movsCollapsed = !S._movsCollapsed;
-  // Solo actualiza #movs-table-section — #movs-section y .charts-grid no se tocan
   _updateMovsTable(getMovFiltradas());
-  const icon = S._movsCollapsed ? 'down' : 'up';
-  const lbl  = S._movsCollapsed ? 'Expandir tabla' : 'Contraer tabla';
-  const btn  = document.getElementById('btn-movs-toggle');
-  if (btn) btn.innerHTML = `<i class="ti ti-chevron-${icon}"></i> ${lbl}`;
 }
 
 function openCatPicker(id) {
