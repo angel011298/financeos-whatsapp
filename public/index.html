@@ -3592,7 +3592,13 @@ function rMovs() {
       </tr>`;
     }
   });
-  if (_tHost) { _tHost.innerHTML = _movTable; } else { host.innerHTML += _movTable; }
+  if (_tHost) {
+    _tHost.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      <button class="btn" onclick="toggleMovsCollapsed()" style="font-size:12px;padding:5px 14px;gap:6px">
+        <i class="ti ti-chevron-up"></i> Contraer tabla
+      </button>
+    </div>${_movTable}`;
+  } else { host.innerHTML += _movTable; }
   setTimeout(()=>renderMovChart(filtered),60);
 }
 
