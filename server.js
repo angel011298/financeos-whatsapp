@@ -117,6 +117,8 @@ const fs      = require('fs');
 const DEPLOY_TS = Date.now().toString(36);
 
 // Headers que previenen caché en browser, CDN Railway (Hikari) y proxies intermedios
+app.set('etag', false); // nunca enviar ETag — evita que CDNs interpreten respuestas como cacheables
+
 const NO_CACHE_HEADERS = {
   'Cache-Control'    : 'no-store, no-cache, must-revalidate, proxy-revalidate',
   'Pragma'           : 'no-cache',
