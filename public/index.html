@@ -1672,6 +1672,18 @@ function rQuincenaPanel(ctx) {
   const allIngEsp = getIngresosEsperados(refs, qKey);
   const gasEsp    = getGastosEsperados(refs, qKey);
 
+  // Inject DESPENSA synthetic entry (computed from the shopping list)
+  if (refs.hide_despensa_gastos !== true) {
+    const _despPend  = (S.data.despensa || []).filter(x => !x.comprado);
+    const _despTotal = _despPend.reduce((a, x) => {
+      const bW = typeof x.precio_walmart === 'number' ? x.precio_walmart : Infinity;
+      const bA = typeof x.precio_amazon  === 'number' ? x.precio_amazon  : Infinity;
+      const b  = Math.min(bW, bA);
+      return a + (isFinite(b) ? b : (x.precio_est || 0));
+    }, 0);
+    if (_despTotal > 0) gasEsp.push({ _id: '_despensa_', descripcion: 'Despensa', monto: _despTotal, _isDespensa: true });
+  }
+
   // Populate lookup for inline editing; tag items with their storage key
   S._expItemData = {};
   allIngEsp.forEach(i => { const k = i._id || i.id || i.descripcion; if (k) S._expItemData[k] = { ...i, _tipo: 'ingresos', _qKey: hasQBudget ? qKey : null }; });
@@ -1778,6 +1790,14 @@ function rQuincenaPanel(ctx) {
   <div style="margin-bottom:10px">
     <div class="q-section-lbl"><i class="ti ti-wallet" style="color:var(--yellow)"></i> Gastos esta quincena</div>
     ${gasEsp.length ? gasEsp.map(g => {
+      if (g._isDespensa) return `<div class="q-item-row">
+        <span style="font-size:12px;display:flex;align-items:center;gap:5px"><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Despensa <span style="font-size:10px;color:var(--text-3)">(mejor precio)</span></span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="red" style="font-weight:600">${fmt(g.monto)}</span>
+          <button class="edit-pill-btn" title="Ver despensa" onclick="go('dashboard');setTimeout(()=>document.getElementById('despensa-section')?.scrollIntoView({behavior:'smooth'}),300)"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
+          <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
+        </div>
+      </div>`;
       const fp       = fpMap[g.descripcion] || g.forma_pago || '';
       const _id      = g._id || g.id || g.descripcion;
       const nomSafe  = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -4096,51 +4116,120 @@ function oAgregarLimitePpto(mes) {
 function rDespensa() {
   const el = $('despensa-section');
   if (!el) return;
-  const items    = S.data.despensa || [];
-  const pending  = items.filter(x => !x.comprado);
-  const done     = items.filter(x =>  x.comprado);
-  const total    = pending.reduce((a, x) => a + (x.precio_est || 0), 0);
+  const items   = S.data.despensa || [];
+  const pending = items.filter(x => !x.comprado);
+  const done    = items.filter(x =>  x.comprado);
+
+  // Compute totals
+  const wTotal = pending.reduce((a, x) => typeof x.precio_walmart === 'number' ? a + x.precio_walmart : a, 0);
+  const aTotal = pending.reduce((a, x) => typeof x.precio_amazon  === 'number' ? a + x.precio_amazon  : a, 0);
+  const bestTotal = pending.reduce((a, x) => {
+    const bW = typeof x.precio_walmart === 'number' ? x.precio_walmart : Infinity;
+    const bA = typeof x.precio_amazon  === 'number' ? x.precio_amazon  : Infinity;
+    const b  = Math.min(bW, bA);
+    return a + (isFinite(b) ? b : (x.precio_est || 0));
+  }, 0);
+
+  const lastCheck = pending.reduce((d, x) => {
+    if (!x.ultima_consulta) return d;
+    return (!d || x.ultima_consulta > d) ? x.ultima_consulta : d;
+  }, null);
+
+  const hasAnyPrices = pending.some(x => x.precio_walmart != null || x.precio_amazon != null);
+
+  const tblHtml = pending.length ? mkTable({
+    id: 'tbl-despensa',
+    rows: pending,
+    numbered: true,
+    empty: 'Sin artículos pendientes',
+    columns: [
+      { key:'nombre',    label:'Producto',     filter:'text',   value: r => r.nombre || '', width:'160px' },
+      { key:'p_walmart', label:'Walmart',       num:true,        value: r => r.precio_walmart ?? '', width:'90px' },
+      { key:'l_walmart', label:'',              sortable:false,  value: r => r.url_walmart ? '🔗' : '', width:'36px' },
+      { key:'p_amazon',  label:'Amazon',        num:true,        value: r => r.precio_amazon ?? '', width:'90px' },
+      { key:'l_amazon',  label:'',              sortable:false,  value: r => r.url_amazon ? '🔗' : '', width:'36px' },
+      { key:'mejor',     label:'Mejor precio',  filter:'select', value: r => {
+          const hasW = typeof r.precio_walmart === 'number';
+          const hasA = typeof r.precio_amazon  === 'number';
+          if (hasW && hasA) return r.precio_walmart <= r.precio_amazon ? 'Walmart' : 'Amazon';
+          if (hasW) return 'Walmart'; if (hasA) return 'Amazon'; return '—';
+        }, width:'100px' },
+      { key:'_acts',     label:'',              sortable:false,  value: r => '', width:'64px' }
+    ],
+    renderRow: r => {
+      const hasW   = typeof r.precio_walmart === 'number';
+      const hasA   = typeof r.precio_amazon  === 'number';
+      const wPrice = hasW ? fmt(r.precio_walmart) : '—';
+      const aPrice = hasA ? fmt(r.precio_amazon)  : '—';
+      const wLink  = r.url_walmart ? `<a href="${r.url_walmart}" target="_blank" rel="noopener" style="color:#0071ce;font-size:13px" title="Ver en Walmart"><i class="ti ti-external-link"></i></a>` : '<span style="color:var(--text-3)">—</span>';
+      const aLink  = r.url_amazon  ? `<a href="${r.url_amazon}"  target="_blank" rel="noopener" style="color:#ff9900;font-size:13px" title="Ver en Amazon"><i class="ti ti-external-link"></i></a>`  : '<span style="color:var(--text-3)">—</span>';
+      let mejor = '—', mejorColor = 'var(--text-3)';
+      if (hasW && hasA) { mejor = r.precio_walmart <= r.precio_amazon ? 'Walmart' : 'Amazon'; mejorColor = r.precio_walmart <= r.precio_amazon ? '#0071ce' : '#ff9900'; }
+      else if (hasW) { mejor = 'Walmart'; mejorColor = '#0071ce'; }
+      else if (hasA) { mejor = 'Amazon';  mejorColor = '#ff9900'; }
+      return `<tr style="${r.comprado?'opacity:.5':''}">
+        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
+        <td style="color:#0071ce;font-weight:600">${wPrice}</td>
+        <td style="text-align:center">${wLink}</td>
+        <td style="color:#ff9900;font-weight:600">${aPrice}</td>
+        <td style="text-align:center">${aLink}</td>
+        <td style="color:${mejorColor};font-weight:700;text-align:center">${mejor}</td>
+        <td style="text-align:center;white-space:nowrap">
+          <button onclick="toggleComprado(${r.id},${!r.comprado})" style="background:none;border:none;cursor:pointer;color:${r.comprado?'var(--color-income)':'var(--text-3)'};font-size:15px;padding:2px 4px" title="${r.comprado?'Desmarcar':'Marcar comprado'}"><i class="ti ti-${r.comprado?'check-circle':'circle'}"></i></button>
+          <button onclick="dDespensa(${r.id})" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:15px;padding:2px 4px" title="Eliminar"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`;
+    },
+    footer: rows => {
+      const vis = rows.filter(r => !r.comprado);
+      const vW = vis.reduce((a, r) => typeof r.precio_walmart === 'number' ? a + r.precio_walmart : a, 0);
+      const vA = vis.reduce((a, r) => typeof r.precio_amazon  === 'number' ? a + r.precio_amazon  : a, 0);
+      const vB = vis.reduce((a, r) => {
+        const bW = typeof r.precio_walmart === 'number' ? r.precio_walmart : Infinity;
+        const bA = typeof r.precio_amazon  === 'number' ? r.precio_amazon  : Infinity;
+        const b  = Math.min(bW, bA);
+        return a + (isFinite(b) ? b : (r.precio_est || 0));
+      }, 0);
+      if (!vW && !vA && !vB) return '';
+      return `<tr style="border-top:2px solid var(--border-default);font-weight:700">
+        <td></td><td style="color:#0071ce">${vW > 0 ? fmt(vW) : '—'}</td><td></td>
+        <td style="color:#ff9900">${vA > 0 ? fmt(vA) : '—'}</td><td></td>
+        <td style="color:var(--color-income);font-size:15px">${vB > 0 ? 'Mejor: ' + fmt(vB) : ''}</td><td></td>
+      </tr>`;
+    }
+  }) : '';
+
   el.innerHTML = `
 <div class="cbox">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <h3 style="font-size:var(--text-sm);color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;margin:0">
       <i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Lista de Despensa
-      ${items.length ? `<span style="font-size:10px;background:var(--cat-despensa)22;color:var(--cat-despensa);padding:2px 8px;border-radius:var(--radius-pill)">${pending.length} pendiente${pending.length!==1?'s':''}</span>` : ''}
+      ${pending.length ? `<span style="font-size:10px;background:var(--cat-despensa)22;color:var(--cat-despensa);padding:2px 8px;border-radius:var(--radius-pill)">${pending.length} pendiente${pending.length!==1?'s':''}</span>` : ''}
     </h3>
-    <div style="display:flex;gap:6px;align-items:center">
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      ${pending.length ? `<button id="btn-buscar-precios" class="btn btn-sm" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44;font-size:11px" onclick="buscarPreciosDespensa()">
+        <i class="ti ti-robot"></i> Buscar precios IA
+      </button>` : ''}
       ${done.length ? `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="limpiarCompradosDespensa()"><i class="ti ti-trash-x"></i> Limpiar comprados</button>` : ''}
       <button class="btn btn-sm" style="background:var(--cat-despensa)22;color:var(--cat-despensa);border:1px solid var(--cat-despensa)44;font-size:12px" onclick="oDespensa()">
         <i class="ti ti-plus"></i> Agregar
       </button>
     </div>
   </div>
-  ${!items.length ? `<p style="color:var(--text-3);text-align:center;padding:24px;font-size:12px"><i class="ti ti-shopping-bag" style="font-size:28px;display:block;margin-bottom:8px;color:var(--text-3)"></i>Lista vacía — agrega lo que necesitas comprar</p>` : `
-  <div style="display:flex;flex-direction:column;gap:4px">
-    ${pending.map(x => despensaRow(x)).join('')}
-    ${done.length ? `<div style="height:1px;background:var(--border-default);margin:8px 0"></div>
-    ${done.map(x => despensaRow(x)).join('')}` : ''}
-  </div>
-  ${total > 0 ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border-default);display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:12px;color:var(--text-2)">Total estimado pendiente</span>
-    <span style="font-size:16px;font-weight:700;color:var(--cat-despensa);font-family:'Space Grotesk',system-ui,sans-serif">${fmt(total)}</span>
-  </div>` : ''}
-  `}
+  ${lastCheck && hasAnyPrices ? `<div style="font-size:10px;color:var(--text-3);margin-bottom:8px"><i class="ti ti-clock"></i> Precios actualizados: ${new Date(lastCheck).toLocaleDateString('es-MX',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+  ${!items.length
+    ? `<p style="color:var(--text-3);text-align:center;padding:24px;font-size:12px"><i class="ti ti-shopping-bag" style="font-size:28px;display:block;margin-bottom:8px;color:var(--text-3)"></i>Lista vacía — agrega lo que necesitas comprar</p>`
+    : tblHtml + (done.length ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-default)">
+        <div style="font-size:10px;color:var(--text-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Comprados</div>
+        <div style="display:flex;flex-direction:column;gap:3px">${done.map(x => `
+          <div style="display:flex;align-items:center;gap:8px;opacity:.5;padding:4px 8px;border-radius:var(--radius-md);background:var(--bg-surface-2)">
+            <button onclick="toggleComprado(${x.id},false)" style="background:none;border:none;cursor:pointer;color:var(--color-income);font-size:14px;padding:0"><i class="ti ti-check-circle"></i></button>
+            <span style="font-size:12px;text-decoration:line-through;flex:1">${x.nombre}</span>
+            <button onclick="dDespensa(${x.id})" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:13px;padding:0"><i class="ti ti-x"></i></button>
+          </div>`).join('')}</div>
+      </div>` : '')
+  }
 </div>`;
-}
-
-function despensaRow(x) {
-  const nomSafe = (x.nombre||'').replace(/'/g,"\\'");
-  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-md);background:var(--bg-surface-2);${x.comprado?'opacity:.5':''}" id="drow-${x.id}">
-    <button onclick="toggleComprado(${x.id},${!x.comprado})" style="width:20px;height:20px;border-radius:50%;border:1.5px solid ${x.comprado?'var(--color-income)':'var(--border-default)'};background:${x.comprado?'var(--color-income)':'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s">
-      ${x.comprado?'<i class="ti ti-check" style="font-size:11px;color:#fff"></i>':''}
-    </button>
-    <div style="flex:1;min-width:0">
-      <span style="font-size:13px;${x.comprado?'text-decoration:line-through;color:var(--text-3)':''}">${x.nombre}</span>
-      ${x.cantidad?`<span style="font-size:11px;color:var(--text-3);margin-left:6px">${x.cantidad}</span>`:''}
-    </div>
-    ${x.precio_est>0?`<span style="font-size:12px;color:var(--text-2);font-family:'Space Grotesk',system-ui,sans-serif;white-space:nowrap">${fmt(x.precio_est)}</span>`:''}
-    <button onclick="dDespensa(${x.id})" style="background:none;border:none;color:var(--text-3);cursor:pointer;padding:2px;line-height:1;font-size:14px" title="Eliminar"><i class="ti ti-x"></i></button>
-  </div>`;
 }
 
 function oDespensa() {
@@ -4181,6 +4270,35 @@ async function limpiarCompradosDespensa() {
     S.data.despensa = (S.data.despensa || []).filter(x => !x.comprado);
     rDespensa();
     toast(`${done.length} artículo${done.length!==1?'s':''} eliminado${done.length!==1?'s':''}`);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function buscarPreciosDespensa() {
+  const btn = $('btn-buscar-precios');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Buscando...'; }
+  try {
+    const res = await api('POST', '/api/despensa/buscar-precios', { phone: S.phone });
+    if (res.data?.length) {
+      res.data.forEach(updated => {
+        const idx = (S.data.despensa || []).findIndex(x => x.id === updated.id);
+        if (idx >= 0) S.data.despensa[idx] = { ...S.data.despensa[idx], ...updated };
+      });
+    }
+    rDespensa();
+    rDash();
+    toast(`Precios actualizados para ${res.data?.length || 0} artículo(s) ✓`);
+  } catch(e) {
+    toast('Error buscando precios: ' + e.message, 'error');
+    rDespensa();
+  }
+}
+
+async function toggleDespensaEnGastos(visible) {
+  if (!visible && !confirm('¿Ocultar la Despensa de la sección de gastos esperados?')) return;
+  try {
+    await api('POST', '/api/update-refs', { phone: S.phone, field: 'hide_despensa_gastos', value: !visible });
+    await load();
+    toast(visible ? 'Despensa visible en gastos ✓' : 'Despensa ocultada de gastos');
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 

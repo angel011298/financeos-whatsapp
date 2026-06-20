@@ -2327,6 +2327,60 @@ app.delete('/api/despensa/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+app.post('/api/despensa/buscar-precios', async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ success: false, error: 'Missing phone' });
+  try {
+    const { data: items } = await sb.from('despensa')
+      .select('id, nombre').eq('user_phone', phone).eq('comprado', false);
+    if (!items?.length) return res.json({ success: true, data: [] });
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      tools: [{ googleSearch: {} }],
+    });
+
+    const itemList = items.map((it, i) => `${i + 1}. ID:${it.id} - ${it.nombre}`).join('\n');
+    const prompt = `Busca el precio actual y link directo de cada producto en Walmart México (walmart.com.mx) y Amazon México (amazon.com.mx).
+
+Productos a buscar:
+${itemList}
+
+Devuelve SOLO un array JSON sin ningún texto adicional. Cada elemento debe tener exactamente:
+- "id": número entero (el ID del producto tal como aparece arriba)
+- "precio_walmart": precio en pesos MXN como número sin símbolo (o null si no se encuentra)
+- "url_walmart": URL directa al producto en walmart.com.mx (o null)
+- "precio_amazon": precio en pesos MXN como número sin símbolo (o null)
+- "url_amazon": URL directa al producto en amazon.com.mx (o null)`;
+
+    const result = await geminiWithRetry(() => model.generateContent(prompt));
+    const text = result.response.text();
+
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('Gemini no devolvió JSON válido con los precios');
+    const priceData = JSON.parse(jsonMatch[0]);
+
+    const now = new Date().toISOString();
+    const updates = await Promise.all(priceData.map(async p => {
+      const { data } = await sb.from('despensa')
+        .update({
+          precio_walmart:  p.precio_walmart  ?? null,
+          url_walmart:     p.url_walmart     || null,
+          precio_amazon:   p.precio_amazon   ?? null,
+          url_amazon:      p.url_amazon      || null,
+          ultima_consulta: now
+        })
+        .eq('id', p.id).eq('user_phone', phone).select().single();
+      return data;
+    }));
+
+    res.json({ success: true, data: updates.filter(Boolean) });
+  } catch (e) {
+    console.error('buscar-precios error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.post('/api/send-whatsapp-invite', async (req, res) => {
   try {
     const { phone } = req.body;
@@ -2879,7 +2933,9 @@ app.post('/api/update-refs', async (req, res) => {
     if (selErr && selErr.code !== 'PGRST116') return res.status(500).json({ success: false, error: selErr.message });
     const refs = { ...(cur?.external_refs || {}) };
 
-    if (field === 'forma_pago_gastos' && action === 'set') {
+    if (field === 'hide_despensa_gastos') {
+      refs.hide_despensa_gastos = req.body.value === true;
+    } else if (field === 'forma_pago_gastos' && action === 'set') {
       if (!refs.forma_pago_gastos) refs.forma_pago_gastos = {};
       refs.forma_pago_gastos[itemId] = item || '';  // itemId=descripcion, item='efectivo'|'tarjeta_debito'|''
     } else if (field === 'budget_q') {
