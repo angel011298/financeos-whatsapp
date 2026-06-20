@@ -2212,6 +2212,8 @@ ${rQuincenaPanel('dash')}
 </div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-brain"></i> Consejos IA</h2></div><div class="sec-hdr-sub">Análisis personalizado de tus hábitos financieros</div></div>
 <div id="insights-section"></div>
+<div class="sec-hdr" style="margin-top:16px"><div class="sec-hdr-row"><h2><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Lista de Despensa</h2></div></div>
+<div id="despensa-section"></div>
 `;
 
   rMovs();
@@ -2230,6 +2232,7 @@ ${rQuincenaPanel('dash')}
   if (top.length) mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
   else emptyChart('c-pat','Sin patrones registrados aún');
   fetchInsights();
+  rDespensa();
 }
 
 // ── INSIGHTS IA ───────────────────────────────────────────────────────────────
@@ -2872,7 +2875,6 @@ ${rows.length ? mkTable({ id:'tbl-prsp', numbered:true, empty:'Sin gastos ni lí
   <td>${l>0?`<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;color:${p>=100?'var(--color-expense)':p>=80?'var(--color-warning)':'var(--text-2)'}">${p}%</span>${stLbl}</div><div class="bpbar"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div></div></div>`:'—'}</td>
   <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
 </tr>`} }) : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
-<div id="despensa-section" style="margin-top:16px"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-heart-handshake" style="color:var(--accent-couple)"></i> Proyectos y Metas del Nidito</h2><div class="sec-hdr-sub"><a style="font-size:11px;color:var(--accent-couple);cursor:pointer" onclick="go('nidito')">Ver detalle →</a></div></div></div>
 <div id="nidito-prsp-section"></div>
 <div class="sec-hdr" style="margin-top:16px"><div class="sec-hdr-row"><h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2></div></div>
@@ -2882,7 +2884,6 @@ ${rows.length ? mkTable({ id:'tbl-prsp', numbered:true, empty:'Sin gastos ni lí
     {label:'Límite',data:rows.map(x=>x.l), backgroundColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'33'), borderColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'88')}
   ]);
   else emptyChart('c-prsp','Sin datos de presupuesto este mes');
-  rDespensa();
   loadRebalanceo();
   rNiditoPresp();
   rObjs();
