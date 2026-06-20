@@ -264,14 +264,14 @@ textarea{min-height:64px;resize:vertical}
 table{width:100%;border-collapse:collapse;background:var(--bg-surface);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px}
 th{
   background:var(--bg-surface-2);padding:9px 12px;text-align:left;
-  font-size:13px;color:var(--text-2);font-weight:600;
+  font-size:16px;color:var(--text-2);font-weight:600;
   letter-spacing:.04em;border-bottom:2px solid var(--border-default);
   position:sticky;top:0;z-index:1;
 }
 td{
   padding:8px 12px;border-bottom:1px solid var(--border-default);
   font-family:'Space Grotesk',system-ui,sans-serif;
-  font-size:15px;color:var(--text-1);
+  font-size:19px;color:var(--text-1);
 }
 td.num,td.red,td.green,td.yellow{
   font-family:'Space Grotesk',system-ui,sans-serif;
@@ -697,6 +697,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
      horizontal y ancho mínimo legible (antes se ocultaba Categoría — corregido) */
   #tbl-movs-box table{min-width:760px}
   #tbl-tdc-box table{min-width:720px}
+#tbl-movs-box table{table-layout:fixed}
 }
 
 /* ═══════════════════════════════════════════════════════ NIDITO v8 */
@@ -2794,7 +2795,7 @@ ${mkTable({ id:'tbl-tdc', numbered:true, empty:'Sin tarjetas configuradas',
   <td class="red">${fmt(s)}</td>
   <td class="editable" onclick="ieTDC(this,${t.id},'mes_objetivo')" style="color:var(--muted)">${t.mes_objetivo||'—'}</td>
   <td><div class="pbar" style="width:80px"><div class="pfill${p>=100?' dng':p>=75?' warn':''}" style="width:${p}%"></div></div> ${p}%</td>
-  <td class="editable" onclick="ieTDC(this,${t.id},'notas')" style="color:var(--muted);font-size:13px;max-width:140px">${t.notas||'<em style="color:var(--text-3);font-style:normal">—</em>'}</td>
+  <td class="editable" onclick="ieTDC(this,${t.id},'notas')" style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px">${t.notas||'<em style="color:var(--text-3);font-style:normal">—</em>'}</td>
   <td style="white-space:nowrap">
     <button class="edit-pill-btn" title="Editar" onclick="eTDC(S._tdcData[${t.id}])"><i class="ti ti-pencil" style="font-size:13px"></i></button>
     <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dTDC(${t.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
@@ -2846,9 +2847,9 @@ ${rows.length ? mkTable({ id:'tbl-prsp', numbered:true, empty:'Sin gastos ni lí
   renderRow:({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;const st=p>=100?'dng':p>=80?'warn':'';const stLbl=p>=100?'<span style="color:var(--color-expense);font-size:10px;font-weight:600">Excedido</span>':p>=80?'<span style="color:var(--color-warning);font-size:10px">Cerca del límite</span>':'';return`<tr>
   <td><div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${c}</div></td>
   <td class="red">${fmt(r)}</td>
-  <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto(this,'${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3);font-size:13px\'>+ límite</span>'}</td>
+  <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto(this,'${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3)\'>+ límite</span>'}</td>
   <td class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</td>
-  <td>${l>0?`<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:600;color:${p>=100?'var(--color-expense)':p>=80?'var(--color-warning)':'var(--text-2)'}">${p}%</span>${stLbl}</div><div class="bpbar"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div></div></div>`:'—'}</td>
+  <td>${l>0?`<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;color:${p>=100?'var(--color-expense)':p>=80?'var(--color-warning)':'var(--text-2)'}">${p}%</span>${stLbl}</div><div class="bpbar"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div></div></div>`:'—'}</td>
   <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
 </tr>`} }) : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
 <div id="despensa-section" style="margin-top:16px"></div>
@@ -3265,13 +3266,13 @@ function movRow(m) {
   const dot=m.revisado?'':`<button class="dot-btn" title="Marcar revisado" onclick="markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
   return `<tr id="mrow-${m.id}">
   <td style="padding:0;width:36px;text-align:center">${dot}</td>
-  <td class="editable" onclick="ieMov(this,${m.id},'fecha')" style="white-space:nowrap;color:var(--muted);font-size:13px">${fmtDate(m.fecha)}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'fecha')" style="white-space:nowrap;color:var(--muted)">${fmtDate(m.fecha)}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'tipo')" style="cursor:pointer"><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
   <td id="catcell-${m.id}" onclick="openCatPicker(${m.id})" style="cursor:pointer"><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
-  <td class="editable" onclick="ieMov(this,${m.id},'concepto')">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'concepto')" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
   <td class="editable monto-sel" onclick="ieMov(this,${m.id},'monto')" data-v="${m.monto||0}" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
-  <td class="editable" onclick="ieMov(this,${m.id},'medio_pago')" style="color:var(--muted);font-size:13px">${m.medio_pago||'—'}</td>
-  <td class="editable" onclick="ieMov(this,${m.id},'comentarios')" style="color:var(--muted);font-size:13px;max-width:140px">${m.comentarios||'<em style="color:var(--text-3);font-style:normal">—</em>'}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'medio_pago')" style="color:var(--muted)">${m.medio_pago||'—'}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'comentarios')" style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.comentarios||'<em style="color:var(--text-3);font-style:normal">—</em>'}</td>
   <td class="acts">
     <button class="btn btn-ghost" style="padding:6px 10px" title="Editar" onclick="eMov(S._movData[${m.id}])"><i class="ti ti-pencil"></i></button>
     <button class="btn btn-dup" style="padding:6px 10px" title="Duplicar" onclick="duplicarMov(${m.id})"><i class="ti ti-copy"></i></button>
@@ -3493,14 +3494,14 @@ function rMovs() {
 ${mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
   columns:[
     {key:'_dot',label:'',sortable:false,width:'36px'},
-    {key:'fecha',label:'Fecha',filter:'text',value:m=>fd(m.fecha)},
-    {key:'tipo',label:'Tipo',filter:'select',value:m=>m.tipo==='GASTO'?'Gasto':'Ingreso'},
-    {key:'categoria',label:'Categoría',filter:'select',value:m=>m.categoria||'—'},
-    {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||''},
-    {key:'monto',label:'Monto',num:true,align:'right',value:m=>m.monto||0},
-    {key:'medio_pago',label:'Medio',filter:'select',value:m=>m.medio_pago||'—'},
-    {key:'comentarios',label:'Comentarios',filter:'text',value:m=>m.comentarios||''},
-    {key:'_acts',label:'',sortable:false}],
+    {key:'fecha',label:'Fecha',filter:'text',value:m=>fd(m.fecha),width:'102px'},
+    {key:'tipo',label:'Tipo',filter:'select',value:m=>m.tipo==='GASTO'?'Gasto':'Ingreso',width:'72px'},
+    {key:'categoria',label:'Categoría',filter:'select',value:m=>m.categoria||'—',width:'110px'},
+    {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||'',width:'160px'},
+    {key:'monto',label:'Monto',num:true,align:'right',value:m=>m.monto||0,width:'88px'},
+    {key:'medio_pago',label:'Medio',filter:'select',value:m=>m.medio_pago||'—',width:'92px'},
+    {key:'comentarios',label:'Comentarios',filter:'text',value:m=>m.comentarios||'',width:'122px'},
+    {key:'_acts',label:'',sortable:false,width:'98px'}],
   rows:filtered,
   numbered:true,
   renderRow:movRow,
