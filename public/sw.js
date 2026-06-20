@@ -55,16 +55,7 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // index.html and all navigation: ALWAYS network-first, bypass HTTP cache.
-  // Falls back to cached version only when fully offline.
-  e.respondWith(
-    fetch(e.request, { cache: 'no-store' })
-      .then(res => {
-        if (res.ok) {
-          caches.open(CACHE).then(c => c.put(e.request, res.clone())).catch(() => {});
-        }
-        return res;
-      })
-      .catch(() => caches.match(e.request))
-  );
+  // HTML: siempre desde la red, NUNCA almacenar en caché SW.
+  // El servidor inyecta _BUILD_TS y headers Surrogate-Control: no-store.
+  e.respondWith(fetch(e.request, { cache: 'no-store' }).catch(() => caches.match('/')));
 });

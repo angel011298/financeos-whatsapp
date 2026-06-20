@@ -112,34 +112,46 @@ const getQuincenaActual = () => getQuincena(hoy());
 
 // ── Compatibilidad con código existente ──────────────────────────────────────
 const path    = require('path');
-// Timestamp único por despliegue — cambia el nombre del caché del SW en cada Railway deploy
+const fs      = require('fs');
+// Timestamp único por despliegue — cambia en cada reinicio del servidor (cada Railway deploy)
 const DEPLOY_TS = Date.now().toString(36);
 
+// Headers que previenen caché en browser, CDN Railway (Hikari) y proxies intermedios
+const NO_CACHE_HEADERS = {
+  'Cache-Control'    : 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma'           : 'no-cache',
+  'Expires'          : '0',
+  'Surrogate-Control': 'no-store',   // Railway Hikari CDN
+  'CDN-Cache-Control': 'no-store',   // Cloudflare / genérico
+};
+
+// index.html con _BUILD_TS inyectado — cargado una vez en memoria por deploy
+// Inyectar el timestamp en el HTML permite que el cliente detecte un deploy nuevo
+// aunque el CDN sirva HTML cacheado (el polling compara _BUILD_TS con /api/version)
+const _rawHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+const _injectedHtml = _rawHtml.replace(
+  '<meta charset="UTF-8">',
+  `<meta charset="UTF-8"><script>window._BUILD_TS='${DEPLOY_TS}';</script>`
+);
+
 // sw.js con DEPLOY_TS inyectado — debe ir ANTES de express.static
-// Esto garantiza que el browser detecte un SW nuevo en cada deploy y limpie el caché viejo
 app.get('/sw.js', (_req, res) => {
-  const fs = require('fs');
   const sw = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8')
                .replace(/DEPLOY_TS/g, DEPLOY_TS);
-  res.set({
-    'Content-Type': 'application/javascript; charset=utf-8',
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-    'Service-Worker-Allowed': '/',
-  });
+  res.set({ ...NO_CACHE_HEADERS, 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/' });
   res.send(sw);
 });
 
-// Versión actual — el cliente puede consultar esto para saber si hay actualización
+// Versión actual — el cliente consulta esto para detectar deploys nuevos
 app.get('/api/version', (_req, res) => {
+  res.set(NO_CACHE_HEADERS);
   res.json({ v: DEPLOY_TS, ts: Date.now() });
 });
 
-// index.html sin caché (debe ir ANTES del static middleware)
+// index.html — sin ETag, sin caché, con _BUILD_TS inyectado
 app.get('/', (_req, res) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.set(NO_CACHE_HEADERS);
+  res.send(_injectedHtml);
 });
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModified: false }));
 const genAI   = gemini;      // alias — código legacy usa genAI

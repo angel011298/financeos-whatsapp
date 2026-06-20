@@ -4747,13 +4747,32 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
 
     navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
       .then(reg => {
-        // Verificar actualizaciones al abrir la app
         reg.update().catch(() => {});
-        // Y cada 2 minutos mientras la app está abierta
         setInterval(() => reg.update().catch(() => {}), 2 * 60 * 1000);
       })
       .catch(() => {});
   }
+
+  // ── POLLING DE VERSIÓN — solución definitiva contra CDN y SW caché ──────────
+  // El servidor inyecta window._BUILD_TS en cada deploy.
+  // Cada 30s comparamos con /api/version: si cambiaron, recargamos con ?v=nuevo
+  // para que el CDN sirva la versión fresca (URL única por deploy).
+  (function _versionPoll() {
+    const _bts = window._BUILD_TS;
+    if (!_bts) return;
+    const _check = async () => {
+      try {
+        const r = await fetch('/api/version', { cache: 'no-store' });
+        if (!r.ok) return;
+        const { v } = await r.json();
+        if (v && v !== _bts) {
+          window.location.replace('/?_v=' + v);
+        }
+      } catch {}
+    };
+    setTimeout(_check, 8000);
+    setInterval(_check, 30000);
+  })();
 
   document.addEventListener('click', e => {
     if (S._openCatPicker && !e.target.closest('.cat-picker') && !e.target.closest('[id^="catcell-"]')) {
