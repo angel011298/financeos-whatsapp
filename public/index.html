@@ -3547,7 +3547,12 @@ function _updateMovsTable(filtered) {
         <td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:700;color:${clr};white-space:nowrap">${m.tipo==='GASTO'?'-':'+'} ${fmt(m.monto||0)}</td>
       </tr>`;
     }).join('');
-    const compactHTML = `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">
+    const compactHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      <button class="btn" onclick="toggleMovsCollapsed()" style="font-size:12px;padding:5px 14px;gap:6px">
+        <i class="ti ti-chevron-down"></i> Expandir tabla
+      </button>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
       <table style="width:100%;border-collapse:collapse">
         <thead><tr style="background:var(--surface-2)">
           <th colspan="4" style="padding:7px 10px;font-size:11px;font-weight:600;text-align:left;color:var(--text-3)">
@@ -3561,11 +3566,6 @@ function _updateMovsTable(filtered) {
           <tr class="tbl-foot-row"><td colspan="3" style="padding:5px 10px;font-size:12px;text-align:right;color:var(--text-2);font-style:italic">Balance</td><td style="padding:5px 10px;font-size:12px;text-align:right;font-weight:700;color:${balClr}">${(balance>=0?'+':'')+fmt(balance)}</td></tr>
         </tbody>
       </table>
-    </div>
-    <div style="display:flex;justify-content:flex-end">
-      <button class="btn" onclick="toggleMovsCollapsed()" style="font-size:12px;padding:5px 14px;gap:6px">
-        <i class="ti ti-chevron-down"></i> Expandir tabla
-      </button>
     </div>`;
     if (_tHost) _tHost.innerHTML = compactHTML;
     return;
