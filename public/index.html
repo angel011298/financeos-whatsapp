@@ -2202,7 +2202,7 @@ ${periodoSelectorHTML()}
   </div>
 </div>
 ${rQuincenaPanel('dash')}
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div></div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2><button id="btn-movs-toggle" onclick="toggleMovsCollapsed()" class="btn-pill" style="margin-left:auto;font-size:11px;padding:3px 10px"><i class="ti ti-chevron-${S._movsCollapsed?'down':'up'}"></i> ${S._movsCollapsed?'Expandir':'Contraer'}</button></div></div>
 <div id="movs-section"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis Gráfico</h2></div><div class="sec-hdr-sub">Gastos, ingresos y patrones del período</div></div>
 <div class="charts-grid">
@@ -2210,10 +2210,10 @@ ${rQuincenaPanel('dash')}
   <div class="cbox"><h3>Ingresos vs Gastos — últimos 6 meses</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div><div id="legend-c-men" class="chart-legend"></div></div>
   <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div><div id="legend-c-pat" class="chart-legend"></div></div>
 </div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-brain"></i> Consejos IA</h2></div><div class="sec-hdr-sub">Análisis personalizado de tus hábitos financieros</div></div>
-<div id="insights-section"></div>
 <div class="sec-hdr" style="margin-top:16px"><div class="sec-hdr-row"><h2><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Lista de Despensa</h2></div></div>
 <div id="despensa-section"></div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-brain"></i> Consejos IA</h2></div><div class="sec-hdr-sub">Análisis personalizado de tus hábitos financieros</div></div>
+<div id="insights-section"></div>
 `;
 
   rMovs();
@@ -3457,6 +3457,42 @@ function rMovs() {
 
   const host = $('movs-section') || $('tab-movimientos');
   if (!host) return;
+
+  if (S._movsCollapsed) {
+    const today = new Date().toISOString().slice(0,10);
+    const yest  = new Date(Date.now()-86400000).toISOString().slice(0,10);
+    let recent  = filtered.filter(m=>(m.fecha||'').startsWith(today));
+    const dayLbl = recent.length ? 'hoy' : 'ayer';
+    if (!recent.length) recent = filtered.filter(m=>(m.fecha||'').startsWith(yest));
+    const balance = totIng - totGas;
+    const balClr  = balance>=0 ? 'var(--green)' : 'var(--red)';
+    const recentRows = recent.map(m=>{
+      const clr = m.tipo==='GASTO' ? 'var(--red)' : 'var(--green)';
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 10px;font-size:12px;color:var(--text-3);white-space:nowrap">${fd(m.fecha)}</td>
+        <td style="padding:6px 10px;font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.concepto||'—'}</td>
+        <td style="padding:6px 10px;font-size:12px;color:var(--text-3)">${m.categoria||'—'}</td>
+        <td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:700;color:${clr};white-space:nowrap">${m.tipo==='GASTO'?'-':'+'} ${fmt(m.monto||0)}</td>
+      </tr>`;
+    }).join('');
+    host.innerHTML=`<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--surface-2)">
+          <th colspan="4" style="padding:7px 10px;font-size:11px;font-weight:600;text-align:left;color:var(--text-3)">
+            Movimientos recientes (${dayLbl}) — ${recent.length} registro${recent.length!==1?'s':''}
+          </th>
+        </tr></thead>
+        <tbody>
+          ${recent.length ? recentRows : `<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Sin movimientos hoy ni ayer</td></tr>`}
+          <tr class="tbl-foot-row"><td colspan="3" style="padding:5px 10px;font-size:12px;text-align:right;color:var(--text-2)">💸 Gastos del período</td><td style="padding:5px 10px;font-size:12px;text-align:right;font-weight:700;color:var(--red)">${fmt(totGas)}</td></tr>
+          <tr class="tbl-foot-row"><td colspan="3" style="padding:5px 10px;font-size:12px;text-align:right;color:var(--text-2)">💰 Ingresos del período</td><td style="padding:5px 10px;font-size:12px;text-align:right;font-weight:700;color:var(--green)">${fmt(totIng)}</td></tr>
+          <tr class="tbl-foot-row"><td colspan="3" style="padding:5px 10px;font-size:12px;text-align:right;color:var(--text-2);font-style:italic">Balance</td><td style="padding:5px 10px;font-size:12px;text-align:right;font-weight:700;color:${balClr}">${(balance>=0?'+':'')+fmt(balance)}</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+    return;
+  }
+
   host.innerHTML=`
 <div class="hdr" style="margin-bottom:14px">
   <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-list-details"></i> Registros del período filtrado ${unrevBadge}</span>
@@ -3586,6 +3622,13 @@ function _updateUnrevBadge() {
 function toggleUnreadFilter() {
   S.movF.onlyUnread = !S.movF.onlyUnread;
   rMovs();
+}
+
+function toggleMovsCollapsed() {
+  S._movsCollapsed = !S._movsCollapsed;
+  rMovs();
+  const btn = document.getElementById('btn-movs-toggle');
+  if (btn) btn.innerHTML = `<i class="ti ti-chevron-${S._movsCollapsed?'down':'up'}"></i> ${S._movsCollapsed?'Expandir':'Contraer'}`;
 }
 
 function openCatPicker(id) {
