@@ -2149,7 +2149,7 @@ function rDash() {
   pats.forEach(p => { S._patData[p.id] = p; });
   const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
 
-  $('tab-dashboard').innerHTML = rDailySnapshot() + `
+  $('tab-dashboard').innerHTML = `
 <div class="hdr">
   <h2><i class="ti ti-layout-dashboard"></i> Dashboard <span style="font-size:13px;color:var(--muted);font-weight:400">${who}</span></h2>
   <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
