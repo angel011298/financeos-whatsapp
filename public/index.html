@@ -263,7 +263,7 @@ textarea{min-height:64px;resize:vertical}
 /* ═══════════════════════════════════════════════════════ TABLES */
 table{width:100%;border-collapse:collapse;background:var(--bg-surface);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px}
 th{
-  background:var(--bg-surface-2);padding:9px 12px;text-align:left;
+  background:var(--bg-surface-2);padding:9px 12px;text-align:center;
   font-size:16px;color:var(--text-2);font-weight:600;
   letter-spacing:.04em;border-bottom:2px solid var(--border-default);
   position:sticky;top:0;z-index:1;
@@ -271,7 +271,7 @@ th{
 td{
   padding:8px 12px;border-bottom:1px solid var(--border-default);
   font-family:'Space Grotesk',system-ui,sans-serif;
-  font-size:19px;color:var(--text-1);
+  font-size:19px;color:var(--text-1);text-align:center;
 }
 td.num,td.red,td.green,td.yellow{
   font-family:'Space Grotesk',system-ui,sans-serif;
@@ -395,10 +395,10 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 /* ═══════════════════════════════════════════════════════ CATEGORY & PAYMENT CHIPS */
 .cat-bdg{
   display:inline-flex;align-items:center;
-  padding:2px 8px;border-radius:var(--radius-pill);
-  font-size:var(--text-xs);font-weight:500;white-space:nowrap;
+  padding:4px 13px;border-radius:var(--radius-pill);
+  font-size:17px;font-weight:500;white-space:nowrap;
 }
-.tipo-bdg{display:inline-block;padding:3px 10px;border-radius:var(--radius-pill);font-size:var(--text-xs);font-weight:600}
+.tipo-bdg{display:inline-block;padding:5px 15px;border-radius:var(--radius-pill);font-size:17px;font-weight:600}
 .nota-ia{display:inline-flex;align-items:center;gap:2px;font-size:var(--text-xs);color:#a78bfa;cursor:help}
 td.editable{cursor:text}
 td.row-num,th.row-num{color:var(--text-3);font-size:10px;text-align:right;padding-right:6px;user-select:none;min-width:28px;width:28px}
@@ -687,7 +687,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   th{font-size:11px;padding:8px 10px}
   .msg{font-size:15px;max-width:88%}
   .card-lbl,.kpi-lbl,.snap-lbl{font-size:11px}
-  .cat-bdg,.tipo-bdg,.badge{font-size:11px}
+  .cat-bdg,.tipo-bdg,.badge{font-size:13px}
   nav a span,.mobile-nav a span{font-size:12px}
   .tbl-search{max-width:none}
   .hdr{flex-wrap:wrap;gap:8px}
@@ -3266,7 +3266,7 @@ function movRow(m) {
   const dot=m.revisado?'':`<button class="dot-btn" title="Marcar revisado" onclick="markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
   return `<tr id="mrow-${m.id}">
   <td style="padding:0;width:36px;text-align:center">${dot}</td>
-  <td class="editable" onclick="ieMov(this,${m.id},'fecha')" style="white-space:nowrap;color:var(--muted)">${fmtDate(m.fecha)}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'fecha')" style="white-space:nowrap;color:var(--text-1);font-weight:600">${fmtDate(m.fecha)}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'tipo')" style="cursor:pointer"><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
   <td id="catcell-${m.id}" onclick="openCatPicker(${m.id})" style="cursor:pointer"><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
   <td class="editable" onclick="ieMov(this,${m.id},'concepto')" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
