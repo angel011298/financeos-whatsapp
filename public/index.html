@@ -2202,7 +2202,7 @@ ${periodoSelectorHTML()}
   </div>
 </div>
 ${rQuincenaPanel('dash')}
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2><button id="btn-movs-toggle" onclick="toggleMovsCollapsed()" class="btn-pill" style="margin-left:auto;font-size:11px;padding:3px 10px"><i class="ti ti-chevron-${S._movsCollapsed?'down':'up'}"></i> ${S._movsCollapsed?'Expandir':'Contraer'}</button></div></div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2><button id="btn-movs-toggle" onclick="toggleMovsCollapsed()" class="btn" style="margin-left:auto;font-size:12px;padding:5px 14px;gap:6px"><i class="ti ti-chevron-${S._movsCollapsed?'down':'up'}"></i> ${S._movsCollapsed?'Expandir tabla':'Contraer tabla'}</button></div></div>
 <div id="movs-section"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis Gráfico</h2></div><div class="sec-hdr-sub">Gastos, ingresos y patrones del período</div></div>
 <div class="charts-grid">
@@ -2210,6 +2210,7 @@ ${rQuincenaPanel('dash')}
   <div class="cbox"><h3>Ingresos vs Gastos — últimos 6 meses</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div><div id="legend-c-men" class="chart-legend"></div></div>
   <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div><div id="legend-c-pat" class="chart-legend"></div></div>
 </div>
+<div id="movs-table-section"></div>
 <div class="sec-hdr" style="margin-top:16px"><div class="sec-hdr-row"><h2><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Lista de Despensa</h2></div></div>
 <div id="despensa-section"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-brain"></i> Consejos IA</h2></div><div class="sec-hdr-sub">Análisis personalizado de tus hábitos financieros</div></div>
@@ -3490,6 +3491,7 @@ function rMovs() {
         </tbody>
       </table>
     </div>`;
+    const _th = $('movs-table-section'); if (_th) _th.innerHTML = '';
     return;
   }
 
@@ -3547,48 +3549,50 @@ function rMovs() {
   <div class="cwrap-lg"><canvas id="mov-chart"></canvas></div>
   <div id="legend-mov-chart" class="chart-legend"></div>
 </div>
+`;
 
-${mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
-  columns:[
-    {key:'_dot',label:'',sortable:false,width:'36px'},
-    {key:'fecha',label:'Fecha',filter:'text',value:m=>fd(m.fecha),width:'102px'},
-    {key:'tipo',label:'Tipo',filter:'select',value:m=>m.tipo==='GASTO'?'Gasto':'Ingreso',width:'72px'},
-    {key:'categoria',label:'Categoría',filter:'select',value:m=>m.categoria||'—',width:'110px'},
-    {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||'',width:'160px'},
-    {key:'monto',label:'Monto',num:true,align:'right',value:m=>m.monto||0,width:'88px'},
-    {key:'medio_pago',label:'Medio',filter:'select',value:m=>m.medio_pago||'—',width:'92px'},
-    {key:'comentarios',label:'Comentarios',filter:'text',value:m=>m.comentarios||'',width:'122px'},
-    {key:'_acts',label:'',sortable:false,width:'98px'}],
-  rows:filtered,
-  numbered:true,
-  renderRow:movRow,
-  footer: rows => {
-    const gastos   = rows.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
-    const ingresos = rows.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
-    // cols: # | dot | fecha | tipo | cat | concepto | monto | medio | comentarios | acts
-    const td = (s,extra='') => `<td style="padding:5px 8px;font-size:12px;${extra}">${s}</td>`;
-    const balance = ingresos - gastos;
-    const balClr  = balance >= 0 ? 'var(--green)' : 'var(--red)';
-    return `<tr class="tbl-foot-row">
-      <td class="row-num"></td>${td('')}
-      ${td(rows.length+' mov.','color:var(--text-3)')}${td('')}${td('')}
-      ${td('💸 Gastos','text-align:right;color:var(--text-2)')}
-      ${td(fmt(gastos),'text-align:right;font-weight:700;color:var(--red)')}
-      <td colspan="3"></td>
-    </tr><tr class="tbl-foot-row">
-      <td colspan="5"></td>
-      ${td('💰 Ingresos','text-align:right;color:var(--text-2)')}
-      ${td(fmt(ingresos),'text-align:right;font-weight:700;color:var(--green)')}
-      <td colspan="3"></td>
-    </tr><tr class="tbl-foot-row">
-      <td colspan="5"></td>
-      ${td('Balance','text-align:right;color:var(--text-2);font-style:italic')}
-      ${td((balance>=0?'+':'')+fmt(balance),'text-align:right;font-weight:700;color:'+balClr)}
-      <td colspan="3"></td>
-    </tr>`;
-  }
-})}`;
-
+  // Tabla de movimientos va DESPUÉS del bloque de gráficas en el Dashboard
+  const _tHost = $('movs-table-section');
+  const _movTable = mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
+    columns:[
+      {key:'_dot',label:'',sortable:false,width:'36px'},
+      {key:'fecha',label:'Fecha',filter:'text',value:m=>fd(m.fecha),width:'102px'},
+      {key:'tipo',label:'Tipo',filter:'select',value:m=>m.tipo==='GASTO'?'Gasto':'Ingreso',width:'72px'},
+      {key:'categoria',label:'Categoría',filter:'select',value:m=>m.categoria||'—',width:'110px'},
+      {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||'',width:'160px'},
+      {key:'monto',label:'Monto',num:true,align:'right',value:m=>m.monto||0,width:'88px'},
+      {key:'medio_pago',label:'Medio',filter:'select',value:m=>m.medio_pago||'—',width:'92px'},
+      {key:'comentarios',label:'Comentarios',filter:'text',value:m=>m.comentarios||'',width:'122px'},
+      {key:'_acts',label:'',sortable:false,width:'98px'}],
+    rows:filtered,
+    numbered:true,
+    renderRow:movRow,
+    footer: rows => {
+      const gastos   = rows.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
+      const ingresos = rows.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
+      const td = (s,extra='') => `<td style="padding:5px 8px;font-size:12px;${extra}">${s}</td>`;
+      const balance = ingresos - gastos;
+      const balClr  = balance >= 0 ? 'var(--green)' : 'var(--red)';
+      return `<tr class="tbl-foot-row">
+        <td class="row-num"></td>${td('')}
+        ${td(rows.length+' mov.','color:var(--text-3)')}${td('')}${td('')}
+        ${td('💸 Gastos','text-align:right;color:var(--text-2)')}
+        ${td(fmt(gastos),'text-align:right;font-weight:700;color:var(--red)')}
+        <td colspan="3"></td>
+      </tr><tr class="tbl-foot-row">
+        <td colspan="5"></td>
+        ${td('💰 Ingresos','text-align:right;color:var(--text-2)')}
+        ${td(fmt(ingresos),'text-align:right;font-weight:700;color:var(--green)')}
+        <td colspan="3"></td>
+      </tr><tr class="tbl-foot-row">
+        <td colspan="5"></td>
+        ${td('Balance','text-align:right;color:var(--text-2);font-style:italic')}
+        ${td((balance>=0?'+':'')+fmt(balance),'text-align:right;font-weight:700;color:'+balClr)}
+        <td colspan="3"></td>
+      </tr>`;
+    }
+  });
+  if (_tHost) { _tHost.innerHTML = _movTable; } else { host.innerHTML += _movTable; }
   setTimeout(()=>renderMovChart(filtered),60);
 }
 
@@ -3628,7 +3632,7 @@ function toggleMovsCollapsed() {
   S._movsCollapsed = !S._movsCollapsed;
   rMovs();
   const btn = document.getElementById('btn-movs-toggle');
-  if (btn) btn.innerHTML = `<i class="ti ti-chevron-${S._movsCollapsed?'down':'up'}"></i> ${S._movsCollapsed?'Expandir':'Contraer'}`;
+  if (btn) btn.innerHTML = `<i class="ti ti-chevron-${S._movsCollapsed?'down':'up'}"></i> ${S._movsCollapsed?'Expandir tabla':'Contraer tabla'}`;
 }
 
 function openCatPicker(id) {
