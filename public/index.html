@@ -2075,8 +2075,8 @@ function rQuincenaPanel(ctx) {
       <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
       <span class="qt-val red">${fmt(totalGasEsp)}</span>
     </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
-    <div class="cbox" style="margin-top:10px;margin-bottom:0">
-      <h3>Balance — ${qi.label}</h3>${ctBtns(qChId,LINE,'bar')}
+    <div style="margin-top:10px;background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;border:1px solid var(--border-default)">
+      <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:6px">Balance — ${qi.label}${ctBtns(qChId,LINE,'bar')}</div>
       <div class="cwrap"><canvas id="${qChId}"></canvas></div>
       <div id="legend-${qChId}" class="chart-legend"></div>
     </div>
