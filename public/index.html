@@ -3623,31 +3623,7 @@ function _updateMovsTable(filtered) {
   const icon = S._movsCollapsed ? 'down' : 'up';
   const lbl  = S._movsCollapsed ? 'Expandir tabla' : 'Contraer tabla';
 
-  // Footer siempre con totales del período completo (filtered), no solo las filas visibles
-  const footer = () => {
-    const gastos   = filtered.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
-    const ingresos = filtered.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
-    const td = (s,extra='') => `<td style="padding:5px 8px;font-size:12px;${extra}">${s}</td>`;
-    const balance = ingresos - gastos;
-    const balClr  = balance >= 0 ? 'var(--green)' : 'var(--red)';
-    return `<tr class="tbl-foot-row">
-      <td class="row-num"></td>${td('')}
-      ${td(filtered.length+' mov.','color:var(--text-3)')}${td('')}${td('')}
-      ${td('💸 Gastos','text-align:right;color:var(--text-2)')}
-      ${td(fmt(gastos),'text-align:right;font-weight:700;color:var(--red)')}
-      <td colspan="3"></td>
-    </tr><tr class="tbl-foot-row">
-      <td colspan="5"></td>
-      ${td('💰 Ingresos','text-align:right;color:var(--text-2)')}
-      ${td(fmt(ingresos),'text-align:right;font-weight:700;color:var(--green)')}
-      <td colspan="3"></td>
-    </tr><tr class="tbl-foot-row">
-      <td colspan="5"></td>
-      ${td('Balance','text-align:right;color:var(--text-2);font-style:italic')}
-      ${td((balance>=0?'+':'')+fmt(balance),'text-align:right;font-weight:700;color:'+balClr)}
-      <td colspan="3"></td>
-    </tr>`;
-  };
+  const footer = () => '';
 
   const _movTable = mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
     columns:[
