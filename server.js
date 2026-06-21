@@ -1809,9 +1809,49 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     ]);
     const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
     const nidito_dinerito_val = nidDin.data?.monto || 0;
-    const negTxQ     = negReflejos.data || [];
-    const retiros_q  = negTxQ.filter(t => t.reflejo_personal === 'RETIRO').reduce((a, t) => a + Number(t.monto), 0);
-    const aportes_q  = negTxQ.filter(t => t.reflejo_personal === 'APORTE').reduce((a, t) => a + Number(t.monto), 0);
+    const negTxQ    = negReflejos.data || [];
+    const retiros_q = negTxQ.filter(t => t.reflejo_personal === 'RETIRO').reduce((a, t) => a + Number(t.monto), 0);
+    const aportes_q = negTxQ.filter(t => t.reflejo_personal === 'APORTE').reduce((a, t) => a + Number(t.monto), 0);
+
+    // Vencimientos de sub-recursos negocios → calendario del frontend
+    let negEventos = [];
+    const proyIds = (negProys.data || []).map(p => p.id);
+    if (proyIds.length) {
+      const horizonte = new Date(); horizonte.setDate(horizonte.getDate() + 90);
+      const horizonStr = horizonte.toISOString().slice(0, 10);
+      const [{ data: vD }, { data: vA }, { data: vI }, { data: vB }] = await Promise.all([
+        sb.from('neg_deudores')
+          .select('id, nombre, fecha_vencimiento, monto_original, monto_pagado, proyecto_id')
+          .in('proyecto_id', proyIds).neq('estado', 'PAGADO')
+          .not('fecha_vencimiento', 'is', null).lte('fecha_vencimiento', horizonStr),
+        sb.from('neg_acreedores')
+          .select('id, nombre, fecha_vencimiento, monto_original, monto_pagado, proyecto_id')
+          .in('proyecto_id', proyIds).neq('estado', 'PAGADO')
+          .not('fecha_vencimiento', 'is', null).lte('fecha_vencimiento', horizonStr),
+        sb.from('neg_inversiones')
+          .select('id, nombre, fecha_objetivo, estado, proyecto_id')
+          .in('proyecto_id', proyIds)
+          .not('fecha_objetivo', 'is', null).lte('fecha_objetivo', horizonStr)
+          .not('estado', 'in', '("COMPLETADA","CANCELADA")'),
+        sb.from('neg_bloques')
+          .select('id, titulo, contenido, proyecto_id')
+          .in('proyecto_id', proyIds).eq('tipo', 'RECORDATORIO'),
+      ]);
+      const proyMap = Object.fromEntries((negProys.data || []).map(p => [p.id, p.nombre]));
+      for (const d of (vD || []))
+        negEventos.push({ id: `neg_deudor:${d.id}`, tipo: 'VENCIMIENTO_COBRO',  titulo: `Cobrar: ${d.nombre}`,   fecha: d.fecha_vencimiento, proyecto: proyMap[d.proyecto_id], monto_pendiente: Number(d.monto_original) - Number(d.monto_pagado) });
+      for (const a of (vA || []))
+        negEventos.push({ id: `neg_acreedor:${a.id}`, tipo: 'VENCIMIENTO_PAGO', titulo: `Pagar a: ${a.nombre}`, fecha: a.fecha_vencimiento, proyecto: proyMap[a.proyecto_id], monto_pendiente: Number(a.monto_original) - Number(a.monto_pagado) });
+      for (const i of (vI || []))
+        negEventos.push({ id: `neg_inversion:${i.id}`, tipo: 'INVERSION_OBJETIVO', titulo: `Inversión: ${i.nombre}`, fecha: i.fecha_objetivo, proyecto: proyMap[i.proyecto_id] });
+      for (const b of (vB || [])) {
+        const c = b.contenido || {};
+        if (c.completado !== true && c.completado !== 'true' && c.fecha)
+          negEventos.push({ id: `neg_bloque:${b.id}`, tipo: 'RECORDATORIO', titulo: b.titulo || c.texto || 'Recordatorio', fecha: c.fecha, proyecto: proyMap[b.proyecto_id] });
+      }
+      negEventos.sort((a, b2) => (a.fecha || '').localeCompare(b2.fecha || ''));
+    }
+
     res.json({ success: true, data: {
       tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data,
       calendario: cal.data, patrones: pat.data, presupuesto: presp.data,
@@ -1827,6 +1867,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         retiros_quincena: retiros_q,
         aportes_quincena: aportes_q,
         neto_personal:    retiros_q - aportes_q,
+        eventos:          negEventos,
       },
     }});
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -2426,6 +2467,70 @@ app.post('/api/send-whatsapp-invite', async (req, res) => {
 
 // ── neg_proyectos sub-recursos (deben preceder a /proyecto/:id) ──────────
 
+app.get('/api/negocios/proyecto/:id/grafica', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fuente = 'flujo', rango } = req.query;
+    let txQuery = sb.from('neg_transacciones')
+      .select('tipo, monto, categoria, quincena_key, fecha').eq('proyecto_id', id).order('fecha');
+    if (rango) {
+      const nQ = Math.min(Math.max(parseInt(rango) || 6, 1), 24);
+      const keys = new Set();
+      const base = new Date();
+      for (let i = nQ - 1; i >= 0; i--) {
+        const d = new Date(base); d.setDate(d.getDate() - i * 14);
+        keys.add(getQuincena(d).key);
+      }
+      txQuery = txQuery.in('quincena_key', [...keys]);
+    }
+    const { data: tx, error: txErr } = await txQuery;
+    if (txErr) throw txErr;
+
+    if (fuente === 'flujo') {
+      const map = {};
+      for (const t of (tx || [])) {
+        const k = t.quincena_key || 'SIN_QUINCENA';
+        map[k] ??= { ingresos: 0, gastos: 0 };
+        if (t.tipo === 'INGRESO') map[k].ingresos += Number(t.monto);
+        if (t.tipo === 'GASTO')   map[k].gastos   += Number(t.monto);
+      }
+      const labels = Object.keys(map).sort();
+      return res.json({ labels, datasets: [
+        { label: 'Ingresos', data: labels.map(k => map[k].ingresos) },
+        { label: 'Gastos',   data: labels.map(k => map[k].gastos)   },
+      ]});
+    }
+
+    if (fuente === 'categorias') {
+      const catMap = {};
+      for (const t of (tx || []).filter(t => t.tipo === 'GASTO' && t.categoria))
+        catMap[t.categoria] = (catMap[t.categoria] || 0) + Number(t.monto);
+      const sorted = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+      return res.json({
+        labels: sorted.map(([cat]) => cat),
+        datasets: [{ label: 'Gastos por categoría', data: sorted.map(([, m]) => m) }],
+      });
+    }
+
+    if (fuente === 'cartera') {
+      const [{ data: deus }, { data: acrs }] = await Promise.all([
+        sb.from('neg_deudores').select('monto_original, monto_pagado').eq('proyecto_id', id).neq('estado', 'PAGADO'),
+        sb.from('neg_acreedores').select('monto_original, monto_pagado').eq('proyecto_id', id).neq('estado', 'PAGADO'),
+      ]);
+      const saldo = (arr) => (arr || []).reduce((a, r) => a + Number(r.monto_original) - Number(r.monto_pagado), 0);
+      return res.json({
+        labels: ['Por cobrar', 'Por pagar'],
+        datasets: [{ label: 'Cartera', data: [saldo(deus), saldo(acrs)] }],
+      });
+    }
+
+    return res.status(400).json({ error: `fuente desconocida: ${fuente}. Usa flujo|categorias|cartera` });
+  } catch (err) {
+    console.error('Error en gráfica de negocio', err);
+    return res.status(500).json({ error: 'No se pudo generar la gráfica' });
+  }
+});
+
 app.get('/api/negocios/proyecto/:id/resumen', async (req, res) => {
   try {
     const { id } = req.params;
@@ -2560,6 +2665,10 @@ app.get('/api/negocios/proyecto/:id/bloques', async (req, res) => {
 
 app.post('/api/negocios/proyecto/:id/bloques', async (req, res) => {
   try {
+    const { tipo, contenido } = req.body;
+    if (!tipo) return res.status(400).json({ success: false, error: 'Falta tipo de bloque' });
+    const shapeErr = validarBloqueContenido(tipo, contenido || {});
+    if (shapeErr) return res.status(400).json({ success: false, error: shapeErr });
     const { data, error } = await sb.from('neg_bloques').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data });
@@ -2616,13 +2725,68 @@ app.delete('/api/negocios/transaccion/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── Helpers negocios ──────────────────────────────────────────────────────
+
+function calcEstadoPago(monto_original, monto_pagado) {
+  const saldo = Number(monto_original) - Number(monto_pagado);
+  if (saldo <= 0)                   return 'PAGADO';
+  if (Number(monto_pagado) > 0)     return 'PARCIAL';
+  return 'PENDIENTE';
+}
+
+function validarBloqueContenido(tipo, contenido) {
+  if (!contenido || typeof contenido !== 'object') return 'contenido debe ser un objeto';
+  switch (tipo) {
+    case 'TABLA':
+      if (!Array.isArray(contenido.columns)) return 'TABLA requiere contenido.columns (array)';
+      if (!Array.isArray(contenido.rows))    return 'TABLA requiere contenido.rows (array)';
+      break;
+    case 'LISTA':
+      if (!Array.isArray(contenido.items))   return 'LISTA requiere contenido.items (array de {text,done})';
+      break;
+    case 'NOTA':
+      if (typeof contenido.texto !== 'string') return 'NOTA requiere contenido.texto (string)';
+      break;
+    case 'RECORDATORIO':
+      if (typeof contenido.texto !== 'string') return 'RECORDATORIO requiere contenido.texto (string)';
+      if (!contenido.fecha)                    return 'RECORDATORIO requiere contenido.fecha (YYYY-MM-DD)';
+      break;
+    case 'GRAFICA':
+      if (!contenido.chartType) return 'GRAFICA requiere contenido.chartType';
+      if (!contenido.fuente)    return 'GRAFICA requiere contenido.fuente';
+      break;
+    default:
+      return `tipo desconocido: ${tipo}`;
+  }
+  return null;
+}
+
 // ── neg_deudores item ─────────────────────────────────────────────────────
 
 app.put('/api/negocios/deudor/:id', async (req, res) => {
   try {
-    const { data, error } = await sb.from('neg_deudores').update(req.body).eq('id', req.params.id).select().single();
+    const { data: cur, error: fErr } = await sb.from('neg_deudores').select('monto_original, monto_pagado').eq('id', req.params.id).single();
+    if (fErr) return res.status(404).json({ success: false, error: fErr.message });
+    const monto_original = req.body.monto_original ?? cur.monto_original;
+    const monto_pagado   = req.body.monto_pagado   ?? cur.monto_pagado;
+    const estado = req.body.estado ?? calcEstadoPago(monto_original, monto_pagado);
+    const { data, error } = await sb.from('neg_deudores').update({ ...req.body, monto_pagado, estado }).eq('id', req.params.id).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/deudor/:id/pago', async (req, res) => {
+  try {
+    const { monto } = req.body;
+    if (!monto || Number(monto) <= 0) return res.status(400).json({ success: false, error: 'monto debe ser positivo' });
+    const { data: cur, error: fErr } = await sb.from('neg_deudores').select('monto_original, monto_pagado').eq('id', req.params.id).single();
+    if (fErr) return res.status(404).json({ success: false, error: fErr.message });
+    const nuevo_pagado = Math.min(Number(cur.monto_pagado) + Number(monto), Number(cur.monto_original));
+    const estado = calcEstadoPago(cur.monto_original, nuevo_pagado);
+    const { data, error } = await sb.from('neg_deudores').update({ monto_pagado: nuevo_pagado, estado }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data, saldo_restante: Number(cur.monto_original) - nuevo_pagado });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -2638,9 +2802,28 @@ app.delete('/api/negocios/deudor/:id', async (req, res) => {
 
 app.put('/api/negocios/acreedor/:id', async (req, res) => {
   try {
-    const { data, error } = await sb.from('neg_acreedores').update(req.body).eq('id', req.params.id).select().single();
+    const { data: cur, error: fErr } = await sb.from('neg_acreedores').select('monto_original, monto_pagado').eq('id', req.params.id).single();
+    if (fErr) return res.status(404).json({ success: false, error: fErr.message });
+    const monto_original = req.body.monto_original ?? cur.monto_original;
+    const monto_pagado   = req.body.monto_pagado   ?? cur.monto_pagado;
+    const estado = req.body.estado ?? calcEstadoPago(monto_original, monto_pagado);
+    const { data, error } = await sb.from('neg_acreedores').update({ ...req.body, monto_pagado, estado }).eq('id', req.params.id).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/acreedor/:id/pago', async (req, res) => {
+  try {
+    const { monto } = req.body;
+    if (!monto || Number(monto) <= 0) return res.status(400).json({ success: false, error: 'monto debe ser positivo' });
+    const { data: cur, error: fErr } = await sb.from('neg_acreedores').select('monto_original, monto_pagado').eq('id', req.params.id).single();
+    if (fErr) return res.status(404).json({ success: false, error: fErr.message });
+    const nuevo_pagado = Math.min(Number(cur.monto_pagado) + Number(monto), Number(cur.monto_original));
+    const estado = calcEstadoPago(cur.monto_original, nuevo_pagado);
+    const { data, error } = await sb.from('neg_acreedores').update({ monto_pagado: nuevo_pagado, estado }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data, saldo_restante: Number(cur.monto_original) - nuevo_pagado });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -2674,6 +2857,13 @@ app.delete('/api/negocios/inversion/:id', async (req, res) => {
 
 app.put('/api/negocios/bloque/:id', async (req, res) => {
   try {
+    if (req.body.contenido !== undefined) {
+      const tipoToValidate = req.body.tipo || (await sb.from('neg_bloques').select('tipo').eq('id', req.params.id).single()).data?.tipo;
+      if (tipoToValidate) {
+        const shapeErr = validarBloqueContenido(tipoToValidate, req.body.contenido);
+        if (shapeErr) return res.status(400).json({ success: false, error: shapeErr });
+      }
+    }
     const { data, error } = await sb.from('neg_bloques')
       .update({ ...req.body, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
