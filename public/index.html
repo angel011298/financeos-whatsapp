@@ -2617,12 +2617,30 @@ function _ndPaint() {
         ${restante<0?`<span style="font-size:12px;color:var(--red);font-weight:600">excedido</span>`:''}
       </div>
       <div style="font-size:11px;color:var(--text-3);margin-top:3px">${fmt(din)} asignado − ${fmt(gastado)} gastado con Alicia</div>
-      ${qMovsAlicia.length?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px">
-        ${qMovsAlicia.map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-2);padding:5px 10px;background:rgba(0,0,0,.06);border-radius:var(--radius-md)">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%">${m.concepto||m.descripcion||'—'}</span>
-          <span style="flex-shrink:0;color:var(--red);font-weight:600;margin-left:8px">−${fmt(m.monto)}</span>
-        </div>`).join('')}
-      </div>`:'<div style="font-size:11px;color:var(--text-3);margin-top:6px;opacity:.7">Sin gastos con Alicia esta quincena</div>'}
+      ${qMovsAlicia.length ? `<div style="margin-top:10px">${tglBtn('tbl-nd-movs')}${mkTable({
+        id:'tbl-nd-movs', numbered:true, empty:'Sin gastos',
+        columns:[
+          {key:'concepto', label:'Concepto',  filter:'text',   value:m=>m.concepto||m.descripcion||'—'},
+          {key:'monto',    label:'Monto',     num:true,        value:m=>m.monto||0},
+          {key:'fecha',    label:'Fecha',     filter:'text',   value:m=>fd(m.fecha)||m.fecha||'—'},
+          {key:'medio',    label:'Medio',     filter:'select', value:m=>m.medio_pago||'—'}
+        ],
+        rows: qMovsAlicia,
+        renderRow: m => `<tr>
+          <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.concepto||m.descripcion||'—'}</td>
+          <td style="color:var(--red);font-weight:600">−${fmt(m.monto)}</td>
+          <td style="color:var(--text-2)">${fd(m.fecha)||m.fecha||'—'}</td>
+          <td style="color:var(--text-3)">${m.medio_pago||'—'}</td>
+        </tr>`,
+        footer: rows => {
+          const total = rows.reduce((a,m)=>a+(m.monto||0),0);
+          return total ? `<tr style="border-top:2px solid var(--border-default);font-weight:700">
+            <td colspan="2" style="text-align:right;color:var(--red)">Total: −${fmt(total)}</td>
+            <td colspan="2"></td>
+          </tr>` : '';
+        }
+      })}</div>`
+      : '<div style="font-size:11px;color:var(--text-3);margin-top:6px;opacity:.7">Sin gastos con Alicia esta quincena</div>'}
     </div>
   </div>
   ${comprQ>0?`<div class="nd-din-note" style="margin-top:14px"><i class="ti ti-target" style="color:var(--accent-primary)"></i> Compromiso quincenal total al Nidito: <strong style="color:var(--accent-primary)">${fmt(comprQ)}</strong></div>`:''}
