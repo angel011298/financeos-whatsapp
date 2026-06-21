@@ -1736,6 +1736,9 @@ function _applyNdDinCollapse(card, ttl, collapsed) {
   });
 }
 
+// true/undefined = collapsed (default), false = expandido por el usuario
+function _isCollapsed(key) { return S._secCollapsed[key] !== false; }
+
 function _initCollapsibles() {
   if (!S._secCollapsed) S._secCollapsed = {};
 
@@ -1745,7 +1748,9 @@ function _initCollapsibles() {
       const i = document.createElement('i'); i.className = 'sec-chev ti ti-chevron-up'; h2.appendChild(i);
     }
     const key = _secKey('S', h2);
-    if (S._secCollapsed[key]) { _applySectionCollapse(h2.closest('.sec-hdr'), true); _setChev(h2, true); }
+    const col = _isCollapsed(key);
+    _applySectionCollapse(h2.closest('.sec-hdr'), col);
+    _setChev(h2, col);
   });
 
   // Widgets globales (.cbox > h3/h4)
@@ -1756,7 +1761,9 @@ function _initCollapsibles() {
       const i = document.createElement('i'); i.className = 'sec-chev ti ti-chevron-up'; h.appendChild(i);
     }
     const key = _secKey('C', h);
-    if (S._secCollapsed[key]) { _applyCboxCollapse(cbox, h, true); _setChev(h, true); }
+    const col = _isCollapsed(key);
+    _applyCboxCollapse(cbox, h, col);
+    _setChev(h, col);
   });
 
   // Nidito — secciones (.nd-sec-hdr h3)
@@ -1765,7 +1772,9 @@ function _initCollapsibles() {
       const i = document.createElement('i'); i.className = 'sec-chev ti ti-chevron-up'; h3.appendChild(i);
     }
     const key = _secKey('NS', h3);
-    if (S._secCollapsed[key]) { _applyNdSecCollapse(h3.closest('.nd-sec-hdr'), true); _setChev(h3, true); }
+    const col = _isCollapsed(key);
+    _applyNdSecCollapse(h3.closest('.nd-sec-hdr'), col);
+    _setChev(h3, col);
   });
 
   // Nidito — widget Dinerito (.nd-din-card .nd-din-ttl)
@@ -1774,7 +1783,9 @@ function _initCollapsibles() {
       const i = document.createElement('i'); i.className = 'sec-chev ti ti-chevron-up'; ttl.appendChild(i);
     }
     const key = _secKey('ND', ttl);
-    if (S._secCollapsed[key]) { _applyNdDinCollapse(ttl.closest('.nd-din-card'), ttl, true); _setChev(ttl, true); }
+    const col = _isCollapsed(key);
+    _applyNdDinCollapse(ttl.closest('.nd-din-card'), ttl, col);
+    _setChev(ttl, col);
   });
 }
 
@@ -1789,7 +1800,7 @@ document.addEventListener('click', function(e) {
     const secHdr = h2.closest('.sec-hdr');
     if (!secHdr) return;
     const key = _secKey('S', h2);
-    S._secCollapsed[key] = !S._secCollapsed[key];
+    S._secCollapsed[key] = _isCollapsed(key) ? false : true;
     _applySectionCollapse(secHdr, S._secCollapsed[key]);
     _setChev(h2, S._secCollapsed[key]);
     return;
@@ -1800,7 +1811,7 @@ document.addEventListener('click', function(e) {
   if (h) {
     const cbox = h.closest('.cbox');
     const key = _secKey('C', h);
-    S._secCollapsed[key] = !S._secCollapsed[key];
+    S._secCollapsed[key] = _isCollapsed(key) ? false : true;
     _applyCboxCollapse(cbox, h, S._secCollapsed[key]);
     _setChev(h, S._secCollapsed[key]);
     return;
@@ -1811,7 +1822,7 @@ document.addEventListener('click', function(e) {
   if (ndH3) {
     const ndSec = ndH3.closest('.nd-sec-hdr');
     const key = _secKey('NS', ndH3);
-    S._secCollapsed[key] = !S._secCollapsed[key];
+    S._secCollapsed[key] = _isCollapsed(key) ? false : true;
     _applyNdSecCollapse(ndSec, S._secCollapsed[key]);
     _setChev(ndH3, S._secCollapsed[key]);
     return;
@@ -1822,7 +1833,7 @@ document.addEventListener('click', function(e) {
   if (ndTtl) {
     const card = ndTtl.closest('.nd-din-card');
     const key = _secKey('ND', ndTtl);
-    S._secCollapsed[key] = !S._secCollapsed[key];
+    S._secCollapsed[key] = _isCollapsed(key) ? false : true;
     _applyNdDinCollapse(card, ndTtl, S._secCollapsed[key]);
     _setChev(ndTtl, S._secCollapsed[key]);
   }
@@ -2064,13 +2075,11 @@ function rQuincenaPanel(ctx) {
       <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
       <span class="qt-val red">${fmt(totalGasEsp)}</span>
     </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
-  </div>
-
-  <!-- Chart -->
-  <div class="cbox" style="margin-bottom:10px">
-    <h3>Balance — ${qi.label}</h3>${ctBtns(qChId,LINE,'bar')}
-    <div class="cwrap"><canvas id="${qChId}"></canvas></div>
-    <div id="legend-${qChId}" class="chart-legend"></div>
+    <div class="cbox" style="margin-top:10px;margin-bottom:0">
+      <h3>Balance — ${qi.label}</h3>${ctBtns(qChId,LINE,'bar')}
+      <div class="cwrap"><canvas id="${qChId}"></canvas></div>
+      <div id="legend-${qChId}" class="chart-legend"></div>
+    </div>
   </div>
 
   <!-- AI Recommendations -->
