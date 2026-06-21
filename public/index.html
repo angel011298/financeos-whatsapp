@@ -1727,7 +1727,8 @@ function rQuincenaPanel(ctx) {
   // Use per-quincena budget if it exists, else fall back to global template
   const hasQBudget = (refs.budget_q || {})[qKey] != null;
   const allIngEsp = getIngresosEsperados(refs, qKey);
-  const gasEsp    = getGastosEsperados(refs, qKey);
+  // Eliminar cualquier entrada "Despensa" de los gastos fijos — se reemplaza con el total real de la lista
+  const gasEsp    = getGastosEsperados(refs, qKey).filter(g => !/^despensa$/i.test((g.descripcion || '').trim()));
 
   // Inject DESPENSA synthetic entry — solo ítems marcados "compra_quincena" (null=true por default)
   if (refs.hide_despensa_gastos !== true) {
