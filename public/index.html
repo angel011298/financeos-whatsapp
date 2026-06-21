@@ -355,8 +355,14 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
   font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;
 }
 .qstat-sub{font-size:var(--text-xs);margin-top:3px;color:var(--text-3)}
-.q-section-lbl{font-size:var(--text-xs);color:var(--text-2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:4px}
-.q-item-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-surface-2);border-radius:var(--radius-md);margin-bottom:4px;border:1px solid var(--border-default)}
+.q-section-lbl{font-size:13px;color:var(--text-2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:4px}
+.q-item-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg-surface-2);border-radius:var(--radius-md);margin-bottom:5px;border:1px solid var(--border-default);gap:8px}
+.q-item-row .q-desc{font-size:15px;font-weight:500;flex:1;min-width:0}
+.q-item-row .q-cat-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap;text-transform:uppercase;letter-spacing:.05em}
+.q-item-row .q-monto{font-size:16px;font-weight:700;white-space:nowrap}
+.q-total-widget{margin-top:16px;padding:16px 24px;border-radius:var(--radius-lg);background:var(--bg-surface);border:2px solid var(--border-default);display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
+.q-total-widget .qt-lbl{font-size:13px;color:var(--text-2);text-transform:uppercase;letter-spacing:.08em}
+.q-total-widget .qt-val{font-size:2rem;font-weight:800;font-family:'Space Grotesk',system-ui,sans-serif}
 .q-ai-box{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:14px;font-size:var(--text-sm);line-height:1.75;color:var(--text-1);margin-top:10px;white-space:pre-wrap;border:1px solid var(--border-default)}
 
 /* ═══════════════════════════════════════════════════════ KPI GRID */
@@ -653,22 +659,24 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 .sel-sum-bar strong{color:var(--text-1);font-weight:700}
 
 /* ═══════════════════════════════════════════════════════ INSIGHT CARDS */
-.insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:4px}
-.insight-card{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:16px 18px 14px;position:relative;overflow:hidden}
-.insight-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px 0 0 4px}
+.insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px;margin-top:4px;max-width:1400px;margin-left:auto;margin-right:auto}
+.insight-card{background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:22px 24px 20px;position:relative;overflow:hidden}
+.insight-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px;border-radius:5px 0 0 5px}
 .insight-card.ahorro::before{background:#34d399}
 .insight-card.alerta::before{background:#f87171}
 .insight-card.habito::before{background:#fbbf24}
 .insight-card.logro::before{background:var(--accent-primary)}
-.insight-badge{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:99px;display:inline-flex;align-items:center;gap:4px;margin-bottom:9px}
+.insight-card.patrones::before{background:#818cf8}
+.insight-badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:4px;margin-bottom:11px}
 .insight-card.ahorro .insight-badge{background:#34d39920;color:#34d399}
 .insight-card.alerta .insight-badge{background:#f8717120;color:#f87171}
 .insight-card.habito .insight-badge{background:#fbbf2420;color:#d97706}
 .insight-card.logro .insight-badge{background:color-mix(in srgb,var(--accent-primary) 18%,transparent);color:var(--accent-primary)}
-.insight-title{font-size:13.5px;font-weight:600;color:var(--text-1);margin-bottom:7px;line-height:1.3}
-.insight-body{font-size:12px;color:var(--text-2);line-height:1.65}
-.insight-skel{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
-.insight-skel-line{height:9px;background:var(--border);border-radius:4px;margin-bottom:9px;animation:ins-pulse 1.4s ease-in-out infinite}
+.insight-card.patrones .insight-badge{background:#818cf820;color:#818cf8}
+.insight-title{font-size:16px;font-weight:600;color:var(--text-1);margin-bottom:9px;line-height:1.3}
+.insight-body{font-size:14px;color:var(--text-2);line-height:1.7}
+.insight-skel{background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:22px 24px}
+.insight-skel-line{height:10px;background:var(--border);border-radius:4px;margin-bottom:10px;animation:ins-pulse 1.4s ease-in-out infinite}
 @keyframes ins-pulse{0%,100%{opacity:.9}50%{opacity:.35}}
 
 /* ═══════════════════════════════════════════════════════ CHAT INPUT — WhatsApp style auto-grow textarea */
@@ -1651,6 +1659,52 @@ function periodoSelectorHTML() {
 function setPeriodo(tipo) { S.periodo = { tipo, offset: 0 }; renderTab(S.tab); }
 function navPeriodo(dir, mode) { if (mode==='reset') S.periodo.offset=0; else S.periodo.offset+=dir; renderTab(S.tab); }
 
+// ── CATEGORÍA CLASSIFIER ─────────────────────────────────────────────────────
+function catGasto(desc) {
+  if (!desc) return 'Otros';
+  const d = desc;
+  if (/platina|gasolina|verificac|afinac|mecán/i.test(d)) return 'Platina';
+  if (/psico|terapia|playera|ropa|lentes/i.test(d))       return 'Personales';
+  if (/comida/i.test(d))                                   return 'Comida';
+  if (/pago.*tarjeta|pago.*tdc|bbva|liverpool|amex|palacio|nu\b|hey\b|rappi/i.test(d)) return 'TDC';
+  if (/transporte|pasajes/i.test(d))                       return 'Transporte';
+  if (/despensa/i.test(d))                                 return 'Despensa';
+  if (/hogar|renta|luz|agua|gas\b|internet|teléfono|celular/i.test(d)) return 'Hogar';
+  if (/hormiga|café|snack|golosina|antojo/i.test(d))       return 'Hormiga';
+  if (/ocio|entretenimiento|netflix|spotify|cine|suscri/i.test(d)) return 'Ocio';
+  return 'Otros';
+}
+const _CAT_COLORS = {
+  Hogar:'#60A5FA', Comida:'#fb923c', TDC:'#f87171', Despensa:'#4ade80',
+  Hormiga:'#FBBF24', Ocio:'#a78bfa', Personales:'#f472b6', Platina:'#22d3ee',
+  Transporte:'#818cf8', Otros:'#94a3b8'
+};
+function catBadge(cat) {
+  const c = _CAT_COLORS[cat] || _CAT_COLORS.Otros;
+  return `<span class="q-cat-badge" style="background:${c}22;color:${c};border:1px solid ${c}44">${cat}</span>`;
+}
+
+// ── TABLE TOGGLE (generic) ────────────────────────────────────────────────────
+if (!S._tblCollapsed) S._tblCollapsed = {};
+function toggleTbl(tableId) {
+  S._tblCollapsed[tableId] = !S._tblCollapsed[tableId];
+  const collapsed = S._tblCollapsed[tableId];
+  const tbl = document.getElementById(tableId);
+  if (tbl) {
+    const rows = Array.from(tbl.querySelectorAll('tbody tr:not(.tbl-foot-row)'));
+    rows.forEach((r, i) => { r.style.display = (collapsed && i >= 5) ? 'none' : ''; });
+  }
+  const btn = document.getElementById('btn-tgl-' + tableId);
+  if (btn) btn.innerHTML = `<i class="ti ti-chevron-${collapsed?'down':'up'}"></i> ${collapsed?'Expandir tabla':'Contraer tabla'}`;
+}
+function tglBtn(tableId) {
+  return `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+    <button id="btn-tgl-${tableId}" class="btn" onclick="toggleTbl('${tableId}')" style="font-size:12px;padding:5px 14px;gap:6px">
+      <i class="ti ti-chevron-up"></i> Contraer tabla
+    </button>
+  </div>`;
+}
+
 // ── QUINCENAL PANEL ──────────────────────────────────────────────────────────
 function rQuincenaPanel(ctx) {
   const refs   = (S.data.user || {}).external_refs || {};
@@ -1675,9 +1729,9 @@ function rQuincenaPanel(ctx) {
   const allIngEsp = getIngresosEsperados(refs, qKey);
   const gasEsp    = getGastosEsperados(refs, qKey);
 
-  // Inject DESPENSA synthetic entry (computed from the shopping list)
+  // Inject DESPENSA synthetic entry — solo ítems marcados "compra_quincena" (null=true por default)
   if (refs.hide_despensa_gastos !== true) {
-    const _despPend  = (S.data.despensa || []).filter(x => !x.comprado);
+    const _despPend  = (S.data.despensa || []).filter(x => !x.comprado && x.compra_quincena !== false);
     const _despTotal = _despPend.reduce((a, x) => {
       const bW = typeof x.precio_walmart === 'number' ? x.precio_walmart : Infinity;
       const bA = typeof x.precio_amazon  === 'number' ? x.precio_amazon  : Infinity;
@@ -1794,9 +1848,10 @@ function rQuincenaPanel(ctx) {
     <div class="q-section-lbl"><i class="ti ti-wallet" style="color:var(--yellow)"></i> Gastos esta quincena</div>
     ${gasEsp.length ? gasEsp.map(g => {
       if (g._isDespensa) return `<div class="q-item-row">
-        <span style="font-size:12px;display:flex;align-items:center;gap:5px"><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Despensa <span style="font-size:10px;color:var(--text-3)">(mejor precio)</span></span>
+        <span class="q-desc" style="display:flex;align-items:center;gap:6px"><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Despensa</span>
+        ${catBadge('Despensa')}
         <div style="display:flex;align-items:center;gap:6px">
-          <span class="red" style="font-weight:600">${fmt(g.monto)}</span>
+          <span class="q-monto red">${fmt(g.monto)}</span>
           <button class="edit-pill-btn" title="Ver despensa" onclick="go('dashboard');setTimeout(()=>document.getElementById('despensa-section')?.scrollIntoView({behavior:'smooth'}),300)"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
           <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
         </div>
@@ -1807,9 +1862,11 @@ function rQuincenaPanel(ctx) {
       const fpEfect  = fp === 'efectivo';
       const fpDebit  = fp === 'tarjeta_debito';
       const fpNone   = !fp;
+      const cat      = catGasto(g.descripcion);
       return `<div class="q-item-row">
-        <span style="font-size:12px">${g.descripcion}</span>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="q-desc">${g.descripcion}</span>
+        ${catBadge(cat)}
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
           <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
             style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfect?'var(--color-income)':'var(--border-default)'};background:${fpEfect?'rgba(74,222,128,.15)':'transparent'};color:${fpEfect?'var(--color-income)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
             <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
@@ -1818,12 +1875,16 @@ function rQuincenaPanel(ctx) {
             style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebit?'var(--accent-primary)':'var(--border-default)'};background:${fpDebit?'rgba(124,106,247,.15)':'transparent'};color:${fpDebit?'var(--accent-primary)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
             <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
           </button>
-          <span class="red" style="font-weight:600;margin-left:4px">${fmt(g.monto)}</span>
+          <span class="q-monto red">${fmt(g.monto)}</span>
           <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
           <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
         </div>
       </div>`;
-    }).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
+    }).join('') : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
+    ${gasEsp.length ? `<div class="q-total-widget">
+      <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
+      <span class="qt-val red">${fmt(totalGasEsp)}</span>
+    </div>` : ''}
   </div>
 
   <!-- Chart -->
@@ -2249,7 +2310,29 @@ function _insightSkeleton() {
   return `<div class="insight-grid">${card.repeat(4)}</div>`;
 }
 
+function _patronesCard() {
+  const pats = S.data.patrones || [];
+  if (!pats.length) return '';
+  const top = pats.slice(0, 8);
+  const lines = top.map(p => {
+    const avg = p.monto_promedio != null ? `promedio ${fmt(p.monto_promedio)}` : '';
+    const frec = p.frecuencia_mensual != null ? `${(+p.frecuencia_mensual).toFixed(1)}x/mes` : '';
+    const cat  = p.categoria ? `<span style="color:var(--text-3);font-size:12px">[${p.categoria}]</span>` : '';
+    return `<div style="display:flex;align-items:baseline;gap:6px;padding:5px 0;border-bottom:1px solid var(--border-default)">
+      <span style="flex:1;font-weight:500">${p.concepto_clave||p.concepto||'—'}</span>
+      ${cat}
+      <span style="color:var(--text-3);font-size:12px;white-space:nowrap">${[frec,avg].filter(Boolean).join(' · ')}</span>
+    </div>`;
+  }).join('');
+  return `<div class="insight-card patrones">
+    <span class="insight-badge">🔍 Patrones</span>
+    <div class="insight-title">Patrones detectados en tus gastos</div>
+    <div class="insight-body">${lines}</div>
+  </div>`;
+}
+
 function _renderInsightCards(consejos) {
+  const patronCard = _patronesCard();
   return `<div class="insight-grid">${consejos.map(c=>{
     const tipo = c.tipo||'habito';
     return `<div class="insight-card ${tipo}">
@@ -2257,7 +2340,7 @@ function _renderInsightCards(consejos) {
       <div class="insight-title">${c.titulo||''}</div>
       <div class="insight-body">${(c.cuerpo||'').replace(/\n/g,'<br>')}</div>
     </div>`;
-  }).join('')}</div>
+  }).join('')}${patronCard}</div>
   <div style="text-align:right;margin-top:10px">
     <button class="btn btn-ghost btn-xs" onclick="fetchInsights(true)" style="font-size:11px;gap:4px;opacity:.7">
       <i class="ti ti-refresh"></i> Actualizar
@@ -2802,7 +2885,7 @@ function rDeudas() {
   <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h'],['Radar','radar']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div><div id="legend-c-tdc2" class="chart-legend"></div></div>
 </div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Detalle de Tarjetas</h2></div></div>
-${mkTable({ id:'tbl-tdc', numbered:true, empty:'Sin tarjetas configuradas',
+${tglBtn('tbl-tdc')}${mkTable({ id:'tbl-tdc', numbered:true, empty:'Sin tarjetas configuradas',
   columns:[
     {key:'nombre',label:'Tarjeta',filter:'text',value:t=>t.nombre||''},
     {key:'estado',label:'Estado',filter:'select',value:t=>t.estado||'activo'},
@@ -2862,7 +2945,7 @@ ${qHtml}
 </div>
 <div id="rebal-container"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Gastos vs Límites</h2></div></div>
-${rows.length ? mkTable({ id:'tbl-prsp', numbered:true, empty:'Sin gastos ni límites configurados este mes',
+${rows.length ? tglBtn('tbl-prsp') : ''}${rows.length ? mkTable({ id:'tbl-prsp', numbered:true, empty:'Sin gastos ni límites configurados este mes',
   columns:[
     {key:'c',label:'Categoría',filter:'select',value:x=>x.c},
     {key:'r',label:'Real',num:true,value:x=>x.r},
@@ -3728,7 +3811,7 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
 function _calUpcomingHTML(evts) {
   const today=new Date().toISOString().split('T')[0];
   const up=evts.filter(e=>fd(e.fecha)>=today).sort((a,b)=>(fd(a.fecha)||'').localeCompare(fd(b.fecha)||'')).slice(0,100);
-  return mkTable({ id:'tbl-cal', numbered:true, limit:80, empty:'Sin eventos próximos',
+  return tglBtn('tbl-cal') + mkTable({ id:'tbl-cal', numbered:true, limit:80, empty:'Sin eventos próximos',
     columns:[
       {key:'fecha',label:'Fecha',filter:'text',value:e=>fd(e.fecha)||e.fecha||''},
       {key:'hora',label:'Hora',value:e=>e.hora||'—'},
@@ -3991,10 +4074,11 @@ async function saveM() {
   if (ctx.mode === 'add-despensa') {
     const nombre = $('d-nombre')?.value.trim();
     if (!nombre) { alert('Ingresa el nombre del artículo'); return; }
+    const nombre_oficial = $('d-nombre-oficial')?.value.trim() || '';
     const cantidad  = $('d-cantidad')?.value.trim() || '';
     const precio_est= parseFloat($('d-precio')?.value) || 0;
     try {
-      const r = await api('POST', '/api/despensa', { user_phone: S.phone, nombre, cantidad, precio_est });
+      const r = await api('POST', '/api/despensa', { user_phone: S.phone, nombre, nombre_oficial: nombre_oficial || null, cantidad, precio_est });
       if (r?.success === false) { alert('Error: ' + (r.error || '')); return; }
       if (r.data) { if (!S.data.despensa) S.data.despensa = []; S.data.despensa.unshift(r.data); }
       closeM(); rDespensa(); toast(`"${nombre}" agregado a la despensa`);
@@ -4173,6 +4257,7 @@ function rDespensa() {
   }, null);
 
   const hasAnyPrices = pending.some(x => x.precio_walmart != null || x.precio_amazon != null);
+  const tblBtn = pending.length ? tglBtn('tbl-despensa') : '';
 
   const tblHtml = pending.length ? mkTable({
     id: 'tbl-despensa',
@@ -4180,18 +4265,20 @@ function rDespensa() {
     numbered: true,
     empty: 'Sin artículos pendientes',
     columns: [
-      { key:'nombre',    label:'Producto',     filter:'text',   value: r => r.nombre || '', width:'160px' },
-      { key:'p_walmart', label:'Walmart',       num:true,        value: r => r.precio_walmart ?? '', width:'90px' },
-      { key:'l_walmart', label:'',              sortable:false,  value: r => r.url_walmart ? '🔗' : '', width:'36px' },
-      { key:'p_amazon',  label:'Amazon',        num:true,        value: r => r.precio_amazon ?? '', width:'90px' },
-      { key:'l_amazon',  label:'',              sortable:false,  value: r => r.url_amazon ? '🔗' : '', width:'36px' },
-      { key:'mejor',     label:'Mejor precio',  filter:'select', value: r => {
+      { key:'nombre',       label:'Producto',              filter:'text',   value: r => r.nombre || '',        width:'140px' },
+      { key:'nombre_of',    label:'Nombre Oficial',        filter:'text',   value: r => r.nombre_oficial || '', width:'140px' },
+      { key:'p_walmart',    label:'Walmart',               num:true,        value: r => r.precio_walmart ?? '', width:'88px' },
+      { key:'l_walmart',    label:'',                      sortable:false,  value: r => r.url_walmart ? '🔗' : '', width:'32px' },
+      { key:'p_amazon',     label:'Amazon',                num:true,        value: r => r.precio_amazon ?? '', width:'88px' },
+      { key:'l_amazon',     label:'',                      sortable:false,  value: r => r.url_amazon ? '🔗' : '', width:'32px' },
+      { key:'mejor',        label:'Mejor precio',          filter:'select', value: r => {
           const hasW = typeof r.precio_walmart === 'number';
           const hasA = typeof r.precio_amazon  === 'number';
           if (hasW && hasA) return r.precio_walmart <= r.precio_amazon ? 'Walmart' : 'Amazon';
           if (hasW) return 'Walmart'; if (hasA) return 'Amazon'; return '—';
-        }, width:'100px' },
-      { key:'_acts',     label:'',              sortable:false,  value: r => '', width:'64px' }
+        }, width:'96px' },
+      { key:'compra_q',     label:'¿Compra esta quincena?', sortable:false, value: r => r.compra_quincena !== false ? 'Sí' : 'No', width:'130px' },
+      { key:'_acts',        label:'',                      sortable:false,  value: r => '', width:'64px' }
     ],
     renderRow: r => {
       const hasW   = typeof r.precio_walmart === 'number';
@@ -4204,13 +4291,21 @@ function rDespensa() {
       if (hasW && hasA) { mejor = r.precio_walmart <= r.precio_amazon ? 'Walmart' : 'Amazon'; mejorColor = r.precio_walmart <= r.precio_amazon ? '#0071ce' : '#ff9900'; }
       else if (hasW) { mejor = 'Walmart'; mejorColor = '#0071ce'; }
       else if (hasA) { mejor = 'Amazon';  mejorColor = '#ff9900'; }
+      const cq = r.compra_quincena !== false;
       return `<tr style="${r.comprado?'opacity:.5':''}">
         <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
+        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:12px">${r.nombre_oficial||'—'}</td>
         <td style="color:#0071ce;font-weight:600">${wPrice}</td>
         <td style="text-align:center">${wLink}</td>
         <td style="color:#ff9900;font-weight:600">${aPrice}</td>
         <td style="text-align:center">${aLink}</td>
         <td style="color:${mejorColor};font-weight:700;text-align:center">${mejor}</td>
+        <td style="text-align:center">
+          <button onclick="toggleCompraQ(${r.id},${!cq})" title="${cq?'Quitar de esta quincena':'Incluir en esta quincena'}"
+            style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;color:${cq?'var(--color-income)':'var(--text-3)'}">
+            <i class="ti ti-${cq?'checkbox':'square'}"></i>
+          </button>
+        </td>
         <td style="text-align:center;white-space:nowrap">
           <button onclick="toggleComprado(${r.id},${!r.comprado})" style="background:none;border:none;cursor:pointer;color:${r.comprado?'var(--color-income)':'var(--text-3)'};font-size:15px;padding:2px 4px" title="${r.comprado?'Desmarcar':'Marcar comprado'}"><i class="ti ti-${r.comprado?'check-circle':'circle'}"></i></button>
           <button onclick="dDespensa(${r.id})" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:15px;padding:2px 4px" title="Eliminar"><i class="ti ti-trash"></i></button>
@@ -4227,11 +4322,20 @@ function rDespensa() {
         const b  = Math.min(bW, bA);
         return a + (isFinite(b) ? b : (r.precio_est || 0));
       }, 0);
+      const vBQ = vis.filter(r => r.compra_quincena !== false).reduce((a, r) => {
+        const bW = typeof r.precio_walmart === 'number' ? r.precio_walmart : Infinity;
+        const bA = typeof r.precio_amazon  === 'number' ? r.precio_amazon  : Infinity;
+        const b  = Math.min(bW, bA);
+        return a + (isFinite(b) ? b : (r.precio_est || 0));
+      }, 0);
       if (!vW && !vA && !vB) return '';
       return `<tr style="border-top:2px solid var(--border-default);font-weight:700">
-        <td></td><td style="color:#0071ce">${vW > 0 ? fmt(vW) : '—'}</td><td></td>
+        <td></td><td style="color:var(--text-3);font-size:11px">Totales</td>
+        <td style="color:#0071ce">${vW > 0 ? fmt(vW) : '—'}</td><td></td>
         <td style="color:#ff9900">${vA > 0 ? fmt(vA) : '—'}</td><td></td>
-        <td style="color:var(--color-income);font-size:15px">${vB > 0 ? 'Mejor: ' + fmt(vB) : ''}</td><td></td>
+        <td style="color:var(--color-income)">${vB > 0 ? fmt(vB) : ''}</td>
+        <td style="color:var(--cat-despensa);font-size:12px">${vBQ > 0 ? '✓ '+fmt(vBQ) : ''}</td>
+        <td></td>
       </tr>`;
     }
   }) : '';
@@ -4256,7 +4360,7 @@ function rDespensa() {
   ${lastCheck && hasAnyPrices ? `<div style="font-size:10px;color:var(--text-3);margin-bottom:8px"><i class="ti ti-clock"></i> Precios actualizados: ${new Date(lastCheck).toLocaleDateString('es-MX',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>` : ''}
   ${!items.length
     ? `<p style="color:var(--text-3);text-align:center;padding:24px;font-size:12px"><i class="ti ti-shopping-bag" style="font-size:28px;display:block;margin-bottom:8px;color:var(--text-3)"></i>Lista vacía — agrega lo que necesitas comprar</p>`
-    : tblHtml + (done.length ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-default)">
+    : tblBtn + tblHtml + (done.length ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-default)">
         <div style="font-size:10px;color:var(--text-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Comprados</div>
         <div style="display:flex;flex-direction:column;gap:3px">${done.map(x => `
           <div style="display:flex;align-items:center;gap:8px;opacity:.5;padding:4px 8px;border-radius:var(--radius-md);background:var(--bg-surface-2)">
@@ -4274,9 +4378,20 @@ function oDespensa() {
   $('m-title').textContent = '+ Artículo de Despensa';
   $('m-body').innerHTML = `
 <div class="fr"><label>Artículo</label><input id="d-nombre" placeholder="Ej: Leche, Arroz, Detergente" autofocus></div>
+<div class="fr"><label>Nombre Oficial <span style="color:var(--muted);font-size:10px">(para búsqueda de precios IA)</span></label><input id="d-nombre-oficial" placeholder="Ej: Leche Lala Entera 1L, Arroz SOS 1kg"></div>
 <div class="fr"><label>Cantidad <span style="color:var(--muted);font-size:10px">(opcional)</span></label><input id="d-cantidad" placeholder="Ej: 2 litros, 1 kg, 3 piezas"></div>
 <div class="fr"><label>Precio estimado <span style="color:var(--muted);font-size:10px">(opcional)</span></label><input id="d-precio" type="number" min="0" step="1" placeholder="0"></div>`;
   $('ovl').classList.add('open');
+}
+
+async function toggleCompraQ(id, val) {
+  try {
+    await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, compra_quincena: val });
+    const item = (S.data.despensa || []).find(x => x.id === id);
+    if (item) item.compra_quincena = val;
+    rDespensa();
+    rDash();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function toggleComprado(id, comprado) {

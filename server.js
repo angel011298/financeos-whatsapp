@@ -2315,9 +2315,9 @@ app.get('/api/despensa/:phone', async (req, res) => {
 
 app.post('/api/despensa', async (req, res) => {
   try {
-    const { user_phone, nombre, cantidad, precio_est, prioridad } = req.body;
+    const { user_phone, nombre, nombre_oficial, cantidad, precio_est, prioridad } = req.body;
     if (!user_phone || !nombre) return res.status(400).json({ success: false, error: 'Faltan campos' });
-    const { data, error } = await sb.from('despensa').insert({ user_phone, nombre, cantidad: cantidad || '', precio_est: parseFloat(precio_est) || 0, prioridad: parseInt(prioridad) || 0, comprado: false }).select().single();
+    const { data, error } = await sb.from('despensa').insert({ user_phone, nombre, nombre_oficial: nombre_oficial || null, cantidad: cantidad || '', precio_est: parseFloat(precio_est) || 0, prioridad: parseInt(prioridad) || 0, comprado: false, compra_quincena: true }).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
