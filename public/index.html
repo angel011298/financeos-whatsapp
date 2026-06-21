@@ -1851,45 +1851,72 @@ function rQuincenaPanel(ctx) {
   <!-- Gastos presupuestados esta quincena -->
   <div style="margin-bottom:10px">
     <div class="q-section-lbl"><i class="ti ti-wallet" style="color:var(--yellow)"></i> Gastos esta quincena</div>
-    ${gasEsp.length ? gasEsp.map(g => {
-      if (g._isDespensa) return `<div class="q-item-row">
-        <span class="q-desc" style="display:flex;align-items:center;gap:6px"><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Despensa</span>
-        ${catBadge('Despensa')}
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="q-monto red">${fmt(g.monto)}</span>
-          <button class="edit-pill-btn" title="Ver despensa" onclick="go('dashboard');setTimeout(()=>document.getElementById('despensa-section')?.scrollIntoView({behavior:'smooth'}),300)"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
-          <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
-        </div>
-      </div>`;
-      const fp       = fpMap[g.descripcion] || g.forma_pago || '';
-      const _id      = g._id || g.id || g.descripcion;
-      const nomSafe  = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      const fpEfect  = fp === 'efectivo';
-      const fpDebit  = fp === 'tarjeta_debito';
-      const fpNone   = !fp;
-      const cat      = catGasto(g.descripcion);
-      return `<div class="q-item-row">
-        <span class="q-desc">${g.descripcion}</span>
-        ${catBadge(cat)}
-        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-          <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
-            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpEfect?'var(--color-income)':'var(--border-default)'};background:${fpEfect?'rgba(74,222,128,.15)':'transparent'};color:${fpEfect?'var(--color-income)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
-            <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
-          </button>
-          <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="T. Débito"
-            style="padding:2px 8px;border-radius:var(--radius-pill);border:1px solid ${fpDebit?'var(--accent-primary)':'var(--border-default)'};background:${fpDebit?'rgba(124,106,247,.15)':'transparent'};color:${fpDebit?'var(--accent-primary)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;transition:.12s;font-family:'Space Grotesk',system-ui,sans-serif">
-            <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
-          </button>
-          <span class="q-monto red">${fmt(g.monto)}</span>
-          <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-          <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
-        </div>
-      </div>`;
-    }).join('') : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
-    ${gasEsp.length ? `<div class="q-total-widget">
+    ${gasEsp.length ? `
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border-default)">
+          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;width:36px">#</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Concepto</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Monto</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Forma de pago</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Comentarios</th>
+          <th style="width:56px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${gasEsp.map((g, i) => {
+          if (g._isDespensa) return `<tr style="border-bottom:1px solid var(--border-default)">
+            <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
+            <td style="padding:10px;text-align:center"><span style="display:inline-flex;align-items:center;gap:5px;font-weight:500"><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Despensa</span></td>
+            <td style="padding:10px;text-align:center;font-weight:700;color:var(--red)">${fmt(g.monto)}</td>
+            <td style="padding:10px;text-align:center;color:var(--text-3)">—</td>
+            <td style="padding:10px;text-align:center;color:var(--text-3)">—</td>
+            <td style="padding:10px;text-align:center;white-space:nowrap">
+              <button class="edit-pill-btn" title="Ver despensa" onclick="go('dashboard');setTimeout(()=>document.getElementById('despensa-section')?.scrollIntoView({behavior:'smooth'}),300)"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
+              <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
+            </td>
+          </tr>`;
+          const fp      = fpMap[g.descripcion] || g.forma_pago || '';
+          const _id     = g._id || g.id || g.descripcion;
+          const nomSafe = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+          const fpEfect = fp === 'efectivo';
+          const fpDebit = fp === 'tarjeta_debito';
+          const fpNone  = !fp;
+          const fpLabel = fpEfect ? '<i class="ti ti-cash" style="font-size:10px"></i> Efectivo'
+                        : fpDebit ? '<i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito'
+                        : '<span style="color:var(--text-3)">—</span>';
+          const fpColor = fpEfect ? 'var(--color-income)' : fpDebit ? 'var(--accent-primary)' : 'var(--text-3)';
+          return `<tr style="border-bottom:1px solid var(--border-default)">
+            <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
+            <td style="padding:10px;text-align:center;font-weight:500">${g.descripcion}</td>
+            <td style="padding:10px;text-align:center;font-weight:700;color:var(--red)">${fmt(g.monto)}</td>
+            <td style="padding:10px;text-align:center">
+              <div style="display:inline-flex;gap:4px;align-items:center">
+                <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
+                  style="padding:2px 7px;border-radius:var(--radius-pill);border:1px solid ${fpEfect?'var(--color-income)':'var(--border-default)'};background:${fpEfect?'rgba(74,222,128,.15)':'transparent'};color:${fpEfect?'var(--color-income)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;font-family:inherit">
+                  <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
+                </button>
+                <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="T. Débito"
+                  style="padding:2px 7px;border-radius:var(--radius-pill);border:1px solid ${fpDebit?'var(--accent-primary)':'var(--border-default)'};background:${fpDebit?'rgba(124,106,247,.15)':'transparent'};color:${fpDebit?'var(--accent-primary)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;font-family:inherit">
+                  <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
+                </button>
+              </div>
+            </td>
+            <td style="padding:10px;text-align:center;color:var(--text-3);font-size:13px">${g.comentarios||'—'}</td>
+            <td style="padding:10px;text-align:center;white-space:nowrap">
+              <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+              <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+    <div class="q-total-widget">
       <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
       <span class="qt-val red">${fmt(totalGasEsp)}</span>
-    </div>` : ''}
+    </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
   </div>
 
   <!-- Chart -->
