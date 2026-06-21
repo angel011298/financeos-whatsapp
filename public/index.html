@@ -650,7 +650,13 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   font-family:'Space Grotesk',system-ui,sans-serif;font-size:var(--text-lg);
   font-weight:400;color:var(--text-1);letter-spacing:-0.3px;
   display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+  cursor:pointer;user-select:none;
 }
+.sec-hdr h2:hover{opacity:.8}
+.cbox>h3,.cbox>h4{cursor:pointer;user-select:none}
+.cbox>h3:hover,.cbox>h4:hover{opacity:.85}
+.sec-chev{font-size:11px;margin-left:6px;opacity:.4;transition:transform .18s,opacity .18s;vertical-align:middle}
+.sec-hdr h2:hover .sec-chev,.cbox>h3:hover .sec-chev,.cbox>h4:hover .sec-chev{opacity:.8}
 .sec-hdr h2 .ti{color:var(--accent-primary);font-size:18px}
 .sec-hdr-sub{font-size:var(--text-xs);color:var(--text-2);margin-top:5px;letter-spacing:.04em}
 
@@ -1256,6 +1262,7 @@ function renderTab(t) {
   // Movimientos vive dentro de Dashboard (rDash) y Objetivos dentro de Presupuesto (rPresp).
   ({ dashboard:rDash, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp,
      calendario:rCal, chat:rChat })[t]?.();
+  setTimeout(_initCollapsibles, 120);
 }
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
@@ -1691,6 +1698,88 @@ function catBadge(cat) {
 
 // ── TABLE TOGGLE (generic) ────────────────────────────────────────────────────
 if (!S._tblCollapsed) S._tblCollapsed = {};
+// ── COLAPSO GLOBAL DE SECCIONES Y WIDGETS ────────────────────────────────────
+if (!S._secCollapsed) S._secCollapsed = {};
+
+function _secKey(prefix, el) {
+  return prefix + ':' + (el.textContent || '').replace(/\s+/g,'').slice(0,50);
+}
+function _applySectionCollapse(secHdr, collapsed) {
+  let el = secHdr.nextElementSibling;
+  while (el && !el.classList.contains('sec-hdr')) {
+    el.style.display = collapsed ? 'none' : '';
+    el = el.nextElementSibling;
+  }
+}
+function _applyCboxCollapse(cbox, h, collapsed) {
+  Array.from(cbox.children).forEach(child => {
+    if (child !== h) child.style.display = collapsed ? 'none' : '';
+  });
+}
+function _setChev(el, collapsed) {
+  const chev = el.querySelector('.sec-chev');
+  if (chev) chev.className = 'sec-chev ti ti-chevron-' + (collapsed ? 'right' : 'up');
+}
+function _initCollapsibles() {
+  if (!S._secCollapsed) S._secCollapsed = {};
+  // Secciones (.sec-hdr h2)
+  document.querySelectorAll('.sec-hdr-row h2').forEach(h2 => {
+    if (!h2.querySelector('.sec-chev')) {
+      const i = document.createElement('i');
+      i.className = 'sec-chev ti ti-chevron-up';
+      h2.appendChild(i);
+    }
+    const key = _secKey('S', h2);
+    if (S._secCollapsed[key]) {
+      _applySectionCollapse(h2.closest('.sec-hdr'), true);
+      _setChev(h2, true);
+    }
+  });
+  // Widgets (.cbox > h3/h4)
+  document.querySelectorAll('.cbox').forEach(cbox => {
+    const h = cbox.querySelector(':scope>h3,:scope>h4');
+    if (!h) return;
+    if (!h.querySelector('.sec-chev')) {
+      const i = document.createElement('i');
+      i.className = 'sec-chev ti ti-chevron-up';
+      h.appendChild(i);
+    }
+    const key = _secKey('C', h);
+    if (S._secCollapsed[key]) {
+      _applyCboxCollapse(cbox, h, true);
+      _setChev(h, true);
+    }
+  });
+}
+
+// Delegación de eventos — cubre pestañas renderizadas dinámicamente
+document.addEventListener('click', function(e) {
+  // No disparar si el clic fue en un botón, link, input u otro interactivo
+  if (e.target.closest('button,a,select,input,label,.btn,.tbl-filter-toggle,.sort-arrow,.edit-pill-btn,.dot-btn')) return;
+
+  // Clic en h2 dentro de .sec-hdr-row
+  const h2 = e.target.closest('.sec-hdr-row h2');
+  if (h2) {
+    const secHdr = h2.closest('.sec-hdr');
+    if (!secHdr) return;
+    const key = _secKey('S', h2);
+    S._secCollapsed[key] = !S._secCollapsed[key];
+    _applySectionCollapse(secHdr, S._secCollapsed[key]);
+    _setChev(h2, S._secCollapsed[key]);
+    return;
+  }
+
+  // Clic en h3/h4 directo de .cbox
+  const h = e.target.closest('.cbox>h3,.cbox>h4');
+  if (h) {
+    const cbox = h.closest('.cbox');
+    const key = _secKey('C', h);
+    S._secCollapsed[key] = !S._secCollapsed[key];
+    _applyCboxCollapse(cbox, h, S._secCollapsed[key]);
+    _setChev(h, S._secCollapsed[key]);
+  }
+}, true);
+
 function _applyTblCollapse(tableId, collapsed) {
   const tbody = document.getElementById(tableId + '-body');
   if (!tbody) return;
