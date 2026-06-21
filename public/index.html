@@ -363,6 +363,10 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-total-widget{margin-top:16px;padding:16px 24px;border-radius:var(--radius-lg);background:var(--bg-surface);border:2px solid var(--border-default);display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
 .q-total-widget .qt-lbl{font-size:13px;color:var(--text-2);text-transform:uppercase;letter-spacing:.08em}
 .q-total-widget .qt-val{font-size:2rem;font-weight:800;font-family:'Space Grotesk',system-ui,sans-serif}
+.td-edit{background:transparent;border:none;border-bottom:1px solid transparent;outline:none;font:inherit;color:inherit;width:100%;min-width:50px;padding:2px 0;cursor:text;box-sizing:border-box}
+.td-edit:hover{border-bottom-color:var(--border-default)}
+.td-edit:focus{border-bottom-color:var(--color-primary);background:var(--bg-surface-2);border-radius:2px 2px 0 0;padding:2px 4px}
+.td-edit-num{text-align:right;max-width:90px}
 .q-ai-box{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:14px;font-size:var(--text-sm);line-height:1.75;color:var(--text-1);margin-top:10px;white-space:pre-wrap;border:1px solid var(--border-default)}
 
 /* ═══════════════════════════════════════════════════════ KPI GRID */
@@ -4266,20 +4270,21 @@ function rDespensa() {
     numbered: true,
     empty: 'Sin artículos pendientes',
     columns: [
-      { key:'nombre',       label:'Producto',              filter:'text',   value: r => r.nombre || '',        width:'140px' },
-      { key:'nombre_of',    label:'Nombre Oficial',        filter:'text',   value: r => r.nombre_oficial || '', width:'140px' },
-      { key:'p_walmart',    label:'Walmart',               num:true,        value: r => r.precio_walmart ?? '', width:'88px' },
-      { key:'l_walmart',    label:'',                      sortable:false,  value: r => r.url_walmart ? '🔗' : '', width:'32px' },
-      { key:'p_amazon',     label:'Amazon',                num:true,        value: r => r.precio_amazon ?? '', width:'88px' },
-      { key:'l_amazon',     label:'',                      sortable:false,  value: r => r.url_amazon ? '🔗' : '', width:'32px' },
-      { key:'mejor',        label:'Mejor precio',          filter:'select', value: r => {
+      { key:'nombre',       label:'Producto',               filter:'text',   value: r => r.nombre || '',         width:'130px' },
+      { key:'nombre_of',    label:'Nombre Oficial',         filter:'text',   value: r => r.nombre_oficial || '', width:'130px' },
+      { key:'precio_est',   label:'Precio estimado',        num:true,        value: r => r.precio_est ?? '',     width:'100px' },
+      { key:'p_walmart',    label:'Walmart',                num:true,        value: r => r.precio_walmart ?? '', width:'88px' },
+      { key:'l_walmart',    label:'',                       sortable:false,  value: r => r.url_walmart ? '🔗' : '', width:'32px' },
+      { key:'p_amazon',     label:'Amazon',                 num:true,        value: r => r.precio_amazon ?? '',  width:'88px' },
+      { key:'l_amazon',     label:'',                       sortable:false,  value: r => r.url_amazon ? '🔗' : '', width:'32px' },
+      { key:'mejor',        label:'Mejor precio',           filter:'select', value: r => {
           const hasW = typeof r.precio_walmart === 'number';
           const hasA = typeof r.precio_amazon  === 'number';
           if (hasW && hasA) return r.precio_walmart <= r.precio_amazon ? 'Walmart' : 'Amazon';
           if (hasW) return 'Walmart'; if (hasA) return 'Amazon'; return '—';
         }, width:'96px' },
-      { key:'compra_q',     label:'¿Compra esta quincena?', sortable:false, value: r => r.compra_quincena !== false ? 'Sí' : 'No', width:'130px' },
-      { key:'_acts',        label:'',                      sortable:false,  value: r => '', width:'64px' }
+      { key:'compra_q',     label:'¿Compra esta quincena?', sortable:false, value: r => r.compra_quincena !== false ? 'Sí' : 'No', width:'120px' },
+      { key:'_acts',        label:'',                       sortable:false,  value: r => '', width:'64px' }
     ],
     renderRow: r => {
       const hasW   = typeof r.precio_walmart === 'number';
@@ -4293,9 +4298,19 @@ function rDespensa() {
       else if (hasW) { mejor = 'Walmart'; mejorColor = '#0071ce'; }
       else if (hasA) { mejor = 'Amazon';  mejorColor = '#ff9900'; }
       const cq = r.compra_quincena !== false;
+      const peVal = r.precio_est > 0 ? r.precio_est : '';
       return `<tr style="${r.comprado?'opacity:.5':''}">
-        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
-        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:12px">${r.nombre_oficial||'—'}</td>
+        <td><input class="td-edit" value="${(r.nombre||'').replace(/"/g,'&quot;')}" placeholder="Producto"
+          onblur="if(this.value.trim()!==\`${(r.nombre||'').replace(/`/g,'\\`')}\`)updateDespensaField(${r.id},'nombre',this.value.trim()||'${(r.nombre||'').replace(/'/g,"\\'")}')"
+          onkeydown="if(event.key==='Enter')this.blur()"></td>
+        <td><input class="td-edit" value="${(r.nombre_oficial||'').replace(/"/g,'&quot;')}" placeholder="Nombre oficial…"
+          style="color:var(--text-3);font-size:12px"
+          onblur="updateDespensaField(${r.id},'nombre_oficial',this.value.trim()||null)"
+          onkeydown="if(event.key==='Enter')this.blur()"></td>
+        <td><input class="td-edit td-edit-num" type="number" min="0" step="0.01" value="${peVal}" placeholder="0.00"
+          style="color:var(--text-2)"
+          onblur="updateDespensaField(${r.id},'precio_est',this.value===''?0:parseFloat(this.value)||0)"
+          onkeydown="if(event.key==='Enter')this.blur()"></td>
         <td style="color:#0071ce;font-weight:600">${wPrice}</td>
         <td style="text-align:center">${wLink}</td>
         <td style="color:#ff9900;font-weight:600">${aPrice}</td>
@@ -4329,9 +4344,11 @@ function rDespensa() {
         const b  = Math.min(bW, bA);
         return a + (isFinite(b) ? b : (r.precio_est || 0));
       }, 0);
-      if (!vW && !vA && !vB) return '';
+      const vPE = vis.reduce((a, r) => a + (r.precio_est || 0), 0);
+      if (!vW && !vA && !vB && !vPE) return '';
       return `<tr style="border-top:2px solid var(--border-default);font-weight:700">
         <td></td><td style="color:var(--text-3);font-size:11px">Totales</td>
+        <td style="color:var(--text-2)">${vPE > 0 ? fmt(vPE) : '—'}</td>
         <td style="color:#0071ce">${vW > 0 ? fmt(vW) : '—'}</td><td></td>
         <td style="color:#ff9900">${vA > 0 ? fmt(vA) : '—'}</td><td></td>
         <td style="color:var(--color-income)">${vB > 0 ? fmt(vB) : ''}</td>
@@ -4383,6 +4400,22 @@ function oDespensa() {
 <div class="fr"><label>Cantidad <span style="color:var(--muted);font-size:10px">(opcional)</span></label><input id="d-cantidad" placeholder="Ej: 2 litros, 1 kg, 3 piezas"></div>
 <div class="fr"><label>Precio estimado <span style="color:var(--muted);font-size:10px">(opcional)</span></label><input id="d-precio" type="number" min="0" step="1" placeholder="0"></div>`;
   $('ovl').classList.add('open');
+}
+
+async function updateDespensaField(id, field, value) {
+  const item = (S.data.despensa || []).find(x => x.id === id);
+  if (!item) return;
+  const prev = item[field];
+  item[field] = value;
+  // Re-render totals/dash without re-rendering table (el input sigue focused)
+  rDash();
+  try {
+    await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, [field]: value });
+  } catch(e) {
+    item[field] = prev;
+    rDespensa();
+    toast('Error al guardar: ' + e.message, 'error');
+  }
 }
 
 async function toggleCompraQ(id, val) {
