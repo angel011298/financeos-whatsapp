@@ -1996,6 +1996,7 @@ function rQuincenaPanel(ctx) {
   <div style="margin-bottom:10px">
     <div class="q-section-lbl"><i class="ti ti-wallet" style="color:var(--yellow)"></i> Gastos esta quincena</div>
     ${gasEsp.length ? `
+    ${tglBtn('tbl-gastos-q-'+ctx)}
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:14px">
       <thead>
@@ -2008,7 +2009,7 @@ function rQuincenaPanel(ctx) {
           <th style="width:56px"></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="tbl-gastos-q-${ctx}-body">
         ${gasEsp.map((g, i) => {
           if (g._isDespensa) return `<tr style="border-bottom:1px solid var(--border-default)">
             <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
