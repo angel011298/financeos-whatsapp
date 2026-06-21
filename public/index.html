@@ -1994,7 +1994,9 @@ function rQuincenaPanel(ctx) {
 
   <!-- Gastos presupuestados esta quincena -->
   <div style="margin-bottom:10px">
-    <div class="q-section-lbl"><i class="ti ti-wallet" style="color:var(--yellow)"></i> Gastos esta quincena</div>
+    <div class="sec-hdr" style="margin:14px 0 12px">
+      <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta quincena</h2></div>
+    </div>
     ${gasEsp.length ? `
     ${tglBtn('tbl-gastos-q-'+ctx)}
     <div style="overflow-x:auto">
