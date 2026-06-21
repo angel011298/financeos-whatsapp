@@ -367,6 +367,7 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .td-edit:hover{border-bottom-color:var(--border-default)}
 .td-edit:focus{border-bottom-color:var(--color-primary);background:var(--bg-surface-2);border-radius:2px 2px 0 0;padding:2px 4px}
 .td-edit-num{text-align:right;max-width:90px}
+#tbl-movs th,#tbl-movs td{text-align:center !important}
 .q-ai-box{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:14px;font-size:var(--text-sm);line-height:1.75;color:var(--text-1);margin-top:10px;white-space:pre-wrap;border:1px solid var(--border-default)}
 
 /* ═══════════════════════════════════════════════════════ KPI GRID */
@@ -3407,7 +3408,7 @@ function movRow(m) {
   return `<tr id="mrow-${m.id}">
   <td style="padding:0;width:36px;text-align:center">${dot}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'concepto')" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
-  <td class="editable monto-sel" onclick="ieMov(this,${m.id},'monto')" data-v="${m.monto||0}" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
+  <td class="editable monto-sel" onclick="ieMov(this,${m.id},'monto')" data-v="${m.monto||0}" style="font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'fecha')" style="white-space:nowrap;color:var(--text-1);font-weight:600">${fmtDate(m.fecha)}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'tipo')" style="cursor:pointer"><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
   <td id="catcell-${m.id}" onclick="openCatPicker(${m.id})" style="cursor:pointer"><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
@@ -3656,7 +3657,7 @@ function _updateMovsTable(filtered) {
     columns:[
       {key:'_dot',label:'',sortable:false,width:'36px'},
       {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||'',width:'180px'},
-      {key:'monto',label:'Monto',num:true,align:'right',value:m=>m.monto||0,width:'88px'},
+      {key:'monto',label:'Monto',num:true,value:m=>m.monto||0,width:'88px'},
       {key:'fecha',label:'Fecha',filter:'text',value:m=>fd(m.fecha),width:'102px'},
       {key:'tipo',label:'Tipo',filter:'select',value:m=>m.tipo==='GASTO'?'Gasto':'Ingreso',width:'72px'},
       {key:'categoria',label:'Categoría',filter:'select',value:m=>m.categoria||'—',width:'110px'},
