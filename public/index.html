@@ -1691,21 +1691,27 @@ function catBadge(cat) {
 
 // ── TABLE TOGGLE (generic) ────────────────────────────────────────────────────
 if (!S._tblCollapsed) S._tblCollapsed = {};
+function _applyTblCollapse(tableId, collapsed) {
+  const tbody = document.getElementById(tableId + '-body');
+  if (!tbody) return;
+  Array.from(tbody.querySelectorAll('tr')).forEach((r, i) => {
+    r.style.display = (collapsed && i >= 5) ? 'none' : '';
+  });
+}
 function toggleTbl(tableId) {
   S._tblCollapsed[tableId] = !S._tblCollapsed[tableId];
   const collapsed = S._tblCollapsed[tableId];
-  const tbl = document.getElementById(tableId);
-  if (tbl) {
-    const rows = Array.from(tbl.querySelectorAll('tbody tr:not(.tbl-foot-row)'));
-    rows.forEach((r, i) => { r.style.display = (collapsed && i >= 5) ? 'none' : ''; });
-  }
+  _applyTblCollapse(tableId, collapsed);
   const btn = document.getElementById('btn-tgl-' + tableId);
   if (btn) btn.innerHTML = `<i class="ti ti-chevron-${collapsed?'down':'up'}"></i> ${collapsed?'Expandir tabla':'Contraer tabla'}`;
 }
 function tglBtn(tableId) {
+  const collapsed = !!(S._tblCollapsed && S._tblCollapsed[tableId]);
+  // Restaurar estado colapsado tras re-render del DOM
+  setTimeout(() => _applyTblCollapse(tableId, collapsed), 0);
   return `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
     <button id="btn-tgl-${tableId}" class="btn" onclick="toggleTbl('${tableId}')" style="font-size:12px;padding:5px 14px;gap:6px">
-      <i class="ti ti-chevron-up"></i> Contraer tabla
+      <i class="ti ti-chevron-${collapsed?'down':'up'}"></i> ${collapsed?'Expandir tabla':'Contraer tabla'}
     </button>
   </div>`;
 }
