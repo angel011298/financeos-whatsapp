@@ -1786,7 +1786,8 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
-    const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin] = await Promise.all([
+    const qActual = getQuincenaActual().key;
+    const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin, negProys, negReflejos] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
       sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).limit(500),
       sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
@@ -1798,10 +1799,19 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         .select('monto_quincenal, nidito_items!inner(deleted_at)')
         .eq('user_phone', phone)
         .is('nidito_items.deleted_at', null),
-      sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', getQuincenaActual().key).maybeSingle(),
+      sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', qActual).maybeSingle(),
+      sb.from('neg_proyectos')
+        .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden')
+        .eq('user_phone', phone).is('deleted_at', null).order('orden'),
+      sb.from('neg_transacciones')
+        .select('tipo, monto, reflejo_personal')
+        .eq('reflejo_user_phone', phone).eq('quincena_key', qActual),
     ]);
     const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
     const nidito_dinerito_val = nidDin.data?.monto || 0;
+    const negTxQ     = negReflejos.data || [];
+    const retiros_q  = negTxQ.filter(t => t.reflejo_personal === 'RETIRO').reduce((a, t) => a + Number(t.monto), 0);
+    const aportes_q  = negTxQ.filter(t => t.reflejo_personal === 'APORTE').reduce((a, t) => a + Number(t.monto), 0);
     res.json({ success: true, data: {
       tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data,
       calendario: cal.data, patrones: pat.data, presupuesto: presp.data,
@@ -1812,6 +1822,12 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       },
       nidito_compromiso,
       nidito_dinerito: nidito_dinerito_val,
+      negocios: {
+        proyectos:        negProys.data || [],
+        retiros_quincena: retiros_q,
+        aportes_quincena: aportes_q,
+        neto_personal:    retiros_q - aportes_q,
+      },
     }});
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -2402,6 +2418,298 @@ app.post('/api/send-whatsapp-invite', async (req, res) => {
     const msg = `Hola 👋 Desde *OnlyUs* 💑\n\nPara conectarte al asistente y gestionar tus finanzas, responde a este mensaje o envía:\n\n*join everywhere-shot*\n\nLuego puedes hablar naturalmente: "gasté 250 en comida", "recibí $8000 de sueldo", "agrega a wishlist un sillón", etc.`;
     await twl.messages.create({ from: WA_FROM, to: phone, body: msg });
     res.json({ success: true, message: 'Invitación enviada a WhatsApp' });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── NEGOCIOS Y PROYECTOS ─────────────────────────────────────────────────
+// Rutas específicas van ANTES que las paramétricas para evitar conflictos Express
+
+// ── neg_proyectos sub-recursos (deben preceder a /proyecto/:id) ──────────
+
+app.get('/api/negocios/proyecto/:id/resumen', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { desde, hasta, quincena } = req.query;
+    let txQuery = sb.from('neg_transacciones').select('*').eq('proyecto_id', id);
+    if (quincena) txQuery = txQuery.eq('quincena_key', quincena);
+    if (desde)    txQuery = txQuery.gte('fecha', desde);
+    if (hasta)    txQuery = txQuery.lte('fecha', hasta);
+    const { data: tx, error: txErr } = await txQuery;
+    if (txErr) throw txErr;
+    const sum = (arr) => arr.reduce((a, t) => a + Number(t.monto), 0);
+    const ingresos    = sum(tx.filter(t => t.tipo === 'INGRESO'));
+    const gastos      = sum(tx.filter(t => t.tipo === 'GASTO'));
+    const inversiones = sum(tx.filter(t => t.tipo === 'INVERSION'));
+    const utilidadBruta = ingresos - gastos;
+    const utilidadNeta  = utilidadBruta - inversiones;
+    const margenPct     = ingresos > 0 ? utilidadBruta / ingresos : 0;
+    const flujoPorQuincena = {};
+    for (const t of tx) {
+      const k = t.quincena_key || 'SIN_QUINCENA';
+      flujoPorQuincena[k] ??= { ingresos: 0, gastos: 0, inversiones: 0 };
+      flujoPorQuincena[k][t.tipo === 'INGRESO' ? 'ingresos' : t.tipo === 'GASTO' ? 'gastos' : 'inversiones'] += Number(t.monto);
+    }
+    const [{ data: deudores }, { data: acreedores }] = await Promise.all([
+      sb.from('neg_deudores').select('monto_original, monto_pagado, fecha_vencimiento, estado').eq('proyecto_id', id).neq('estado', 'PAGADO'),
+      sb.from('neg_acreedores').select('monto_original, monto_pagado').eq('proyecto_id', id).neq('estado', 'PAGADO'),
+    ]);
+    const saldoPend  = (r) => Number(r.monto_original) - Number(r.monto_pagado);
+    const porCobrar  = (deudores  || []).reduce((a, d) => a + saldoPend(d), 0);
+    const porPagar   = (acreedores|| []).reduce((a, a2) => a + saldoPend(a2), 0);
+    const hoyD = new Date();
+    const diasVenc = (f) => f ? Math.floor((hoyD - new Date(f + 'T12:00:00')) / 86400000) : -1;
+    const aging = { vigente: 0, v1_30: 0, v31_60: 0, v60_mas: 0 };
+    for (const d of (deudores || [])) {
+      const dias = diasVenc(d.fecha_vencimiento), saldo = saldoPend(d);
+      if (dias <= 0)       aging.vigente  += saldo;
+      else if (dias <= 30) aging.v1_30    += saldo;
+      else if (dias <= 60) aging.v31_60   += saldo;
+      else                 aging.v60_mas  += saldo;
+    }
+    return res.json({
+      financiero: { ingresos, gastos, inversiones, utilidad_bruta: utilidadBruta, utilidad_neta: utilidadNeta, margen_pct: Number(margenPct.toFixed(4)) },
+      flujo_por_quincena: flujoPorQuincena,
+      cartera: { por_cobrar_total: porCobrar, por_pagar_total: porPagar, posicion_neta: porCobrar - porPagar, aging_deudores: aging },
+    });
+  } catch (err) {
+    console.error('Error en resumen de negocio', err);
+    return res.status(500).json({ error: 'No se pudo calcular el resumen' });
+  }
+});
+
+app.get('/api/negocios/proyecto/:id/transacciones', async (req, res) => {
+  try {
+    const { quincena, tipo } = req.query;
+    let q = sb.from('neg_transacciones').select('*').eq('proyecto_id', req.params.id).order('fecha', { ascending: false });
+    if (quincena) q = q.eq('quincena_key', quincena);
+    if (tipo)     q = q.eq('tipo', tipo);
+    const { data, error } = await q;
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/transacciones', async (req, res) => {
+  try {
+    const { fecha, ...rest } = req.body;
+    if (!fecha) return res.status(400).json({ success: false, error: 'Falta fecha' });
+    const quincena_key = getQuincena(fecha).key;
+    const { data, error } = await sb.from('neg_transacciones')
+      .insert({ ...rest, proyecto_id: req.params.id, fecha, quincena_key })
+      .select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/proyecto/:id/deudores', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_deudores').select('*').eq('proyecto_id', req.params.id).order('fecha_vencimiento');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/deudores', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_deudores').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/proyecto/:id/acreedores', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_acreedores').select('*').eq('proyecto_id', req.params.id).order('fecha_vencimiento');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/acreedores', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_acreedores').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/proyecto/:id/inversiones', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_inversiones').select('*').eq('proyecto_id', req.params.id).order('prioridad').order('fecha_objetivo');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/inversiones', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_inversiones').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/proyecto/:id/bloques', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_bloques').select('*').eq('proyecto_id', req.params.id).order('orden');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/bloques', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_bloques').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_proyectos item ────────────────────────────────────────────────────
+
+app.get('/api/negocios/proyecto/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_proyectos').select('*').eq('id', req.params.id).is('deleted_at', null).single();
+    if (error) return res.status(404).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/negocios/proyecto/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_proyectos')
+      .update({ ...req.body, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/proyecto/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_proyectos')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_transacciones item ────────────────────────────────────────────────
+
+app.put('/api/negocios/transaccion/:id', async (req, res) => {
+  try {
+    const { fecha, ...rest } = req.body;
+    const upd = { ...rest };
+    if (fecha) { upd.fecha = fecha; upd.quincena_key = getQuincena(fecha).key; }
+    const { data, error } = await sb.from('neg_transacciones').update(upd).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/transaccion/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_transacciones').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_deudores item ─────────────────────────────────────────────────────
+
+app.put('/api/negocios/deudor/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_deudores').update(req.body).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/deudor/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_deudores').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_acreedores item ───────────────────────────────────────────────────
+
+app.put('/api/negocios/acreedor/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_acreedores').update(req.body).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/acreedor/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_acreedores').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_inversiones item ──────────────────────────────────────────────────
+
+app.put('/api/negocios/inversion/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_inversiones').update(req.body).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/inversion/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_inversiones').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_bloques item ──────────────────────────────────────────────────────
+
+app.put('/api/negocios/bloque/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_bloques')
+      .update({ ...req.body, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/bloque/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_bloques').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_proyectos colección (/:phone al final para no tragarse literales) ─
+
+app.post('/api/negocios', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+    const { data, error } = await sb.from('neg_proyectos').insert({ ...d, user_phone }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/:phone', async (req, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const { estado } = req.query;
+    let q = sb.from('neg_proyectos').select('*').eq('user_phone', phone).is('deleted_at', null).order('orden');
+    if (estado) q = q.eq('estado', estado);
+    const { data, error } = await q;
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
