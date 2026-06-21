@@ -4386,13 +4386,22 @@ function oDespensa() {
 }
 
 async function toggleCompraQ(id, val) {
+  // Actualizar estado local primero para UX fluida
+  const item = (S.data.despensa || []).find(x => x.id === id);
+  if (item) item.compra_quincena = val;
+  rDespensa();
+  rDash();
   try {
     await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, compra_quincena: val });
-    const item = (S.data.despensa || []).find(x => x.id === id);
-    if (item) item.compra_quincena = val;
-    rDespensa();
-    rDash();
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  } catch(e) {
+    if (/compra_quincena/i.test(e.message || '')) {
+      toast('Ejecuta migration_v9.sql en Supabase para persistir este cambio', 'error');
+    } else {
+      if (item) item.compra_quincena = !val;
+      rDespensa();
+      toast('Error: ' + e.message, 'error');
+    }
+  }
 }
 
 async function toggleComprado(id, comprado) {
