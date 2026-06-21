@@ -3379,13 +3379,13 @@ function movRow(m) {
   const dot=m.revisado?'':`<button class="dot-btn" title="Marcar revisado" onclick="markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
   return `<tr id="mrow-${m.id}">
   <td style="padding:0;width:36px;text-align:center">${dot}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'concepto')" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
+  <td class="editable monto-sel" onclick="ieMov(this,${m.id},'monto')" data-v="${m.monto||0}" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'fecha')" style="white-space:nowrap;color:var(--text-1);font-weight:600">${fmtDate(m.fecha)}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'tipo')" style="cursor:pointer"><span class="tipo-bdg" style="background:${tBg};color:${tClr}">${m.tipo==='GASTO'?'Gasto':'Ingreso'}</span></td>
   <td id="catcell-${m.id}" onclick="openCatPicker(${m.id})" style="cursor:pointer"><span class="cat-bdg" style="background:${cClr}20;color:${cClr}">${m.categoria||'—'}</span></td>
-  <td class="editable" onclick="ieMov(this,${m.id},'concepto')" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.concepto||'<em style="color:var(--muted);font-style:normal">—</em>'}</td>
-  <td class="editable monto-sel" onclick="ieMov(this,${m.id},'monto')" data-v="${m.monto||0}" style="text-align:right;font-weight:600;color:${tClr}">${fmt(m.monto)}</td>
-  <td class="editable" onclick="ieMov(this,${m.id},'medio_pago')" style="color:var(--muted)">${m.medio_pago||'—'}</td>
   <td class="editable" onclick="ieMov(this,${m.id},'comentarios')" style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.comentarios||'<em style="color:var(--text-3);font-style:normal">—</em>'}</td>
+  <td class="editable" onclick="ieMov(this,${m.id},'medio_pago')" style="color:var(--muted)">${m.medio_pago||'—'}</td>
   <td class="acts">
     <button class="btn btn-ghost" style="padding:6px 10px" title="Editar" onclick="eMov(S._movData[${m.id}])"><i class="ti ti-pencil"></i></button>
     <button class="btn btn-dup" style="padding:6px 10px" title="Duplicar" onclick="duplicarMov(${m.id})"><i class="ti ti-copy"></i></button>
@@ -3628,13 +3628,13 @@ function _updateMovsTable(filtered) {
   const _movTable = mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
     columns:[
       {key:'_dot',label:'',sortable:false,width:'36px'},
+      {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||'',width:'180px'},
+      {key:'monto',label:'Monto',num:true,align:'right',value:m=>m.monto||0,width:'88px'},
       {key:'fecha',label:'Fecha',filter:'text',value:m=>fd(m.fecha),width:'102px'},
       {key:'tipo',label:'Tipo',filter:'select',value:m=>m.tipo==='GASTO'?'Gasto':'Ingreso',width:'72px'},
       {key:'categoria',label:'Categoría',filter:'select',value:m=>m.categoria||'—',width:'110px'},
-      {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||'',width:'160px'},
-      {key:'monto',label:'Monto',num:true,align:'right',value:m=>m.monto||0,width:'88px'},
+      {key:'comentarios',label:'Comentarios',filter:'text',value:m=>m.comentarios||'',width:'140px'},
       {key:'medio_pago',label:'Medio',filter:'select',value:m=>m.medio_pago||'—',width:'92px'},
-      {key:'comentarios',label:'Comentarios',filter:'text',value:m=>m.comentarios||'',width:'122px'},
       {key:'_acts',label:'',sortable:false,width:'98px'}],
     rows, numbered:true, renderRow:movRow, footer
   });
