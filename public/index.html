@@ -741,7 +741,10 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 .nd-din-field-row{padding-bottom:14px}
 .nd-din-field-lbl{font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px;display:flex;align-items:center;gap:5px;text-transform:uppercase;letter-spacing:.05em}
 .nd-sec-hdr{display:flex;align-items:center;justify-content:space-between;margin:24px 0 12px;flex-wrap:wrap;gap:8px}
-.nd-sec-hdr h3{font-family:'Space Grotesk',system-ui,sans-serif;font-size:var(--text-xl);font-weight:400;color:var(--text-1);display:flex;align-items:center;gap:8px}
+.nd-sec-hdr h3{font-family:'Space Grotesk',system-ui,sans-serif;font-size:var(--text-xl);font-weight:400;color:var(--text-1);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.nd-sec-hdr h3:hover{opacity:.8}
+.nd-din-ttl{cursor:pointer;user-select:none}
+.nd-din-ttl:hover{opacity:.8}
 .nd-sec-hdr h3 .ti{color:var(--accent-primary);font-size:20px}
 /* Accordion */
 .nd-acc-item{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:8px;transition:border-color .15s}
@@ -1720,35 +1723,58 @@ function _setChev(el, collapsed) {
   const chev = el.querySelector('.sec-chev');
   if (chev) chev.className = 'sec-chev ti ti-chevron-' + (collapsed ? 'right' : 'up');
 }
+function _applyNdSecCollapse(ndSecHdr, collapsed) {
+  let el = ndSecHdr.nextElementSibling;
+  while (el && !el.classList.contains('nd-sec-hdr')) {
+    el.style.display = collapsed ? 'none' : '';
+    el = el.nextElementSibling;
+  }
+}
+function _applyNdDinCollapse(card, ttl, collapsed) {
+  Array.from(card.children).forEach(child => {
+    if (child !== ttl) child.style.display = collapsed ? 'none' : '';
+  });
+}
+
 function _initCollapsibles() {
   if (!S._secCollapsed) S._secCollapsed = {};
-  // Secciones (.sec-hdr h2)
+
+  // Secciones globales (.sec-hdr h2)
   document.querySelectorAll('.sec-hdr-row h2').forEach(h2 => {
     if (!h2.querySelector('.sec-chev')) {
-      const i = document.createElement('i');
-      i.className = 'sec-chev ti ti-chevron-up';
-      h2.appendChild(i);
+      const i = document.createElement('i'); i.className = 'sec-chev ti ti-chevron-up'; h2.appendChild(i);
     }
     const key = _secKey('S', h2);
-    if (S._secCollapsed[key]) {
-      _applySectionCollapse(h2.closest('.sec-hdr'), true);
-      _setChev(h2, true);
-    }
+    if (S._secCollapsed[key]) { _applySectionCollapse(h2.closest('.sec-hdr'), true); _setChev(h2, true); }
   });
-  // Widgets (.cbox > h3/h4)
+
+  // Widgets globales (.cbox > h3/h4)
   document.querySelectorAll('.cbox').forEach(cbox => {
     const h = cbox.querySelector(':scope>h3,:scope>h4');
     if (!h) return;
     if (!h.querySelector('.sec-chev')) {
-      const i = document.createElement('i');
-      i.className = 'sec-chev ti ti-chevron-up';
-      h.appendChild(i);
+      const i = document.createElement('i'); i.className = 'sec-chev ti ti-chevron-up'; h.appendChild(i);
     }
     const key = _secKey('C', h);
-    if (S._secCollapsed[key]) {
-      _applyCboxCollapse(cbox, h, true);
-      _setChev(h, true);
+    if (S._secCollapsed[key]) { _applyCboxCollapse(cbox, h, true); _setChev(h, true); }
+  });
+
+  // Nidito — secciones (.nd-sec-hdr h3)
+  document.querySelectorAll('.nd-sec-hdr h3').forEach(h3 => {
+    if (!h3.querySelector('.sec-chev')) {
+      const i = document.createElement('i'); i.className = 'sec-chev ti ti-chevron-up'; h3.appendChild(i);
     }
+    const key = _secKey('NS', h3);
+    if (S._secCollapsed[key]) { _applyNdSecCollapse(h3.closest('.nd-sec-hdr'), true); _setChev(h3, true); }
+  });
+
+  // Nidito — widget Dinerito (.nd-din-card .nd-din-ttl)
+  document.querySelectorAll('.nd-din-card .nd-din-ttl').forEach(ttl => {
+    if (!ttl.querySelector('.sec-chev')) {
+      const i = document.createElement('i'); i.className = 'sec-chev ti ti-chevron-up'; ttl.appendChild(i);
+    }
+    const key = _secKey('ND', ttl);
+    if (S._secCollapsed[key]) { _applyNdDinCollapse(ttl.closest('.nd-din-card'), ttl, true); _setChev(ttl, true); }
   });
 }
 
@@ -1777,6 +1803,28 @@ document.addEventListener('click', function(e) {
     S._secCollapsed[key] = !S._secCollapsed[key];
     _applyCboxCollapse(cbox, h, S._secCollapsed[key]);
     _setChev(h, S._secCollapsed[key]);
+    return;
+  }
+
+  // Nidito — .nd-sec-hdr h3
+  const ndH3 = e.target.closest('.nd-sec-hdr h3');
+  if (ndH3) {
+    const ndSec = ndH3.closest('.nd-sec-hdr');
+    const key = _secKey('NS', ndH3);
+    S._secCollapsed[key] = !S._secCollapsed[key];
+    _applyNdSecCollapse(ndSec, S._secCollapsed[key]);
+    _setChev(ndH3, S._secCollapsed[key]);
+    return;
+  }
+
+  // Nidito — .nd-din-card .nd-din-ttl
+  const ndTtl = e.target.closest('.nd-din-card .nd-din-ttl');
+  if (ndTtl) {
+    const card = ndTtl.closest('.nd-din-card');
+    const key = _secKey('ND', ndTtl);
+    S._secCollapsed[key] = !S._secCollapsed[key];
+    _applyNdDinCollapse(card, ndTtl, S._secCollapsed[key]);
+    _setChev(ndTtl, S._secCollapsed[key]);
   }
 }, true);
 
