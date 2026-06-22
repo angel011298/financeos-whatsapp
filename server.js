@@ -1787,7 +1787,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
     const qActual = getQuincenaActual().key;
-    const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin, negProys, negReflejos] = await Promise.all([
+    const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin, negProys] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
       sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).limit(500),
       sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
@@ -1803,12 +1803,14 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('neg_proyectos')
         .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden')
         .eq('user_phone', phone).is('deleted_at', null).order('orden'),
-      sb.from('neg_transacciones')
-        .select('tipo, monto, reflejo_personal')
-        .eq('reflejo_user_phone', phone).eq('quincena_key', qActual),
     ]);
     const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
     const nidito_dinerito_val = nidDin.data?.monto || 0;
+    const negProjIds = (negProys.data || []).map(p => p.id);
+    const negReflejos = negProjIds.length
+      ? await sb.from('neg_transacciones').select('tipo, monto, reflejo_personal')
+          .in('proyecto_id', negProjIds).eq('quincena_key', qActual)
+      : { data: [] };
     const negTxQ    = negReflejos.data || [];
     const retiros_q = negTxQ.filter(t => t.reflejo_personal === 'RETIRO').reduce((a, t) => a + Number(t.monto), 0);
     const aportes_q = negTxQ.filter(t => t.reflejo_personal === 'APORTE').reduce((a, t) => a + Number(t.monto), 0);
@@ -2596,7 +2598,7 @@ app.get('/api/negocios/proyecto/:id/transacciones', async (req, res) => {
 
 app.post('/api/negocios/proyecto/:id/transacciones', async (req, res) => {
   try {
-    const { fecha, ...rest } = req.body;
+    const { fecha, user_phone: _up, ...rest } = req.body;
     if (!fecha) return res.status(400).json({ success: false, error: 'Falta fecha' });
     const quincena_key = getQuincena(fecha).key;
     const { data, error } = await sb.from('neg_transacciones')
