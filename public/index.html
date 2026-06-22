@@ -617,6 +617,16 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .tbl-search .ti{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:14px;pointer-events:none}
 .tbl-count{font-size:var(--text-xs);color:var(--text-3);white-space:nowrap;margin-left:auto;font-family:'Space Grotesk',system-ui,sans-serif}
 .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl-tc{display:flex;align-items:center;gap:2px;flex-shrink:0;margin-left:4px}
+.tbl-tc-btn{background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:4px;cursor:pointer;color:var(--text-2);font-size:11px;padding:3px 7px;line-height:1;transition:color .12s,background .12s;font-family:inherit;white-space:nowrap}
+.tbl-tc-btn:hover{color:var(--text-1);background:var(--bg-surface-3)}
+.tbl-fs-val{font-size:10px;color:var(--text-3);min-width:28px;text-align:center;font-family:'Space Grotesk',system-ui,sans-serif}
+.tbl-rh-c td,.tbl-rh-c th{padding-top:2px!important;padding-bottom:2px!important}
+.tbl-rh-s td,.tbl-rh-s th{padding-top:16px!important;padding-bottom:16px!important}
+.tbl-box th{position:relative}
+.col-rz{position:absolute;right:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:2;border-radius:2px}
+.col-rz:hover{background:var(--accent-primary);opacity:.4}
+.col-rz-active{background:var(--accent-primary)!important;opacity:.5!important}
 th.th-sort{cursor:pointer;user-select:none;white-space:nowrap;transition:color .12s ease-out}
 th.th-sort:hover{color:var(--text-1)}
 th.th-sort.th-active{color:var(--text-1)}
@@ -1463,17 +1473,27 @@ function _tblState(id) {
   return S._tblState[id];
 }
 function _tblVal(c, r) { const v = c.value ? c.value(r) : r[c.key]; return v==null ? '' : v; }
+function _tblMeta(id) {
+  if (!S._tblMeta) S._tblMeta = {};
+  if (!S._tblMeta[id]) S._tblMeta[id] = { fs: 0, rh: 0, cols: {} };
+  return S._tblMeta[id];
+}
 
 function _tblHeadCells(cfg) {
   const st = _tblState(cfg.id);
+  const meta = _tblMeta(cfg.id);
+  const numOffset = cfg.numbered ? 1 : 0;
   const numTh = cfg.numbered ? '<th class="row-num">#</th>' : '';
-  return numTh + cfg.columns.map(c => {
+  return numTh + cfg.columns.map((c, idx) => {
+    const thIdx = idx + numOffset;
     const align = c.align ? `text-align:${c.align};` : '';
-    const width = c.width ? `width:${c.width};` : '';
-    if (c.sortable === false) return `<th style="${align}${width}">${c.label||''}</th>`;
+    const wStored = meta.cols && meta.cols[thIdx] != null ? meta.cols[thIdx] : null;
+    const width = wStored ? `width:${wStored}px;min-width:${wStored}px;` : c.width ? `width:${c.width};` : '';
+    const rz = `<span class="col-rz" onmousedown="event.stopPropagation();_colRzStart(event,'${cfg.id}',${thIdx})"></span>`;
+    if (c.sortable === false) return `<th style="${align}${width}">${c.label||''}${rz}</th>`;
     const active = st.sort && st.sort.key === c.key;
     const arrow  = active ? (st.sort.dir==='asc'?'▲':'▼') : '<span style="opacity:.3">↕</span>';
-    return `<th class="th-sort${active?' th-active':''}" style="${align}${width}" onclick="toggleTblSort('${cfg.id}','${c.key}')">${c.label||''}<span class="sort-arrow">${arrow}</span></th>`;
+    return `<th class="th-sort${active?' th-active':''}" style="${align}${width}" onclick="toggleTblSort('${cfg.id}','${c.key}')">${c.label||''}<span class="sort-arrow">${arrow}</span>${rz}</th>`;
   }).join('');
 }
 function _tblFilterCells(cfg) {
@@ -1531,15 +1551,24 @@ function _tblBody(cfg) {
 function mkTable(cfg) {
   S._tables[cfg.id] = cfg;
   const st   = _tblState(cfg.id);
+  const meta = _tblMeta(cfg.id);
   const rows = _tblFilteredSorted(cfg);
   const n    = rows.length;
+  const fsAct = 13 + (meta.fs || 0);
+  const rhCls = meta.rh === 1 ? ' tbl-rh-c' : meta.rh === 2 ? ' tbl-rh-s' : '';
   return `<div class="tbl-box" id="${cfg.id}-box">
     <div class="tbl-toolbar">
       <button class="tbl-filter-toggle${st.showFilters?' on':''}" onclick="toggleTblFilters('${cfg.id}')" title="Filtrar por columna"><i class="ti ti-filter"></i> Filtros</button>
       <div class="tbl-search"><i class="ti ti-search"></i><input placeholder="Buscar en la tabla..." value="${(st.search||'').replace(/"/g,'&quot;')}" oninput="setTblSearch('${cfg.id}',this.value)"></div>
       <span class="tbl-count" id="${cfg.id}-count">${n} fila${n!==1?'s':''}</span>
+      <div class="tbl-tc">
+        <button class="tbl-tc-btn" onclick="tblFontAdj('${cfg.id}',-1)" title="Texto más pequeño">A−</button>
+        <span class="tbl-fs-val" id="${cfg.id}-fsv">${fsAct}px</span>
+        <button class="tbl-tc-btn" onclick="tblFontAdj('${cfg.id}',1)" title="Texto más grande">A+</button>
+        <button class="tbl-tc-btn" onclick="tblRowAdj('${cfg.id}')" title="Altura de filas: Normal / Compact / Spacious"><i class="ti ti-layout-rows"></i></button>
+      </div>
     </div>
-    <div class="tbl-scroll"><table style="margin-bottom:0">
+    <div class="tbl-scroll${rhCls}"><table style="margin-bottom:0;font-size:${fsAct}px">
       <thead>
         <tr id="${cfg.id}-head">${_tblHeadCells(cfg)}</tr>
         <tr class="tbl-filters${st.showFilters?' show':''}" id="${cfg.id}-filters">${_tblFilterCells(cfg)}</tr>
@@ -1574,6 +1603,43 @@ function toggleTblFilters(id) {
   const st = _tblState(id); st.showFilters = !st.showFilters;
   const fr  = $(id+'-filters'); if (fr) fr.classList.toggle('show', st.showFilters);
   const btn = document.querySelector(`#${id}-box .tbl-filter-toggle`); if (btn) btn.classList.toggle('on', st.showFilters);
+}
+function _tblApplyMeta(id) {
+  const meta = _tblMeta(id);
+  const box = $(id + '-box'); if (!box) return;
+  const tbl = box.querySelector('.tbl-scroll table');
+  if (tbl) tbl.style.fontSize = (13 + (meta.fs || 0)) + 'px';
+  const scroll = box.querySelector('.tbl-scroll');
+  if (scroll) { scroll.classList.remove('tbl-rh-c','tbl-rh-s'); if (meta.rh===1) scroll.classList.add('tbl-rh-c'); else if (meta.rh===2) scroll.classList.add('tbl-rh-s'); }
+  const fsVal = $(id + '-fsv'); if (fsVal) fsVal.textContent = (13 + (meta.fs || 0)) + 'px';
+}
+function tblFontAdj(id, delta) {
+  const meta = _tblMeta(id);
+  meta.fs = Math.max(-3, Math.min(7, (meta.fs || 0) + delta));
+  _tblApplyMeta(id);
+}
+function tblRowAdj(id) {
+  const meta = _tblMeta(id);
+  meta.rh = ((meta.rh || 0) + 1) % 3;
+  _tblApplyMeta(id);
+}
+let _colRz = null;
+function _colRzStart(e, id, colidx) {
+  e.preventDefault();
+  const th = e.target.closest('th'); if (!th) return;
+  e.target.classList.add('col-rz-active');
+  const startX = e.clientX, startW = th.offsetWidth, handle = e.target;
+  _colRz = { id, colidx, th, startX, startW, handle };
+  function onMove(ev) {
+    if (!_colRz) return;
+    const w = Math.max(30, _colRz.startW + ev.clientX - _colRz.startX);
+    _colRz.th.style.width = w + 'px'; _colRz.th.style.minWidth = w + 'px';
+  }
+  function onUp() {
+    if (_colRz) { _tblMeta(_colRz.id).cols[_colRz.colidx] = _colRz.th.offsetWidth; _colRz.handle.classList.remove('col-rz-active'); _colRz = null; }
+    document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
 }
 
 // ── HELPERS DE DATOS ─────────────────────────────────────────────────────────
@@ -1877,7 +1943,7 @@ function _initCollapsibles() {
 // Delegación de eventos — cubre pestañas renderizadas dinámicamente
 document.addEventListener('click', function(e) {
   // No disparar si el clic fue en un botón, link, input u otro interactivo
-  if (e.target.closest('button,a,select,input,label,.btn,.tbl-filter-toggle,.sort-arrow,.edit-pill-btn,.dot-btn')) return;
+  if (e.target.closest('button,a,select,input,label,.btn,.tbl-filter-toggle,.sort-arrow,.edit-pill-btn,.dot-btn,.col-rz')) return;
 
   // Clic en h2 dentro de .sec-hdr-row
   const h2 = e.target.closest('.sec-hdr-row h2');
@@ -2823,6 +2889,7 @@ ${['META_CORTO','META_MEDIANO','META_LARGO'].map(tipo=>{
     const h=$('ndh-'+id),b=$('ndb-'+id),w=$('nditem-'+id);
     if(h){h.classList.add('nd-open');b?.classList.add('nd-open');w?.classList.add('nd-open');}
   });
+  setTimeout(_initCollapsibles, 80);
 }
 
 function _ndAcc(item, angelPh, aliciaPh) {
