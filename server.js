@@ -3249,6 +3249,9 @@ app.post('/api/chat-web', async (req, res) => {
     const user  = { ...(await getOrCreateUser(phone)), ai_preference: 'GEMINI' };
     checkAndSendReminders(phone).catch(() => {});   // no-bloqueante: no retrasa la respuesta del chat
 
+    // Guardar mensaje del usuario SIEMPRE (para sincronización cross-device)
+    await guardarMensaje(phone, 'user', text);
+
     let reply = '';
     if (['resumen','summary','balance'].includes(lower))         reply = await cmdResumen(phone);
     else if (['deudas','tdc'].includes(lower))                   reply = await cmdDeudas(phone);
@@ -3257,7 +3260,6 @@ app.post('/api/chat-web', async (req, res) => {
     else {
       const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
 
-      await guardarMensaje(phone, 'user', input);
       const { intent, items } = await withTimeout(
         extractIntentBatch(input, phone),
         12000,
@@ -3283,10 +3285,10 @@ app.post('/api/chat-web', async (req, res) => {
           '⚠️ Gemini tardó demasiado en responder. Intenta de nuevo, o escribe "gasté [monto] en [concepto]" para registrar directo.'
         );   // direct=true → registros sin menú
       }
-
-      await guardarMensaje(phone, 'assistant', reply);
     }
 
+    // Guardar respuesta del bot SIEMPRE (para sincronización cross-device)
+    await guardarMensaje(phone, 'assistant', reply);
     res.json({ reply, transcription: isAudio ? text : undefined });
   } catch (e) {
     const detail = `${e.message || e} | status=${e.status} | code=${e.code}`;
@@ -3299,6 +3301,20 @@ app.post('/api/chat-web', async (req, res) => {
     }
     res.status(500).json({ error: detail.slice(0, 200) });
   }
+});
+
+// ── HISTORIAL DE CHAT (para sincronización cross-device) ─────────────────────
+app.get('/api/chat-history/:phone', async (req, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const { data, error } = await sb.from('historial_chat')
+      .select('role, content, created_at')
+      .eq('user_phone', phone)
+      .order('created_at', { ascending: true })
+      .limit(60);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // ── INSIGHTS IA — consejos financieros personalizados (Dashboard) ─────────────

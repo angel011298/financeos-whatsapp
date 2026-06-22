@@ -5642,7 +5642,35 @@ function rChat() {
 
 function _chatKey() { return 'fos_chat_' + S.phone; }
 
-function _loadChatHistory() {
+async function _loadChatHistory() {
+  // Cargar desde servidor primero (sincronización cross-device)
+  try {
+    const r = await api('GET', `/api/chat-history/${encodeURIComponent(S.phone)}`);
+    if (r.success && r.data && r.data.length) {
+      const msgs = $('chat-msgs');
+      const spacer = $('chat-spacer');
+      if (msgs) { msgs.innerHTML = ''; if (spacer) msgs.appendChild(spacer); }
+      r.data.forEach(m => {
+        const role = m.role === 'user' ? 'user' : 'bot';
+        const ts = m.created_at
+          ? new Date(m.created_at).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' })
+          : null;
+        _appendMsg(role, m.content, ts, false);
+      });
+      // Actualizar caché localStorage
+      localStorage.setItem(_chatKey(), JSON.stringify(
+        r.data.map(m => ({
+          r: m.role === 'user' ? 'user' : 'bot',
+          t: m.content,
+          ts: m.created_at ? new Date(m.created_at).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' }) : null
+        }))
+      ));
+      _scrollChat();
+      return;
+    }
+  } catch(_) {}
+
+  // Fallback: localStorage (sin conexión o historial vacío en servidor)
   const saved = localStorage.getItem(_chatKey());
   if (saved) {
     try { JSON.parse(saved).slice(-60).forEach(m => _appendMsg(m.r, m.t, m.ts, false)); }
@@ -5652,6 +5680,7 @@ function _loadChatHistory() {
       'Hola 👋 Soy tu asistente OnlyUs.\n\nPuedes decirme:\n• "Gasté 350 en comida"\n• "Recibí $10,000 de sueldo"\n• "¿Cuánto debo en total?"\n• "Agrega viaje a Europa al nidito"\n\nO graba un audio con el micrófono 🎤',
       null, false);
   }
+  _scrollChat();
 }
 
 function _appendMsg(role, text, ts = null, save = true) {
