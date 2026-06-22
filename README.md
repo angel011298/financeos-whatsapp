@@ -8,8 +8,101 @@ App de finanzas personales integrada con WhatsApp, con soporte para múltiples u
 - **`public/index.html`** — PWA frontend (single-file, vanilla JS)
 - **`tests/integration.test.js`** — Suite de integración (node:test)
 - **`migration_v8.sql`** — Schema para Nidito v8
+- **`migration_v10.sql`** — Schema para Negocios y Proyectos
 
-## Pestaña Nidito — Metas y Presupuesto Compartido
+## Pestaña Negocios y Proyectos
+
+### Descripción
+Pestaña para gestionar proyectos empresariales/negocios con tracking de:
+- **Transacciones** — Ingresos/gastos por proyecto
+- **Deudores** — Clientes que deben (con pago parcial)
+- **Acreedores** — Proveedores a los que debe (con pago parcial)
+- **Inversiones** — Capital invertido con seguimiento de rendimiento
+- **Bloques (Canvas)** — Notas, listas, tablas, recordatorios y gráficas personalizadas
+- **Gráficas** — Flujo de caja, distribución por categoría, aging de cartera
+
+**Reflejo en Dashboard:**
+- Cada transacción con `reflejo_personal='RETIRO'` suma como ingreso del usuario
+- Cada transacción con `reflejo_personal='APORTE'` suma como gasto del usuario
+- El neto personal (retiros - aportes) aparece en la pestaña y en un card del Dashboard
+
+### Endpoints REST
+
+#### Proyectos
+- **POST /api/negocios** — Crear proyecto (req: `phone`, `nombre`, `tipo`, `estado`, `fecha_inicio`, `fecha_vencimiento`, `monto_meta`, `capital_inicial`)
+- **GET /api/negocios/:phone** — Listar proyectos del usuario
+- **GET /api/negocios/proyecto/:id/resumen** — KPIs (ingresos, gastos, saldo neto, por cobrar, por pagar, inversiones totales)
+- **PUT /api/negocios/proyecto/:id** — Actualizar proyecto
+- **DELETE /api/negocios/proyecto/:id** — Eliminar proyecto y sus datos relacionados
+
+#### Transacciones
+- **POST /api/negocios/proyecto/:id/transacciones** — Registrar transacción (auto-calcula `quincena_key`)
+- **GET /api/negocios/proyecto/:id/transacciones** — Listar transacciones
+- **PUT /api/negocios/transaccion/:id** — Actualizar
+- **DELETE /api/negocios/transaccion/:id** — Eliminar
+
+#### Deudores (Por Cobrar)
+- **POST /api/negocios/proyecto/:id/deudores** — Agregar cliente/deuda (req: `nombre`, `monto_original`, `concepto`, `fecha_vencimiento`)
+- **GET /api/negocios/proyecto/:id/deudores** — Listar deudores
+- **POST /api/negocios/deudor/:id/pago** — Registrar cobro parcial (req: `monto`) → recalcula `estado` automáticamente
+- **PUT /api/negocios/deudor/:id** — Actualizar deudor
+- **DELETE /api/negocios/deudor/:id** — Eliminar
+
+#### Acreedores (Por Pagar)
+- **POST /api/negocios/proyecto/:id/acreedores** — Agregar proveedor/deuda (req: `nombre`, `monto_original`, `concepto`, `fecha_vencimiento`)
+- **GET /api/negocios/proyecto/:id/acreedores** — Listar acreedores
+- **POST /api/negocios/acreedor/:id/pago** — Registrar pago parcial (req: `monto`) → recalcula `estado` automáticamente
+- **PUT /api/negocios/acreedor/:id** — Actualizar acreedor
+- **DELETE /api/negocios/acreedor/:id** — Eliminar
+
+#### Inversiones
+- **POST /api/negocios/proyecto/:id/inversiones** — Crear inversión (req: `nombre`, `monto_invertido`, `tipo_inversion`, `estado`)
+- **GET /api/negocios/proyecto/:id/inversiones** — Listar inversiones
+- **PUT /api/negocios/inversion/:id** — Actualizar
+- **DELETE /api/negocios/inversion/:id** — Eliminar
+
+#### Canvas (Bloques)
+- **POST /api/negocios/proyecto/:id/bloques** — Crear bloque (req: `tipo` ∈ NOTA|LISTA|TABLA|RECORDATORIO|GRAFICA, `titulo`, `contenido`)
+  - NOTA: contenido es string (soporta links)
+  - LISTA: contenido es `[{texto, marcado}]`
+  - TABLA: contenido es `{columns: [...], rows: [[...], [...]]}`
+  - RECORDATORIO: contenido es `{texto, fecha}`
+  - GRAFICA: contenido es `{fuente: flujo|categorias|cartera, tipo: bar|line|doughnut}`
+- **GET /api/negocios/proyecto/:id/bloques** — Listar bloques ordenados por `orden`
+- **PUT /api/negocios/bloque/:id** — Actualizar (soporta shape-validation de contenido por tipo)
+- **DELETE /api/negocios/bloque/:id** — Eliminar
+
+#### Gráficas
+- **GET /api/negocios/proyecto/:id/grafica?fuente=flujo|categorias|cartera** — Obtener datos para Chart.js
+  - `flujo` — Ingresos vs gastos por quincena (barras)
+  - `categorias` — Suma de gastos por categoría (dona)
+  - `cartera` — Por cobrar vs por pagar (barras)
+
+#### Dashboard
+- **GET /api/dashboard/:phone** — Incluye campos:
+  - `negocios.proyectos` — Array de proyectos
+  - `negocios.retiros_quincena` — Suma de ingresos con `reflejo_personal=RETIRO` esta quincena
+  - `negocios.aportes_quincena` — Suma de egresos con `reflejo_personal=APORTE` esta quincena
+  - `negocios.neto_personal` — `retiros_quincena - aportes_quincena`
+  - `negocios.eventos` — Array de 90-day eventos (VENCIMIENTO_COBRO, VENCIMIENTO_PAGO, INVERSION_OBJETIVO, RECORDATORIO)
+
+### Estados de Pago
+- **PENDIENTE** — Monto pagado = 0
+- **PARCIAL** — 0 < Monto pagado < Monto original
+- **PAGADO** — Monto pagado = Monto original
+
+Se recalculan automáticamente en PUT (deudor/acreedor) y POST (pago).
+
+### Aging de Cartera
+Basado en `fecha_vencimiento`:
+- **Vigente** — Vencimiento en el futuro
+- **v1_30** — Vencido hace 1-30 días
+- **v31_60** — Vencido hace 31-60 días
+- **v60_mas** — Vencido hace 60+ días
+
+Se expone en el endpoint `/api/negocios/proyecto/:id/resumen`.
+
+### Pestaña Nidito — Metas y Presupuesto Compartido
 
 ### Descripción
 Pestaña para gestionar metas/proyectos conjuntos (parejas) con asignaciones quinzenales y presupuesto compartido.
@@ -68,7 +161,7 @@ Flow firmado (Supabase Storage):
 
 Todas las tablas de Nidito v8 tienen RLS con política `FOR ALL USING (true)` — service role accede sin restricción; el control de acceso es responsabilidad de la app.
 
-## Migración v8
+## Migración v8 (Nidito)
 
 Archivo: **`migration_v8.sql`**
 
@@ -89,6 +182,45 @@ Storage:
 4. Verificar en Tables: `nidito_items`, `nidito_asignaciones`, `nidito_comentarios`, `nidito_dinerito` creadas
 5. Verificar en Storage → Buckets: `nidito-adjuntos` creado
 6. Deploy app (incluye los nuevos endpoints y frontend)
+
+## Migración v10 (Negocios y Proyectos)
+
+Archivo: **`migration_v10.sql`**
+
+Tablas (6 tablas, todas con RLS `FOR ALL USING (true)`, control en app):
+- **neg_proyectos** — Proyectos empresariales (uuid, user_phone FK, nombre, tipo ∈ NEGOCIO|EMPRENDIMIENTO|PROYECTO|INVERSION|FREELANCE, estado ∈ ACTIVO|PAUSADO|CERRADO, fechas, monto_meta, capital_inicial)
+- **neg_transacciones** — Transacciones (ingresos/gastos, auto-calcula `quincena_key`, soporta `reflejo_personal` ∈ RETIRO|APORTE)
+- **neg_deudores** — Clientes/deudas por cobrar (estado auto-recalculado: PENDIENTE|PARCIAL|PAGADO)
+- **neg_acreedores** — Proveedores/deudas por pagar (mismo sistema de estados)
+- **neg_inversiones** — Capital invertido con rendimiento esperado
+- **neg_bloques** — Canvas: notas, listas, tablas, recordatorios, gráficas (contenido JSONB validado por tipo)
+
+### Cómo aplicar en producción
+
+1. **Supabase Dashboard** → SQL Editor
+2. Copy-paste contenido de `migration_v10.sql`
+3. **Run** (botón verde)
+4. Verificar en Tables: 6 tablas `neg_*` creadas con RLS
+5. Deploy app con endpoints `/api/negocios/*`
+
+### Notas de Implementación
+
+**RETIRO vs APORTE:**
+- Transacción con `reflejo_personal='RETIRO'` (ingreso del proyecto) → suma como retiro neto del usuario (ingreso personal)
+- Transacción con `reflejo_personal='APORTE'` (aporte a proyecto) → suma como aporte neto del usuario (egreso personal)
+- **Neto personal** = Σ retiros - Σ aportes (por quincena)
+- Aparece en dashboard y card "Negocios" del dashboard
+
+**Validación de bloques:**
+- NOTA: contenido es string; soporta links auto-detectados
+- LISTA: contenido es `[{texto, marcado}]`; UI permite togglear items
+- TABLA: contenido es `{columns: [...], rows: [[...], [...]]}` con scroll horizontal en móvil
+- RECORDATORIO: contenido es `{texto, fecha}`; se sincroniza a negEventos del dashboard
+- GRAFICA: contenido es `{fuente: flujo|categorias|cartera, tipo: bar|line|doughnut}`; renderiza con mkC()
+
+**Aging de cartera:**
+- Calculado en `/api/negocios/proyecto/:id/resumen` a partir de `fecha_vencimiento` en deudores/acreedores
+- Categorías: vigente, v1_30, v31_60, v60_mas
 
 ## Helpers
 
@@ -128,4 +260,4 @@ Build: `.env` con `SUPABASE_URL` y `SUPABASE_KEY`
 
 ## Versión
 
-v6.1 (última: Nidito v8 — 28/28 tests, dashboard total_quincenal, soft-delete items)
+v7.0 (Negocios y Proyectos v10 — 28/28 tests, 26 endpoints, 6 tablas, canvas con 5 tipos bloques, 3 gráficas)
