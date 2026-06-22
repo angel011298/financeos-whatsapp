@@ -1,8 +1,8 @@
-// OnlyUs — Service Worker
+// Us — Service Worker
 // DEPLOY_TS is injected by the server on every Railway deploy
 // so the browser always detects a changed SW and installs the new version.
 const V = 'DEPLOY_TS';
-const CACHE = 'onlyus-' + V;
+const CACHE = 'us-' + V;
 
 // ── INSTALL ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', e => {
