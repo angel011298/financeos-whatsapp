@@ -607,7 +607,7 @@ async function checkAndSendReminders(phone) {
 }
 
 // ── DB ACTION EXECUTOR ─────────────────────────────────────────────────────
-const TABLAS_VALIDAS = ['movimientos','metas','calendario','tdc','presupuesto','nidito','usuarios'];
+const TABLAS_VALIDAS = ['movimientos','metas','calendario','tdc','presupuesto','nidito','usuarios','neg_transacciones','despensa'];
 const TABLAS_SOFT_DELETE = ['movimientos','metas','calendario','nidito'];
 
 // ── GASTOS PROGRAMADOS → PRESUPUESTO (no movimientos) ────────────────────────
@@ -729,6 +729,57 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
         if (error) return `❌ Error: ${error.message}`;
         await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen, texto_original);
         return `🗑️ Eliminado del Nidito #${id}.`;
+      }
+    }
+
+    // ── neg_transacciones — transacciones de negocios/proyectos ─────────────
+    if (tabla === 'neg_transacciones') {
+      if (accion === 'crear') {
+        const { proyecto_id, ...rest } = datos || {};
+        if (!proyecto_id) return `❌ neg_transacciones requiere proyecto_id. Especifica el proyecto.`;
+        // Auto-calcular quincena_key desde fecha
+        const fechaTx = rest.fecha || hoy();
+        const d = new Date(fechaTx + 'T12:00:00');
+        const qk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getDate()<=15?'1':'2'}`;
+        const payload = { ...rest, proyecto_id, fecha: fechaTx, quincena_key: qk };
+        const { data, error } = await sb.from('neg_transacciones').insert(payload).select().single();
+        if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen, texto_original);
+        return `✅ Transacción registrada en negocio ✓ ID: ${data?.id}`;
+      }
+      if (accion === 'editar') {
+        const { data, error } = await sb.from('neg_transacciones').update(datos).eq('id', id).select().single();
+        if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen, texto_original);
+        return `✅ Transacción #${id} actualizada.`;
+      }
+      if (accion === 'eliminar') {
+        const { error } = await sb.from('neg_transacciones').delete().eq('id', id);
+        if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen, texto_original);
+        return `🗑️ Transacción #${id} eliminada.`;
+      }
+    }
+
+    // ── despensa — lista de compras ───────────────────────────────────────────
+    if (tabla === 'despensa') {
+      if (accion === 'crear') {
+        const { data, error } = await sb.from('despensa').insert({ ...datos, user_phone: phone }).select().single();
+        if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen, texto_original);
+        return `✅ Agregado a la despensa ✓ ID: ${data?.id}`;
+      }
+      if (accion === 'editar') {
+        const { data, error } = await sb.from('despensa').update(datos).eq('id', id).eq('user_phone', phone).select().single();
+        if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen, texto_original);
+        return `✅ Despensa #${id} actualizado.`;
+      }
+      if (accion === 'eliminar') {
+        const { error } = await sb.from('despensa').delete().eq('id', id).eq('user_phone', phone);
+        if (error) return `❌ Error: ${error.message}`;
+        await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen, texto_original);
+        return `🗑️ Item #${id} eliminado de despensa.`;
       }
     }
 
@@ -1400,7 +1451,7 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
 
   // Fetches paralelos — movimientos solo se trae con detalle en CONSULTA
   const movsLimit = intent === 'CONSULTA' ? 10 : 0;
-  const [tdcR, movsR, metasR, calR, patrR, prspR, niditoR] = await Promise.all([
+  const [tdcR, movsR, metasR, calR, patrR, prspR, niditoR, negR, despR] = await Promise.all([
     sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
     movsLimit > 0
       ? sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null)
@@ -1414,6 +1465,10 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
     sb.from('presupuesto').select('*').eq('user_phone', phone).eq('mes', mesStr),
     sb.from('nidito').select('*').is('deleted_at', null)
         .order('prioridad', { ascending: false }).limit(20),
+    sb.from('neg_proyectos').select('id,nombre,tipo,estado,monto_meta,capital_inicial')
+        .eq('user_phone', phone).is('deleted_at', null).order('orden').limit(10),
+    sb.from('despensa').select('id,nombre,cantidad,unidad,categoria,comprado')
+        .eq('user_phone', phone).eq('comprado', false).limit(20),
   ]);
 
   // Para gastos/ingresos del mes siempre necesitamos un agregado ligero
@@ -1430,6 +1485,8 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
   const patrones = patrR.data   || [];
   const presp    = prspR.data   || [];
   const nidito   = niditoR.data || [];
+  const negocios = negR.data    || [];
+  const despensa = despR.data   || [];
   const aggrMovs = aggrR.data   || [];
   const refs     = user.external_refs || {};
 
@@ -1516,6 +1573,9 @@ GASTO PROGRAMADO vs GASTO YA HECHO (¡importante!):
 Para INGRESO: tipo="INGRESO", categoria="OTROS", concepto=fuente del ingreso, monto, fecha.
 Para calendario.crear: titulo, fecha (YYYY-MM-DD), hora (HH:MM), tipo, descripcion.
 Para nidito: titulo, descripcion, tipo (meta/idea/wishlist/plan/nota), emoji, monto, prioridad.
+Para neg_transacciones.crear: proyecto_id (ID del negocio), tipo (INGRESO/GASTO/INVERSION), concepto, monto, fecha, categoria (opcional), reflejo_personal (RETIRO=el usuario retira dinero del negocio / APORTE=el usuario mete dinero / null=no afecta finanzas personales).
+Para despensa.crear: nombre (producto), cantidad (número), unidad (pz/kg/lt/etc), categoria (Frutas/Verduras/Lácteos/Carnes/Limpieza/etc), precio_estimado (opcional).
+Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprado.
 
 ════════ REGLAS DE MODIFICACIÓN ════════
 - tabla="usuarios" datos={campo: valor}: merge automático, no sobreescribe campos no enviados.
@@ -1591,6 +1651,14 @@ ${patrones.map(p=>`  ${p.concepto_clave}: promedio ${fmt(p.monto_promedio)}, ${p
 
 NIDITO:
 ${nidito.map(n=>`  [${n.id}] ${n.emoji||'💫'} ${n.tipo?.toUpperCase()}: "${n.titulo}"${n.monto>0?' '+fmt(n.monto):''}${n.completado?' ✅':''}`).join('\n')||'  Nidito vacío'}
+
+NEGOCIOS/PROYECTOS:
+${negocios.length ? negocios.map(p=>`  [id:${p.id}] ${p.nombre} (${p.tipo||'negocio'}) — estado:${p.estado||'activo'}${p.monto_meta>0?' meta:'+fmt(p.monto_meta):''}${p.capital_inicial>0?' capital:'+fmt(p.capital_inicial):''}`).join('\n') : '  Sin proyectos registrados.'}
+Para registrar ingresos/gastos de un negocio usa tabla="neg_transacciones" con proyecto_id del proyecto correspondiente.
+
+LISTA DE COMPRAS (despensa pendiente):
+${despensa.length ? despensa.map(d=>`  [${d.id}] ${d.nombre}${d.cantidad?' '+d.cantidad+(d.unidad||''):''}${d.categoria?' — '+d.categoria:''}`).join('\n') : '  Despensa vacía.'}
+Para agregar productos usa tabla="despensa". Para marcar comprado usa editar id=X datos={comprado:true}.
 Para nidito usa tabla="nidito".${ghost}`;
 
   return { static: staticBlock, dynamic: dynamicBlock };
@@ -1639,20 +1707,20 @@ async function cmdCalendario(phone) {
 // ── TOOLS SCHEMA ───────────────────────────────────────────────────────────
 const toolsSchema = {
   name: "modificar_plataforma",
-  description: "Crea, edita o elimina registros en: movimientos, metas, calendario, tdc, presupuesto, nidito (metas/ideas/wishlist compartidas entre Ángel y Alicia).",
+  description: "Crea, edita o elimina registros en: movimientos (gastos/ingresos), metas, calendario, tdc, presupuesto, nidito (espacio compartido), neg_transacciones (ingresos/gastos de negocios), despensa (lista de compras).",
   input_schema: {
     type: "object",
     properties: {
-      tabla:  { type: "string", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito"] },
+      tabla:  { type: "string", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito","usuarios","neg_transacciones","despensa"] },
       accion: { type: "string", enum: ["crear","editar","eliminar"] },
       id:     { type: "string", description: "ID a editar/eliminar" },
-      datos:  { type: "object", description: "Campos a insertar/actualizar. Para movimientos: tipo, categoria, concepto, comentarios, monto, medio_pago, fecha. Para calendario: titulo, fecha, hora, tipo, descripcion, recurrente. Para nidito: titulo, descripcion, tipo (meta/idea/wishlist/plan/nota), emoji, monto, completado, prioridad." }
+      datos:  { type: "object", description: "Campos según tabla. movimientos: tipo,categoria,concepto,comentarios,monto,medio_pago,fecha. calendario: titulo,fecha,hora,tipo,descripcion. nidito: titulo,descripcion,tipo,emoji,monto,completado,prioridad. neg_transacciones: proyecto_id,tipo(INGRESO/GASTO/INVERSION),concepto,monto,fecha,categoria,medio_pago,reflejo_personal(RETIRO/APORTE/null). despensa: nombre,cantidad,unidad,categoria,precio_estimado,prioridad." }
     },
     required: ["tabla","accion"]
   }
 };
 
-const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", description: "Crea, edita o elimina registros en la plataforma. Para guardar info personal del usuario (ingreso quincenal, días de pago, etc.) usa tabla='usuarios'. Para nidito (espacio compartido) usa tabla='nidito'.", parameters: { type: "OBJECT", properties: { tabla: { type: "STRING", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito","usuarios"], description: "Tabla destino. Usa 'usuarios' para datos personales/configuración, 'presupuesto' para límites por categoría, 'movimientos' para ingresos/gastos." }, accion: { type: "STRING", enum: ["crear","editar","eliminar"] }, id: { type: "STRING", description: "ID del registro a editar o eliminar (omitir en crear)" }, datos: { type: "OBJECT", description: "Para 'usuarios': {ingreso_quincenal, dias_pago, ...}. Para 'presupuesto': {categoria, limite, mes}. Para 'movimientos': {monto, tipo, categoria, descripcion, fecha}." } }, required: ["tabla","accion","datos"] } }] }];
+const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", description: "Crea, edita o elimina registros en la plataforma. Tablas disponibles: movimientos (gastos/ingresos personales), metas, calendario, tdc (tarjetas), presupuesto (límites por categoría), nidito (espacio compartido pareja), usuarios (configuración personal), neg_transacciones (transacciones de negocios/proyectos), despensa (lista de compras del súper).", parameters: { type: "OBJECT", properties: { tabla: { type: "STRING", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito","usuarios","neg_transacciones","despensa"], description: "Tabla destino. 'neg_transacciones' para registrar ingresos/gastos de un negocio; 'despensa' para agregar productos a la lista de compras." }, accion: { type: "STRING", enum: ["crear","editar","eliminar"] }, id: { type: "STRING", description: "ID del registro a editar o eliminar (omitir en crear)" }, datos: { type: "OBJECT", description: "Para 'movimientos': {monto, tipo, categoria, concepto, medio_pago, fecha, comentarios}. Para 'neg_transacciones': {proyecto_id, tipo(INGRESO/GASTO/INVERSION), concepto, monto, fecha, categoria, reflejo_personal(RETIRO/APORTE)}. Para 'despensa': {nombre, cantidad, unidad, categoria, precio_estimado}. Para 'presupuesto': {categoria, limite, mes}. Para 'usuarios': {ingreso_quincenal, dias_pago, ...}." } }, required: ["tabla","accion","datos"] } }] }];
 
 // ── LLM ENGINE ─────────────────────────────────────────────────────────────
 
