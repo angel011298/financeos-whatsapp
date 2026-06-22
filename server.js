@@ -1786,7 +1786,8 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
-    const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin] = await Promise.all([
+    const qActual = getQuincenaActual().key;
+    const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin, negProys, negReflejos] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
       sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).limit(500),
       sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
@@ -1798,10 +1799,59 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         .select('monto_quincenal, nidito_items!inner(deleted_at)')
         .eq('user_phone', phone)
         .is('nidito_items.deleted_at', null),
-      sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', getQuincenaActual().key).maybeSingle(),
+      sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', qActual).maybeSingle(),
+      sb.from('neg_proyectos')
+        .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden')
+        .eq('user_phone', phone).is('deleted_at', null).order('orden'),
+      sb.from('neg_transacciones')
+        .select('tipo, monto, reflejo_personal')
+        .eq('reflejo_user_phone', phone).eq('quincena_key', qActual),
     ]);
     const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
     const nidito_dinerito_val = nidDin.data?.monto || 0;
+    const negTxQ    = negReflejos.data || [];
+    const retiros_q = negTxQ.filter(t => t.reflejo_personal === 'RETIRO').reduce((a, t) => a + Number(t.monto), 0);
+    const aportes_q = negTxQ.filter(t => t.reflejo_personal === 'APORTE').reduce((a, t) => a + Number(t.monto), 0);
+
+    // Vencimientos de sub-recursos negocios → calendario del frontend
+    let negEventos = [];
+    const proyIds = (negProys.data || []).map(p => p.id);
+    if (proyIds.length) {
+      const horizonte = new Date(); horizonte.setDate(horizonte.getDate() + 90);
+      const horizonStr = horizonte.toISOString().slice(0, 10);
+      const [{ data: vD }, { data: vA }, { data: vI }, { data: vB }] = await Promise.all([
+        sb.from('neg_deudores')
+          .select('id, nombre, fecha_vencimiento, monto_original, monto_pagado, proyecto_id')
+          .in('proyecto_id', proyIds).neq('estado', 'PAGADO')
+          .not('fecha_vencimiento', 'is', null).lte('fecha_vencimiento', horizonStr),
+        sb.from('neg_acreedores')
+          .select('id, nombre, fecha_vencimiento, monto_original, monto_pagado, proyecto_id')
+          .in('proyecto_id', proyIds).neq('estado', 'PAGADO')
+          .not('fecha_vencimiento', 'is', null).lte('fecha_vencimiento', horizonStr),
+        sb.from('neg_inversiones')
+          .select('id, nombre, fecha_objetivo, estado, proyecto_id')
+          .in('proyecto_id', proyIds)
+          .not('fecha_objetivo', 'is', null).lte('fecha_objetivo', horizonStr)
+          .not('estado', 'in', '("COMPLETADA","CANCELADA")'),
+        sb.from('neg_bloques')
+          .select('id, titulo, contenido, proyecto_id')
+          .in('proyecto_id', proyIds).eq('tipo', 'RECORDATORIO'),
+      ]);
+      const proyMap = Object.fromEntries((negProys.data || []).map(p => [p.id, p.nombre]));
+      for (const d of (vD || []))
+        negEventos.push({ id: `neg_deudor:${d.id}`, tipo: 'VENCIMIENTO_COBRO',  titulo: `Cobrar: ${d.nombre}`,   fecha: d.fecha_vencimiento, proyecto: proyMap[d.proyecto_id], monto_pendiente: Number(d.monto_original) - Number(d.monto_pagado) });
+      for (const a of (vA || []))
+        negEventos.push({ id: `neg_acreedor:${a.id}`, tipo: 'VENCIMIENTO_PAGO', titulo: `Pagar a: ${a.nombre}`, fecha: a.fecha_vencimiento, proyecto: proyMap[a.proyecto_id], monto_pendiente: Number(a.monto_original) - Number(a.monto_pagado) });
+      for (const i of (vI || []))
+        negEventos.push({ id: `neg_inversion:${i.id}`, tipo: 'INVERSION_OBJETIVO', titulo: `Inversión: ${i.nombre}`, fecha: i.fecha_objetivo, proyecto: proyMap[i.proyecto_id] });
+      for (const b of (vB || [])) {
+        const c = b.contenido || {};
+        if (c.completado !== true && c.completado !== 'true' && c.fecha)
+          negEventos.push({ id: `neg_bloque:${b.id}`, tipo: 'RECORDATORIO', titulo: b.titulo || c.texto || 'Recordatorio', fecha: c.fecha, proyecto: proyMap[b.proyecto_id] });
+      }
+      negEventos.sort((a, b2) => (a.fecha || '').localeCompare(b2.fecha || ''));
+    }
+
     res.json({ success: true, data: {
       tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data,
       calendario: cal.data, patrones: pat.data, presupuesto: presp.data,
@@ -1812,6 +1862,13 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       },
       nidito_compromiso,
       nidito_dinerito: nidito_dinerito_val,
+      negocios: {
+        proyectos:        negProys.data || [],
+        retiros_quincena: retiros_q,
+        aportes_quincena: aportes_q,
+        neto_personal:    retiros_q - aportes_q,
+        eventos:          negEventos,
+      },
     }});
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -2402,6 +2459,447 @@ app.post('/api/send-whatsapp-invite', async (req, res) => {
     const msg = `Hola 👋 Desde *OnlyUs* 💑\n\nPara conectarte al asistente y gestionar tus finanzas, responde a este mensaje o envía:\n\n*join everywhere-shot*\n\nLuego puedes hablar naturalmente: "gasté 250 en comida", "recibí $8000 de sueldo", "agrega a wishlist un sillón", etc.`;
     await twl.messages.create({ from: WA_FROM, to: phone, body: msg });
     res.json({ success: true, message: 'Invitación enviada a WhatsApp' });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── NEGOCIOS Y PROYECTOS ─────────────────────────────────────────────────
+// Rutas específicas van ANTES que las paramétricas para evitar conflictos Express
+
+// ── neg_proyectos sub-recursos (deben preceder a /proyecto/:id) ──────────
+
+app.get('/api/negocios/proyecto/:id/grafica', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fuente = 'flujo', rango } = req.query;
+    let txQuery = sb.from('neg_transacciones')
+      .select('tipo, monto, categoria, quincena_key, fecha').eq('proyecto_id', id).order('fecha');
+    if (rango) {
+      const nQ = Math.min(Math.max(parseInt(rango) || 6, 1), 24);
+      const keys = new Set();
+      const base = new Date();
+      for (let i = nQ - 1; i >= 0; i--) {
+        const d = new Date(base); d.setDate(d.getDate() - i * 14);
+        keys.add(getQuincena(d).key);
+      }
+      txQuery = txQuery.in('quincena_key', [...keys]);
+    }
+    const { data: tx, error: txErr } = await txQuery;
+    if (txErr) throw txErr;
+
+    if (fuente === 'flujo') {
+      const map = {};
+      for (const t of (tx || [])) {
+        const k = t.quincena_key || 'SIN_QUINCENA';
+        map[k] ??= { ingresos: 0, gastos: 0 };
+        if (t.tipo === 'INGRESO') map[k].ingresos += Number(t.monto);
+        if (t.tipo === 'GASTO')   map[k].gastos   += Number(t.monto);
+      }
+      const labels = Object.keys(map).sort();
+      return res.json({ labels, datasets: [
+        { label: 'Ingresos', data: labels.map(k => map[k].ingresos) },
+        { label: 'Gastos',   data: labels.map(k => map[k].gastos)   },
+      ]});
+    }
+
+    if (fuente === 'categorias') {
+      const catMap = {};
+      for (const t of (tx || []).filter(t => t.tipo === 'GASTO' && t.categoria))
+        catMap[t.categoria] = (catMap[t.categoria] || 0) + Number(t.monto);
+      const sorted = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+      return res.json({
+        labels: sorted.map(([cat]) => cat),
+        datasets: [{ label: 'Gastos por categoría', data: sorted.map(([, m]) => m) }],
+      });
+    }
+
+    if (fuente === 'cartera') {
+      const [{ data: deus }, { data: acrs }] = await Promise.all([
+        sb.from('neg_deudores').select('monto_original, monto_pagado').eq('proyecto_id', id).neq('estado', 'PAGADO'),
+        sb.from('neg_acreedores').select('monto_original, monto_pagado').eq('proyecto_id', id).neq('estado', 'PAGADO'),
+      ]);
+      const saldo = (arr) => (arr || []).reduce((a, r) => a + Number(r.monto_original) - Number(r.monto_pagado), 0);
+      return res.json({
+        labels: ['Por cobrar', 'Por pagar'],
+        datasets: [{ label: 'Cartera', data: [saldo(deus), saldo(acrs)] }],
+      });
+    }
+
+    return res.status(400).json({ error: `fuente desconocida: ${fuente}. Usa flujo|categorias|cartera` });
+  } catch (err) {
+    console.error('Error en gráfica de negocio', err);
+    return res.status(500).json({ error: 'No se pudo generar la gráfica' });
+  }
+});
+
+app.get('/api/negocios/proyecto/:id/resumen', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { desde, hasta, quincena } = req.query;
+    let txQuery = sb.from('neg_transacciones').select('*').eq('proyecto_id', id);
+    if (quincena) txQuery = txQuery.eq('quincena_key', quincena);
+    if (desde)    txQuery = txQuery.gte('fecha', desde);
+    if (hasta)    txQuery = txQuery.lte('fecha', hasta);
+    const { data: tx, error: txErr } = await txQuery;
+    if (txErr) throw txErr;
+    const sum = (arr) => arr.reduce((a, t) => a + Number(t.monto), 0);
+    const ingresos    = sum(tx.filter(t => t.tipo === 'INGRESO'));
+    const gastos      = sum(tx.filter(t => t.tipo === 'GASTO'));
+    const inversiones = sum(tx.filter(t => t.tipo === 'INVERSION'));
+    const utilidadBruta = ingresos - gastos;
+    const utilidadNeta  = utilidadBruta - inversiones;
+    const margenPct     = ingresos > 0 ? utilidadBruta / ingresos : 0;
+    const flujoPorQuincena = {};
+    for (const t of tx) {
+      const k = t.quincena_key || 'SIN_QUINCENA';
+      flujoPorQuincena[k] ??= { ingresos: 0, gastos: 0, inversiones: 0 };
+      flujoPorQuincena[k][t.tipo === 'INGRESO' ? 'ingresos' : t.tipo === 'GASTO' ? 'gastos' : 'inversiones'] += Number(t.monto);
+    }
+    const [{ data: deudores }, { data: acreedores }] = await Promise.all([
+      sb.from('neg_deudores').select('monto_original, monto_pagado, fecha_vencimiento, estado').eq('proyecto_id', id).neq('estado', 'PAGADO'),
+      sb.from('neg_acreedores').select('monto_original, monto_pagado').eq('proyecto_id', id).neq('estado', 'PAGADO'),
+    ]);
+    const saldoPend  = (r) => Number(r.monto_original) - Number(r.monto_pagado);
+    const porCobrar  = (deudores  || []).reduce((a, d) => a + saldoPend(d), 0);
+    const porPagar   = (acreedores|| []).reduce((a, a2) => a + saldoPend(a2), 0);
+    const hoyD = new Date();
+    const diasVenc = (f) => f ? Math.floor((hoyD - new Date(f + 'T12:00:00')) / 86400000) : -1;
+    const aging = { vigente: 0, v1_30: 0, v31_60: 0, v60_mas: 0 };
+    for (const d of (deudores || [])) {
+      const dias = diasVenc(d.fecha_vencimiento), saldo = saldoPend(d);
+      if (dias <= 0)       aging.vigente  += saldo;
+      else if (dias <= 30) aging.v1_30    += saldo;
+      else if (dias <= 60) aging.v31_60   += saldo;
+      else                 aging.v60_mas  += saldo;
+    }
+    return res.json({
+      financiero: { ingresos, gastos, inversiones, utilidad_bruta: utilidadBruta, utilidad_neta: utilidadNeta, margen_pct: Number(margenPct.toFixed(4)) },
+      flujo_por_quincena: flujoPorQuincena,
+      cartera: { por_cobrar_total: porCobrar, por_pagar_total: porPagar, posicion_neta: porCobrar - porPagar, aging_deudores: aging },
+    });
+  } catch (err) {
+    console.error('Error en resumen de negocio', err);
+    return res.status(500).json({ error: 'No se pudo calcular el resumen' });
+  }
+});
+
+app.get('/api/negocios/proyecto/:id/transacciones', async (req, res) => {
+  try {
+    const { quincena, tipo } = req.query;
+    let q = sb.from('neg_transacciones').select('*').eq('proyecto_id', req.params.id).order('fecha', { ascending: false });
+    if (quincena) q = q.eq('quincena_key', quincena);
+    if (tipo)     q = q.eq('tipo', tipo);
+    const { data, error } = await q;
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/transacciones', async (req, res) => {
+  try {
+    const { fecha, ...rest } = req.body;
+    if (!fecha) return res.status(400).json({ success: false, error: 'Falta fecha' });
+    const quincena_key = getQuincena(fecha).key;
+    const { data, error } = await sb.from('neg_transacciones')
+      .insert({ ...rest, proyecto_id: req.params.id, fecha, quincena_key })
+      .select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/proyecto/:id/deudores', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_deudores').select('*').eq('proyecto_id', req.params.id).order('fecha_vencimiento');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/deudores', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_deudores').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/proyecto/:id/acreedores', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_acreedores').select('*').eq('proyecto_id', req.params.id).order('fecha_vencimiento');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/acreedores', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_acreedores').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/proyecto/:id/inversiones', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_inversiones').select('*').eq('proyecto_id', req.params.id).order('prioridad').order('fecha_objetivo');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/inversiones', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_inversiones').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/proyecto/:id/bloques', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_bloques').select('*').eq('proyecto_id', req.params.id).order('orden');
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/proyecto/:id/bloques', async (req, res) => {
+  try {
+    const { tipo, contenido } = req.body;
+    if (!tipo) return res.status(400).json({ success: false, error: 'Falta tipo de bloque' });
+    const shapeErr = validarBloqueContenido(tipo, contenido || {});
+    if (shapeErr) return res.status(400).json({ success: false, error: shapeErr });
+    const { data, error } = await sb.from('neg_bloques').insert({ ...req.body, proyecto_id: req.params.id }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_proyectos item ────────────────────────────────────────────────────
+
+app.get('/api/negocios/proyecto/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_proyectos').select('*').eq('id', req.params.id).is('deleted_at', null).single();
+    if (error) return res.status(404).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/negocios/proyecto/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_proyectos')
+      .update({ ...req.body, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/proyecto/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_proyectos')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_transacciones item ────────────────────────────────────────────────
+
+app.put('/api/negocios/transaccion/:id', async (req, res) => {
+  try {
+    const { fecha, ...rest } = req.body;
+    const upd = { ...rest };
+    if (fecha) { upd.fecha = fecha; upd.quincena_key = getQuincena(fecha).key; }
+    const { data, error } = await sb.from('neg_transacciones').update(upd).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/transaccion/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_transacciones').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── Helpers negocios ──────────────────────────────────────────────────────
+
+function calcEstadoPago(monto_original, monto_pagado) {
+  const saldo = Number(monto_original) - Number(monto_pagado);
+  if (saldo <= 0)                   return 'PAGADO';
+  if (Number(monto_pagado) > 0)     return 'PARCIAL';
+  return 'PENDIENTE';
+}
+
+function validarBloqueContenido(tipo, contenido) {
+  if (!contenido || typeof contenido !== 'object') return 'contenido debe ser un objeto';
+  switch (tipo) {
+    case 'TABLA':
+      if (!Array.isArray(contenido.columns)) return 'TABLA requiere contenido.columns (array)';
+      if (!Array.isArray(contenido.rows))    return 'TABLA requiere contenido.rows (array)';
+      break;
+    case 'LISTA':
+      if (!Array.isArray(contenido.items))   return 'LISTA requiere contenido.items (array de {text,done})';
+      break;
+    case 'NOTA':
+      if (typeof contenido.texto !== 'string') return 'NOTA requiere contenido.texto (string)';
+      break;
+    case 'RECORDATORIO':
+      if (typeof contenido.texto !== 'string') return 'RECORDATORIO requiere contenido.texto (string)';
+      if (!contenido.fecha)                    return 'RECORDATORIO requiere contenido.fecha (YYYY-MM-DD)';
+      break;
+    case 'GRAFICA':
+      if (!contenido.chartType) return 'GRAFICA requiere contenido.chartType';
+      if (!contenido.fuente)    return 'GRAFICA requiere contenido.fuente';
+      break;
+    default:
+      return `tipo desconocido: ${tipo}`;
+  }
+  return null;
+}
+
+// ── neg_deudores item ─────────────────────────────────────────────────────
+
+app.put('/api/negocios/deudor/:id', async (req, res) => {
+  try {
+    const { data: cur, error: fErr } = await sb.from('neg_deudores').select('monto_original, monto_pagado').eq('id', req.params.id).single();
+    if (fErr) return res.status(404).json({ success: false, error: fErr.message });
+    const monto_original = req.body.monto_original ?? cur.monto_original;
+    const monto_pagado   = req.body.monto_pagado   ?? cur.monto_pagado;
+    const estado = req.body.estado ?? calcEstadoPago(monto_original, monto_pagado);
+    const { data, error } = await sb.from('neg_deudores').update({ ...req.body, monto_pagado, estado }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/deudor/:id/pago', async (req, res) => {
+  try {
+    const { monto } = req.body;
+    if (!monto || Number(monto) <= 0) return res.status(400).json({ success: false, error: 'monto debe ser positivo' });
+    const { data: cur, error: fErr } = await sb.from('neg_deudores').select('monto_original, monto_pagado').eq('id', req.params.id).single();
+    if (fErr) return res.status(404).json({ success: false, error: fErr.message });
+    const nuevo_pagado = Math.min(Number(cur.monto_pagado) + Number(monto), Number(cur.monto_original));
+    const estado = calcEstadoPago(cur.monto_original, nuevo_pagado);
+    const { data, error } = await sb.from('neg_deudores').update({ monto_pagado: nuevo_pagado, estado }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data, saldo_restante: Number(cur.monto_original) - nuevo_pagado });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/deudor/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_deudores').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_acreedores item ───────────────────────────────────────────────────
+
+app.put('/api/negocios/acreedor/:id', async (req, res) => {
+  try {
+    const { data: cur, error: fErr } = await sb.from('neg_acreedores').select('monto_original, monto_pagado').eq('id', req.params.id).single();
+    if (fErr) return res.status(404).json({ success: false, error: fErr.message });
+    const monto_original = req.body.monto_original ?? cur.monto_original;
+    const monto_pagado   = req.body.monto_pagado   ?? cur.monto_pagado;
+    const estado = req.body.estado ?? calcEstadoPago(monto_original, monto_pagado);
+    const { data, error } = await sb.from('neg_acreedores').update({ ...req.body, monto_pagado, estado }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/negocios/acreedor/:id/pago', async (req, res) => {
+  try {
+    const { monto } = req.body;
+    if (!monto || Number(monto) <= 0) return res.status(400).json({ success: false, error: 'monto debe ser positivo' });
+    const { data: cur, error: fErr } = await sb.from('neg_acreedores').select('monto_original, monto_pagado').eq('id', req.params.id).single();
+    if (fErr) return res.status(404).json({ success: false, error: fErr.message });
+    const nuevo_pagado = Math.min(Number(cur.monto_pagado) + Number(monto), Number(cur.monto_original));
+    const estado = calcEstadoPago(cur.monto_original, nuevo_pagado);
+    const { data, error } = await sb.from('neg_acreedores').update({ monto_pagado: nuevo_pagado, estado }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data, saldo_restante: Number(cur.monto_original) - nuevo_pagado });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/acreedor/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_acreedores').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_inversiones item ──────────────────────────────────────────────────
+
+app.put('/api/negocios/inversion/:id', async (req, res) => {
+  try {
+    const { data, error } = await sb.from('neg_inversiones').update(req.body).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/inversion/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_inversiones').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_bloques item ──────────────────────────────────────────────────────
+
+app.put('/api/negocios/bloque/:id', async (req, res) => {
+  try {
+    if (req.body.contenido !== undefined) {
+      const tipoToValidate = req.body.tipo || (await sb.from('neg_bloques').select('tipo').eq('id', req.params.id).single()).data?.tipo;
+      if (tipoToValidate) {
+        const shapeErr = validarBloqueContenido(tipoToValidate, req.body.contenido);
+        if (shapeErr) return res.status(400).json({ success: false, error: shapeErr });
+      }
+    }
+    const { data, error } = await sb.from('neg_bloques')
+      .update({ ...req.body, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/negocios/bloque/:id', async (req, res) => {
+  try {
+    const { error } = await sb.from('neg_bloques').delete().eq('id', req.params.id);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── neg_proyectos colección (/:phone al final para no tragarse literales) ─
+
+app.post('/api/negocios', async (req, res) => {
+  try {
+    const { user_phone, ...d } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+    const { data, error } = await sb.from('neg_proyectos').insert({ ...d, user_phone }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/negocios/:phone', async (req, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const { estado } = req.query;
+    let q = sb.from('neg_proyectos').select('*').eq('user_phone', phone).is('deleted_at', null).order('orden');
+    if (estado) q = q.eq('estado', estado);
+    const { data, error } = await q;
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: data || [] });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

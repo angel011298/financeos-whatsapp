@@ -817,6 +817,84 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   .nd-acc-body{padding:10px 12px 12px}
   .nd-meta-hdr{flex-direction:column;gap:6px}
 }
+
+/* ── NEGOCIOS ──────────────────────────────────────────────────────────────── */
+.neg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:16px 0}
+.neg-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:16px;cursor:pointer;transition:border-color .18s,box-shadow .18s;position:relative}
+.neg-card:hover{border-color:var(--accent-primary);box-shadow:0 4px 20px rgba(0,0,0,.2)}
+.neg-card-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.neg-card-icon{width:38px;height:38px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.neg-card-title{font-size:15px;font-weight:700;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.neg-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.neg-kpi{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:8px 10px}
+.neg-kpi-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.neg-kpi-val{font-size:15px;font-weight:700;font-family:'Space Grotesk',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.neg-badge{font-size:9px;padding:2px 8px;border-radius:var(--radius-pill);text-transform:uppercase;letter-spacing:.4px;border:1px solid transparent}
+.neg-badge-tipo{background:var(--bg-surface-2);color:var(--text-3)}
+.neg-st-ACTIVO{background:rgba(74,222,128,.12);color:#4ade80;border-color:rgba(74,222,128,.25)}
+.neg-st-PAUSADO{background:rgba(251,191,36,.12);color:#fbbf24;border-color:rgba(251,191,36,.25)}
+.neg-st-CERRADO{background:rgba(248,113,113,.12);color:#f87171;border-color:rgba(248,113,113,.25)}
+.neg-pago-PENDIENTE{color:var(--text-3)}
+.neg-pago-PARCIAL{color:#fbbf24}
+.neg-pago-PAGADO{color:#4ade80}
+.neg-back{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--text-2);font-size:13px;margin-bottom:4px;width:fit-content}
+.neg-back:hover{color:var(--text)}
+.neg-det-hdr{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.neg-det-icon{width:46px;height:46px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.neg-resumen-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px}
+.neg-sec{margin-bottom:24px}
+.neg-pago-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.neg-pago-btn{padding:4px 10px;font-size:11px;border-radius:var(--radius-pill);background:var(--bg-surface-2);border:1px solid var(--border-default);color:var(--text-2);cursor:pointer;transition:background .15s}
+.neg-pago-btn:hover{background:var(--accent-primary);color:#fff;border-color:var(--accent-primary)}
+.neg-inv-card{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.neg-inv-main{flex:1;min-width:0}
+.neg-inv-nombre{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.neg-inv-meta{font-size:11px;color:var(--text-3);margin-top:2px}
+.neg-inv-actions{display:flex;gap:6px;flex-shrink:0}
+.neg-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.neg-form-full{grid-column:1/-1}
+.neg-empty{text-align:center;color:var(--text-3);padding:32px 0;font-size:13px}
+.neg-evento-row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-default)}
+.neg-evento-row:last-child{border-bottom:none}
+.neg-evento-icon{width:30px;height:30px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+/* ── Negocios: gráficas + canvas bloques ─────────────────────────────────── */
+.neg-chart-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.neg-chart-item{min-width:0}
+.neg-chart-ttl{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;font-weight:600}
+.neg-ch-wrap{position:relative;height:180px}
+.neg-bloque{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);margin-bottom:12px;overflow:hidden}
+.neg-bloque-hdr{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-surface-2);border-bottom:1px solid var(--border-default)}
+.neg-bloque-ico{width:26px;height:26px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.neg-bloque-ttl{font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.neg-bloque-body{padding:12px 14px}
+.neg-lista-item{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border-default)}
+.neg-lista-item:last-child{border-bottom:none}
+.neg-lista-check{width:16px;height:16px;accent-color:var(--accent-primary);cursor:pointer;flex-shrink:0;margin:0}
+.neg-lista-txt{flex:1;font-size:13px;line-height:1.4;cursor:pointer;user-select:none}
+.neg-lista-txt.done{text-decoration:line-through;color:var(--text-3)}
+.neg-nota-body{font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word;color:var(--text-2)}
+.neg-nota-body a{color:var(--accent-primary);text-decoration:none}
+.neg-nota-body a:hover{text-decoration:underline}
+.neg-tabla-scrl{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.neg-tabla-scrl table{border-collapse:collapse;font-size:12px;min-width:100%}
+.neg-tabla-scrl th{background:var(--bg-surface-2);padding:6px 10px;text-align:left;font-weight:600;white-space:nowrap;border-bottom:1px solid var(--border-default)}
+.neg-tabla-scrl td{padding:6px 10px;border-top:1px solid var(--border-default);vertical-align:top;word-break:break-word;max-width:200px}
+.neg-rec-row{display:flex;align-items:flex-start;gap:12px}
+.neg-rec-ico{color:#fbbf24;font-size:20px;flex-shrink:0;margin-top:2px}
+.neg-rec-ttl{font-size:13px;font-weight:600;line-height:1.4;margin-bottom:4px}
+.neg-rec-fecha{font-size:11px;color:var(--text-3)}
+@media(max-width:600px){
+  .neg-chart-grid{grid-template-columns:1fr}
+  .neg-ch-wrap{height:150px}
+  .neg-tabla-scrl td{max-width:120px}
+}
+@media(max-width:600px){
+  .neg-grid{grid-template-columns:1fr}
+  .neg-kpi-grid{grid-template-columns:1fr 1fr}
+  .neg-resumen-kpis{grid-template-columns:1fr 1fr}
+  .neg-form-grid{grid-template-columns:1fr}
+  .neg-form-full{grid-column:1}
+}
 </style>
 </head>
 <body>
@@ -877,6 +955,9 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
         <a onclick="go('nidito')" id="n-nidito" style="color:var(--accent-couple)">
           <i class="ti ti-heart-handshake" style="color:var(--accent-couple)"></i><span>Nidito</span>
         </a>
+        <a onclick="go('negocios')" id="n-negocios">
+          <i class="ti ti-building-store"></i><span>Negocios</span>
+        </a>
         <a onclick="go('calendario')" id="n-calendario">
           <i class="ti ti-calendar"></i><span>Calendario</span>
         </a>
@@ -929,6 +1010,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
       <div id="tab-presupuesto" class="tab"></div>
       <div id="tab-calendario"  class="tab"></div>
       <div id="tab-chat"        class="tab"></div>
+      <div id="tab-negocios"    class="tab"></div>
     </main>
   </div>
 
@@ -957,6 +1039,9 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
         </div>
         <div class="sheet-item" onclick="go('calendario');closeMobileMore()">
           <i class="ti ti-calendar"></i><span>Calendario</span>
+        </div>
+        <div class="sheet-item" onclick="go('negocios');closeMobileMore()">
+          <i class="ti ti-building-store"></i><span>Negocios</span>
         </div>
         <div class="sheet-item" onclick="toggleTheme();closeMobileMore()">
           <i class="ti ti-moon" id="mn-theme-icon"></i><span id="mn-theme-label">Modo día</span>
@@ -1264,7 +1349,7 @@ function go(t) {
 function renderTab(t) {
   // Movimientos vive dentro de Dashboard (rDash) y Objetivos dentro de Presupuesto (rPresp).
   ({ dashboard:rDash, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp,
-     calendario:rCal, chat:rChat })[t]?.();
+     calendario:rCal, chat:rChat, negocios:rNegocios })[t]?.();
   setTimeout(_initCollapsibles, 120);
 }
 
@@ -2452,6 +2537,18 @@ ${periodoSelectorHTML()}
     <div class="card-lbl">Deuda TDC <i class="ti ti-chevron-right" style="font-size:9px;opacity:.5"></i></div>
     <div class="card-val yellow">${fmt(tdcP)}</div>
   </div>
+  ${(() => {
+    const neg = S.data?.negocios || {};
+    const proys = neg.proyectos || [];
+    const neto = neg.neto_personal || 0;
+    const utilidad = (proys || []).reduce((a, p) => a + (p.monto_meta || 0), 0);
+    return proys.length ? `<div class="card" style="cursor:pointer;background:var(--bg-surface-2)" onclick="go('negocios')" title="Ver proyectos y negocio">
+    <div class="card-lbl">Negocios <i class="ti ti-briefcase" style="font-size:9px;opacity:.5"></i></div>
+    <div class="card-val accent">${fmt(utilidad)}</div>
+    <div style="font-size:9px;color:var(--text-3);margin-top:3px">Neto Q: <span style="color:${neto>=0?'var(--green)':'var(--red)'}">
+      ${neto>=0?'+':''}${fmt(neto)}</span></div>
+  </div>` : '';
+  })()}
 </div>
 ${rQuincenaPanel('dash')}
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div></div>
@@ -4225,8 +4322,20 @@ function oMeta() {
 
 function closeM() { $('ovl').classList.remove('open'); }
 
+function openM(title, bodyHtml, onSave) {
+  $('m-title').textContent = title;
+  $('m-body').innerHTML = bodyHtml;
+  S.mctx = { mode: '_neg_cb', _cb: onSave };
+  $('ovl').classList.add('open');
+}
+
 async function saveM() {
   const ctx=S.mctx; let datos={}, r;
+  if (ctx?.mode === '_neg_cb' && ctx._cb) {
+    const ok = await ctx._cb();
+    if (ok !== false) closeM();
+    return;
+  }
 
   if (ctx.mode === 'add-exp-item' || ctx.mode === 'edit-exp-item') {
     const desc  = $('ei-desc')?.value.trim();
@@ -4724,6 +4833,779 @@ async function marcarPagado(nombre, esp, pagadoId) {
 }
 async function dEvt(id)  { if(!confirm('¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
 async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/metas/${id}`,{user_phone:S.phone}); await load(); }
+
+// ── NEGOCIOS Y PROYECTOS ──────────────────────────────────────────────────────
+
+const NEG_TIPO_CLR = { NEGOCIO:'#6366f1', EMPRENDIMIENTO:'#f97316', PROYECTO:'#0ea5e9', INVERSION:'#10b981', FREELANCE:'#8b5cf6' };
+const NEG_TIPO_ICO = { NEGOCIO:'ti-building-store', EMPRENDIMIENTO:'ti-rocket', PROYECTO:'ti-clipboard-list', INVERSION:'ti-trending-up', FREELANCE:'ti-device-laptop' };
+
+async function rNegocios() {
+  const el = $('tab-negocios'); if (!el) return;
+  if (!S._negProyId) {
+    _negRenderLista(el);
+  } else {
+    await _negRenderDetalle(el, S._negProyId);
+  }
+  setTimeout(_initCollapsibles, 120);
+}
+
+function _negLista() { return S.data?.negocios?.proyectos || []; }
+function _negColor(p) { return p.color || NEG_TIPO_CLR[p.tipo] || 'var(--accent-primary)'; }
+function _negIco(p)   { return p.icono || NEG_TIPO_ICO[p.tipo] || 'ti-briefcase'; }
+
+function _negRenderLista(el) {
+  const proys = _negLista();
+  const neg   = S.data?.negocios || {};
+  const neto  = neg.neto_personal || 0;
+  const eventos = (neg.eventos || []).filter(e => {
+    const hoy = new Date().toISOString().slice(0,10);
+    return e.fecha && e.fecha <= new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+  }).slice(0,5);
+
+  const evHtml = eventos.length ? `
+<div class="sec-hdr" style="margin-top:8px"><div class="sec-hdr-row"><h2><i class="ti ti-bell"></i> Próximos eventos</h2></div><div class="sec-hdr-sub">30 días</div></div>
+<div style="background:var(--bg-surface);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:8px">
+${eventos.map(e=>{
+  const colorMap={VENCIMIENTO_COBRO:'#4ade80',VENCIMIENTO_PAGO:'#f87171',INVERSION_OBJETIVO:'#0ea5e9',RECORDATORIO:'#fbbf24'};
+  const icoMap={VENCIMIENTO_COBRO:'ti-cash',VENCIMIENTO_PAGO:'ti-alert-triangle',INVERSION_OBJETIVO:'ti-trending-up',RECORDATORIO:'ti-bell'};
+  const c=colorMap[e.tipo]||'var(--accent-primary)';
+  return `<div class="neg-evento-row">
+    <div class="neg-evento-icon" style="background:${c}22;color:${c}"><i class="ti ${icoMap[e.tipo]||'ti-bell'}"></i></div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.titulo||e.nombre||'—'}</div>
+      <div style="font-size:11px;color:var(--text-3)">${fmtDate(e.fecha)} · ${e.tipo?.replace(/_/g,' ')}</div>
+    </div>
+  </div>`;
+}).join('')}
+</div>` : '';
+
+  const cardsHtml = proys.length ? `<div class="neg-grid">${proys.map(p=>{
+    const c = _negColor(p);
+    return `<div class="neg-card" onclick="negAbrirDetalle('${p.id}')">
+  <div class="neg-card-hdr">
+    <div class="neg-card-icon" style="background:${c}22;color:${c}"><i class="ti ${_negIco(p)}"></i></div>
+    <div style="flex:1;min-width:0">
+      <div class="neg-card-title">${p.nombre}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">
+        <span class="neg-badge neg-badge-tipo">${p.tipo}</span>
+        <span class="neg-badge neg-st-${p.estado||'ACTIVO'}">${p.estado||'ACTIVO'}</span>
+      </div>
+    </div>
+  </div>
+  <div class="neg-kpi-grid" id="neg-kpis-${p.id}">
+    <div class="neg-kpi"><div class="neg-kpi-lbl">Meta</div><div class="neg-kpi-val" style="color:${c}">${fmt(p.monto_meta||0)}</div></div>
+    <div class="neg-kpi"><div class="neg-kpi-lbl">Capital</div><div class="neg-kpi-val">${fmt(p.capital_inicial||0)}</div></div>
+    ${p.fecha_vencimiento?`<div class="neg-kpi" style="grid-column:1/-1"><div class="neg-kpi-lbl">Vence</div><div class="neg-kpi-val" style="font-size:12px">${fmtDate(p.fecha_vencimiento)}</div></div>`:''}
+  </div>
+</div>`;
+  }).join('')}</div>` :
+  `<div class="neg-empty"><i class="ti ti-building-off" style="font-size:36px;display:block;margin-bottom:10px"></i>Sin proyectos aún.<br><button class="btn btn-accent btn-sm" style="margin-top:14px" onclick="negNuevoProyecto()"><i class="ti ti-plus"></i> Crear primer proyecto</button></div>`;
+
+  el.innerHTML = `
+<div class="hdr">
+  <h2><i class="ti ti-building-store"></i> Negocios y Proyectos</h2>
+  <button class="btn btn-accent btn-sm" onclick="negNuevoProyecto()"><i class="ti ti-plus"></i> Nuevo</button>
+</div>
+<div class="cards">
+  <div class="card"><div class="card-lbl">Proyectos</div><div class="card-val accent">${proys.length}</div></div>
+  <div class="card"><div class="card-lbl">Activos</div><div class="card-val green">${proys.filter(p=>p.estado==='ACTIVO').length}</div></div>
+  <div class="card"><div class="card-lbl">Neto personal Q</div><div class="card-val ${neto>=0?'green':'red'}">${fmt(Math.abs(neto))}</div></div>
+</div>
+${evHtml}
+${cardsHtml}`;
+}
+
+async function negAbrirDetalle(id) {
+  S._negProyId = id;
+  const el = $('tab-negocios'); if (!el) return;
+  el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)"><i class="ti ti-loader-2" style="font-size:28px;animation:spin 1s linear infinite"></i><div style="margin-top:10px">Cargando proyecto…</div></div>`;
+  await _negRenderDetalle(el, id);
+  setTimeout(_initCollapsibles, 120);
+}
+
+async function _negRenderDetalle(el, id) {
+  const proys = _negLista();
+  const p = proys.find(x=>x.id===id) || {};
+  const c = _negColor(p);
+
+  let res={}, trans=[], deudores=[], acreedores=[], inv=[], bloques=[];
+  let gfFlujo={labels:[],datasets:[]}, gfCat={labels:[],datasets:[]}, gfCartera={labels:[],datasets:[]};
+  try {
+    const [rRes,rT,rD,rA,rI,rGfF,rGfC,rGfCar,rBloq] = await Promise.all([
+      api('GET',`/api/negocios/proyecto/${id}/resumen`),
+      api('GET',`/api/negocios/proyecto/${id}/transacciones`),
+      api('GET',`/api/negocios/proyecto/${id}/deudores`),
+      api('GET',`/api/negocios/proyecto/${id}/acreedores`),
+      api('GET',`/api/negocios/proyecto/${id}/inversiones`),
+      api('GET',`/api/negocios/proyecto/${id}/grafica?fuente=flujo`),
+      api('GET',`/api/negocios/proyecto/${id}/grafica?fuente=categorias`),
+      api('GET',`/api/negocios/proyecto/${id}/grafica?fuente=cartera`),
+      api('GET',`/api/negocios/proyecto/${id}/bloques`)
+    ]);
+    res        = rRes.data   || {};
+    trans      = rT.data     || [];
+    deudores   = rD.data     || [];
+    acreedores = rA.data     || [];
+    inv        = rI.data     || [];
+    gfFlujo    = rGfF.data   || {};
+    gfCat      = rGfC.data   || {};
+    gfCartera  = rGfCar.data || {};
+    bloques    = rBloq.data  || [];
+  } catch(e) { toast('Error cargando proyecto: '+e.message,'error'); }
+  S._negBloques = bloques;
+
+  const kpis = [
+    {lbl:'Ingresos',val:fmt(res.total_ingresos||0),col:'var(--color-income)'},
+    {lbl:'Gastos',val:fmt(res.total_gastos||0),col:'var(--color-expense)'},
+    {lbl:'Saldo neto',val:fmt(res.saldo_neto||0),col:(res.saldo_neto||0)>=0?'var(--green)':'var(--red)'},
+    {lbl:'Por cobrar',val:fmt(res.total_por_cobrar||0),col:'var(--green)'},
+    {lbl:'Por pagar',val:fmt(res.total_por_pagar||0),col:'var(--red)'},
+    {lbl:'Inversiones',val:fmt(res.total_inversiones||0),col:'var(--accent-primary)'},
+  ];
+
+  const mkEstPago = e => `<span class="neg-pago-${e||'PENDIENTE'}" style="font-size:11px;font-weight:600">${e||'PENDIENTE'}</span>`;
+
+  el.innerHTML = `
+<div class="neg-back" onclick="negVolverLista()"><i class="ti ti-arrow-left"></i> Todos los proyectos</div>
+
+<div class="neg-det-hdr">
+  <div class="neg-det-icon" style="background:${c}22;color:${c}"><i class="ti ${_negIco(p)}"></i></div>
+  <div>
+    <div style="font-size:19px;font-weight:800;color:var(--text)">${p.nombre||'Proyecto'}</div>
+    <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+      <span class="neg-badge neg-badge-tipo">${p.tipo||''}</span>
+      <span class="neg-badge neg-st-${p.estado||'ACTIVO'}">${p.estado||'ACTIVO'}</span>
+      ${p.fecha_vencimiento?`<span class="neg-badge" style="background:var(--bg-surface-2);color:var(--text-3)"><i class="ti ti-calendar" style="font-size:9px"></i> ${fmtDate(p.fecha_vencimiento)}</span>`:''}
+    </div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:6px">
+    <button class="edit-pill-btn" title="Editar" onclick="negEditarProyecto('${id}')"><i class="ti ti-pencil" style="font-size:13px"></i></button>
+    <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="negEliminarProyecto('${id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+  </div>
+</div>
+
+<div class="neg-resumen-kpis">${kpis.map(k=>`<div class="neg-kpi"><div class="neg-kpi-lbl">${k.lbl}</div><div class="neg-kpi-val" style="color:${k.col}">${k.val}</div></div>`).join('')}</div>
+
+<!-- GRÁFICAS (canvas; mkC se llama tras el innerHTML) -->
+<div class="neg-sec">
+  <div style="padding:4px 0 8px;border-bottom:1px solid var(--border-default);margin-bottom:12px">
+    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)"><i class="ti ti-chart-bar"></i> Gráficas</span>
+  </div>
+  <div class="neg-chart-grid">
+    <div class="neg-chart-item">
+      <div class="neg-chart-ttl">Flujo de caja</div>
+      <div class="neg-ch-wrap"><canvas id="neg-ch-flujo-${id}"></canvas></div>
+    </div>
+    <div class="neg-chart-item">
+      <div class="neg-chart-ttl">Gastos por categoría</div>
+      <div class="neg-ch-wrap"><canvas id="neg-ch-cat-${id}"></canvas></div>
+    </div>
+    <div class="neg-chart-item">
+      <div class="neg-chart-ttl">Cartera</div>
+      <div class="neg-ch-wrap"><canvas id="neg-ch-cartera-${id}"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- TRANSACCIONES -->
+<div class="neg-sec">
+  <div class="sec-hdr collapsible-hdr" data-target="neg-trans-body">
+    <div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Transacciones</h2></div>
+    <div class="sec-hdr-sub">${trans.length} registros</div>
+  </div>
+  <div id="neg-trans-body" class="collapsible-body">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button class="btn btn-accent btn-sm" onclick="negNuevaTrans('${id}')"><i class="ti ti-plus"></i> Registrar</button>
+    </div>
+    ${tglBtn('tbl-neg-trans')}${mkTable({id:'tbl-neg-trans',numbered:true,empty:'Sin transacciones',
+      columns:[
+        {key:'concepto',label:'Concepto',filter:'text',value:t=>t.concepto||''},
+        {key:'tipo',label:'Tipo',filter:'select',value:t=>t.tipo||''},
+        {key:'monto',label:'Monto',num:true,value:t=>t.monto||0},
+        {key:'fecha',label:'Fecha',filter:'text',value:t=>fd(t.fecha)||''},
+        {key:'categoria',label:'Categoría',filter:'select',value:t=>t.categoria||''},
+        {key:'_acts',label:'',sortable:false}],
+      rows:trans,
+      renderRow:t=>`<tr>
+        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${t.concepto||'—'}</td>
+        <td><span class="badge b-${t.tipo==='INGRESO'?'ingreso':'gasto'}">${t.tipo||'—'}</span></td>
+        <td style="color:${t.tipo==='INGRESO'?'var(--color-income)':'var(--color-expense)'};font-weight:600;font-variant-numeric:tabular-nums">${t.tipo==='INGRESO'?'+'+'':'-'}${fmt(t.monto)}</td>
+        <td style="color:var(--text-3)">${fd(t.fecha)||'—'}</td>
+        <td style="color:var(--text-3)">${t.categoria||'—'}</td>
+        <td style="white-space:nowrap">
+          <button class="edit-pill-btn" style="color:var(--red)" onclick="negDelTrans('${id}','${t.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+        </td>
+      </tr>`})}
+  </div>
+</div>
+
+<!-- DEUDORES -->
+<div class="neg-sec">
+  <div class="sec-hdr collapsible-hdr" data-target="neg-deu-body">
+    <div class="sec-hdr-row"><h2><i class="ti ti-cash"></i> Por cobrar (Deudores)</h2></div>
+    <div class="sec-hdr-sub">${deudores.filter(d=>d.estado!=='PAGADO').length} pendientes · ${fmt(res.total_por_cobrar||0)}</div>
+  </div>
+  <div id="neg-deu-body" class="collapsible-body">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button class="btn btn-accent btn-sm" onclick="negNuevoDeudor('${id}')"><i class="ti ti-plus"></i> Agregar</button>
+    </div>
+    ${deudores.length ? deudores.map(d=>`
+<div class="neg-inv-card" style="margin-bottom:8px">
+  <div class="neg-inv-main">
+    <div class="neg-inv-nombre">${d.nombre||'—'}</div>
+    <div class="neg-inv-meta">${d.concepto||''}</div>
+    <div class="neg-pago-row">
+      <span style="font-family:'Space Grotesk',system-ui;font-variant-numeric:tabular-nums;font-weight:700;color:var(--color-income)">${fmt(d.monto_original||0)}</span>
+      <span style="color:var(--text-3);font-size:11px">cobrado ${fmt(d.monto_pagado||0)}</span>
+      ${mkEstPago(d.estado)}
+      ${d.fecha_vencimiento?`<span style="font-size:10px;color:var(--text-3)"><i class="ti ti-calendar" style="font-size:9px"></i> ${fmtDate(d.fecha_vencimiento)}</span>`:''}
+    </div>
+    ${d.estado!=='PAGADO'?`<div style="margin-top:8px"><button class="neg-pago-btn" onclick="negRegistrarPago('deudor','${d.id}','${id}')"><i class="ti ti-coins"></i> Registrar cobro</button></div>`:''}
+  </div>
+  <button class="edit-pill-btn" style="color:var(--red);align-self:flex-start" onclick="negDelDeudor('${id}','${d.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+</div>`).join('') : '<div class="neg-empty" style="padding:16px 0">Sin deudores registrados</div>'}
+  </div>
+</div>
+
+<!-- ACREEDORES -->
+<div class="neg-sec">
+  <div class="sec-hdr collapsible-hdr" data-target="neg-acr-body">
+    <div class="sec-hdr-row"><h2><i class="ti ti-alert-triangle"></i> Por pagar (Acreedores)</h2></div>
+    <div class="sec-hdr-sub">${acreedores.filter(a=>a.estado!=='PAGADO').length} pendientes · ${fmt(res.total_por_pagar||0)}</div>
+  </div>
+  <div id="neg-acr-body" class="collapsible-body">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button class="btn btn-accent btn-sm" onclick="negNuevoAcreedor('${id}')"><i class="ti ti-plus"></i> Agregar</button>
+    </div>
+    ${acreedores.length ? acreedores.map(a=>`
+<div class="neg-inv-card" style="margin-bottom:8px">
+  <div class="neg-inv-main">
+    <div class="neg-inv-nombre">${a.nombre||'—'}</div>
+    <div class="neg-inv-meta">${a.concepto||''}</div>
+    <div class="neg-pago-row">
+      <span style="font-family:'Space Grotesk',system-ui;font-variant-numeric:tabular-nums;font-weight:700;color:var(--color-expense)">${fmt(a.monto_original||0)}</span>
+      <span style="color:var(--text-3);font-size:11px">pagado ${fmt(a.monto_pagado||0)}</span>
+      ${mkEstPago(a.estado)}
+      ${a.fecha_vencimiento?`<span style="font-size:10px;color:var(--text-3)"><i class="ti ti-calendar" style="font-size:9px"></i> ${fmtDate(a.fecha_vencimiento)}</span>`:''}
+    </div>
+    ${a.estado!=='PAGADO'?`<div style="margin-top:8px"><button class="neg-pago-btn" onclick="negRegistrarPago('acreedor','${a.id}','${id}')"><i class="ti ti-coins"></i> Registrar pago</button></div>`:''}
+  </div>
+  <button class="edit-pill-btn" style="color:var(--red);align-self:flex-start" onclick="negDelAcreedor('${id}','${a.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+</div>`).join('') : '<div class="neg-empty" style="padding:16px 0">Sin acreedores registrados</div>'}
+  </div>
+</div>
+
+<!-- INVERSIONES -->
+<div class="neg-sec">
+  <div class="sec-hdr collapsible-hdr" data-target="neg-inv-body">
+    <div class="sec-hdr-row"><h2><i class="ti ti-trending-up"></i> Inversiones</h2></div>
+    <div class="sec-hdr-sub">${inv.length} registros · ${fmt(res.total_inversiones||0)}</div>
+  </div>
+  <div id="neg-inv-body" class="collapsible-body">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button class="btn btn-accent btn-sm" onclick="negNuevaInversion('${id}')"><i class="ti ti-plus"></i> Agregar</button>
+    </div>
+    ${inv.length ? inv.map(v=>`
+<div class="neg-inv-card" style="margin-bottom:8px">
+  <div class="neg-inv-main">
+    <div class="neg-inv-nombre">${v.nombre||'—'}</div>
+    <div class="neg-inv-meta">${v.tipo_inversion||''} ${v.monto_objetivo?'· meta '+fmt(v.monto_objetivo):''}</div>
+    <div class="neg-pago-row">
+      <span style="font-family:'Space Grotesk',system-ui;font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent-primary)">${fmt(v.monto_invertido||0)}</span>
+      ${v.rendimiento_esperado?`<span style="font-size:11px;color:var(--text-3)">rend. ${v.rendimiento_esperado}%</span>`:''}
+      <span class="neg-badge neg-st-${v.estado||'ACTIVA'}" style="font-size:9px">${v.estado||'ACTIVA'}</span>
+      ${v.fecha_vencimiento?`<span style="font-size:10px;color:var(--text-3)"><i class="ti ti-calendar" style="font-size:9px"></i> ${fmtDate(v.fecha_vencimiento)}</span>`:''}
+    </div>
+  </div>
+  <button class="edit-pill-btn" style="color:var(--red);align-self:flex-start" onclick="negDelInversion('${id}','${v.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+</div>`).join('') : '<div class="neg-empty" style="padding:16px 0">Sin inversiones registradas</div>'}
+  </div>
+</div>
+
+${_negRenderBloquesHtml(bloques, id)}`;
+  _negRenderCharts(id, gfFlujo, gfCat, gfCartera, bloques);
+}
+
+function negVolverLista() {
+  S._negProyId = null;
+  rNegocios();
+}
+
+// ── Gráficas ─────────────────────────────────────────────────────────────────
+
+function _negRenderCharts(proyId, gfFlujo, gfCat, gfCartera, bloques) {
+  const gfMap = { flujo:gfFlujo, categorias:gfCat, cartera:gfCartera };
+
+  function renderOne(canvasId, tipo, gf) {
+    const labels = gf?.labels || [];
+    const dsets  = gf?.datasets || [];
+    if (labels.length && dsets.length) {
+      mkC(canvasId, tipo, labels, dsets);
+    } else {
+      emptyChart(canvasId, 'Sin datos');
+    }
+  }
+
+  renderOne(`neg-ch-flujo-${proyId}`,    'bar',      gfFlujo);
+  renderOne(`neg-ch-cat-${proyId}`,      'doughnut', gfCat);
+  renderOne(`neg-ch-cartera-${proyId}`,  'bar',      gfCartera);
+
+  // GRAFICA bloques
+  (bloques||[]).filter(b=>b.tipo==='GRAFICA').forEach(b => {
+    const fuente = b.contenido?.fuente || 'flujo';
+    const tipo   = b.contenido?.tipo   || 'bar';
+    renderOne(`neg-bg-${b.id}`, tipo, gfMap[fuente]);
+  });
+}
+
+// ── Canvas de bloques ─────────────────────────────────────────────────────────
+
+function _negEsc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _negLinkify(txt) {
+  return txt.replace(/(https?:\/\/[^\s&<>"]+)/g, url =>
+    `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+}
+
+const _NEG_BLOQUE_ICO = {NOTA:'ti-notes',LISTA:'ti-list-check',TABLA:'ti-table',RECORDATORIO:'ti-bell',GRAFICA:'ti-chart-bar'};
+const _NEG_BLOQUE_CLR = {NOTA:'#60a5fa',LISTA:'#4ade80',TABLA:'#f97316',RECORDATORIO:'#fbbf24',GRAFICA:'#a78bfa'};
+
+function _negBloqueBodyHtml(b, proyId) {
+  const cont = b.contenido;
+  switch (b.tipo) {
+    case 'NOTA': {
+      const txt = typeof cont === 'string' ? cont : '';
+      return `<div class="neg-nota-body">${_negLinkify(_negEsc(txt))}</div>`;
+    }
+    case 'LISTA': {
+      const items = Array.isArray(cont) ? cont : [];
+      const rows = items.map((it,i) =>
+        `<div class="neg-lista-item">
+  <input type="checkbox" class="neg-lista-check" ${it.marcado?'checked':''} onchange="negToggleListaItem('${b.id}',${i},this.checked,'${proyId}')">
+  <span class="neg-lista-txt${it.marcado?' done':''}">${_negEsc(it.texto||'')}</span>
+</div>`).join('');
+      return `<div>${rows}</div>
+<div style="margin-top:8px">
+  <button class="btn btn-ghost btn-sm" onclick="negAddListaItem('${b.id}','${proyId}')"><i class="ti ti-plus" style="font-size:11px"></i> Agregar ítem</button>
+</div>`;
+    }
+    case 'TABLA': {
+      const cols = cont?.columns || [];
+      const rows = cont?.rows    || [];
+      if (!cols.length) return '<div class="neg-empty" style="padding:8px 0">Sin columnas definidas</div>';
+      const thead = cols.map(c=>`<th>${_negEsc(c)}</th>`).join('');
+      const tbody = rows.map(r=>`<tr>${cols.map((_,i)=>`<td>${_negEsc(String(r[i]??''))}</td>`).join('')}</tr>`).join('');
+      return `<div class="neg-tabla-scrl"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+    }
+    case 'RECORDATORIO': {
+      const texto = cont?.texto || '';
+      const fecha = cont?.fecha || null;
+      return `<div class="neg-rec-row">
+  <i class="ti ti-bell neg-rec-ico"></i>
+  <div>
+    <div class="neg-rec-ttl">${_negEsc(texto)}</div>
+    ${fecha?`<div class="neg-rec-fecha"><i class="ti ti-calendar" style="font-size:10px"></i> ${fmtDate(fecha)}</div>`:''}
+  </div>
+</div>`;
+    }
+    case 'GRAFICA':
+      return `<div class="neg-ch-wrap"><canvas id="neg-bg-${b.id}"></canvas></div>`;
+    default:
+      return '<div class="neg-empty" style="padding:8px 0">Tipo desconocido</div>';
+  }
+}
+
+function _negRenderBloquesHtml(bloques, proyId) {
+  const sorted = [...bloques].sort((a,b)=>(a.orden||0)-(b.orden||0));
+  const cards = sorted.map((b,i) => {
+    const c = _NEG_BLOQUE_CLR[b.tipo]||'var(--accent-primary)';
+    const up   = i>0 ? `<button class="edit-pill-btn" onclick="negMoverBloque('${proyId}','${b.id}','up')" title="Subir"><i class="ti ti-arrow-up" style="font-size:11px"></i></button>` : '';
+    const down = i<sorted.length-1 ? `<button class="edit-pill-btn" onclick="negMoverBloque('${proyId}','${b.id}','down')" title="Bajar"><i class="ti ti-arrow-down" style="font-size:11px"></i></button>` : '';
+    return `<div class="neg-bloque" data-bid="${b.id}">
+  <div class="neg-bloque-hdr">
+    <div class="neg-bloque-ico" style="background:${c}22;color:${c}"><i class="ti ${_NEG_BLOQUE_ICO[b.tipo]||'ti-square'}"></i></div>
+    <span class="neg-bloque-ttl">${_negEsc(b.titulo||b.tipo||'')}</span>
+    <div style="display:flex;gap:4px;margin-left:auto;flex-shrink:0">${up}${down}
+      <button class="edit-pill-btn" style="color:var(--red)" onclick="negDelBloque('${proyId}','${b.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+    </div>
+  </div>
+  <div class="neg-bloque-body">${_negBloqueBodyHtml(b, proyId)}</div>
+</div>`;
+  }).join('');
+
+  const emptyMsg = `<div class="neg-empty" style="padding:24px 0">El canvas está vacío.<br><small style="font-size:11px">Agrega notas, listas, tablas, recordatorios y gráficas.</small></div>`;
+  return `<div class="neg-sec">
+  <div style="padding:4px 0 8px;border-bottom:1px solid var(--border-default);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)"><i class="ti ti-layout-board"></i> Canvas</span>
+    <button class="btn btn-accent btn-sm" onclick="negNuevoBloque('${proyId}')"><i class="ti ti-plus"></i> Agregar bloque</button>
+  </div>
+  ${cards||emptyMsg}
+</div>`;
+}
+
+// ── Acciones de canvas ────────────────────────────────────────────────────────
+
+function negBloqueFormChange() {
+  const t = $('nb-tipo')?.value;
+  ['NOTA','LISTA','TABLA','RECORDATORIO','GRAFICA'].forEach(v => {
+    const d = $('nb-f-'+v);
+    if (d) d.style.display = v===t ? '' : 'none';
+  });
+}
+
+function negNuevoBloque(proyId) {
+  openM('Nuevo bloque', `
+<div style="display:flex;flex-direction:column;gap:10px">
+  <div><label>Tipo *</label>
+    <select id="nb-tipo" class="inp" onchange="negBloqueFormChange()" style="margin-top:4px">
+      <option value="NOTA">Nota</option>
+      <option value="LISTA">Lista / Checklist</option>
+      <option value="TABLA">Tabla</option>
+      <option value="RECORDATORIO">Recordatorio</option>
+      <option value="GRAFICA">Gráfica</option>
+    </select></div>
+  <div><label>Título (opcional)</label>
+    <input id="nb-titulo" class="inp" placeholder="Título del bloque" style="margin-top:4px"></div>
+  <div id="nb-f-NOTA"><label>Texto</label>
+    <textarea id="nb-nota-txt" class="inp" rows="4" placeholder="Texto... los enlaces se detectan automáticamente" style="margin-top:4px;resize:vertical"></textarea></div>
+  <div id="nb-f-LISTA" style="display:none"><label>Ítems (uno por línea)</label>
+    <textarea id="nb-lista-txt" class="inp" rows="4" placeholder="Ítem 1&#10;Ítem 2&#10;Ítem 3" style="margin-top:4px;resize:vertical"></textarea></div>
+  <div id="nb-f-TABLA" style="display:none">
+    <label>Columnas (separadas por coma)</label>
+    <input id="nb-tabla-cols" class="inp" placeholder="Nombre, Monto, Fecha" style="margin-top:4px">
+    <label style="margin-top:8px;display:block">Filas iniciales (una por línea, valores separados por coma)</label>
+    <textarea id="nb-tabla-rows" class="inp" rows="3" placeholder="valor1, valor2, valor3" style="margin-top:4px;resize:vertical"></textarea></div>
+  <div id="nb-f-RECORDATORIO" style="display:none">
+    <label>Texto del recordatorio</label>
+    <input id="nb-rec-txt" class="inp" placeholder="Recordatorio..." style="margin-top:4px">
+    <label style="margin-top:8px;display:block">Fecha</label>
+    <input id="nb-rec-fecha" class="inp" type="date" style="margin-top:4px"></div>
+  <div id="nb-f-GRAFICA" style="display:none">
+    <label>Fuente de datos</label>
+    <select id="nb-gf-fuente" class="inp" style="margin-top:4px">
+      <option value="flujo">Flujo de caja (ingresos vs gastos)</option>
+      <option value="categorias">Gastos por categoría</option>
+      <option value="cartera">Cartera (cobrar vs pagar)</option>
+    </select>
+    <label style="margin-top:8px;display:block">Tipo de gráfica</label>
+    <select id="nb-gf-tipo" class="inp" style="margin-top:4px">
+      <option value="bar">Barras</option>
+      <option value="line">Líneas</option>
+      <option value="doughnut">Dona</option>
+    </select></div>
+</div>`, async () => {
+    const tipo   = $('nb-tipo')?.value;
+    const titulo = $('nb-titulo')?.value?.trim()||null;
+    let contenido;
+    if (tipo==='NOTA') {
+      contenido = $('nb-nota-txt')?.value||'';
+    } else if (tipo==='LISTA') {
+      contenido = ($('nb-lista-txt')?.value||'').split('\n').map(l=>l.trim()).filter(Boolean).map(t=>({texto:t,marcado:false}));
+    } else if (tipo==='TABLA') {
+      const cols = ($('nb-tabla-cols')?.value||'').split(',').map(c=>c.trim()).filter(Boolean);
+      contenido  = {columns:cols, rows:($('nb-tabla-rows')?.value||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>l.split(',').map(c=>c.trim()))};
+    } else if (tipo==='RECORDATORIO') {
+      contenido = {texto:$('nb-rec-txt')?.value||'', fecha:$('nb-rec-fecha')?.value||null};
+    } else if (tipo==='GRAFICA') {
+      contenido = {fuente:$('nb-gf-fuente')?.value, tipo:$('nb-gf-tipo')?.value};
+    }
+    try {
+      await api('POST',`/api/negocios/proyecto/${proyId}/bloques`,{tipo,titulo,contenido});
+      S._negProyId = proyId;
+      const el=$('tab-negocios');
+      await _negRenderDetalle(el, proyId);
+      setTimeout(_initCollapsibles, 120);
+      toast('Bloque agregado');
+    } catch(e) { toast(e.message,'error'); return false; }
+  });
+}
+
+async function negDelBloque(proyId, bId) {
+  if (!confirm('¿Eliminar este bloque?')) return;
+  try {
+    await api('DELETE',`/api/negocios/bloque/${bId}`);
+    S._negBloques = (S._negBloques||[]).filter(b=>b.id!==bId);
+    const el=$('tab-negocios');
+    await _negRenderDetalle(el, proyId);
+    setTimeout(_initCollapsibles, 120);
+    toast('Bloque eliminado');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function negMoverBloque(proyId, bId, dir) {
+  const all = [...(S._negBloques||[])].sort((a,b)=>(a.orden||0)-(b.orden||0));
+  const idx = all.findIndex(b=>b.id===bId);
+  if (idx<0) return;
+  const swapIdx = dir==='up'?idx-1:idx+1;
+  if (swapIdx<0||swapIdx>=all.length) return;
+  const [a,b] = [all[idx], all[swapIdx]];
+  try {
+    await Promise.all([
+      api('PUT',`/api/negocios/bloque/${a.id}`,{orden: b.orden??swapIdx}),
+      api('PUT',`/api/negocios/bloque/${b.id}`,{orden: a.orden??idx})
+    ]);
+    const el=$('tab-negocios');
+    await _negRenderDetalle(el, proyId);
+    setTimeout(_initCollapsibles, 120);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function negToggleListaItem(bloqueId, itemIdx, checked, proyId) {
+  const bloque = (S._negBloques||[]).find(b=>b.id===bloqueId);
+  if (!bloque) return;
+  const items = Array.isArray(bloque.contenido) ? [...bloque.contenido] : [];
+  if (!items[itemIdx]) return;
+  items[itemIdx] = {...items[itemIdx], marcado:checked};
+
+  // Optimistic UI
+  const row = document.querySelector(`[data-bid="${bloqueId}"] .neg-lista-item:nth-child(${itemIdx+1})`);
+  const txt = row?.querySelector('.neg-lista-txt');
+  if (txt) txt.classList.toggle('done', checked);
+
+  try {
+    await api('PUT',`/api/negocios/bloque/${bloqueId}`,{contenido:items});
+    S._negBloques = (S._negBloques||[]).map(b=>b.id===bloqueId?{...b,contenido:items}:b);
+  } catch(e) {
+    toast('Error: '+e.message,'error');
+    const cb = row?.querySelector('.neg-lista-check');
+    if (cb) cb.checked = !checked;
+    if (txt) txt.classList.toggle('done', !checked);
+  }
+}
+
+async function negAddListaItem(bloqueId, proyId) {
+  const texto = prompt('Nuevo ítem:')?.trim();
+  if (!texto) return;
+  const bloque = (S._negBloques||[]).find(b=>b.id===bloqueId);
+  const items = Array.isArray(bloque?.contenido) ? [...bloque.contenido, {texto,marcado:false}] : [{texto,marcado:false}];
+  try {
+    await api('PUT',`/api/negocios/bloque/${bloqueId}`,{contenido:items});
+    S._negProyId = proyId;
+    const el=$('tab-negocios');
+    await _negRenderDetalle(el, proyId);
+    setTimeout(_initCollapsibles, 120);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── Formularios / acciones ────────────────────────────────────────────────────
+
+function negNuevoProyecto() {
+  openM('Nuevo proyecto', `
+<div class="neg-form-grid">
+  <div class="neg-form-full"><label>Nombre *</label><input id="np-nombre" class="inp" placeholder="Mi negocio"></div>
+  <div><label>Tipo</label><select id="np-tipo" class="inp">
+    ${['NEGOCIO','EMPRENDIMIENTO','PROYECTO','INVERSION','FREELANCE'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+  </select></div>
+  <div><label>Estado</label><select id="np-estado" class="inp">
+    ${['ACTIVO','PAUSADO','CERRADO'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+  </select></div>
+  <div><label>Meta ($)</label><input id="np-meta" class="inp" type="number" min="0" placeholder="0"></div>
+  <div><label>Capital inicial ($)</label><input id="np-cap" class="inp" type="number" min="0" placeholder="0"></div>
+  <div><label>Inicio</label><input id="np-ini" class="inp" type="date"></div>
+  <div><label>Vencimiento</label><input id="np-venc" class="inp" type="date"></div>
+  <div class="neg-form-full"><label>Descripción</label><input id="np-desc" class="inp" placeholder="Opcional"></div>
+</div>`, async () => {
+    const nombre = $('np-nombre')?.value?.trim();
+    if (!nombre) { toast('El nombre es requerido','warn'); return false; }
+    try {
+      await api('POST','/api/negocios',{
+        phone: S.phone, nombre,
+        tipo:  $('np-tipo')?.value,
+        estado:$('np-estado')?.value,
+        monto_meta:     +($('np-meta')?.value||0),
+        capital_inicial:+($('np-cap')?.value||0),
+        fecha_inicio:   $('np-ini')?.value||null,
+        fecha_vencimiento:$('np-venc')?.value||null,
+        descripcion:    $('np-desc')?.value||null
+      });
+      await load();
+      toast('Proyecto creado');
+    } catch(e) { toast(e.message,'error'); return false; }
+  });
+}
+
+function negEditarProyecto(id) {
+  const p = _negLista().find(x=>x.id===id); if (!p) return;
+  openM('Editar proyecto', `
+<div class="neg-form-grid">
+  <div class="neg-form-full"><label>Nombre *</label><input id="ep-nombre" class="inp" value="${p.nombre||''}"></div>
+  <div><label>Tipo</label><select id="ep-tipo" class="inp">
+    ${['NEGOCIO','EMPRENDIMIENTO','PROYECTO','INVERSION','FREELANCE'].map(t=>`<option value="${t}"${p.tipo===t?' selected':''}>${t}</option>`).join('')}
+  </select></div>
+  <div><label>Estado</label><select id="ep-estado" class="inp">
+    ${['ACTIVO','PAUSADO','CERRADO'].map(t=>`<option value="${t}"${p.estado===t?' selected':''}>${t}</option>`).join('')}
+  </select></div>
+  <div><label>Meta ($)</label><input id="ep-meta" class="inp" type="number" value="${p.monto_meta||0}"></div>
+  <div><label>Capital inicial ($)</label><input id="ep-cap" class="inp" type="number" value="${p.capital_inicial||0}"></div>
+  <div><label>Inicio</label><input id="ep-ini" class="inp" type="date" value="${fd(p.fecha_inicio)||''}"></div>
+  <div><label>Vencimiento</label><input id="ep-venc" class="inp" type="date" value="${fd(p.fecha_vencimiento)||''}"></div>
+  <div class="neg-form-full"><label>Descripción</label><input id="ep-desc" class="inp" value="${p.descripcion||''}"></div>
+</div>`, async () => {
+    const nombre = $('ep-nombre')?.value?.trim();
+    if (!nombre) { toast('El nombre es requerido','warn'); return false; }
+    try {
+      await api('PUT',`/api/negocios/proyecto/${id}`,{
+        nombre, tipo:$('ep-tipo')?.value, estado:$('ep-estado')?.value,
+        monto_meta:+($('ep-meta')?.value||0), capital_inicial:+($('ep-cap')?.value||0),
+        fecha_inicio:$('ep-ini')?.value||null, fecha_vencimiento:$('ep-venc')?.value||null,
+        descripcion:$('ep-desc')?.value||null
+      });
+      await load(); toast('Proyecto actualizado');
+    } catch(e) { toast(e.message,'error'); return false; }
+  });
+}
+
+async function negEliminarProyecto(id) {
+  if (!confirm('¿Eliminar este proyecto y todos sus datos?')) return;
+  try {
+    await api('DELETE',`/api/negocios/proyecto/${id}`);
+    S._negProyId = null;
+    await load();
+    toast('Proyecto eliminado');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+function negNuevaTrans(proyId) {
+  openM('Nueva transacción', `
+<div class="neg-form-grid">
+  <div class="neg-form-full"><label>Concepto *</label><input id="nt-conc" class="inp" placeholder="Venta de servicio"></div>
+  <div><label>Tipo</label><select id="nt-tipo" class="inp"><option value="INGRESO">INGRESO</option><option value="GASTO">GASTO</option></select></div>
+  <div><label>Monto ($) *</label><input id="nt-monto" class="inp" type="number" min="0" placeholder="0"></div>
+  <div><label>Fecha</label><input id="nt-fecha" class="inp" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+  <div><label>Categoría</label><input id="nt-cat" class="inp" placeholder="Opcional"></div>
+  <div><label>Medio de pago</label><select id="nt-medio" class="inp">
+    ${['Efectivo','Transferencia','Tarjeta débito','Tarjeta crédito','Otro'].map(m=>`<option value="${m}">${m}</option>`).join('')}
+  </select></div>
+  <div class="neg-form-full"><label>Notas</label><input id="nt-notas" class="inp" placeholder="Opcional"></div>
+</div>`, async () => {
+    const concepto=$('nt-conc')?.value?.trim(), monto=+($('nt-monto')?.value||0);
+    if (!concepto||!monto) { toast('Concepto y monto requeridos','warn'); return false; }
+    try {
+      await api('POST',`/api/negocios/proyecto/${proyId}/transacciones`,{
+        concepto, monto, tipo:$('nt-tipo')?.value,
+        fecha:$('nt-fecha')?.value, categoria:$('nt-cat')?.value||null,
+        medio_pago:$('nt-medio')?.value||null, notas:$('nt-notas')?.value||null
+      });
+      S._negProyId = proyId; await load(); toast('Transacción registrada');
+    } catch(e) { toast(e.message,'error'); return false; }
+  });
+}
+
+async function negDelTrans(proyId, id) {
+  if (!confirm('¿Eliminar esta transacción?')) return;
+  try { await api('DELETE',`/api/negocios/transaccion/${id}`); S._negProyId=proyId; await load(); toast('Eliminada'); }
+  catch(e) { toast(e.message,'error'); }
+}
+
+function negNuevoDeudor(proyId) {
+  openM('Nuevo deudor / cobro', `
+<div class="neg-form-grid">
+  <div class="neg-form-full"><label>Nombre *</label><input id="nd-nom" class="inp" placeholder="Cliente ABC"></div>
+  <div class="neg-form-full"><label>Concepto</label><input id="nd-conc" class="inp" placeholder="Servicio prestado"></div>
+  <div><label>Monto original ($) *</label><input id="nd-monto" class="inp" type="number" min="0" placeholder="0"></div>
+  <div><label>Vencimiento</label><input id="nd-venc" class="inp" type="date"></div>
+  <div class="neg-form-full"><label>Notas</label><input id="nd-notas" class="inp" placeholder="Opcional"></div>
+</div>`, async () => {
+    const nombre=$('nd-nom')?.value?.trim(), monto=+($('nd-monto')?.value||0);
+    if (!nombre||!monto) { toast('Nombre y monto requeridos','warn'); return false; }
+    try {
+      await api('POST',`/api/negocios/proyecto/${proyId}/deudores`,{
+        nombre, monto_original:monto, concepto:$('nd-conc')?.value||null,
+        fecha_vencimiento:$('nd-venc')?.value||null, notas:$('nd-notas')?.value||null
+      });
+      S._negProyId=proyId; await load(); toast('Deudor agregado');
+    } catch(e) { toast(e.message,'error'); return false; }
+  });
+}
+
+async function negDelDeudor(proyId, id) {
+  if (!confirm('¿Eliminar este deudor?')) return;
+  try { await api('DELETE',`/api/negocios/deudor/${id}`); S._negProyId=proyId; await load(); toast('Eliminado'); }
+  catch(e) { toast(e.message,'error'); }
+}
+
+function negNuevoAcreedor(proyId) {
+  openM('Nuevo acreedor / deuda', `
+<div class="neg-form-grid">
+  <div class="neg-form-full"><label>Nombre *</label><input id="na-nom" class="inp" placeholder="Proveedor XYZ"></div>
+  <div class="neg-form-full"><label>Concepto</label><input id="na-conc" class="inp" placeholder="Factura compra"></div>
+  <div><label>Monto original ($) *</label><input id="na-monto" class="inp" type="number" min="0" placeholder="0"></div>
+  <div><label>Vencimiento</label><input id="na-venc" class="inp" type="date"></div>
+  <div class="neg-form-full"><label>Notas</label><input id="na-notas" class="inp" placeholder="Opcional"></div>
+</div>`, async () => {
+    const nombre=$('na-nom')?.value?.trim(), monto=+($('na-monto')?.value||0);
+    if (!nombre||!monto) { toast('Nombre y monto requeridos','warn'); return false; }
+    try {
+      await api('POST',`/api/negocios/proyecto/${proyId}/acreedores`,{
+        nombre, monto_original:monto, concepto:$('na-conc')?.value||null,
+        fecha_vencimiento:$('na-venc')?.value||null, notas:$('na-notas')?.value||null
+      });
+      S._negProyId=proyId; await load(); toast('Acreedor agregado');
+    } catch(e) { toast(e.message,'error'); return false; }
+  });
+}
+
+async function negDelAcreedor(proyId, id) {
+  if (!confirm('¿Eliminar este acreedor?')) return;
+  try { await api('DELETE',`/api/negocios/acreedor/${id}`); S._negProyId=proyId; await load(); toast('Eliminado'); }
+  catch(e) { toast(e.message,'error'); }
+}
+
+function negRegistrarPago(tipo, id, proyId) {
+  const es = tipo==='deudor'?'cobro':'pago';
+  openM(`Registrar ${es}`, `
+<div>
+  <label>Monto a ${tipo==='deudor'?'cobrar':'pagar'} ($) *</label>
+  <input id="np-monto" class="inp" type="number" min="1" placeholder="0" style="margin-top:6px">
+  <div style="font-size:11px;color:var(--text-3);margin-top:6px">Se sumará al monto ${tipo==='deudor'?'cobrado':'pagado'} acumulado.</div>
+</div>`, async () => {
+    const monto=+($('np-monto')?.value||0);
+    if (!monto) { toast('Ingresa el monto','warn'); return false; }
+    try {
+      const ep = tipo==='deudor' ? 'deudor' : 'acreedor';
+      await api('POST',`/api/negocios/${ep}/${id}/pago`,{ monto });
+      S._negProyId=proyId; await load(); toast(`${tipo==='deudor'?'Cobro':'Pago'} registrado`);
+    } catch(e) { toast(e.message,'error'); return false; }
+  });
+}
+
+function negNuevaInversion(proyId) {
+  openM('Nueva inversión', `
+<div class="neg-form-grid">
+  <div class="neg-form-full"><label>Nombre *</label><input id="ni-nom" class="inp" placeholder="Fondo de inversión"></div>
+  <div><label>Tipo</label><select id="ni-tipo" class="inp">
+    ${['FONDO','ACCIONES','CRIPTO','INMUEBLE','OTRO'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+  </select></div>
+  <div><label>Estado</label><select id="ni-est" class="inp">
+    ${['ACTIVA','COMPLETADA','CANCELADA'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+  </select></div>
+  <div><label>Monto invertido ($) *</label><input id="ni-inv" class="inp" type="number" min="0" placeholder="0"></div>
+  <div><label>Meta ($)</label><input id="ni-meta" class="inp" type="number" min="0" placeholder="0"></div>
+  <div><label>Rendimiento esperado (%)</label><input id="ni-rend" class="inp" type="number" placeholder="0"></div>
+  <div><label>Vencimiento</label><input id="ni-venc" class="inp" type="date"></div>
+  <div class="neg-form-full"><label>Notas</label><input id="ni-notas" class="inp" placeholder="Opcional"></div>
+</div>`, async () => {
+    const nombre=$('ni-nom')?.value?.trim(), monto=+($('ni-inv')?.value||0);
+    if (!nombre||!monto) { toast('Nombre y monto requeridos','warn'); return false; }
+    try {
+      await api('POST',`/api/negocios/proyecto/${proyId}/inversiones`,{
+        nombre, monto_invertido:monto, tipo_inversion:$('ni-tipo')?.value,
+        estado:$('ni-est')?.value, monto_objetivo:+($('ni-meta')?.value||0)||null,
+        rendimiento_esperado:+($('ni-rend')?.value||0)||null,
+        fecha_vencimiento:$('ni-venc')?.value||null, notas:$('ni-notas')?.value||null
+      });
+      S._negProyId=proyId; await load(); toast('Inversión registrada');
+    } catch(e) { toast(e.message,'error'); return false; }
+  });
+}
+
+async function negDelInversion(proyId, id) {
+  if (!confirm('¿Eliminar esta inversión?')) return;
+  try { await api('DELETE',`/api/negocios/inversion/${id}`); S._negProyId=proyId; await load(); toast('Eliminada'); }
+  catch(e) { toast(e.message,'error'); }
+}
 
 // ── CHAT IA (PWA) ─────────────────────────────────────────────────────────────
 let _mediaRec = null, _audioChunks = [], _recording = false, _recTimer = null, _recognition = null;
