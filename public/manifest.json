@@ -1,12 +1,12 @@
 {
-  "name": "OnlyUs ♡",
-  "short_name": "OnlyUs",
+  "name": "Us ♡",
+  "short_name": "Us",
   "description": "Tu asistente financiero personal con IA",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0f0f13",
-  "theme_color": "#818cf8",
+  "theme_color": "#0ABFBC",
   "orientation": "any",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }

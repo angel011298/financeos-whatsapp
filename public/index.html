@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
-<title>OnlyUs ♡</title>
+<title>Us ♡</title>
 <!-- PWA -->
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="OnlyUs">
-<meta name="theme-color" content="#818cf8">
+<meta name="apple-mobile-web-app-title" content="Us">
+<meta name="theme-color" content="#0ABFBC">
 <!-- Libs -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
@@ -924,7 +924,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 <div class="welcome-ovl" id="welcome-modal">
   <div class="welcome-box">
     <div class="w-heart"><i class="ti ti-heart-handshake" style="font-size:52px;color:#f9a8d4"></i></div>
-    <h2>¡Bienvenida a OnlyUs!</h2>
+    <h2>¡Bienvenida a Us!</h2>
     <p>Este espacio fue creado por el amor de tu vida para que plasmes todas tus ideas, planes, proyectos y cualquier cosa que se te ocurra.<br><br>
     Velo también como tu <strong>contador personal vía WhatsApp</strong> — envía texto o audio con tus gastos, metas, lista de deseos… lo que sea.<br><br>
     Incluye una sección especial <strong>Nidito</strong> donde planearemos y visualizaremos nuestras metas juntos.<br><br>
@@ -947,7 +947,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
     <aside>
       <div class="logo">
         <div class="logo-text">
-          <h2><i class="ti ti-infinity" style="color:var(--accent-couple);font-size:18px"></i> Only<span style="color:var(--accent-couple)">·</span>Us</h2>
+          <h2><img src="/icon.svg" width="24" height="24" style="border-radius:5px;vertical-align:middle;flex-shrink:0" alt="Us"> <span style="color:#0ABFBC;font-weight:700;letter-spacing:-0.3px">Us</span></h2>
           <small id="id-label"></small>
         </div>
         <button class="icon-btn" onclick="toggleSidebar()" title="Ocultar sidebar">
@@ -1204,7 +1204,7 @@ function showPhoneInput(id) {
   $('auth-phone').style.display = 'flex';
   // Pantalla siempre neutral — el servidor decide quién eres al ingresar tu número
   $('auth-ava').innerHTML = '<i class="ti ti-infinity" style="font-size:46px;color:var(--accent)"></i>';
-  $('auth-name').textContent = 'OnlyUs';
+  $('auth-name').textContent = 'Us';
   $('auth-desc').innerHTML = 'Ingresa tu número de WhatsApp<br><span style="font-size:11px;color:var(--muted)">Solo se configura una vez en este dispositivo</span>';
   setTimeout(() => $('ph-input').focus(), 100);
 }
@@ -5744,7 +5744,7 @@ async function _loadChatHistory() {
     catch(_) {}
   } else {
     _appendMsg('bot',
-      'Hola 👋 Soy tu asistente OnlyUs.\n\nPuedes decirme:\n• "Gasté 350 en comida"\n• "Recibí $10,000 de sueldo"\n• "¿Cuánto debo en total?"\n• "Agrega viaje a Europa al nidito"\n\nO graba un audio con el micrófono 🎤',
+      'Hola 👋 Soy tu asistente Us.\n\nPuedes decirme:\n• "Gasté 350 en comida"\n• "Recibí $10,000 de sueldo"\n• "¿Cuánto debo en total?"\n• "Agrega viaje a Europa al nidito"\n\nO graba un audio con el micrófono 🎤',
       null, false);
   }
   _scrollChat();

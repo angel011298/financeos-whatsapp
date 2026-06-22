@@ -599,7 +599,7 @@ async function checkAndSendReminders(phone) {
     try {
       await twl.messages.create({
         from: WA_FROM, to: phone,
-        body: `🔔 *OnlyUs — Recordatorio*\nMañana: *${ev.titulo}*\n📅 ${ev.fecha}${ev.hora ? ' a las ' + ev.hora : ''}\n${ev.descripcion || ''}`
+        body: `🔔 *Us — Recordatorio*\nMañana: *${ev.titulo}*\n📅 ${ev.fecha}${ev.hora ? ' a las ' + ev.hora : ''}\n${ev.descripcion || ''}`
       });
       await sb.from('calendario').update({ notificado: true }).eq('id', ev.id);
     } catch (e) { console.error('reminder err:', e.message); }
@@ -1454,7 +1454,7 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
   }
 
   // ── Bloque estático (cacheable) — reglas y esquemas que no cambian ─────────
-  const staticBlock = `Eres Finn, el asistente financiero personal de Ángel.
+  const staticBlock = `Eres el asistente de Us, la app financiera personal de Ángel.
 
 CONTEXTO DE PAREJA:
 - Usuario: Ángel. Novia: Alicia. Comparten vida y gastos cotidianos.
@@ -2458,7 +2458,7 @@ app.post('/api/send-whatsapp-invite', async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ success: false, error: 'Phone required' });
-    const msg = `Hola 👋 Desde *OnlyUs* 💑\n\nPara conectarte al asistente y gestionar tus finanzas, responde a este mensaje o envía:\n\n*join everywhere-shot*\n\nLuego puedes hablar naturalmente: "gasté 250 en comida", "recibí $8000 de sueldo", "agrega a wishlist un sillón", etc.`;
+    const msg = `Hola 👋 Desde *Us* 💑\n\nPara conectarte al asistente y gestionar tus finanzas, responde a este mensaje o envía:\n\n*join everywhere-shot*\n\nLuego puedes hablar naturalmente: "gasté 250 en comida", "recibí $8000 de sueldo", "agrega a wishlist un sillón", etc.`;
     await twl.messages.create({ from: WA_FROM, to: phone, body: msg });
     res.json({ success: true, message: 'Invitación enviada a WhatsApp' });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -2936,7 +2936,7 @@ app.post('/webhook', async (req, res) => {
     const lower   = (Body || '').trim().toLowerCase();
 
     if (lower === 'ayuda' || lower === 'help') {
-      reply = `🤖 *Hola ${usuario.nombre}, soy Finn*\n\nTus comandos:\n` +
+      reply = `🤖 *Hola ${usuario.nombre}, soy tu asistente Us*\n\nTus comandos:\n` +
         `📊 *resumen* — resumen del día y mes\n` +
         `💳 *deudas* — estado de tus TDC\n` +
         `🎯 *metas* — tus objetivos de ahorro\n` +
@@ -3360,7 +3360,7 @@ app.post('/api/insights', async (req, res) => {
         ).join('\n')
       : 'sin patrones detectados aún';
 
-    const prompt = `Eres OnlyUs, asesor financiero personal amigable en México.
+    const prompt = `Eres el asistente de Us, asesor financiero personal amigable en México.
 Con los datos reales del usuario genera EXACTAMENTE 4 consejos financieros personalizados, concretos y útiles.
 Responde ÚNICAMENTE con JSON válido (sin texto adicional, sin markdown): {"consejos":[...]}
 
@@ -3425,14 +3425,14 @@ app.post('/api/nidito/upload-confirm', async (req, res) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({ status: 'OnlyUs v6 ✅', build: 'quincenal-panel-full' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'Us v6 ✅', build: 'quincenal-panel-full' }));
 
 // ── QUINCENAL IA — genera recomendaciones para una quincena ──────────────────
 app.post('/api/quincenal-ia', async (req, res) => {
   try {
     const { phone, qLabel, qFrom, qTo, espIngreso, realIngreso, espGasto, realGasto, items } = req.body;
     const fmt2 = n => '$' + Math.round(n||0).toLocaleString('es-MX');
-    const prompt = `Eres OnlyUs, asesor financiero personal cercano. Analiza este período financiero y da 3-4 recomendaciones concretas y accionables:
+    const prompt = `Eres el asistente de Us, asesor financiero personal cercano. Analiza este período financiero y da 3-4 recomendaciones concretas y accionables:
 
 Período: ${qLabel} (${qFrom} al ${qTo})
 ━━━ INGRESOS ━━━
@@ -3566,7 +3566,7 @@ async function seedAdminOnStartup() {
 
 const PORT   = process.env.PORT || 3000;
 const server = app.listen(PORT, async () => {
-  console.log('[OnlyUs] v6 ready on port', PORT);
+  console.log('[Us] v6 ready on port', PORT);
   await seedAdminOnStartup();
 });
 
