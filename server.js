@@ -1894,12 +1894,26 @@ async function callIA(user, sysBlocks, text, phone, direct = false) {
 
   if (user.ai_preference === 'CLAUDE') {
     return callClaude(user, sysBlocks, dbHistory, text, phone, direct);
-  } else {
-    const geminiHistory = dbHistory.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-    return callGemini(user, sysBlocks, geminiHistory, text, phone, direct);
+  }
+
+  const geminiHistory = dbHistory.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  try {
+    return await callGemini(user, sysBlocks, geminiHistory, text, phone, direct);
+  } catch (e) {
+    // Fallback a Claude si Gemini agotó la cuota diaria y hay clave disponible
+    const isQuota = String(e?.message || '').includes('429') &&
+      (e?.errorDetails || []).some(d =>
+        (d.violations || []).some(v => String(v.quotaId || '').includes('PerDay'))
+      );
+    if (isQuota && anthropic) {
+      console.warn('[Gemini→Claude] Cuota diaria agotada — fallback automático a Claude');
+      return callClaude(user, sysBlocks, dbHistory, text, phone, direct);
+    }
+    throw e;
   }
 }
 
