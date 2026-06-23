@@ -38,20 +38,27 @@ async function geminiWithRetry(fn, maxRetries = 3) {
       const isRetryable = msg.includes('503') || msg.includes('429') ||
                           msg.includes('Service Unavailable') || msg.includes('overloaded');
       if (isRetryable && attempt < maxRetries) {
-        // On 429, honor Gemini's suggested retryDelay (token bucket refill)
-        // instead of the default exponential backoff which is too short
+        // On 429, check if it's a daily quota (no point retrying until tomorrow)
+        let isDailyQuota = false;
         let delay = (attempt + 1) * 2000;
         if (msg.includes('429')) {
           try {
-            const retryInfo = (err.errorDetails || []).find(
-              d => typeof d['@type'] === 'string' && d['@type'].includes('RetryInfo')
+            const details = err.errorDetails || [];
+            isDailyQuota = details.some(d =>
+              (d.violations || []).some(v => String(v.quotaId || '').includes('PerDay'))
             );
-            if (retryInfo?.retryDelay) {
-              const secs = parseFloat(retryInfo.retryDelay);
-              if (secs > 0) delay = Math.min((secs + 5) * 1000, 90_000);
+            if (!isDailyQuota) {
+              const retryInfo = details.find(
+                d => typeof d['@type'] === 'string' && d['@type'].includes('RetryInfo')
+              );
+              if (retryInfo?.retryDelay) {
+                const secs = parseFloat(retryInfo.retryDelay);
+                if (secs > 0) delay = Math.min((secs + 5) * 1000, 90_000);
+              }
             }
           } catch {}
         }
+        if (isDailyQuota) throw err;  // cuota diaria — no reintentar
         console.warn(`[Gemini] ${err.message.slice(0,80)} — reintento ${attempt + 1}/${maxRetries} en ${delay}ms`);
         await new Promise(r => setTimeout(r, delay));
       } else {
