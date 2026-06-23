@@ -1116,6 +1116,52 @@ function tryParseBatch(text, today) {
     return `${y}-${String(mes).padStart(2,'0')}-${String(parseInt(m[1])).padStart(2,'0')}`;
   }
 
+  // ── Inline format: "hoy/ayer gasté $X en Y [con Z], $A en B, ..." ──────────
+  {
+    const _yd2 = new Date(today + 'T12:00:00'); _yd2.setDate(_yd2.getDate() - 1);
+    const yd2  = _yd2.toISOString().split('T')[0];
+    let tInl = text.trim();
+    let inlFecha = today;
+    if (/^hoy\s+/i.test(tInl))  tInl = tInl.replace(/^hoy\s+/i, '');
+    else if (/^ayer\s+/i.test(tInl)) { tInl = tInl.replace(/^ayer\s+/i, ''); inlFecha = yd2; }
+    if (/^(?:gasté|gaste|pagué|pague)\s+/i.test(tInl)) {
+      tInl = tInl.replace(/^(?:gasté|gaste|pagué|pague)\s+/i, '');
+      // Split "X, $N" and "X y $N" boundaries
+      const rawSegs = [];
+      for (const part of tInl.split(/,\s+/))
+        for (const sub of part.split(/\s+y\s+(?=\$?\d)/)) rawSegs.push(sub.trim());
+      const segs = rawSegs.filter(s => /^\$?\d/.test(s));
+      if (segs.length >= 1) {
+        const inlItems = [];
+        for (const seg of segs) {
+          const sm = seg.match(/^\$?(\d[\d.,]*)\s+en\s+(.+?)(?:\s+con\s+(.+?))?$/i);
+          if (!sm) continue;
+          const monto = parseMonto(sm[1]);
+          if (isNaN(monto) || monto <= 0) continue;
+          let concepto = sm[2].trim();
+          const medioStr = sm[3] ? sm[3].trim() : '';
+          let categoria = 'OTROS';
+          let medio_pago = medioStr ? normMedio(medioStr) : 'efectivo';
+          let conAlicia = false;
+          concepto = concepto.replace(/\(([^)]+)\)/g, (_, inner) => {
+            const c = normCat(inner.trim());
+            if (c !== 'OTROS') { categoria = c; return ''; }
+            if (/efectivo|d[eé]bito|transferencia|tdc|bbva|hey|amex|\bnu\b|rappi|palacio|liverpool/i.test(inner)) { medio_pago = normMedio(inner.trim()); return ''; }
+            return '';
+          }).trim();
+          if (/alicia|nosotros|fuimos/i.test(concepto)) conAlicia = true;
+          concepto = concepto.replace(/\bcon\s+(alicia|angel|ángel)\b/i, '').trim();
+          if (categoria === 'OTROS') categoria = inferCatFromText(concepto);
+          if (conAlicia && categoria !== 'Platina') categoria = 'Ocio';
+          const datos = { tipo:'GASTO', categoria, concepto: concepto || 'Gasto', monto, medio_pago, fecha: inlFecha };
+          if (conAlicia) datos.comentarios = 'Alicia';
+          inlItems.push({ tabla:'movimientos', accion:'crear', datos });
+        }
+        if (inlItems.length >= 1) return { intent:'REGISTRO', items: inlItems };
+      }
+    }
+  }
+
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   // Detect any list line: "N.-" prefix or leading "-"
   if (!lines.some(l => /^(?:\d+\.-?\s+|-\s*)\d/.test(l))) return null;
@@ -1449,8 +1495,9 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
   const phone = user.telefono;
   const mesStr = mes();
 
-  // Fetches paralelos — movimientos solo se trae con detalle en CONSULTA
+  // Fetches paralelos — movimientos y datos extra solo en CONSULTA
   const movsLimit = intent === 'CONSULTA' ? 10 : 0;
+  const extLimit  = intent === 'CONSULTA' ? 1  : 0;  // negocios/despensa solo para consultas
   const [tdcR, movsR, metasR, calR, patrR, prspR, niditoR, negR, despR] = await Promise.all([
     sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
     movsLimit > 0
@@ -1465,10 +1512,14 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
     sb.from('presupuesto').select('*').eq('user_phone', phone).eq('mes', mesStr),
     sb.from('nidito').select('*').is('deleted_at', null)
         .order('prioridad', { ascending: false }).limit(20),
-    sb.from('neg_proyectos').select('id,nombre,tipo,estado,monto_meta,capital_inicial')
-        .eq('user_phone', phone).is('deleted_at', null).order('orden').limit(10),
-    sb.from('despensa').select('id,nombre,cantidad,unidad,categoria,comprado')
-        .eq('user_phone', phone).eq('comprado', false).limit(20),
+    extLimit > 0
+      ? sb.from('neg_proyectos').select('id,nombre,tipo,estado,monto_meta,capital_inicial')
+          .eq('user_phone', phone).is('deleted_at', null).order('orden').limit(10)
+      : Promise.resolve({ data: [] }),
+    extLimit > 0
+      ? sb.from('despensa').select('id,nombre,cantidad,unidad,categoria,comprado')
+          .eq('user_phone', phone).eq('comprado', false).limit(20)
+      : Promise.resolve({ data: [] }),
   ]);
 
   // Para gastos/ingresos del mes siempre necesitamos un agregado ligero
@@ -3349,7 +3400,7 @@ app.post('/api/chat-web', async (req, res) => {
         const sysBlocks = await buildSystemPrompt(user, intent);
         reply = await withTimeout(
           callIA(user, sysBlocks, input, phone, true),
-          12000,
+          22000,
           '⚠️ Gemini tardó demasiado en responder. Intenta de nuevo, o escribe "gasté [monto] en [concepto]" para registrar directo.'
         );   // direct=true → registros sin menú
       }
