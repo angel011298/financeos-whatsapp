@@ -1071,6 +1071,10 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
         <div class="sheet-item" id="mn-ghost-item" style="display:none!important" onclick="toggleGhost();closeMobileMore()">
           <i class="ti ti-eye"></i><span>Ver Alicia</span>
         </div>
+        <!-- Enlace para Alicia — visible solo para Ángel (identity A) -->
+        <div class="sheet-item" id="mn-alicia-link" style="display:none" onclick="genAliciaLink();closeMobileMore()">
+          <i class="ti ti-link"></i><span>Enlace para Alicia</span>
+        </div>
         <div class="sheet-item" style="color:var(--red)" onclick="logout()">
           <i class="ti ti-logout"></i><span>Salir</span>
         </div>
@@ -1246,7 +1250,10 @@ function showApp(id, firstTime = false) {
   $('app').style.display        = 'block';
   $('id-label').textContent = id === 'A' ? 'Ángel' : '';
   // ghost-btn y mn-ghost-item permanecen ocultos — acceso via URL ?alicia
-  if (id === 'A') { const alb = $('alicia-link-btn'); if (alb) alb.style.display = 'flex'; }
+  if (id === 'A') {
+    const alb = $('alicia-link-btn'); if (alb) alb.style.display = 'flex';
+    const mnAlb = $('mn-alicia-link'); if (mnAlb) mnAlb.style.display = 'flex';
+  }
   if (id === 'B') $('wa-btn').style.display = 'flex';
   const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
   // Default to chat in PWA / standalone mode (iOS home screen shortcut)
