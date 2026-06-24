@@ -573,7 +573,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .chat-mode{position:fixed;inset:0;width:100%;overflow:hidden}
   .chat-mode #mobile-nav{display:none!important}
   .chat-mode main{padding:0!important;overflow:hidden;height:100%}
-  .chat-mode .chat-wrap{position:fixed;left:0;right:0;top:var(--vvtop,0px);height:var(--vvh,100svh);padding:0 14px;background:var(--bg-app);z-index:100;box-sizing:border-box}
+  .chat-mode .chat-wrap{position:fixed;left:0;right:0;top:var(--vvtop,0px);height:var(--vvh,100svh);padding:env(safe-area-inset-top,0px) 14px 0;background:var(--bg-app);z-index:100;box-sizing:border-box}
   .chat-mode .chat-nav-back{display:flex}
   /* ── Calendar day panel: bottom sheet on mobile */
   .cal-wrap{flex-direction:column}
