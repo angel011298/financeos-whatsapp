@@ -4739,6 +4739,7 @@ function rDespensa() {
     numbered: true,
     empty: 'Sin artículos pendientes',
     columns: [
+      { key:'compra_q',     label:'¿Compra esta quincena?', sortable:false, value: r => r.compra_quincena !== false ? 'Sí' : 'No', width:'120px' },
       { key:'nombre',       label:'Producto',               filter:'text',   value: r => r.nombre || '',         width:'130px' },
       { key:'nombre_of',    label:'Nombre Oficial',         filter:'text',   value: r => r.nombre_oficial || '', width:'130px' },
       { key:'precio_est',   label:'Precio estimado',        num:true,        value: r => r.precio_est ?? '',     width:'100px' },
@@ -4752,7 +4753,6 @@ function rDespensa() {
           if (hasW && hasA) return r.precio_walmart <= r.precio_amazon ? 'Walmart' : 'Amazon';
           if (hasW) return 'Walmart'; if (hasA) return 'Amazon'; return '—';
         }, width:'96px' },
-      { key:'compra_q',     label:'¿Compra esta quincena?', sortable:false, value: r => r.compra_quincena !== false ? 'Sí' : 'No', width:'120px' },
       { key:'_acts',        label:'',                       sortable:false,  value: r => '', width:'64px' }
     ],
     renderRow: r => {
@@ -4769,6 +4769,12 @@ function rDespensa() {
       const cq = r.compra_quincena !== false;
       const peVal = r.precio_est > 0 ? r.precio_est : '';
       return `<tr style="${r.comprado?'opacity:.5':''}">
+        <td style="text-align:center">
+          <button onclick="toggleCompraQ(${r.id},${!cq})" title="${cq?'Quitar de esta quincena':'Incluir en esta quincena'}"
+            style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;color:${cq?'var(--color-income)':'var(--text-3)'}">
+            <i class="ti ti-${cq?'checkbox':'square'}"></i>
+          </button>
+        </td>
         <td><input class="td-edit" value="${(r.nombre||'').replace(/"/g,'&quot;')}" placeholder="Producto"
           onblur="if(this.value.trim()!==\`${(r.nombre||'').replace(/`/g,'\\`')}\`)updateDespensaField(${r.id},'nombre',this.value.trim()||'${(r.nombre||'').replace(/'/g,"\\'")}')"
           onkeydown="if(event.key==='Enter')this.blur()"></td>
@@ -4785,12 +4791,6 @@ function rDespensa() {
         <td style="color:#ff9900;font-weight:600">${aPrice}</td>
         <td style="text-align:center">${aLink}</td>
         <td style="color:${mejorColor};font-weight:700;text-align:center">${mejor}</td>
-        <td style="text-align:center">
-          <button onclick="toggleCompraQ(${r.id},${!cq})" title="${cq?'Quitar de esta quincena':'Incluir en esta quincena'}"
-            style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;color:${cq?'var(--color-income)':'var(--text-3)'}">
-            <i class="ti ti-${cq?'checkbox':'square'}"></i>
-          </button>
-        </td>
         <td style="text-align:center;white-space:nowrap">
           <button onclick="toggleComprado(${r.id},${!r.comprado})" style="background:none;border:none;cursor:pointer;color:${r.comprado?'var(--color-income)':'var(--text-3)'};font-size:15px;padding:2px 4px" title="${r.comprado?'Desmarcar':'Marcar comprado'}"><i class="ti ti-${r.comprado?'check-circle':'circle'}"></i></button>
           <button onclick="dDespensa(${r.id})" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:15px;padding:2px 4px" title="Eliminar"><i class="ti ti-trash"></i></button>
