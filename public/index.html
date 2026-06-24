@@ -3978,9 +3978,7 @@ function rMovs() {
   const gastos  =filtered.filter(m=>m.tipo==='GASTO');
   const ingresos=filtered.filter(m=>m.tipo==='INGRESO');
   const totGas  =gastos.reduce((a,m)=>a+(m.monto||0),0);
-  const totIngReal=ingresos.reduce((a,m)=>a+(m.monto||0),0);
-  const refs    =(S.data.user||{}).external_refs||{};
-  const totIng  =(f.desde&&f.hasta) ? (calcIngresosEsperadosPeriodo(refs,f.desde,f.hasta)||totIngReal) : totIngReal;
+  const totIng  =ingresos.reduce((a,m)=>a+(m.monto||0),0);
   const neto    =totIng-totGas;
 
   const catPills=CATS.map(c=>{
@@ -4039,7 +4037,7 @@ function rMovs() {
   <div class="kpi">
     <div class="kpi-lbl"><i class="ti ti-trending-up"></i> Ingresos</div>
     <div class="kpi-val green">${fmt(totIng)}</div>
-    <div class="kpi-sub">${totIngReal>0&&totIngReal!==totIng?`Real: ${fmt(totIngReal)} · `:''}${ingresos.length} registro${ingresos.length!==1?'s':''}</div>
+    <div class="kpi-sub">${ingresos.length} registro${ingresos.length!==1?'s':''}</div>
   </div>
   <div class="kpi">
     <div class="kpi-lbl"><i class="ti ti-trending-down"></i> Egresos</div>
