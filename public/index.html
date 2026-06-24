@@ -299,7 +299,8 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .b-urgente{background:#7f1d1d;color:#fca5a5}.b-activo{background:#1e3a5f;color:#93c5fd}
 .b-paralelo{background:#4c1d95;color:#c4b5fd}.b-negociar{background:#78350f;color:#fcd34d}
 .b-liquidada{background:#064e3b;color:#6ee7b7}
-.acts{display:flex;gap:3px}
+.acts{display:flex;gap:4px;justify-content:center;flex-wrap:nowrap}
+.acts .btn{flex:0 0 auto}
 /* Progress bars */
 .pbar{background:var(--bg-surface-2);border-radius:var(--radius-pill);height:6px;overflow:hidden;display:inline-block;vertical-align:middle}
 .pfill{height:100%;border-radius:var(--radius-pill);background:var(--accent-primary)}
@@ -734,9 +735,15 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   .mbtns .btn{flex:1;justify-content:center;min-height:40px}
   /* Movimientos y Deudas: TODAS las columnas visibles en móvil con scroll
      horizontal y ancho mínimo legible (antes se ocultaba Categoría — corregido) */
-  #tbl-movs-box table{min-width:760px}
+  #tbl-movs-box table{min-width:800px}
   #tbl-tdc-box table{min-width:720px}
-#tbl-movs-box table{table-layout:fixed}
+  #tbl-movs-box table{table-layout:fixed}
+  /* Botones de acción compactos para que NUNCA se corten dentro de su columna */
+  .acts{gap:4px}
+  .acts .btn{padding:7px 9px!important;min-height:36px}
+  .acts .btn i{font-size:15px}
+  /* La última columna (acciones) y su celda no deben recortar contenido */
+  .tbl-scroll td:last-child,.tbl-scroll th:last-child{overflow:visible}
 }
 
 /* ═══════════════════════════════════════════════════════ NIDITO v8 */
@@ -1362,22 +1369,20 @@ async function sendWhatsAppInvite() {
 }
 
 async function genAliciaLink() {
-  let bPhone = localStorage.getItem('fos_phone_B');
-  if (!bPhone) {
-    const r = await api('GET', '/api/usuarios');
-    if (r.success && r.data) {
-      const otros = r.data.filter(u => u.telefono !== S.adminPhone);
-      if (otros.length) { bPhone = otros[0].telefono; localStorage.setItem('fos_phone_B', bPhone); }
-    }
-  }
-  if (!bPhone) { toast('Alicia aún no tiene cuenta registrada', 'error'); return; }
-  const digits = bPhone.replace(/\D/g, '');
-  const url = `${location.origin}/?b=${digits}`;
+  // El servidor emite un token HMAC firmado para la cuenta de Alicia (no-admin).
+  // Nunca expone el teléfono en claro ni puede alterarse para ver el dashboard de Ángel.
   try {
-    await navigator.clipboard.writeText(url);
-    toast('Enlace copiado — envíaselo a Alicia por WhatsApp', 'success');
-  } catch {
-    window.prompt('Copia este enlace y envíaselo a Alicia:', url);
+    const r = await api('POST', '/api/share-link', { phone: S.phone });
+    if (!r || r.success === false || !r.token) { toast(r?.error || 'No se pudo generar el enlace', 'error'); return; }
+    const url = `${location.origin}/?t=${r.token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast(`Enlace seguro copiado — envíaselo a ${r.nombre || 'Alicia'} por WhatsApp`, 'success');
+    } catch {
+      window.prompt('Copia este enlace y envíaselo a Alicia:', url);
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
   }
 }
 
@@ -2140,10 +2145,6 @@ function rQuincenaPanel(ctx) {
   return `<div class="q-panel">
   <div class="q-hdr">
     <span style="font-size:12px;font-weight:600;color:var(--text-2)">${qi.label}</span>
-    <div style="display:flex;gap:5px;flex-wrap:wrap">
-      <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
-      <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);font-size:11px" onclick="oAddExpItem('gastos')"><i class="ti ti-plus"></i> Gasto fijo</button>
-    </div>
   </div>
 
   <!-- Stats row -->
@@ -2166,7 +2167,10 @@ function rQuincenaPanel(ctx) {
 
   <!-- Ingresos esperados this quincena -->
   <div style="margin-bottom:10px">
-    <div class="q-section-lbl"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esta quincena</div>
+    <div class="q-section-lbl" style="justify-content:space-between">
+      <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esta quincena</span>
+      <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
+    </div>
     ${ingEspQ.length ? ingEspQ.map(ing=>`
     <div class="q-item-row">
       <span style="font-size:12px">${ing.descripcion} <span style="color:var(--muted);font-size:11px">días ${(ing.dias||[]).filter(d=>dayInQuincena(d,qi)).join(', ')}</span></span>
@@ -2202,6 +2206,9 @@ function rQuincenaPanel(ctx) {
     <div class="sec-hdr" style="margin:14px 0 12px">
       <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta quincena</h2></div>
     </div>
+    <div style="display:flex;justify-content:center;margin-bottom:14px">
+      <button class="btn btn-accent" style="padding:11px 22px;font-size:15px;font-weight:700;gap:8px" onclick="oAddProxGasto()"><i class="ti ti-plus" style="font-size:17px"></i> Registrar Próximo Gasto</button>
+    </div>
     ${gasEsp.length ? `
     ${tglBtn('tbl-gastos-q-'+ctx)}
     <div style="overflow-x:auto">
@@ -2211,6 +2218,7 @@ function rQuincenaPanel(ctx) {
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;width:36px">#</th>
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Concepto</th>
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Monto</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Categoría</th>
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Forma de pago</th>
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Comentarios</th>
           <th style="width:56px"></th>
@@ -2222,6 +2230,7 @@ function rQuincenaPanel(ctx) {
             <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
             <td style="padding:10px;text-align:center"><span style="display:inline-flex;align-items:center;gap:5px;font-weight:500"><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Despensa</span></td>
             <td style="padding:10px;text-align:center;font-weight:700;color:var(--red)">${fmt(g.monto)}</td>
+            <td style="padding:10px;text-align:center"><span class="cat-bdg" style="background:${(CAT_CLR['Despensa']||'#94a3b8')}20;color:${CAT_CLR['Despensa']||'#94a3b8'}">Despensa</span></td>
             <td style="padding:10px;text-align:center;color:var(--text-3)">—</td>
             <td style="padding:10px;text-align:center;color:var(--text-3)">—</td>
             <td style="padding:10px;text-align:center;white-space:nowrap">
@@ -2239,10 +2248,16 @@ function rQuincenaPanel(ctx) {
                         : fpDebit ? '<i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito'
                         : '<span style="color:var(--text-3)">—</span>';
           const fpColor = fpEfect ? 'var(--color-income)' : fpDebit ? 'var(--accent-primary)' : 'var(--text-3)';
+          const catG    = g.categoria || '';
+          const cClrG   = CAT_CLR[catG] || '#94a3b8';
+          const catCell = catG
+            ? `<span class="cat-bdg" style="background:${cClrG}20;color:${cClrG}">${catG}</span>`
+            : '<span style="color:var(--text-3)">—</span>';
           return `<tr style="border-bottom:1px solid var(--border-default)">
             <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
             <td style="padding:10px;text-align:center;font-weight:500">${g.descripcion}</td>
             <td style="padding:10px;text-align:center;font-weight:700;color:var(--red)">${fmt(g.monto)}</td>
+            <td style="padding:10px;text-align:center">${catCell}</td>
             <td style="padding:10px;text-align:center">
               <div style="display:inline-flex;gap:4px;align-items:center">
                 <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
@@ -2268,7 +2283,7 @@ function rQuincenaPanel(ctx) {
     <div class="q-total-widget">
       <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
       <span class="qt-val red">${fmt(totalGasEsp)}</span>
-    </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Sin gastos fijos configurados. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('gastos')">+ Agregar</button></div>`}
+    </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Aún no hay gastos registrados esta quincena. Usa el botón <strong>Registrar Próximo Gasto</strong> de arriba.</div>`}
     <div style="margin-top:10px;background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;border:1px solid var(--border-default)">
       <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:6px">Balance — ${qi.label}${ctBtns(qChId,LINE,'bar')}</div>
       <div class="cwrap"><canvas id="${qChId}"></canvas></div>
@@ -2326,6 +2341,36 @@ async function loadQIA(ctx, qi) {
   btn.disabled  = false;
 }
 
+// Formulario enriquecido de gasto: Concepto, Monto, Forma de pago, Categoría, Comentarios
+function _gastoFormBody(item) {
+  item = item || {};
+  const fp  = item.forma_pago || '';
+  const cat = item.categoria  || '';
+  return `
+<div class="fr"><label>Concepto</label><input id="ei-desc" value="${(item.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Ej: Renta, Gasolina, Súper"></div>
+<div class="fr"><label>Monto ($)</label><input id="ei-monto" type="number" min="0" step="1" value="${item.monto||''}" placeholder="0"></div>
+<div class="f2">
+  <div class="fr"><label>Forma de pago</label><select id="ei-fp">
+    <option value=""${!fp?' selected':''}>— Sin definir —</option>
+    <option value="efectivo"${fp==='efectivo'?' selected':''}>Efectivo</option>
+    <option value="tarjeta_debito"${fp==='tarjeta_debito'?' selected':''}>T. Débito</option>
+  </select></div>
+  <div class="fr"><label>Categoría</label><select id="ei-cat">
+    <option value=""${!cat?' selected':''}>— Sin categoría —</option>
+    ${CATS.map(c=>`<option value="${c}"${cat===c?' selected':''}>${c}</option>`).join('')}
+  </select></div>
+</div>
+<div class="fr"><label>Comentarios</label><input id="ei-coment" value="${(item.comentarios||'').replace(/"/g,'&quot;')}" placeholder="Opcional"></div>`;
+}
+
+// Registrar Próximo Gasto — gasto a realizar en la quincena seleccionada
+function oAddProxGasto() {
+  S.mctx = { mode: 'add-exp-item', tipo: 'gastos', rich: true };
+  $('m-title').textContent = 'Registrar Próximo Gasto';
+  $('m-body').innerHTML = _gastoFormBody({});
+  $('ovl').classList.add('open');
+}
+
 function oAddExpItem(tipo) {
   S.mctx = { mode: 'add-exp-item', tipo };
   $('m-title').textContent = tipo === 'ingresos' ? '+ Ingreso Esperado' : '+ Gasto Fijo Quincenal';
@@ -2378,12 +2423,16 @@ function oEditExpItem(tipo, id) {
   const item = S._expItemData[id];
   if (!item) return;
   const isIng = tipo === 'ingresos';
-  S.mctx = { mode: 'edit-exp-item', tipo, itemId: id };
-  $('m-title').textContent = isIng ? 'Editar Ingreso Esperado' : 'Editar Gasto Fijo';
-  $('m-body').innerHTML = `
-<div class="fr"><label>Descripción</label><input id="ei-desc" value="${(item.descripcion||'').replace(/"/g,'&quot;')}" placeholder="${isIng?'Ej: Sueldo':'Ej: Transporte'}"></div>
+  S.mctx = { mode: 'edit-exp-item', tipo, itemId: id, rich: !isIng };
+  $('m-title').textContent = isIng ? 'Editar Ingreso Esperado' : 'Editar Gasto';
+  if (!isIng) {
+    $('m-body').innerHTML = _gastoFormBody(item);
+  } else {
+    $('m-body').innerHTML = `
+<div class="fr"><label>Descripción</label><input id="ei-desc" value="${(item.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Ej: Sueldo"></div>
 <div class="fr"><label>Monto por quincena ($)</label><input id="ei-monto" type="number" min="0" step="1" value="${item.monto||0}"></div>
-${isIng ? `<div class="fr"><label>Días de cobro <span style="color:var(--muted);font-size:10px">(separados por coma)</span></label><input id="ei-dias" value="${(item.dias||[]).join(',')}" placeholder="Ej: 10,25"></div>` : ''}`;
+<div class="fr"><label>Días de cobro <span style="color:var(--muted);font-size:10px">(separados por coma)</span></label><input id="ei-dias" value="${(item.dias||[]).join(',')}" placeholder="Ej: 10,25"></div>`;
+  }
   $('ovl').classList.add('open');
 }
 
@@ -4043,7 +4092,7 @@ function _updateMovsTable(filtered) {
       {key:'categoria',label:'Categoría',filter:'select',value:m=>m.categoria||'—',width:'110px'},
       {key:'comentarios',label:'Comentarios',filter:'text',value:m=>m.comentarios||'',width:'140px'},
       {key:'medio_pago',label:'Medio',filter:'select',value:m=>m.medio_pago||'—',width:'92px'},
-      {key:'_acts',label:'',sortable:false,width:'98px'}],
+      {key:'_acts',label:'',sortable:false,width:'140px'}],
     rows, numbered:true, renderRow:movRow, footer
   });
 
@@ -4456,6 +4505,12 @@ async function saveM() {
     if (ctx.tipo === 'ingresos') {
       const diasRaw = ($('ei-dias')?.value || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0 && n <= 31);
       item.dias = diasRaw.length ? diasRaw : [];
+    } else {
+      // Gastos: campos enriquecidos (presentes solo en el form "Registrar Próximo Gasto" / editar gasto)
+      const fpEl = $('ei-fp'), catEl = $('ei-cat'), comEl = $('ei-coment');
+      if (fpEl)  item.forma_pago  = fpEl.value || '';
+      if (catEl) item.categoria   = catEl.value || '';
+      if (comEl) item.comentarios = (comEl.value || '').trim();
     }
     const action = ctx.mode === 'edit-exp-item' ? 'update' : 'add';
     const qKey = S.currentQKey || null;
@@ -6154,18 +6209,27 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     }
   });
 
-  // ── Deep link ?b=DIGITS — pre-autentica a Alicia sin pedir teléfono ─────────
-  // Ángel genera este enlace con el botón "Enlace para Alicia" del sidebar.
+  // ── Deep link seguro ?t=TOKEN — pre-autentica a Alicia sin pedir teléfono ───
+  // El token va firmado con HMAC en el servidor: no puede alterarse para acceder
+  // a otra cuenta y el servidor rechaza tokens de cuentas admin. (El antiguo
+  // ?b=<telefono> quedó OBSOLETO y se ignora — era una vulnerabilidad.)
   {
-    const _bPh = new URLSearchParams(location.search).get('b');
-    if (_bPh) {
-      const phone = normalizePhone(_bPh);
-      localStorage.setItem('fos_phone_B', phone);
-      localStorage.setItem('fos_identity', 'B');
-      S.identity = 'B';
-      S.phone = phone;
+    const _tok = new URLSearchParams(location.search).get('t');
+    if (_tok) {
       history.replaceState(null, '', location.pathname);
-      showApp('B', true);
+      api('GET', '/api/resolve-share/' + encodeURIComponent(_tok))
+        .then(r => {
+          if (r && r.success && r.phone) {
+            localStorage.setItem('fos_phone_B', r.phone);
+            localStorage.setItem('fos_identity', 'B');
+            S.identity = 'B';
+            S.phone = r.phone;
+            showApp('B', true);
+          } else {
+            showPhoneInput(null);
+          }
+        })
+        .catch(() => showPhoneInput(null));
       return;
     }
   }

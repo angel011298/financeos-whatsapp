@@ -6,6 +6,7 @@ const WebSocket        = require('ws');
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios     = require('axios');
+const crypto    = require('crypto');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -2020,6 +2021,60 @@ app.get('/api/usuarios', async (req, res) => {
   try {
     const { data } = await sb.from('usuarios').select('telefono, nombre, role, ai_preference');
     res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── ENLACE SEGURO DE ACCESO (token HMAC firmado) ────────────────────────────
+// Reemplaza el viejo deep-link ?b=<telefono> (vulnerable: cualquiera podía poner
+// el teléfono de Ángel en la URL y ver su dashboard). El token va firmado con
+// HMAC-SHA256: no se puede alterar para apuntar a otra cuenta, y el resolver
+// rechaza explícitamente cuentas ADMIN_A. Los enlaces ?b= antiguos quedan muertos
+// porque el cliente ya no los interpreta; para invalidar TODOS los tokens emitidos
+// basta cambiar la env var SHARE_SECRET.
+const SHARE_SECRET = process.env.SHARE_SECRET || process.env.CRON_SECRET || process.env.SUPABASE_KEY || 'us-share-fallback';
+function signShareToken(phone) {
+  const payload = Buffer.from(String(phone), 'utf8').toString('base64url');
+  const sig = crypto.createHmac('sha256', SHARE_SECRET).update(String(phone)).digest('base64url');
+  return `${payload}.${sig}`;
+}
+function verifyShareToken(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 2) return null;
+  let phone;
+  try { phone = Buffer.from(parts[0], 'base64url').toString('utf8'); } catch { return null; }
+  if (!phone) return null;
+  const expected = crypto.createHmac('sha256', SHARE_SECRET).update(phone).digest('base64url');
+  const a = Buffer.from(parts[1]); const b = Buffer.from(expected);
+  if (a.length !== b.length) return null;
+  if (!crypto.timingSafeEqual(a, b)) return null;
+  return phone;
+}
+
+// Genera el enlace seguro para el usuario NO admin (Alicia). Solo Ángel (ADMIN_A)
+// puede generarlo. Nunca emite token para una cuenta admin.
+app.post('/api/share-link', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ success: false, error: 'Falta phone' });
+    const { data: caller } = await sb.from('usuarios').select('role').eq('telefono', phone).single();
+    if (!caller || caller.role !== 'ADMIN_A') return res.status(403).json({ success: false, error: 'Solo el administrador puede generar el enlace' });
+    const { data: users } = await sb.from('usuarios').select('telefono, nombre, role');
+    const target = (users || []).find(u => u.role !== 'ADMIN_A');
+    if (!target) return res.status(404).json({ success: false, error: 'No hay usuario destino registrado' });
+    const token = signShareToken(target.telefono);
+    res.json({ success: true, token, nombre: target.nombre || 'Alicia' });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Resuelve un token de acceso → devuelve el teléfono SOLO si es cuenta no-admin.
+app.get('/api/resolve-share/:token', async (req, res) => {
+  try {
+    const phone = verifyShareToken(req.params.token);
+    if (!phone) return res.status(400).json({ success: false, error: 'Enlace inválido o expirado' });
+    const { data } = await sb.from('usuarios').select('telefono, nombre, role').eq('telefono', phone).single();
+    if (!data) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+    if (data.role === 'ADMIN_A') return res.status(403).json({ success: false, error: 'No permitido' });
+    res.json({ success: true, phone: data.telefono, identity: 'B', nombre: data.nombre || 'Alicia' });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
