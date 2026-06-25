@@ -2707,7 +2707,7 @@ ${periodoSelectorHTML()}
   </div>` : '';
   })()}
 </div>
-${rQuincenaPanel('dash')}
+<div id="quincena-dash-section"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div></div>
 <div id="movs-section"></div>
 <div id="movs-table-section"></div>
@@ -2723,6 +2723,7 @@ ${rQuincenaPanel('dash')}
 <div id="insights-section"></div>
 `;
 
+  $('quincena-dash-section').innerHTML = rQuincenaPanel('dash');
   rMovs();
   const cgRaw=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
   const cg={}; Object.entries(cgRaw).forEach(([k,v])=>{ const nk=k==='Pasajes'?'Transporte':k; cg[nk]=(cg[nk]||0)+v; });
@@ -4887,12 +4888,17 @@ async function updateDespensaField(id, field, value) {
   }
 }
 
+function refreshQuincenaPanel() {
+  const el = $('quincena-dash-section');
+  if (el) el.innerHTML = rQuincenaPanel('dash');
+}
+
 async function toggleCompraQ(id, val) {
   // Actualizar estado local primero para UX fluida
   const item = (S.data.despensa || []).find(x => x.id === id);
   if (item) item.compra_quincena = val;
   rDespensa();
-  rDash();
+  refreshQuincenaPanel();
   try {
     await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, compra_quincena: val });
   } catch(e) {
