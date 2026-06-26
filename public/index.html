@@ -4877,8 +4877,8 @@ async function updateDespensaField(id, field, value) {
   if (!item) return;
   const prev = item[field];
   item[field] = value;
-  // Re-render totals/dash without re-rendering table (el input sigue focused)
-  rDash();
+  rDespensa();
+  refreshQuincenaPanel();
   try {
     await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, [field]: value });
   } catch(e) {
