@@ -1920,29 +1920,12 @@ async function callGemini(user, sysBlocks, geminiHistory, text, phone, direct = 
 async function callIA(user, sysBlocks, text, phone, direct = false) {
   const dbHistory = await cargarHistorial(phone);
 
-  if (user.ai_preference === 'CLAUDE') {
-    return callClaude(user, sysBlocks, dbHistory, text, phone, direct);
-  }
-
   const geminiHistory = dbHistory.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
 
-  try {
-    return await callGemini(user, sysBlocks, geminiHistory, text, phone, direct);
-  } catch (e) {
-    // Fallback a Claude si Gemini agotó la cuota diaria y hay clave disponible
-    const isQuota = String(e?.message || '').includes('429') &&
-      (e?.errorDetails || []).some(d =>
-        (d.violations || []).some(v => String(v.quotaId || '').includes('PerDay'))
-      );
-    if (isQuota && anthropic) {
-      console.warn('[Gemini→Claude] Cuota diaria agotada — fallback automático a Claude');
-      return callClaude(user, sysBlocks, dbHistory, text, phone, direct);
-    }
-    throw e;
-  }
+  return callGemini(user, sysBlocks, geminiHistory, text, phone, direct);
 }
 
 // ── REST API DASHBOARD ─────────────────────────────────────────────────────
@@ -3798,7 +3781,7 @@ async function seedAdminOnStartup() {
     // Solo inserta si NO existe — nunca sobreescribir preferencias (ai_preference, ai_model)
     const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', adminPhone).single();
     if (!existing) {
-      await sb.from('usuarios').insert([{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'CLAUDE', ai_model: 'claude-sonnet-4-6' }]);
+      await sb.from('usuarios').insert([{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'GEMINI', ai_model: 'gemini-2.5-flash' }]);
     }
     const [r1, r2] = await Promise.all([
       sb.from('tdc').update({ user_phone: adminPhone }).eq('user_phone', ''),
