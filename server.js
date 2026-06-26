@@ -801,6 +801,32 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
       return `✅ Perfil personal actualizado.`;
     }
 
+    // ── presupuesto — redirect si la IA usa campos de gasto en lugar de {categoria,limite,mes} ─
+    // Ocurre cuando el modelo confunde "gastos fijos a todas las quincenas" con tabla presupuesto.
+    if (tabla === 'presupuesto' && accion === 'crear' && (datos?.concepto || datos?.descripcion)) {
+      const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+      const refs = { ...(cur?.external_refs || {}) };
+      const existentes = Array.isArray(refs.gastos_esperados) ? [...refs.gastos_esperados]
+        : Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }));
+      const desc  = datos.concepto || datos.descripcion || '';
+      const fp    = medioToFormaPago(datos.medio_pago);
+      const nuevo = {
+        _id:         'gf-' + Date.now(),
+        descripcion: desc,
+        monto:       Number(datos.monto) || 0,
+        ...(fp                ? { forma_pago: fp }             : {}),
+        ...(datos.categoria   ? { categoria: datos.categoria } : {}),
+      };
+      const idx = existentes.findIndex(g => (g.descripcion || '').toLowerCase() === desc.toLowerCase());
+      if (idx >= 0) existentes[idx] = { ...existentes[idx], ...nuevo };
+      else existentes.push(nuevo);
+      refs.gastos_esperados = existentes;
+      const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+      if (error) return `❌ Error al guardar gasto fijo: ${error.message}`;
+      await writeAuditLog(phone, 'usuarios', 'gasto_fijo', phone, cur?.external_refs, refs, origen, texto_original);
+      return `✅ Gasto fijo "${desc}" (${fmt(Number(datos.monto) || 0)}) guardado para todas las quincenas.`;
+    }
+
     if (accion === 'crear') {
       // ── Reglas deterministas de categorización (palabras clave) ────────────
       if (tabla === 'movimientos') aplicarReglasCategoria(datos, texto_original);
@@ -1642,8 +1668,9 @@ Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprad
 - tabla="movimientos" accion="editar" id=X datos={campo: nuevo_valor}: corrige un movimiento existente.
 - Sueldo quincenal: tabla="usuarios", datos={ ingreso_quincenal: X, dias_pago:[D1,D2], ingresos_esperados:[{descripcion:"Sueldo",monto:X,dias:[D1,D2]}] }
 - Ingreso recurrente extra: tabla="usuarios", datos={ ingresos_esperados:[...existentes, {descripcion:"X",monto:Y,dias:[dia]}] }
-- Gasto fijo: tabla="usuarios", datos={ gastos_esperados:[...existentes,{descripcion:"X",monto:Y}], gastos_fijos:{...existentes,X:Y} }
-- Presupuesto mensual por categoría: una llamada a tabla="presupuesto" POR cada categoría.`;
+- Gasto fijo / recurrente (aparece en TODAS las quincenas): tabla="usuarios", datos={ gastos_esperados:[...existentes, {_id:"gf-X",descripcion:"X",monto:Y,forma_pago:"efectivo",categoria:"Cat"}] }
+  ⚠️ NUNCA usar tabla="presupuesto" para gastos fijos. Si son varios gastos, envíalos TODOS en un solo arreglo gastos_esperados en UNA llamada.
+- Presupuesto mensual por categoría (límite de gasto por categoría): tabla="presupuesto" datos={categoria:"Cat",limite:Y,mes:"YYYY-MM"} — UNA llamada por categoría. Solo para límites, NO para gastos individuales.`;
 
   // ── Bloque dinámico (por request) — datos del día ─────────────────────────
   const date3m = new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0];
