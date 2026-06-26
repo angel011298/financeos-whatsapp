@@ -2596,11 +2596,15 @@ app.delete('/api/despensa/:id', async (req, res) => {
 });
 
 app.post('/api/despensa/buscar-precios', async (req, res) => {
-  const { phone } = req.body;
+  const { phone, ids = [] } = req.body;
   if (!phone) return res.status(400).json({ success: false, error: 'Missing phone' });
+  if (!ids.length) return res.json({ success: true, data: [] });
   try {
+    // Only fetch items belonging to this user and in the requested IDs list
     const { data: allItems } = await sb.from('despensa')
-      .select('id, nombre').eq('user_phone', phone).eq('comprado', false);
+      .select('id, nombre')
+      .eq('user_phone', phone)
+      .in('id', ids);
     const items = (allItems || []).slice(0, 8);
     if (!items.length) return res.json({ success: true, data: [] });
 
@@ -2611,17 +2615,25 @@ app.post('/api/despensa/buscar-precios', async (req, res) => {
     });
 
     const itemList = items.map((it, i) => `${i + 1}. ID:${it.id} - ${it.nombre}`).join('\n');
-    const prompt = `Busca el precio actual y link directo de cada producto en Walmart México (walmart.com.mx) y Amazon México (amazon.com.mx).
+    const prompt = `Busca en Google el precio actual y el enlace DIRECTO a la página del producto en Walmart México y Amazon México para cada artículo.
 
-Productos a buscar:
+REGLAS IMPORTANTES PARA LAS URLS:
+- URL de Walmart DEBE ser la página del producto en walmart.com.mx (con /ip/ en la URL). NUNCA una URL de búsqueda (?s=, /search, etc.)
+- URL de Amazon DEBE contener /dp/ en la URL (página directa del producto en amazon.com.mx). NUNCA una URL de búsqueda (/s?, /s/, etc.)
+- Si solo encuentras precio pero no URL directa al producto, devuelve null para esa URL
+
+Artículos a buscar:
 ${itemList}
 
-Devuelve SOLO un array JSON sin ningún texto adicional. Cada elemento debe tener exactamente:
-- "id": número entero (el ID del producto tal como aparece arriba)
-- "precio_walmart": precio en pesos MXN como número sin símbolo (o null si no se encuentra)
-- "url_walmart": URL directa al producto en walmart.com.mx (o null)
-- "precio_amazon": precio en pesos MXN como número sin símbolo (o null)
-- "url_amazon": URL directa al producto en amazon.com.mx (o null)`;
+Responde ÚNICAMENTE con un array JSON válido, sin texto adicional ni bloques de código. Formato exacto:
+[{"id":1,"precio_walmart":99.90,"url_walmart":"https://www.walmart.com.mx/ip/nombre/123456","precio_amazon":109.00,"url_amazon":"https://www.amazon.com.mx/Nombre/dp/ABCD1234"}]
+
+Campos por elemento:
+- "id": número entero exacto del artículo
+- "precio_walmart": número en MXN sin símbolo $ (o null)
+- "url_walmart": URL con /ip/ en walmart.com.mx (o null)
+- "precio_amazon": número en MXN sin símbolo $ (o null)
+- "url_amazon": URL con /dp/ en amazon.com.mx (o null)`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();
@@ -2630,14 +2642,23 @@ Devuelve SOLO un array JSON sin ningún texto adicional. Cada elemento debe tene
     if (!jsonMatch) throw new Error('Gemini no devolvió JSON válido con los precios');
     const priceData = JSON.parse(jsonMatch[0]);
 
+    // Validate URLs: reject search/listing pages
+    const cleanUrl = (url, pattern) => {
+      if (!url || typeof url !== 'string') return null;
+      if (/[?&](s|k|q|query|keywords)=/i.test(url)) return null;
+      if (/\/(search|buscar|results|listing|s\?)/i.test(url)) return null;
+      if (!url.includes(pattern)) return null;
+      return url;
+    };
+
     const now = new Date().toISOString();
     const updates = await Promise.all(priceData.map(async p => {
       const { data } = await sb.from('despensa')
         .update({
           precio_walmart:  p.precio_walmart  ?? null,
-          url_walmart:     p.url_walmart     || null,
+          url_walmart:     cleanUrl(p.url_walmart, '/ip/'),
           precio_amazon:   p.precio_amazon   ?? null,
-          url_amazon:      p.url_amazon      || null,
+          url_amazon:      cleanUrl(p.url_amazon, '/dp/'),
           ultima_consulta: now
         })
         .eq('id', p.id).eq('user_phone', phone).select().single();

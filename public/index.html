@@ -4944,10 +4944,13 @@ async function limpiarCompradosDespensa() {
 }
 
 async function buscarPreciosDespensa() {
+  const selected = (S.data.despensa || []).filter(r => !r.comprado && r.compra_quincena !== false);
+  if (!selected.length) { toast('No hay productos seleccionados para esta quincena', 'error'); return; }
+  const ids = selected.slice(0, 8).map(r => r.id);
   const btn = $('btn-buscar-precios');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Buscando...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = `<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Buscando ${ids.length}...`; }
   try {
-    const res = await api('POST', '/api/despensa/buscar-precios', { phone: S.phone }, { timeout: 90000 });
+    const res = await api('POST', '/api/despensa/buscar-precios', { phone: S.phone, ids }, { timeout: 90000 });
     if (res.data?.length) {
       res.data.forEach(updated => {
         const idx = (S.data.despensa || []).findIndex(x => x.id === updated.id);
