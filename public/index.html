@@ -2216,6 +2216,7 @@ function rQuincenaPanel(ctx) {
       <thead>
         <tr style="border-bottom:2px solid var(--border-default)">
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;width:36px">#</th>
+          <th style="padding:8px 10px;text-align:center;width:40px"></th>
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Concepto</th>
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Monto</th>
           <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Categoría</th>
@@ -2226,8 +2227,18 @@ function rQuincenaPanel(ctx) {
       </thead>
       <tbody id="tbl-gastos-q-${ctx}-body">
         ${gasEsp.map((g, i) => {
-          if (g._isDespensa) return `<tr style="border-bottom:1px solid var(--border-default)">
+          const pagadoMov = qMovs.find(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + g.descripcion);
+          const pagadoId  = pagadoMov?.id || null;
+          const pagadoArg = pagadoId ? ("'" + pagadoId + "'") : 'null';
+          const chkKey    = (g._id || g.id || g.descripcion || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+          const chkTitle  = pagadoId ? 'Quitar de movimientos' : 'Registrar como gasto realizado';
+          const chkColor  = pagadoId ? 'var(--color-income)' : 'var(--text-3)';
+          const chkIcon   = pagadoId ? 'checkbox' : 'square';
+          const chkBg     = pagadoId ? ';background:rgba(74,222,128,.06)' : '';
+          const chkTd     = `<td style="padding:6px;text-align:center"><button onclick="marcarGastoQ('${chkKey}',${pagadoArg})" title="${chkTitle}" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;color:${chkColor}"><i class="ti ti-${chkIcon}"></i></button></td>`;
+          if (g._isDespensa) return `<tr style="border-bottom:1px solid var(--border-default)${chkBg}">
             <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
+            ${chkTd}
             <td style="padding:10px;text-align:center"><span style="display:inline-flex;align-items:center;gap:5px;font-weight:500"><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Despensa</span></td>
             <td style="padding:10px;text-align:center;font-weight:700;color:var(--red)">${fmt(g.monto)}</td>
             <td style="padding:10px;text-align:center"><span class="cat-bdg" style="background:${(CAT_CLR['Despensa']||'#94a3b8')}20;color:${CAT_CLR['Despensa']||'#94a3b8'}">Despensa</span></td>
@@ -2253,8 +2264,9 @@ function rQuincenaPanel(ctx) {
           const catCell = catG
             ? `<span class="cat-bdg" style="background:${cClrG}20;color:${cClrG}">${catG}</span>`
             : '<span style="color:var(--text-3)">—</span>';
-          return `<tr style="border-bottom:1px solid var(--border-default)">
+          return `<tr style="border-bottom:1px solid var(--border-default)${chkBg}">
             <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
+            ${chkTd}
             <td style="padding:10px;text-align:center;font-weight:500">${g.descripcion}</td>
             <td style="padding:10px;text-align:center;font-weight:700;color:var(--red)">${fmt(g.monto)}</td>
             <td style="padding:10px;text-align:center">${catCell}</td>
@@ -5001,6 +5013,36 @@ async function marcarPagado(nombre, esp, pagadoId) {
     }
     await load();
   } catch(e) { alert('Error al actualizar: ' + e.message); }
+}
+
+async function marcarGastoQ(itemId, pagadoId) {
+  const g = S._expItemData[itemId];
+  if (!g) { toast('No se encontró el gasto', 'error'); return; }
+  try {
+    if (pagadoId) {
+      await api('DELETE', `/api/movimientos/${pagadoId}`, { user_phone: S.phone });
+    } else {
+      const refs  = (S.data.user || {}).external_refs || {};
+      const fpMap = refs.forma_pago_gastos || {};
+      const fp    = fpMap[g.descripcion] || g.forma_pago || 'efectivo';
+      const cat   = g.categoria || CATS.find(c =>
+        (g.descripcion || '').toLowerCase().includes(c.toLowerCase()) ||
+        c.toLowerCase().includes((g.descripcion || '').toLowerCase())
+      ) || 'OTROS';
+      await api('POST', '/api/movimientos', {
+        user_phone:  S.phone,
+        tipo:        'GASTO',
+        categoria:   cat,
+        concepto:    '[Ppto] ' + (g.descripcion || ''),
+        descripcion: '',
+        monto:       g.monto || 0,
+        medio_pago:  fp,
+        fecha:       new Date().toISOString().split('T')[0],
+        comentarios: g.comentarios || ''
+      });
+    }
+    await load();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 async function dEvt(id)  { if(!confirm('¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
 async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/metas/${id}`,{user_phone:S.phone}); await load(); }
