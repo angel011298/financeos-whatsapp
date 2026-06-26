@@ -2599,13 +2599,15 @@ app.post('/api/despensa/buscar-precios', async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ success: false, error: 'Missing phone' });
   try {
-    const { data: items } = await sb.from('despensa')
+    const { data: allItems } = await sb.from('despensa')
       .select('id, nombre').eq('user_phone', phone).eq('comprado', false);
-    if (!items?.length) return res.json({ success: true, data: [] });
+    const items = (allItems || []).slice(0, 8);
+    if (!items.length) return res.json({ success: true, data: [] });
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       tools: [{ googleSearch: {} }],
+      generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
     });
 
     const itemList = items.map((it, i) => `${i + 1}. ID:${it.id} - ${it.nombre}`).join('\n');
@@ -2621,7 +2623,7 @@ Devuelve SOLO un array JSON sin ningún texto adicional. Cada elemento debe tene
 - "precio_amazon": precio en pesos MXN como número sin símbolo (o null)
 - "url_amazon": URL directa al producto en amazon.com.mx (o null)`;
 
-    const result = await geminiWithRetry(() => model.generateContent(prompt));
+    const result = await model.generateContent(prompt);
     const text = result.response.text();
 
     const jsonMatch = text.match(/\[[\s\S]*\]/);

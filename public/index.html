@@ -454,7 +454,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .cal-nav h3{flex:1;font-size:var(--text-base);font-weight:600;color:var(--text-1)}
 .cal-day-panel{display:none;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:16px;width:240px;flex-shrink:0}
-.cal-day-panel.open{display:block}
+.cal-day-panel.open{display:block;position:relative;z-index:200}
 #cal-day-ov{display:none;position:fixed;inset:0;z-index:199;background:rgba(0,0,0,.55)}
 
 /* ═══════════════════════════════════════════════════════ MOBILE NAV */
@@ -1164,9 +1164,9 @@ function badgeFecha(d) {
   return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:${color}"><i class="ti ti-calendar-due" style="font-size:11px"></i>${label}</span>`;
 }
 
-async function api(m, p, b) {
+async function api(m, p, b, opts={}) {
   const ctrl = new AbortController();
-  const tid  = setTimeout(() => ctrl.abort(), 28000);   // 28s: Railway timeout is 30s
+  const tid  = setTimeout(() => ctrl.abort(), opts.timeout || 28000);
   try {
     const r = await fetch(p, { method:m, headers:{'Content-Type':'application/json'}, body:b?JSON.stringify(b):undefined, signal:ctrl.signal });
     clearTimeout(tid);
@@ -4351,7 +4351,7 @@ function calDay(ds) {
   ${it.tipo?`<div style="opacity:.75;font-size:11px;margin-top:2px">${it.tipo}</div>`:''}
 </div>`;
   });
-  html+=`<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:4px" onclick="oEvt({fecha:'${ds}'})"><i class="ti ti-plus"></i> Agregar evento</button>`;
+  html+=`<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:4px" onclick="closeCalDay();oEvt({fecha:'${ds}'})"><i class="ti ti-plus"></i> Agregar evento</button>`;
   const panel=$('cal-day-panel');
   if(panel){panel.innerHTML=html;panel.classList.add('open');}
   const ov=$('cal-day-ov');
@@ -4745,9 +4745,9 @@ function rDespensa() {
       { key:'nombre_of',    label:'Nombre Oficial',         filter:'text',   value: r => r.nombre_oficial || '', width:'130px' },
       { key:'precio_est',   label:'Precio estimado',        num:true,        value: r => r.precio_est ?? '',     width:'100px' },
       { key:'p_walmart',    label:'Walmart',                num:true,        value: r => r.precio_walmart ?? '', width:'88px' },
-      { key:'l_walmart',    label:'',                       sortable:false,  value: r => r.url_walmart ? '🔗' : '', width:'32px' },
+      { key:'l_walmart',    label:'Link Walmart',            sortable:false,  value: r => r.url_walmart ? '🔗' : '', width:'80px' },
       { key:'p_amazon',     label:'Amazon',                 num:true,        value: r => r.precio_amazon ?? '',  width:'88px' },
-      { key:'l_amazon',     label:'',                       sortable:false,  value: r => r.url_amazon ? '🔗' : '', width:'32px' },
+      { key:'l_amazon',     label:'Link Amazon',             sortable:false,  value: r => r.url_amazon ? '🔗' : '', width:'80px' },
       { key:'mejor',        label:'Mejor precio',           filter:'select', value: r => {
           const hasW = typeof r.precio_walmart === 'number';
           const hasA = typeof r.precio_amazon  === 'number';
@@ -4799,30 +4799,30 @@ function rDespensa() {
       </tr>`;
     },
     footer: rows => {
-      const vis = rows.filter(r => !r.comprado);
-      const vW = vis.reduce((a, r) => typeof r.precio_walmart === 'number' ? a + r.precio_walmart : a, 0);
-      const vA = vis.reduce((a, r) => typeof r.precio_amazon  === 'number' ? a + r.precio_amazon  : a, 0);
-      const vB = vis.reduce((a, r) => {
+      const vis  = rows.filter(r => !r.comprado);
+      const cntQ = vis.filter(r => r.compra_quincena !== false).length;
+      const vPE  = vis.reduce((a, r) => a + (r.precio_est || 0), 0);
+      const vW   = vis.reduce((a, r) => typeof r.precio_walmart === 'number' ? a + r.precio_walmart : a, 0);
+      const vA   = vis.reduce((a, r) => typeof r.precio_amazon  === 'number' ? a + r.precio_amazon  : a, 0);
+      const vB   = vis.reduce((a, r) => {
         const bW = typeof r.precio_walmart === 'number' ? r.precio_walmart : Infinity;
         const bA = typeof r.precio_amazon  === 'number' ? r.precio_amazon  : Infinity;
         const b  = Math.min(bW, bA);
         return a + (isFinite(b) ? b : (r.precio_est || 0));
       }, 0);
-      const vBQ = vis.filter(r => r.compra_quincena !== false).reduce((a, r) => {
-        const bW = typeof r.precio_walmart === 'number' ? r.precio_walmart : Infinity;
-        const bA = typeof r.precio_amazon  === 'number' ? r.precio_amazon  : Infinity;
-        const b  = Math.min(bW, bA);
-        return a + (isFinite(b) ? b : (r.precio_est || 0));
-      }, 0);
-      const vPE = vis.reduce((a, r) => a + (r.precio_est || 0), 0);
-      if (!vW && !vA && !vB && !vPE) return '';
+      if (!cntQ && !vW && !vA && !vB && !vPE) return '';
+      // TDs: # | compra_q | nombre | nombre_of | precio_est | p_walmart | l_walmart | p_amazon | l_amazon | mejor | _acts
       return `<tr style="border-top:2px solid var(--border-default);font-weight:700">
-        <td></td><td style="color:var(--text-3);font-size:11px">Totales</td>
+        <td></td>
+        <td style="text-align:center;color:var(--color-income)">${cntQ > 0 ? cntQ : '—'}</td>
+        <td style="color:var(--text-3);font-size:11px">Totales</td>
+        <td></td>
         <td style="color:var(--text-2)">${vPE > 0 ? fmt(vPE) : '—'}</td>
-        <td style="color:#0071ce">${vW > 0 ? fmt(vW) : '—'}</td><td></td>
-        <td style="color:#ff9900">${vA > 0 ? fmt(vA) : '—'}</td><td></td>
-        <td style="color:var(--color-income)">${vB > 0 ? fmt(vB) : ''}</td>
-        <td style="color:var(--cat-despensa);font-size:12px">${vBQ > 0 ? '✓ '+fmt(vBQ) : ''}</td>
+        <td style="color:#0071ce">${vW > 0 ? fmt(vW) : '—'}</td>
+        <td></td>
+        <td style="color:#ff9900">${vA > 0 ? fmt(vA) : '—'}</td>
+        <td></td>
+        <td style="color:var(--color-income)">${vB > 0 ? fmt(vB) : '—'}</td>
         <td></td>
       </tr>`;
     }
@@ -4947,7 +4947,7 @@ async function buscarPreciosDespensa() {
   const btn = $('btn-buscar-precios');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Buscando...'; }
   try {
-    const res = await api('POST', '/api/despensa/buscar-precios', { phone: S.phone });
+    const res = await api('POST', '/api/despensa/buscar-precios', { phone: S.phone }, { timeout: 90000 });
     if (res.data?.length) {
       res.data.forEach(updated => {
         const idx = (S.data.despensa || []).findIndex(x => x.id === updated.id);
@@ -4955,7 +4955,7 @@ async function buscarPreciosDespensa() {
       });
     }
     rDespensa();
-    rDash();
+    refreshQuincenaPanel();
     toast(`Precios actualizados para ${res.data?.length || 0} artículo(s) ✓`);
   } catch(e) {
     toast('Error buscando precios: ' + e.message, 'error');
