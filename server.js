@@ -2624,36 +2624,37 @@ app.post('/api/despensa/buscar-precios', async (req, res) => {
       generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
     });
 
-    const itemList = items.map((it, i) => `${i + 1}. ID:${it.id} - ${it.nombre}`).join('\n');
+    // Use sequential 1-based indices — simpler for the model, avoids UUID confusion
+    const itemList = items.map((it, i) => `${i + 1}. ${it.nombre}`).join('\n');
 
     // Two focused calls in parallel — one per store — so Google Search doesn't ignore Amazon
-    const promptW = `Busca en Google el precio actual en Walmart México (walmart.com.mx) para cada artículo.
+    const promptW = `Busca en Google el precio actual en Walmart México (walmart.com.mx) para cada artículo de la lista.
 
-REGLAS:
+REGLAS ESTRICTAS:
 - Busca SOLO en walmart.com.mx
-- URL DEBE contener /ip/ (página directa del producto). NUNCA /search ni ?s=
-- Precio en MXN, número sin símbolo $
-- Si no encuentras el producto en Walmart, usa null
+- URL DEBE contener /ip/ (página directa del producto en Walmart). NUNCA /search ni ?s= ni /browse
+- Precio en MXN, número sin símbolo $ ni comas de miles
+- Si no encuentras precio o URL válida en Walmart, usa null para ese campo
 
-Artículos:
+Artículos (usa el número como "idx" en tu respuesta):
 ${itemList}
 
-Responde ÚNICAMENTE con JSON array (sin texto extra, sin bloques de código):
-[{"id":1,"precio":99.90,"url":"https://www.walmart.com.mx/ip/nombre/123456"}]`;
+Responde ÚNICAMENTE con JSON array, sin texto ni bloques de código:
+[{"idx":1,"precio":99.90,"url":"https://www.walmart.com.mx/ip/leche-lala-entera/00750105647820"},{"idx":2,"precio":null,"url":null}]`;
 
-    const promptA = `Busca en Google el precio actual en Amazon México (amazon.com.mx) para cada artículo.
+    const promptA = `Busca en Google el precio actual en Amazon México (amazon.com.mx) para cada artículo de la lista.
 
-REGLAS:
+REGLAS ESTRICTAS:
 - Busca SOLO en amazon.com.mx
-- URL DEBE contener /dp/ (página directa del producto). NUNCA /s? ni /s/
-- Precio en MXN, número sin símbolo $
-- Si no encuentras el producto en Amazon, usa null
+- URL DEBE contener /dp/ (página directa del producto en Amazon). NUNCA /s? ni /s/ ni /search
+- Precio en MXN, número sin símbolo $ ni comas de miles
+- Si no encuentras precio o URL válida en Amazon, usa null para ese campo
 
-Artículos:
+Artículos (usa el número como "idx" en tu respuesta):
 ${itemList}
 
-Responde ÚNICAMENTE con JSON array (sin texto extra, sin bloques de código):
-[{"id":1,"precio":109.00,"url":"https://www.amazon.com.mx/Nombre/dp/ABCD1234"}]`;
+Responde ÚNICAMENTE con JSON array, sin texto ni bloques de código:
+[{"idx":1,"precio":109.00,"url":"https://www.amazon.com.mx/Lala-Leche-Entera/dp/B01ABC1234"},{"idx":2,"precio":null,"url":null}]`;
 
     const [wRes, aRes] = await Promise.all([
       mkModel().generateContent(promptW),
@@ -2669,7 +2670,7 @@ Responde ÚNICAMENTE con JSON array (sin texto extra, sin bloques de código):
     const cleanUrl = (url, pattern) => {
       if (!url || typeof url !== 'string') return null;
       if (/[?&](s|k|q|query|keywords)=/i.test(url)) return null;
-      if (/\/(search|buscar|results|listing|\/s\?)/i.test(url)) return null;
+      if (/\/(search|buscar|results|browse|listing)(\/|$|\?)/i.test(url)) return null;
       if (!url.includes(pattern)) return null;
       return url;
     };
@@ -2677,14 +2678,14 @@ Responde ÚNICAMENTE con JSON array (sin texto extra, sin bloques de código):
     const wData = parseArr(wRes.response.text());
     const aData = parseArr(aRes.response.text());
 
-    // Index by id for O(1) merge
-    const wById = Object.fromEntries(wData.map(p => [p.id, p]));
-    const aById = Object.fromEntries(aData.map(p => [p.id, p]));
+    // Index by sequential idx (1-based) to avoid UUID confusion
+    const wByIdx = Object.fromEntries(wData.map(p => [p.idx ?? p.id, p]));
+    const aByIdx = Object.fromEntries(aData.map(p => [p.idx ?? p.id, p]));
 
     const now = new Date().toISOString();
-    const updates = await Promise.all(items.map(async it => {
-      const w = wById[it.id];
-      const a = aById[it.id];
+    const updates = await Promise.all(items.map(async (it, i) => {
+      const w = wByIdx[i + 1];
+      const a = aByIdx[i + 1];
       const { data } = await sb.from('despensa')
         .update({
           precio_walmart:  w?.precio  ?? null,
