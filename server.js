@@ -2618,60 +2618,82 @@ app.post('/api/despensa/buscar-precios', async (req, res) => {
     const items = (allItems || []).slice(0, 8);
     if (!items.length) return res.json({ success: true, data: [] });
 
-    const model = genAI.getGenerativeModel({
+    const mkModel = () => genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       tools: [{ googleSearch: {} }],
       generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
     });
 
     const itemList = items.map((it, i) => `${i + 1}. ID:${it.id} - ${it.nombre}`).join('\n');
-    const prompt = `Busca en Google el precio actual y el enlace DIRECTO a la página del producto en Walmart México y Amazon México para cada artículo.
 
-REGLAS IMPORTANTES PARA LAS URLS:
-- URL de Walmart DEBE ser la página del producto en walmart.com.mx (con /ip/ en la URL). NUNCA una URL de búsqueda (?s=, /search, etc.)
-- URL de Amazon DEBE contener /dp/ en la URL (página directa del producto en amazon.com.mx). NUNCA una URL de búsqueda (/s?, /s/, etc.)
-- Si solo encuentras precio pero no URL directa al producto, devuelve null para esa URL
+    // Two focused calls in parallel — one per store — so Google Search doesn't ignore Amazon
+    const promptW = `Busca en Google el precio actual en Walmart México (walmart.com.mx) para cada artículo.
 
-Artículos a buscar:
+REGLAS:
+- Busca SOLO en walmart.com.mx
+- URL DEBE contener /ip/ (página directa del producto). NUNCA /search ni ?s=
+- Precio en MXN, número sin símbolo $
+- Si no encuentras el producto en Walmart, usa null
+
+Artículos:
 ${itemList}
 
-Responde ÚNICAMENTE con un array JSON válido, sin texto adicional ni bloques de código. Formato exacto:
-[{"id":1,"precio_walmart":99.90,"url_walmart":"https://www.walmart.com.mx/ip/nombre/123456","precio_amazon":109.00,"url_amazon":"https://www.amazon.com.mx/Nombre/dp/ABCD1234"}]
+Responde ÚNICAMENTE con JSON array (sin texto extra, sin bloques de código):
+[{"id":1,"precio":99.90,"url":"https://www.walmart.com.mx/ip/nombre/123456"}]`;
 
-Campos por elemento:
-- "id": número entero exacto del artículo
-- "precio_walmart": número en MXN sin símbolo $ (o null)
-- "url_walmart": URL con /ip/ en walmart.com.mx (o null)
-- "precio_amazon": número en MXN sin símbolo $ (o null)
-- "url_amazon": URL con /dp/ en amazon.com.mx (o null)`;
+    const promptA = `Busca en Google el precio actual en Amazon México (amazon.com.mx) para cada artículo.
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+REGLAS:
+- Busca SOLO en amazon.com.mx
+- URL DEBE contener /dp/ (página directa del producto). NUNCA /s? ni /s/
+- Precio en MXN, número sin símbolo $
+- Si no encuentras el producto en Amazon, usa null
 
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('Gemini no devolvió JSON válido con los precios');
-    const priceData = JSON.parse(jsonMatch[0]);
+Artículos:
+${itemList}
 
-    // Validate URLs: reject search/listing pages
+Responde ÚNICAMENTE con JSON array (sin texto extra, sin bloques de código):
+[{"id":1,"precio":109.00,"url":"https://www.amazon.com.mx/Nombre/dp/ABCD1234"}]`;
+
+    const [wRes, aRes] = await Promise.all([
+      mkModel().generateContent(promptW),
+      mkModel().generateContent(promptA),
+    ]);
+
+    const parseArr = text => {
+      const m = text.match(/\[[\s\S]*\]/);
+      if (!m) return [];
+      try { return JSON.parse(m[0]); } catch { return []; }
+    };
+
     const cleanUrl = (url, pattern) => {
       if (!url || typeof url !== 'string') return null;
       if (/[?&](s|k|q|query|keywords)=/i.test(url)) return null;
-      if (/\/(search|buscar|results|listing|s\?)/i.test(url)) return null;
+      if (/\/(search|buscar|results|listing|\/s\?)/i.test(url)) return null;
       if (!url.includes(pattern)) return null;
       return url;
     };
 
+    const wData = parseArr(wRes.response.text());
+    const aData = parseArr(aRes.response.text());
+
+    // Index by id for O(1) merge
+    const wById = Object.fromEntries(wData.map(p => [p.id, p]));
+    const aById = Object.fromEntries(aData.map(p => [p.id, p]));
+
     const now = new Date().toISOString();
-    const updates = await Promise.all(priceData.map(async p => {
+    const updates = await Promise.all(items.map(async it => {
+      const w = wById[it.id];
+      const a = aById[it.id];
       const { data } = await sb.from('despensa')
         .update({
-          precio_walmart:  p.precio_walmart  ?? null,
-          url_walmart:     cleanUrl(p.url_walmart, '/ip/'),
-          precio_amazon:   p.precio_amazon   ?? null,
-          url_amazon:      cleanUrl(p.url_amazon, '/dp/'),
+          precio_walmart:  w?.precio  ?? null,
+          url_walmart:     cleanUrl(w?.url, '/ip/'),
+          precio_amazon:   a?.precio  ?? null,
+          url_amazon:      cleanUrl(a?.url, '/dp/'),
           ultima_consulta: now
         })
-        .eq('id', p.id).eq('user_phone', phone).select().single();
+        .eq('id', it.id).eq('user_phone', phone).select().single();
       return data;
     }));
 
