@@ -1817,13 +1817,21 @@ function getIngresosEsperados(refs, qKey) {
 }
 
 function getGastosEsperados(refs, qKey) {
+  const global = Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length
+    ? refs.gastos_esperados
+    : Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }));
   if (qKey) {
     const qb = (refs.budget_q || {})[qKey];
-    if (qb) return Array.isArray(qb.gastos) ? qb.gastos : [];
+    if (qb) {
+      // Quincena-specific items first (tagged _fromQ:true), then global items not already covered
+      const qItems = (Array.isArray(qb.gastos) ? qb.gastos : []).map(g => ({ ...g, _fromQ: true }));
+      const qDescs = new Set(qItems.map(g => (g.descripcion || '').toLowerCase().trim()));
+      const extras = global.filter(g => !qDescs.has((g.descripcion || '').toLowerCase().trim()))
+                           .map(g => ({ ...g, _fromQ: false }));
+      return [...qItems, ...extras];
+    }
   }
-  if (Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length)
-    return refs.gastos_esperados;
-  return Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }));
+  return global;
 }
 
 // Calcula ingresos esperados para cualquier rango de fechas [from, to]
@@ -2103,7 +2111,8 @@ function rQuincenaPanel(ctx) {
   // Populate lookup for inline editing; tag items with their storage key
   S._expItemData = {};
   allIngEsp.forEach(i => { const k = i._id || i.id || i.descripcion; if (k) S._expItemData[k] = { ...i, _tipo: 'ingresos', _qKey: hasQBudget ? qKey : null }; });
-  gasEsp.forEach(g => { const k = g._id || g.id || g.descripcion; if (k) S._expItemData[k] = { ...g, _tipo: 'gastos', _qKey: hasQBudget ? qKey : null }; });
+  // _fromQ:true → item lives in budget_q[qKey]; _fromQ:false/undefined → lives in gastos_esperados
+  gasEsp.forEach(g => { const k = g._id || g.id || g.descripcion; if (k) S._expItemData[k] = { ...g, _tipo: 'gastos', _qKey: g._fromQ === true ? qKey : null }; });
 
   // Sueldo quincenal → mostrar en TODA quincena; beca/mensual → solo si día 1 cae en la quincena
   const ingEspQ = allIngEsp.filter(ing => {
