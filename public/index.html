@@ -4980,7 +4980,7 @@ async function limpiarCompradosDespensa() {
 }
 
 async function agregarDespensaAGastos() {
-  const qKey = S.currentQKey;
+  const qKey = S.currentQKey || getQKey(getQuincenaInfo(S.qOffset || 0));
   if (!qKey) { toast('No hay quincena activa', 'error'); return; }
   const selected = (S.data.despensa || []).filter(r => !r.comprado && r.compra_quincena !== false);
   if (!selected.length) { toast('No hay productos seleccionados para esta quincena', 'error'); return; }
@@ -4988,7 +4988,7 @@ async function agregarDespensaAGastos() {
     const bW = typeof r.precio_walmart === 'number' ? r.precio_walmart : Infinity;
     const bA = typeof r.precio_amazon  === 'number' ? r.precio_amazon  : Infinity;
     const b  = Math.min(bW, bA);
-    return a + (isFinite(b) ? b : (r.precio_est || 0));
+    return a + (isFinite(b) ? b : (Number(r.precio_est) || 0));
   }, 0);
   if (!total) { toast('Sin precios disponibles — usa "Buscar precios IA" primero', 'error'); return; }
   const refs     = (S.data.user || {}).external_refs || {};
