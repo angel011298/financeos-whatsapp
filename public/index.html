@@ -2096,7 +2096,7 @@ function rQuincenaPanel(ctx) {
   // Eliminar cualquier entrada "Despensa" de los gastos fijos — se reemplaza con el total real de la lista
   const gasEsp    = getGastosEsperados(refs, qKey).filter(g => !/^despensa$/i.test((g.descripcion || '').trim()));
 
-  // Inject DESPENSA synthetic entry — solo ítems marcados "compra_quincena" (null=true por default)
+  // Inject DESPENSA entry — si hay una guardada en budget_q la usa (editable); si no, inyecta sintética
   if (refs.hide_despensa_gastos !== true) {
     const _despPend  = (S.data.despensa || []).filter(x => !x.comprado && x.compra_quincena !== false);
     const _despTotal = _despPend.reduce((a, x) => {
@@ -2105,7 +2105,14 @@ function rQuincenaPanel(ctx) {
       const b  = Math.min(bW, bA);
       return a + (isFinite(b) ? b : (x.precio_est || 0));
     }, 0);
-    if (_despTotal > 0) gasEsp.push({ _id: '_despensa_', descripcion: 'Despensa', monto: _despTotal, _isDespensa: true });
+    const storedDesp = hasQBudget
+      ? ((refs.budget_q || {})[qKey]?.gastos || []).find(g => /^despensa$/i.test((g.descripcion || '').trim()))
+      : null;
+    if (storedDesp) {
+      gasEsp.push({ ...storedDesp, _fromQ: true }); // real, editable
+    } else if (_despTotal > 0) {
+      gasEsp.push({ _id: '_despensa_', descripcion: 'Despensa', monto: _despTotal, _isDespensa: true }); // sintética
+    }
   }
 
   // Populate lookup for inline editing; tag items with their storage key
@@ -4865,6 +4872,9 @@ function rDespensa() {
       ${pending.length ? `<button id="btn-buscar-precios" class="btn btn-sm" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44;font-size:11px" onclick="buscarPreciosDespensa()">
         <i class="ti ti-robot"></i> Buscar precios IA
       </button>` : ''}
+      ${pending.length ? `<button class="btn btn-sm" style="background:var(--cat-despensa)22;color:var(--cat-despensa);border:1px solid var(--cat-despensa)44;font-size:11px" onclick="agregarDespensaAGastos()">
+        <i class="ti ti-clipboard-list"></i> Agregar a Gastos esta quincena
+      </button>` : ''}
       ${done.length ? `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="limpiarCompradosDespensa()"><i class="ti ti-trash-x"></i> Limpiar comprados</button>` : ''}
       <button class="btn btn-sm" style="background:var(--cat-despensa)22;color:var(--cat-despensa);border:1px solid var(--cat-despensa)44;font-size:12px" onclick="oDespensa()">
         <i class="ti ti-plus"></i> Agregar
@@ -4966,6 +4976,33 @@ async function limpiarCompradosDespensa() {
     S.data.despensa = (S.data.despensa || []).filter(x => !x.comprado);
     rDespensa();
     toast(`${done.length} artículo${done.length!==1?'s':''} eliminado${done.length!==1?'s':''}`);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function agregarDespensaAGastos() {
+  const qKey = S.currentQKey;
+  if (!qKey) { toast('No hay quincena activa', 'error'); return; }
+  const selected = (S.data.despensa || []).filter(r => !r.comprado && r.compra_quincena !== false);
+  if (!selected.length) { toast('No hay productos seleccionados para esta quincena', 'error'); return; }
+  const total = selected.reduce((a, r) => {
+    const bW = typeof r.precio_walmart === 'number' ? r.precio_walmart : Infinity;
+    const bA = typeof r.precio_amazon  === 'number' ? r.precio_amazon  : Infinity;
+    const b  = Math.min(bW, bA);
+    return a + (isFinite(b) ? b : (r.precio_est || 0));
+  }, 0);
+  if (!total) { toast('Sin precios disponibles — usa "Buscar precios IA" primero', 'error'); return; }
+  const refs     = (S.data.user || {}).external_refs || {};
+  const qGastos  = (refs.budget_q || {})[qKey]?.gastos || [];
+  const existing = qGastos.find(g => /^despensa$/i.test((g.descripcion || '').trim()));
+  const item     = { descripcion: 'Despensa', monto: total, categoria: 'Despensa', forma_pago: '', comentarios: '' };
+  const body     = existing
+    ? { phone: S.phone, field: 'budget_q', qKey, tipo: 'gastos', action: 'update',
+        itemId: existing._id || existing.id || 'Despensa', item }
+    : { phone: S.phone, field: 'budget_q', qKey, tipo: 'gastos', action: 'add', item };
+  try {
+    await api('POST', '/api/update-refs', body);
+    await load();
+    toast(existing ? `Despensa actualizada — ${fmt(total)} ✓` : `Despensa agregada a Gastos esta quincena — ${fmt(total)} ✓`);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
