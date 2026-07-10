@@ -4532,7 +4532,11 @@ async function saveM() {
       if (comEl) item.comentarios = (comEl.value || '').trim();
     }
     const action = ctx.mode === 'edit-exp-item' ? 'update' : 'add';
-    const qKey = S.currentQKey || null;
+    // For edits: route to wherever the item actually lives (_qKey from _expItemData).
+    // For adds: route to the current quincena slot (S.currentQKey) or global if none.
+    const qKey = ctx.mode === 'edit-exp-item'
+      ? (S._expItemData[ctx.itemId]?._qKey || null)
+      : (S.currentQKey || null);
     let body, res;
     if (qKey) {
       // Save to per-quincena budget slot
@@ -4540,7 +4544,7 @@ async function saveM() {
       body = { phone: S.phone, field: 'budget_q', qKey, tipo, action, item };
       if (ctx.mode === 'edit-exp-item') body.itemId = ctx.itemId;
     } else {
-      // Save to global template
+      // Save to global template (gastos_esperados / ingresos_esperados)
       const field = ctx.tipo === 'ingresos' ? 'ingresos_esperados' : 'gastos_esperados';
       body = { phone: S.phone, field, action, item };
       if (ctx.mode === 'edit-exp-item') body.itemId = ctx.itemId;
