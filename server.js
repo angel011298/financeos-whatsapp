@@ -886,7 +886,8 @@ VOCABULARIO COLOQUIAL MX:
 - Tolerar errores ortográficos: "gaste/pague" sin acento = equivalente
 
 CONTEXTO DE PAREJA:
-- "Alicia/ella/mi novia/nosotros/fuimos/fueron" → comentarios:"Alicia" + categoria:"Ocio" automático
+- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Ocio" automático
+- NUNCA infieras a Alicia de "nosotros/fuimos/fueron/ella": son palabras ambiguas (p.ej. "fueron 80 pesos" = costaron 80 pesos, no implica a Alicia)
 - "Platina" → coche de la pareja → categoria:"Platina" (tiene prioridad sobre Ocio)
 - Alicia/Ángel/Angel como (paréntesis) → NO son medios de pago
 
@@ -1016,8 +1017,9 @@ VOCABULARIO COLOQUIAL MX:
 - Tolerar errores ortográficos: "gaste/pague/compre" sin acento = equivalente con acento
 
 CONTEXTO DE PAREJA:
-- "Alicia/ella/mi novia/nosotros/fuimos/fueron" → comentarios:"Alicia" + categoria:"Ocio" automático
+- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Ocio" automático
 - "le presté/le di a Alicia" → comentarios:"Alicia", categoria "Ocio" (o la más apropiada si es obvia)
+- NUNCA infieras a Alicia de "nosotros/fuimos/fueron/ella/mi novia": son palabras ambiguas (p.ej. "fueron 80 pesos" = costaron 80 pesos, no implica a Alicia)
 - "Platina" → coche de la pareja → categoria:"Platina" siempre (tiene prioridad sobre Ocio)
 - Nombres propios (Alicia, Ángel, Angel) como (paréntesis) → NO son medios de pago, ignorarlos
 
@@ -1183,7 +1185,7 @@ function tryParseBatch(text, today) {
             if (/efectivo|d[eé]bito|transferencia|tdc|bbva|hey|amex|\bnu\b|rappi|palacio|liverpool/i.test(inner)) { medio_pago = normMedio(inner.trim()); return ''; }
             return '';
           }).trim();
-          if (/alicia|nosotros|fuimos/i.test(concepto)) conAlicia = true;
+          if (/\balicia\b/i.test(concepto)) conAlicia = true;
           concepto = concepto.replace(/\bcon\s+(alicia|angel|ángel)\b/i, '').trim();
           if (categoria === 'OTROS') categoria = inferCatFromText(concepto);
           if (conAlicia && categoria !== 'Platina') categoria = 'Ocio';
@@ -1277,7 +1279,7 @@ function tryParseBatch(text, today) {
     }
 
     // Clean concepto: strip trailing "con alicia/angel" and detect Alicia mention
-    if (/\b(alicia|con\s+alicia|nosotros|fuimos|fueron)\b/i.test(rest)) conAlicia = true;
+    if (/\balicia\b/i.test(rest)) conAlicia = true;
     const concepto = rest.replace(/\s+con\s+(alicia|angel|ángel)\s*$/i, '').trim() || 'Gasto';
 
     // Alicia → Ocio (Platina keeps priority if already set)
@@ -1601,7 +1603,8 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
 CONTEXTO DE PAREJA:
 - Usuario: Ángel. Novia: Alicia. Comparten vida y gastos cotidianos.
 - "Platina" = su coche (Nissan). Gasolina, aceite, afinación, refacciones, verificación → categoria:"Platina".
-- "Alicia/ella/mi novia/nosotros/fuimos/fueron" → comentarios:"Alicia" + categoria:"Ocio" automático.
+- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Ocio" automático.
+- NUNCA infieras a Alicia de "nosotros/fuimos/fueron/ella/mi novia": son palabras ambiguas (p.ej. "fueron 80 pesos" = costaron 80 pesos, no implica a Alicia).
 - "Platina" tiene prioridad sobre la regla de Ocio (un gasto de coche no es Ocio).
 - Nunca trates a Alicia o Ángel como medio de pago; son personas mencionadas en el contexto.
 
