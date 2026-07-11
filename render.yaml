@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: financeos-whatsapp
+    env: node
+    plan: free
+    buildCommand: npm install --production
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20
+      # Las siguientes variables debes copiarlas manualmente en el dashboard de Render:
+      # TWILIO_SID, TWILIO_TOKEN, TWILIO_WHATSAPP_FROM
+      # GEMINI_API_KEY
+      # SUPABASE_URL, SUPABASE_KEY
+      # ADMIN_PHONE, PHONE_ANGEL
+      # SHARE_SECRET, CRON_SECRET
+      # ANTHROPIC_KEY  (opcional, no se usa activamente)
