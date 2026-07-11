@@ -1534,7 +1534,7 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
   // Fetches paralelos — movimientos y datos extra solo en CONSULTA
   const movsLimit = intent === 'CONSULTA' ? 10 : 0;
   const extLimit  = intent === 'CONSULTA' ? 1  : 0;  // negocios/despensa solo para consultas
-  const [tdcR, movsR, metasR, calR, patrR, prspR, niditoR, negR, despR] = await Promise.all([
+  const [tdcR, movsR, metasR, calR, patrR, prspR, niditoR, negR, despR, aliciaR] = await Promise.all([
     sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
     movsLimit > 0
       ? sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null)
@@ -1556,6 +1556,12 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
       ? sb.from('despensa').select('id,nombre,cantidad,unidad,categoria,comprado')
           .eq('user_phone', phone).eq('comprado', false).limit(20)
       : Promise.resolve({ data: [] }),
+    // TODOS los gastos etiquetados con Alicia (no solo los últimos 10) — para que
+    // preguntas de suma/promedio se calculen en JS, nunca adivinadas por el modelo.
+    extLimit > 0
+      ? sb.from('movimientos').select('fecha,monto').eq('user_phone', phone).eq('tipo', 'GASTO')
+          .is('deleted_at', null).ilike('comentarios', '%alicia%')
+      : Promise.resolve({ data: [] }),
   ]);
 
   // Para gastos/ingresos del mes siempre necesitamos un agregado ligero
@@ -1574,11 +1580,25 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
   const nidito   = niditoR.data || [];
   const negocios = negR.data    || [];
   const despensa = despR.data   || [];
-  const aggrMovs = aggrR.data   || [];
-  const refs     = user.external_refs || {};
+  const aggrMovs   = aggrR.data   || [];
+  const aliciaMovs = aliciaR.data || [];
+  const refs       = user.external_refs || {};
 
   const gastMes = aggrMovs.filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0);
   const ingrMes = aggrMovs.filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0);
+
+  // Agregados de "gastos con Alicia" (comentarios menciona "alicia") — calculados aquí,
+  // NUNCA por el modelo, para que sumas/promedios por quincena sean siempre exactos.
+  const qActualKey        = getQuincenaActual().key;
+  const aliciaPorQuincena = {};
+  aliciaMovs.forEach(m => {
+    const qk = getQuincena(m.fecha).key;
+    aliciaPorQuincena[qk] = (aliciaPorQuincena[qk] || 0) + (m.monto || 0);
+  });
+  const aliciaQuincenas          = Object.keys(aliciaPorQuincena);
+  const aliciaEstaQuincena       = aliciaPorQuincena[qActualKey] || 0;
+  const aliciaTotalHistorico     = aliciaMovs.reduce((a, m) => a + (m.monto || 0), 0);
+  const aliciaPromedioPorQuincena = aliciaQuincenas.length ? aliciaTotalHistorico / aliciaQuincenas.length : 0;
 
   const catLines = CATEGORIAS.map(cat => {
     const tot = aggrMovs.filter(m => m.tipo === 'GASTO' && m.categoria === cat)
@@ -1642,6 +1662,7 @@ REGLAS DE ACCIÓN:
 - SISTEMA DE CONFIRMACIÓN: cuando llames 'modificar_plataforma', tu texto debe ser vacío o máx 1 línea de contexto. La propuesta la maneja el sistema. NUNCA digas que algo quedó guardado.
 - DETECTA PATRONES: si gasta mucho en algo vs historial, avísalo en 1 línea.
 - PROYECCIONES: cuando des estimaciones de gasto futuro, tendencias o proyecciones de fin de mes, añade al final "— estimación basada en tu historial" (solo en respuestas analíticas; nunca en confirmaciones de registro ni comandos simples).
+- PREGUNTAS SOBRE GASTOS CON ALICIA (cuánto/promedio/quincena): usa SIEMPRE los totales de la sección "GASTOS CON ALICIA" (ya calculados sobre todo el historial). NUNCA sumes tú mismo desde "ÚLTIMOS MOVIMIENTOS" — esa lista está incompleta (solo los 10 más recientes) y daría un total incorrecto.
 
 CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   tipo: "GASTO"
@@ -1708,7 +1729,14 @@ Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprad
   ].filter(Boolean).join('\n');
 
   const movsSection = intent === 'CONSULTA' && movs.length
-    ? `\nÚLTIMOS ${movs.length} MOVIMIENTOS:\n${movs.map(m=>`  [${m.id}] ${m.fecha} ${m.tipo} ${m.categoria} "${m.concepto||''}" ${fmt(m.monto)} ${m.medio_pago||''}`).join('\n')}`
+    ? `\nÚLTIMOS ${movs.length} MOVIMIENTOS:\n${movs.map(m=>`  [${m.id}] ${m.fecha} ${m.tipo} ${m.categoria} "${m.concepto||''}" ${fmt(m.monto)} ${m.medio_pago||''}${m.comentarios?` (${m.comentarios})`:''}`).join('\n')}`
+    : '';
+
+  const aliciaSection = intent === 'CONSULTA' && aliciaMovs.length
+    ? `\nGASTOS CON ALICIA (comentarios menciona "alicia" — totales YA CALCULADOS sobre TODO el historial, no solo los últimos movimientos; úsalos siempre para responder, nunca sumes tú mismo):
+  Esta quincena (${qActualKey}): ${fmt(aliciaEstaQuincena)}
+  Promedio por quincena (${aliciaQuincenas.length} quincena${aliciaQuincenas.length===1?'':'s'} con datos): ${fmt(aliciaPromedioPorQuincena)}
+  Total histórico: ${fmt(aliciaTotalHistorico)} (${aliciaMovs.length} movimiento${aliciaMovs.length===1?'':'s'})`
     : '';
 
   const dynamicBlock = `Hoy: ${today} | Mes: ${mesStr}
@@ -1730,6 +1758,7 @@ ${infoLines}
 DEUDAS TDC:
 ${tdcs.map(t=>`  [${t.id}] ${t.nombre} (${t.estado}): pago ${fmt(t.a_pagar)} saldo ${fmt(Math.max(0,(t.a_pagar||0)-(t.pagado||0)))}`).join('\n')||'  Sin TDC'}
 ${movsSection}
+${aliciaSection}
 METAS: ${metas.map(m=>`[${m.id}] ${m.nombre}: ${fmt(m.actual)}/${fmt(m.meta)}`).join(' | ')||'Sin metas'}
 
 PRÓXIMOS EVENTOS:
