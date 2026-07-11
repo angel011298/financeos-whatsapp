@@ -1564,11 +1564,16 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
       : Promise.resolve({ data: [] }),
   ]);
 
-  // Para gastos/ingresos del mes siempre necesitamos un agregado ligero
-  const [aggrR] = await Promise.all([
+  const qi = getQuincenaActual(); // { key, inicio, fin } de la quincena en curso HOY
+
+  // Para gastos/ingresos del mes y de la quincena actual siempre necesitamos un agregado ligero
+  const [aggrR, quincenaR] = await Promise.all([
     sb.from('movimientos').select('tipo,categoria,monto,fecha')
       .eq('user_phone', phone).is('deleted_at', null)
       .gte('fecha', mesStr + '-01'),
+    sb.from('movimientos').select('tipo,monto')
+      .eq('user_phone', phone).is('deleted_at', null)
+      .gte('fecha', qi.inicio).lte('fecha', qi.fin),
   ]);
 
   const tdcs     = tdcR.data    || [];
@@ -1580,12 +1585,17 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
   const nidito   = niditoR.data || [];
   const negocios = negR.data    || [];
   const despensa = despR.data   || [];
-  const aggrMovs   = aggrR.data   || [];
-  const aliciaMovs = aliciaR.data || [];
-  const refs       = user.external_refs || {};
+  const aggrMovs     = aggrR.data     || [];
+  const quincenaMovs = quincenaR.data || [];
+  const aliciaMovs   = aliciaR.data   || [];
+  const refs         = user.external_refs || {};
 
   const gastMes = aggrMovs.filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0);
   const ingrMes = aggrMovs.filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0);
+
+  // "esta quincena" ≠ "este mes": se calcula aparte para no confundirlos en el prompt
+  const gastoQuincena   = quincenaMovs.filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0);
+  const ingresoQuincena = quincenaMovs.filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0);
 
   // Agregados de "gastos con Alicia" (comentarios menciona "alicia") — calculados aquí,
   // NUNCA por el modelo, para que sumas/promedios por quincena sean siempre exactos.
@@ -1739,12 +1749,14 @@ Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprad
   Total histórico: ${fmt(aliciaTotalHistorico)} (${aliciaMovs.length} movimiento${aliciaMovs.length===1?'':'s'})`
     : '';
 
-  const dynamicBlock = `Hoy: ${today} | Mes: ${mesStr}
+  const dynamicBlock = `Hoy: ${today} | Mes: ${mesStr} | Quincena actual: ${qi.key} (${qi.inicio} a ${qi.fin})
 Si dice "en 3 meses" → fecha ${date3m}. Si dice "en X días" → suma X a ${today}.
 tabla="presupuesto" datos={categoria, limite, mes:"${mesStr}"}.
+⚠️ "esta quincena" y "este mes" son PERIODOS DISTINTOS — usa el bloque que corresponda, nunca los confundas.
 
 ════════ DATOS FINANCIEROS ════════
 GASTOS MES: ${fmt(gastMes)} | INGRESOS: ${fmt(ingrMes)} | NETO: ${fmt(ingrMes - gastMes)}
+GASTOS QUINCENA ACTUAL (${qi.key}): ${fmt(gastoQuincena)} | INGRESOS: ${fmt(ingresoQuincena)} | NETO: ${fmt(ingresoQuincena - gastoQuincena)}
 
 POR CATEGORÍA (${mesStr}):
 ${catLines || '  (sin gastos este mes)'}
