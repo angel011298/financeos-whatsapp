@@ -1816,10 +1816,21 @@ function getIngresosEsperados(refs, qKey) {
   return list;
 }
 
+// Un gasto_esperado sin "dias" aplica a TODAS las quincenas (comportamiento por defecto).
+// Con "dias" (ej. [10] o [25]) solo aplica a la quincena en que caiga alguno de esos días —
+// mismo mecanismo que ya usan ingresos_esperados vía dayInQuincena().
+function gastoAplicaQuincena(item, qKey) {
+  const dias = item.dias || [];
+  if (!dias.length) return true;
+  const letra = String(qKey || '').slice(-1); // 'A' o 'B'
+  return dias.some(d => letra === 'A' ? (d >= 10 && d <= 24) : (d >= 25 || d <= 9));
+}
+
 function getGastosEsperados(refs, qKey) {
-  const global = Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length
+  const globalAll = Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length
     ? refs.gastos_esperados
     : Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }));
+  const global = qKey ? globalAll.filter(g => gastoAplicaQuincena(g, qKey)) : globalAll;
   if (qKey) {
     const qb = (refs.budget_q || {})[qKey];
     if (qb) {
@@ -2346,7 +2357,7 @@ async function loadQIA(ctx, qi) {
     const movs     = S.data.movs || [];
     const qMovs    = filterMovs(movs, qi.from, qi.to);
     const ingEspQ  = getIngresosEsperados(refs).filter(i => (i.dias||[]).some(d => dayInQuincena(d, qi)));
-    const gasEsp   = getGastosEsperados(refs);
+    const gasEsp   = getGastosEsperados(refs, getQKey(qi));
     const espIng   = ingEspQ.reduce((a,i) => a+(i.monto||0), 0);
     const espGas   = gasEsp.reduce((a,g) => a+(g.monto||0), 0);
     const realIng  = qMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0), 0);
@@ -3567,7 +3578,7 @@ function rObjs() {
   // Savings capacity (current quincena)
   const qi    = getQuincenaInfo(0);
   const ingQ  = calcIngresosEsperadosPeriodo(refs, qi.from, qi.to);
-  const gasQ  = getGastosEsperados(refs).reduce((a,g)=>a+(g.monto||0),0);
+  const gasQ  = getGastosEsperados(refs, getQKey(qi)).reduce((a,g)=>a+(g.monto||0),0);
   const dispQ = Math.max(0, ingQ - gasQ);
   const ahorroQ = Math.round(dispQ * 0.2);
 

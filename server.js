@@ -1702,7 +1702,10 @@ Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprad
 - tabla="movimientos" accion="editar" id=X datos={campo: nuevo_valor}: corrige un movimiento existente.
 - Sueldo quincenal: tabla="usuarios", datos={ ingreso_quincenal: X, dias_pago:[D1,D2], ingresos_esperados:[{descripcion:"Sueldo",monto:X,dias:[D1,D2]}] }
 - Ingreso recurrente extra: tabla="usuarios", datos={ ingresos_esperados:[...existentes, {descripcion:"X",monto:Y,dias:[dia]}] }
-- Gasto fijo / recurrente (aparece en TODAS las quincenas): tabla="usuarios", datos={ gastos_esperados:[...existentes, {_id:"gf-X",descripcion:"X",monto:Y,forma_pago:"efectivo",categoria:"Cat"}] }
+- Gasto fijo / recurrente: tabla="usuarios", datos={ gastos_esperados:[...existentes, {_id:"gf-X",descripcion:"X",monto:Y,forma_pago:"efectivo",categoria:"Cat"}] }
+  · Por defecto aparece en TODAS las quincenas (1ª y 2ª) de cada mes.
+  · Si el usuario pide que aplique SOLO en la 1ª quincena (días 10-24) → agrega "dias":[10] al item. SOLO en la 2ª quincena (25 al 9) → "dias":[25].
+  · Para quitarle esa restricción y que vuelva a aplicar en ambas, edita el item con "dias":[] (arreglo vacío).
   ⚠️ NUNCA usar tabla="presupuesto" para gastos fijos. Si son varios gastos, envíalos TODOS en un solo arreglo gastos_esperados en UNA llamada.
 - Presupuesto mensual por categoría (límite de gasto por categoría): tabla="presupuesto" datos={categoria:"Cat",limite:Y,mes:"YYYY-MM"} — UNA llamada por categoría. Solo para límites, NO para gastos individuales.`;
 
@@ -1732,7 +1735,7 @@ Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprad
       ? `  Ingresos esperados:\n${refs.ingresos_esperados.map(i=>`    • ${i.descripcion}: ${fmt(i.monto)} días ${(i.dias||[]).join(',')}`).join('\n')}`
       : '',
     Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length
-      ? `  Gastos fijos:\n${refs.gastos_esperados.map(g=>`    • ${g.descripcion}: ${fmt(g.monto)}`).join('\n')}`
+      ? `  Gastos fijos:\n${refs.gastos_esperados.map(g=>`    • ${g.descripcion}: ${fmt(g.monto)}${(g.dias||[]).length?` (solo días ${g.dias.join(',')})`:' (todas las quincenas)'}`).join('\n')}`
       : refs.gastos_fijos
         ? `  Gastos fijos:\n${Object.entries(refs.gastos_fijos).map(([k,v])=>`    • ${k}: ${fmt(v)}`).join('\n')}`
         : '  Gastos fijos: no configurados.',
