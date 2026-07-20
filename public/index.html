@@ -14,6 +14,7 @@
 <meta name="theme-color" content="#0ABFBC">
 <!-- Libs -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <!-- Anti-FOWT: aplicar tema antes del primer render -->
 <script>try{var t=localStorage.getItem('fos_theme');if(t==='light')document.documentElement.classList.add('light');}catch(e){}</script>
@@ -1603,6 +1604,7 @@ function mkTable(cfg) {
   return `<div class="tbl-box" id="${cfg.id}-box" style="--tbl-fs:${fsAct}px">
     <div class="tbl-toolbar">
       <button type="button" class="tbl-filter-toggle${st.showFilters?' on':''}" onclick="toggleTblFilters('${cfg.id}')" title="Filtrar por columna"><i class="ti ti-filter"></i> Filtros</button>
+      <button type="button" class="tbl-filter-toggle" onclick="exportTableToExcel('${cfg.id}')" title="Descargar esta tabla como Excel (.xlsx)"><i class="ti ti-file-spreadsheet"></i> Excel</button>
       <div class="tbl-search"><i class="ti ti-search"></i><input placeholder="Buscar en la tabla..." value="${(st.search||'').replace(/"/g,'&quot;')}" oninput="setTblSearch('${cfg.id}',this.value)"></div>
       <span class="tbl-count" id="${cfg.id}-count">${n} fila${n!==1?'s':''}</span>
       <div class="tbl-tc">
@@ -1622,6 +1624,39 @@ function mkTable(cfg) {
     </table></div>
     <div class="sel-sum-bar" id="${cfg.id}-selbar"><i class="ti ti-math-function" style="color:var(--accent-primary)"></i><span class="selbar-txt"></span></div>
   </div>`;
+}
+
+// ── EXPORT A EXCEL (.xlsx) ──────────────────────────────────────────────────
+// Núcleo genérico: cols = [{label, get:r=>valor, num:bool}]. Columnas num:true
+// se escriben como números reales de Excel (sumables), el resto como texto —
+// así los datos quedan fielmente conservados, no como strings formateados.
+function exportRowsToExcel(rows, cols, baseName) {
+  if (typeof XLSX === 'undefined') { toast('No se pudo cargar el motor de Excel — revisa tu conexión', 'error'); return; }
+  if (!rows || !rows.length) { toast('No hay datos para exportar', 'error'); return; }
+  const header = cols.map(c => c.label);
+  const aoa = [header, ...rows.map(r => cols.map(c => {
+    const v = c.get(r);
+    if (c.num) {
+      if (v === '' || v == null) return '';
+      const n = Number(v);
+      return isNaN(n) ? '' : n;
+    }
+    return v == null ? '' : String(v);
+  }))];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = cols.map(c => ({ wch: Math.max(10, String(c.label || '').length + 2) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+  const safe = String(baseName || 'tabla').replace(/[^a-z0-9_-]+/gi, '_');
+  XLSX.writeFile(wb, `${safe}_${toISO(new Date())}.xlsx`);
+}
+// Exporta cualquier tabla creada con mkTable — respeta filtros/búsqueda/orden
+// activos, e ignora el límite de paginación (exporta TODAS las filas que calzan).
+function exportTableToExcel(id) {
+  const cfg = S._tables[id]; if (!cfg) return;
+  const rows = _tblFilteredSorted(cfg);
+  const cols = cfg.columns.filter(c => c.label).map(c => ({ label: c.label, get: r => _tblVal(c, r), num: !!c.num }));
+  exportRowsToExcel(rows, cols, cfg.exportName || cfg.id || 'tabla');
 }
 function paintTable(id) {
   const cfg  = S._tables[id]; if (!cfg) return;
@@ -2071,15 +2106,45 @@ function toggleTbl(tableId) {
   const btn = document.getElementById('btn-tgl-' + tableId);
   if (btn) btn.innerHTML = `<i class="ti ti-chevron-${collapsed?'down':'up'}"></i> ${collapsed?'Expandir tabla':'Contraer tabla'}`;
 }
-function tglBtn(tableId) {
+function tglBtn(tableId, exportCall) {
   const collapsed = !!(S._tblCollapsed && S._tblCollapsed[tableId]);
   // Restaurar estado colapsado tras re-render del DOM
   setTimeout(() => _applyTblCollapse(tableId, collapsed), 0);
-  return `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+  return `<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px">
+    ${exportCall ? `<button class="btn" onclick="${exportCall}" style="font-size:12px;padding:5px 14px;gap:6px" title="Descargar como Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>` : ''}
     <button id="btn-tgl-${tableId}" class="btn" onclick="toggleTbl('${tableId}')" style="font-size:12px;padding:5px 14px;gap:6px">
       <i class="ti ti-chevron-${collapsed?'down':'up'}"></i> ${collapsed?'Expandir tabla':'Contraer tabla'}
     </button>
   </div>`;
+}
+
+// Exports de "Gastos/Ingresos esta quincena" — tablas hand-rolled (sin mkTable),
+// leen el snapshot que rQuincenaPanel guarda en S._gastosQRows/_ingresosQRows.
+function exportGastosQuincena(ctx) {
+  const rows = (S._gastosQRows || {})[ctx] || [];
+  const fpMap = ((S.data.user || {}).external_refs || {}).forma_pago_gastos || {};
+  const fpLabel = g => {
+    if (g._isDespensa) return '';
+    const fp = fpMap[g.descripcion] || g.forma_pago || '';
+    return fp === 'efectivo' ? 'Efectivo' : fp === 'tarjeta_debito' ? 'T. Débito' : '';
+  };
+  const cols = [
+    { label: 'Concepto',      get: g => g._isDespensa ? 'Despensa' : (g.descripcion || '') },
+    { label: 'Monto',         get: g => g.monto || 0, num: true },
+    { label: 'Categoría',     get: g => g._isDespensa ? 'Despensa' : (g.categoria || '') },
+    { label: 'Forma de pago', get: fpLabel },
+    { label: 'Comentarios',   get: g => g._isDespensa ? '' : (g.comentarios || '') },
+  ];
+  exportRowsToExcel(rows, cols, 'gastos_quincena');
+}
+function exportIngresosQuincena(ctx) {
+  const rows = (S._ingresosQRows || {})[ctx] || [];
+  const cols = [
+    { label: 'Descripción',   get: i => i.descripcion || '' },
+    { label: 'Monto',         get: i => i.monto || 0, num: true },
+    { label: 'Días de cobro', get: i => (i.dias || []).join(', ') },
+  ];
+  exportRowsToExcel(rows, cols, 'ingresos_quincena');
 }
 
 // ── QUINCENAL PANEL ──────────────────────────────────────────────────────────
@@ -2151,6 +2216,13 @@ function rQuincenaPanel(ctx) {
 
   // Forma de pago por descripción de gasto fijo
   const fpMap = ((S.data.user || {}).external_refs || {}).forma_pago_gastos || {};
+
+  // Snapshot para exportar a Excel (tablas hand-rolled, sin mkTable)
+  if (!S._gastosQRows) S._gastosQRows = {};
+  if (!S._ingresosQRows) S._ingresosQRows = {};
+  S._gastosQRows[ctx]   = gasEsp;
+  S._ingresosQRows[ctx] = ingEspQ;
+
   // Retiro de efectivo = gastos fijos presupuestados marcados como efectivo
   const retiroEfectivo = gasEsp
     .filter(g => (fpMap[g.descripcion] || g.forma_pago || '') === 'efectivo')
@@ -2196,7 +2268,10 @@ function rQuincenaPanel(ctx) {
   <div style="margin-bottom:10px">
     <div class="q-section-lbl" style="justify-content:space-between">
       <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esta quincena</span>
-      <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
+      <div style="display:flex;gap:6px">
+        ${ingEspQ.length ? `<button class="btn btn-sm" style="font-size:11px" onclick="exportIngresosQuincena('${ctx}')" title="Descargar como Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>` : ''}
+        <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
+      </div>
     </div>
     ${ingEspQ.length ? ingEspQ.map(ing=>`
     <div class="q-item-row">
@@ -2237,7 +2312,7 @@ function rQuincenaPanel(ctx) {
       <button class="btn btn-accent" style="padding:11px 22px;font-size:15px;font-weight:700;gap:8px" onclick="oAddProxGasto()"><i class="ti ti-plus" style="font-size:17px"></i> Registrar Próximo Gasto</button>
     </div>
     ${gasEsp.length ? `
-    ${tglBtn('tbl-gastos-q-'+ctx)}
+    ${tglBtn('tbl-gastos-q-'+ctx, "exportGastosQuincena('"+ctx+"')")}
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:14px">
       <thead>
@@ -2972,7 +3047,7 @@ function _ndPaint() {
       </div>
       <div style="font-size:11px;color:var(--text-3);margin-top:3px">${fmt(din)} asignado − ${fmt(gastado)} gastado con Alicia</div>
       ${qMovsAlicia.length ? `<div style="margin-top:10px">${tglBtn('tbl-nd-movs')}${mkTable({
-        id:'tbl-nd-movs', numbered:true, empty:'Sin gastos',
+        id:'tbl-nd-movs', exportName:'gastos_alicia', numbered:true, empty:'Sin gastos',
         columns:[
           {key:'concepto', label:'Concepto',  filter:'text',   value:m=>m.concepto||m.descripcion||'—'},
           {key:'monto',    label:'Monto',     num:true,        value:m=>m.monto||0},
@@ -3386,7 +3461,7 @@ function rDeudas() {
   <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h'],['Radar','radar']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div><div id="legend-c-tdc2" class="chart-legend"></div></div>
 </div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Detalle de Tarjetas</h2></div></div>
-${tglBtn('tbl-tdc')}${mkTable({ id:'tbl-tdc', numbered:true, empty:'Sin tarjetas configuradas',
+${tglBtn('tbl-tdc')}${mkTable({ id:'tbl-tdc', exportName:'deudas_tdc', numbered:true, empty:'Sin tarjetas configuradas',
   columns:[
     {key:'nombre',label:'Tarjeta',filter:'text',value:t=>t.nombre||''},
     {key:'estado',label:'Estado',filter:'select',value:t=>t.estado||'activo'},
@@ -3446,7 +3521,7 @@ ${qHtml}
 </div>
 <div id="rebal-container"></div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Gastos vs Límites</h2></div></div>
-${rows.length ? tglBtn('tbl-prsp') : ''}${rows.length ? mkTable({ id:'tbl-prsp', numbered:true, empty:'Sin gastos ni límites configurados este mes',
+${rows.length ? tglBtn('tbl-prsp') : ''}${rows.length ? mkTable({ id:'tbl-prsp', exportName:'presupuesto_categorias', numbered:true, empty:'Sin gastos ni límites configurados este mes',
   columns:[
     {key:'c',label:'Categoría',filter:'select',value:x=>x.c},
     {key:'r',label:'Real',num:true,value:x=>x.r},
@@ -3568,6 +3643,19 @@ ${otros.length ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px
 }
 
 // ── RENDER: OBJETIVOS ────────────────────────────────────────────────────────
+function exportObjetivosAhorro() {
+  const rows = S._metasRows || [];
+  const cols = [
+    { label: 'Nombre',         get: m => m.nombre || '' },
+    { label: 'Tipo',           get: m => m.tipo || 'ahorro' },
+    { label: 'Meta',           get: m => m.meta || 0, num: true },
+    { label: 'Ya ahorrado',    get: m => m.actual || 0, num: true },
+    { label: 'Falta',          get: m => Math.max(0, (m.meta||0) - (m.actual||0)), num: true },
+    { label: 'Progreso %',     get: m => m.meta > 0 ? Math.min(100, Math.round((m.actual||0)/m.meta*100)) : 0, num: true },
+    { label: 'Fecha objetivo', get: m => m.fecha_objetivo || '' },
+  ];
+  exportRowsToExcel(rows, cols, 'objetivos_ahorro');
+}
 function rObjs() {
   const metas = S.data.metas || [];
   const refs  = (S.data.user||{}).external_refs || {};
@@ -3597,6 +3685,7 @@ function rObjs() {
     fecha:  (a,b)=>String(a.fecha_objetivo||'9999').localeCompare(String(b.fecha_objetivo||'9999')),
   };
   const sorted = [...metas].sort(sortFns[S.metaSort] || sortFns.pct);
+  S._metasRows = sorted;
 
   const goalCards = sorted.map(m => {
     const actual=m.actual||0, objetivo=m.meta||0;
@@ -3664,7 +3753,10 @@ function rObjs() {
   ohost.innerHTML=`
 <div class="hdr" style="margin-bottom:14px">
   <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-flag"></i> Metas de ahorro y compras — progreso y capacidad</span>
-  <button class="btn btn-accent btn-sm" onclick="oMeta()"><i class="ti ti-plus"></i> Nueva Meta</button>
+  <div style="display:flex;gap:8px">
+    ${metas.length ? `<button class="btn btn-sm" onclick="exportObjetivosAhorro()" title="Descargar como Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>` : ''}
+    <button class="btn btn-accent btn-sm" onclick="oMeta()"><i class="ti ti-plus"></i> Nueva Meta</button>
+  </div>
 </div>
 ${metas.length?`
 <div class="cards" style="margin-bottom:14px">
@@ -4119,7 +4211,7 @@ function _updateMovsTable(filtered) {
 
   const footer = () => '';
 
-  const _movTable = mkTable({ id:'tbl-movs', empty:'Sin movimientos en el período seleccionado',
+  const _movTable = mkTable({ id:'tbl-movs', exportName:'movimientos', empty:'Sin movimientos en el período seleccionado',
     columns:[
       {key:'_dot',label:'',sortable:false,width:'36px'},
       {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||'',width:'180px'},
@@ -4307,7 +4399,7 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
 function _calUpcomingHTML(evts) {
   const today=new Date().toISOString().split('T')[0];
   const up=evts.filter(e=>fd(e.fecha)>=today).sort((a,b)=>(fd(a.fecha)||'').localeCompare(fd(b.fecha)||'')).slice(0,100);
-  return tglBtn('tbl-cal') + mkTable({ id:'tbl-cal', numbered:true, limit:80, empty:'Sin eventos próximos',
+  return tglBtn('tbl-cal') + mkTable({ id:'tbl-cal', exportName:'calendario', numbered:true, limit:80, empty:'Sin eventos próximos',
     columns:[
       {key:'fecha',label:'Fecha',filter:'text',value:e=>fd(e.fecha)||e.fecha||''},
       {key:'hora',label:'Hora',value:e=>e.hora||'—'},
@@ -4779,6 +4871,7 @@ function rDespensa() {
 
   const tblHtml = pending.length ? mkTable({
     id: 'tbl-despensa',
+    exportName: 'lista_despensa',
     rows: pending,
     numbered: true,
     empty: 'Sin artículos pendientes',
@@ -5292,7 +5385,7 @@ async function _negRenderDetalle(el, id) {
     <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
       <button class="btn btn-accent btn-sm" onclick="negNuevaTrans('${id}')"><i class="ti ti-plus"></i> Registrar</button>
     </div>
-    ${tglBtn('tbl-neg-trans')}${mkTable({id:'tbl-neg-trans',numbered:true,empty:'Sin transacciones',
+    ${tglBtn('tbl-neg-trans')}${mkTable({id:'tbl-neg-trans',exportName:'negocio_transacciones',numbered:true,empty:'Sin transacciones',
       columns:[
         {key:'concepto',label:'Concepto',filter:'text',value:t=>t.concepto||''},
         {key:'tipo',label:'Tipo',filter:'select',value:t=>t.tipo||''},
