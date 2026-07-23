@@ -3935,11 +3935,29 @@ function renderMovChart(filtered) {
 
   if (type==='doughnut') {
     const bC=byKey(gastos,'categoria');
-    const keys=Object.keys(bC).sort((a,b)=>bC[b]-bC[a]);
+    // Separar Ocio en "resto" y "con Alicia" (mismo criterio determinista que el resto de la app:
+    // \balicia\b en comentarios) para resaltar dentro del propio segmento de Ocio cuánto es con ella.
+    const ALICIA_CLR = '#f59e0b';
+    const ocioTotal  = bC['Ocio'] || 0;
+    const ocioAlicia = ocioTotal > 0
+      ? gastos.filter(m => m.categoria==='Ocio' && /\balicia\b/i.test(m.comentarios||'')).reduce((a,m)=>a+(m.monto||0),0)
+      : 0;
+    const ocioResto  = Math.max(0, ocioTotal - ocioAlicia);
+    const order = Object.keys(bC).filter(k=>k!=='Ocio').concat(ocioTotal>0?['Ocio']:[])
+      .sort((a,b)=>(b==='Ocio'?ocioTotal:bC[b])-(a==='Ocio'?ocioTotal:bC[a]));
+
+    const keys=[], vals=[], bgs=[], bds=[], offs=[];
+    order.forEach(k => {
+      if (k==='Ocio') {
+        if (ocioResto>0)  { keys.push('Ocio');          vals.push(ocioResto);  bgs.push((CAT_CLR.Ocio)+'bb'); bds.push(CAT_CLR.Ocio); offs.push(0); }
+        if (ocioAlicia>0) { keys.push('Ocio · Alicia');  vals.push(ocioAlicia); bgs.push(ALICIA_CLR+'ee');     bds.push(ALICIA_CLR);   offs.push(14); }
+      } else {
+        keys.push(k); vals.push(bC[k]); bgs.push((CAT_CLR[k]||'#94a3b8')+'bb'); bds.push(CAT_CLR[k]||'#94a3b8'); offs.push(0);
+      }
+    });
     if (!keys.length) { if(S.ch['mov-chart']){S.ch['mov-chart'].destroy();delete S.ch['mov-chart'];} return; }
-    mkC('mov-chart','doughnut',keys,[{data:keys.map(k=>bC[k]),label:'$',
-      backgroundColor:keys.map(k=>(CAT_CLR[k]||'#94a3b8')+'bb'),
-      borderColor:keys.map(k=>CAT_CLR[k]||'#94a3b8'),borderWidth:2}]);
+    mkC('mov-chart','doughnut',keys,[{data:vals,label:'$',
+      backgroundColor:bgs, borderColor:bds, borderWidth:2, offset:offs}]);
   } else if (type==='bar') {
     const ms=last6();
     const all=S.data.movs||[];
