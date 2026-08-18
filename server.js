@@ -3512,9 +3512,37 @@ app.post('/webhook', async (req, res) => {
 
 // ── CHAT WEB (PWA) ────────────────────────────────────────────────────────────
 // Mismo motor que WhatsApp pero para el chat integrado en el dashboard
+// ── DEDUP chat-web: evita reprocesar (y duplicar registros) si el mismo teléfono
+// reenvía el TEXTO EXACTO en una ventana corta. Caso típico: el fetch del navegador
+// aborta por su propio timeout mientras el servidor sigue trabajando un lote grande
+// (extractIntentBatch + N inserts secuenciales), el usuario ve "intenta de nuevo" y
+// reenvía — sin esto, la solicitud original igual termina insertando todo.
+const _chatInFlight = new Map(); // phone -> { text, ts, promise }
+const CHAT_DEDUP_WINDOW_MS = 5 * 60 * 1000; // 5 min — cubre el peor caso observado
+
 app.post('/api/chat-web', async (req, res) => {
   const { phone, message, audio_b64, audio_mime } = req.body;
   if (!phone) return res.status(400).json({ error: 'Missing phone' });
+
+  // El dedup solo aplica a texto (el audio no siempre serializa idéntico y su
+  // transcripción ya es no-determinista, así que no hay riesgo real de duplicar ahí).
+  const dedupText = !audio_b64 ? (message || '').trim() : null;
+  if (dedupText) {
+    const prev = _chatInFlight.get(phone);
+    if (prev && prev.text === dedupText && (Date.now() - prev.ts) < CHAT_DEDUP_WINDOW_MS) {
+      try {
+        const reply = await prev.promise;
+        return res.json({ reply, deduped: true });
+      } catch { /* la solicitud original falló: cae al procesamiento normal abajo */ }
+    }
+  }
+  let _resolveInFlight = () => {}, _rejectInFlight = () => {};
+  if (dedupText) {
+    const inFlight = new Promise((res2, rej2) => { _resolveInFlight = res2; _rejectInFlight = rej2; });
+    inFlight.catch(() => {}); // evita UnhandledPromiseRejection si nadie más la consume
+    _chatInFlight.set(phone, { text: dedupText, ts: Date.now(), promise: inFlight });
+  }
+
   try {
 
     let text    = (message || '').trim();
@@ -3560,16 +3588,21 @@ app.post('/api/chat-web', async (req, res) => {
 
       const { intent, items } = await withTimeout(
         extractIntentBatch(input, phone),
-        12000,
+        45000, // lotes grandes (10+ gastos en un solo mensaje) pueden tardar más de 12s en Gemini
         { intent: 'CONSULTA', items: [] }
       );
 
       if (['REGISTRO', 'EDICION', 'ELIMINACION'].includes(intent) && items.length > 0) {
-        const mentionsAlicia = /alicia/i.test(input);
         const execs = [];
         for (const item of items) {
-          if (mentionsAlicia && item.tabla === 'movimientos' && item.accion === 'crear') {
-            item.datos = { ...item.datos, comentarios: 'Alicia' };
+          // Por ITEM, no por batch completo: en un mensaje de varias líneas, que UNA
+          // mencione a Alicia no debe contaminar a las demás (p.ej. "internet (despensa)"
+          // no debe volverse "Alicia" solo porque otra línea del mismo mensaje sí la menciona).
+          if (item.tabla === 'movimientos' && item.accion === 'crear') {
+            const blobItem = `${item.datos?.concepto || ''} ${item.datos?.comentarios || ''}`;
+            if (/\balicia\b/i.test(blobItem)) {
+              item.datos = { ...item.datos, comentarios: 'Alicia' };
+            }
           }
           const result = await executeDbAction(phone, item, 'web');
           execs.push({ item, result });
@@ -3587,6 +3620,7 @@ app.post('/api/chat-web', async (req, res) => {
 
     // Guardar respuesta del bot SIEMPRE (para sincronización cross-device)
     await guardarMensaje(phone, 'assistant', reply);
+    _resolveInFlight(reply);
     res.json({ reply, transcription: isAudio ? text : undefined });
   } catch (e) {
     const detail = `${e.message || e} | status=${e.status} | code=${e.code}`;
@@ -3595,8 +3629,12 @@ app.post('/api/chat-web', async (req, res) => {
     if (is429) {
       const friendlyMsg = '⚠️ Gemini está al límite de cuota por ahora. Para registrar gastos escribe: *gasté [monto] en [concepto]* (se procesa sin IA).';
       try { await guardarMensaje(phone, 'assistant', friendlyMsg); } catch {}
+      _resolveInFlight(friendlyMsg);
       return res.json({ reply: friendlyMsg });
     }
+    // Error genérico: no cachear — puede ser transitorio, un reenvío merece reintentar de cero.
+    _rejectInFlight(e);
+    _chatInFlight.delete(phone);
     res.status(500).json({ error: detail.slice(0, 200) });
   }
 });

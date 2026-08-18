@@ -6159,7 +6159,9 @@ async function _askBot(message, audioB64 = null, audioMime = null) {
   try {
     const body = { phone: S.phone, message: message || '' };
     if (audioB64) { body.audio_b64 = audioB64; body.audio_mime = audioMime; }
-    const r = await api('POST', '/api/chat-web', body);
+    // Timeout generoso: registrar varios gastos en un solo mensaje puede tardar
+    // más que el default (Gemini + inserciones secuenciales en el servidor).
+    const r = await api('POST', '/api/chat-web', body, { timeout: 90000 });
     _hideTyping();
     if (r.error) { _appendMsg('bot', '❌ Error servidor: ' + r.error); return; }
     if (r.transcription) _appendMsg('user', '🎤 ' + r.transcription);
