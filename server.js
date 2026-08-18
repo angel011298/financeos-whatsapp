@@ -3801,6 +3801,15 @@ app.post('/api/update-refs', async (req, res) => {
 
     if (field === 'hide_despensa_gastos') {
       refs.hide_despensa_gastos = req.body.value === true;
+    } else if (field === 'cuentas' && action === 'set') {
+      // Saldos de cuentas para MONITOREO (Banamex débito, Revolut ahorro).
+      // No son movimientos: nunca entran en gastos/ingresos ni en ningún cálculo de balance.
+      if (!refs.cuentas) refs.cuentas = {};
+      refs.cuentas[itemId] = Number(req.body.value) || 0;   // itemId = 'banamex' | 'revolut'
+    } else if (field === 'notas' && action === 'set') {
+      // Notas libres por pestaña (HTML enriquecido del editor tipo Notas de iPhone)
+      if (!refs.notas) refs.notas = {};
+      refs.notas[itemId] = typeof req.body.value === 'string' ? req.body.value.slice(0, 100000) : '';
     } else if (field === 'forma_pago_gastos' && action === 'set') {
       if (!refs.forma_pago_gastos) refs.forma_pago_gastos = {};
       refs.forma_pago_gastos[itemId] = item || '';  // itemId=descripcion, item='efectivo'|'tarjeta_debito'|''
