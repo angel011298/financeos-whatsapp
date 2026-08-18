@@ -2490,8 +2490,7 @@ function oAddExpItem(tipo) {
   $('m-title').textContent = tipo === 'ingresos' ? '+ Ingreso Esperado' : '+ Gasto Fijo Quincenal';
   $('m-body').innerHTML = `
 <div class="fr"><label>Descripción</label><input id="ei-desc" placeholder="${tipo==='ingresos'?'Ej: Sueldo, Freelance, Alquiler':'Ej: Transporte, Gasolina, Internet'}"></div>
-<div class="fr"><label>Monto por quincena ($)</label><input id="ei-monto" type="number" min="0" step="1" placeholder="0"></div>
-${tipo==='ingresos' ? `<div class="fr"><label>Días de cobro <span style="color:var(--muted);font-size:10px">(separados por coma)</span></label><input id="ei-dias" placeholder="Ej: 10,25 ó 1,15 ó 25"></div>` : ''}`;
+<div class="fr"><label>Monto por quincena ($)</label><input id="ei-monto" type="number" min="0" step="1" placeholder="0"></div>`;
   $('ovl').classList.add('open');
 }
 
@@ -2544,8 +2543,7 @@ function oEditExpItem(tipo, id) {
   } else {
     $('m-body').innerHTML = `
 <div class="fr"><label>Descripción</label><input id="ei-desc" value="${(item.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Ej: Sueldo"></div>
-<div class="fr"><label>Monto por quincena ($)</label><input id="ei-monto" type="number" min="0" step="1" value="${item.monto||0}"></div>
-<div class="fr"><label>Días de cobro <span style="color:var(--muted);font-size:10px">(separados por coma)</span></label><input id="ei-dias" value="${(item.dias||[]).join(',')}" placeholder="Ej: 10,25"></div>`;
+<div class="fr"><label>Monto por quincena ($)</label><input id="ei-monto" type="number" min="0" step="1" value="${item.monto||0}"></div>`;
   }
   $('ovl').classList.add('open');
 }
@@ -4650,8 +4648,9 @@ async function saveM() {
     if (!monto) { alert('Ingresa el monto'); return; }
     const item  = { descripcion: desc, monto };
     if (ctx.tipo === 'ingresos') {
-      const diasRaw = ($('ei-dias')?.value || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0 && n <= 31);
-      item.dias = diasRaw.length ? diasRaw : [];
+      // Ya no se pide "días de cobro" en el formulario — se infiere de la descripción:
+      // beca/mensual paga 1 vez al mes (día 1), el resto se asume cada quincena (10 y 25).
+      item.dias = /beca|mensual/i.test(desc) ? [1] : [10, 25];
     } else {
       // Gastos: campos enriquecidos (presentes solo en el form "Registrar Próximo Gasto" / editar gasto)
       const fpEl = $('ei-fp'), catEl = $('ei-cat'), comEl = $('ei-coment');
