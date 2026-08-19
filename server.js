@@ -167,7 +167,7 @@ app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModifi
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
 const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
-const MEDIOS_PAGO = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito'];
+const MEDIOS_PAGO = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito','Débito Banamex','Débito Revolut'];
 
 // Corre `promise` pero si tarda más de `ms` devuelve `fallback` en lugar de colgar.
 const withTimeout = (promise, ms, fallback) =>
@@ -630,6 +630,50 @@ function medioToFormaPago(medio) {
   return ''; // TDC / transferencia → no afecta el cálculo de retiro de efectivo
 }
 
+// ── SALDOS DE CUENTAS (monitoreo Banamex/Revolut) ─────────────────────────────
+// Un gasto pagado con "Débito Banamex" o "Débito Revolut" descuenta AUTOMÁTICAMENTE
+// del saldo monitoreado de esa cuenta (external_refs.cuentas), ADEMÁS de registrarse
+// como gasto normal (categoría, presupuesto, estadísticas) — ambas cosas son
+// independientes: el saldo es solo un espejo de "cuánto dinero real queda ahí".
+// Tolerante a variantes ("Débito Banamex", "banamex débito", "tarjeta banamex", etc.) — no
+// depende de que la IA (o el usuario) use el string exacto del enum de medios de pago.
+function medioPagoACuentaKey(medioPago) {
+  const m = (medioPago || '').toLowerCase();
+  if (/\bbanamex\b/.test(m)) return 'banamex';
+  if (/\brevolut\b/.test(m)) return 'revolut_debito';   // gastar siempre pega a la cuenta de débito, nunca al ahorro
+  return null;
+}
+
+async function ajustarSaldoCuentaKey(phone, key, delta) {
+  if (!key || !delta) return;
+  try {
+    const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+    const refs    = { ...(cur?.external_refs || {}) };
+    const cuentas = { ...(refs.cuentas || {}) };
+    cuentas[key]  = Math.round(((Number(cuentas[key]) || 0) + delta) * 100) / 100;
+    refs.cuentas  = cuentas;
+    await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+  } catch (e) { console.error('ajustarSaldoCuentaKey error:', e.message); }
+}
+
+// Traduce un movimiento a su impacto en cuentas (o null si no aplica: no es GASTO,
+// o su medio_pago no corresponde a ninguna cuenta monitoreada).
+function impactoCuenta(mov) {
+  if (!mov || mov.tipo !== 'GASTO') return null;
+  const key = medioPagoACuentaKey(mov.medio_pago);
+  if (!key) return null;
+  return { key, monto: Number(mov.monto) || 0 };
+}
+
+// Revierte el impacto de "before" (estado previo, o null si es un alta) y aplica el de
+// "after" (estado nuevo, o null si es baja). Cubre crear/editar/eliminar con una sola función.
+async function aplicarImpactoCuentas(phone, before, after) {
+  const b = impactoCuenta(before);
+  const a = impactoCuenta(after);
+  if (b) await ajustarSaldoCuentaKey(phone, b.key, +b.monto);
+  if (a) await ajustarSaldoCuentaKey(phone, a.key, -a.monto);
+}
+
 // Detecta si un GASTO debe tratarse como programado (presupuesto) y no como movimiento real.
 function esGastoProgramado(datos, today) {
   if (!datos || datos.tipo !== 'GASTO') return false;
@@ -843,6 +887,7 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
       if (tabla === 'movimientos' && cleanDatos?.tipo === 'GASTO') {
         await learnPattern(phone, cleanDatos);
         await verificarLimitePresupuesto(phone, cleanDatos.categoria, mesActual()).catch(() => null);
+        await aplicarImpactoCuentas(phone, null, cleanDatos);
       }
       await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen, texto_original);
       return `✅ ${tabla === 'calendario' ? 'Evento agendado' : 'Registrado'} ✓ ID: ${data?.id}`;
@@ -850,6 +895,7 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
     if (accion === 'editar') {
       const { data, error } = await sb.from(tabla).update(datos).eq('id', id).eq('user_phone', phone).select().single();
       if (error) return `❌ Error: ${error.message}`;
+      if (tabla === 'movimientos') await aplicarImpactoCuentas(phone, snapshotBefore, data);
       await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen, texto_original);
       return `✅ Registro ${id} actualizado.`;
     }
@@ -861,6 +907,7 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
         const { error } = await sb.from(tabla).delete().eq('id', id).eq('user_phone', phone);
         if (error) return `❌ Error: ${error.message}`;
       }
+      if (tabla === 'movimientos') await aplicarImpactoCuentas(phone, snapshotBefore, null);
       await writeAuditLog(phone, tabla, accion, id, snapshotBefore, null, origen, texto_original);
       return `🗑️ Registro ${id} eliminado.`;
     }
@@ -922,7 +969,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
+MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito, Débito Banamex, Débito Revolut (usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito")
 Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
@@ -934,6 +981,7 @@ GASTO PROGRAMADO vs GASTO HECHO (¡MUY IMPORTANTE!):
 
 EJEMPLOS:
 "50 tacos" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
+"gasté 350 con débito banamex en super" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Despensa","concepto":"super","monto":350,"medio_pago":"Débito Banamex","fecha":"FECHA_HOY"}}
 "programa airbnb 8000 para la quincena del 25 de junio" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"AIRBNB / HOTEL","monto":8000,"programado":true,"fecha":"FECHA_YEAR-06-25"}}
 "voy a pagar 2500 de afinación de la platina el 25 de junio en efectivo" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"Afinacion platina","monto":2500,"medio_pago":"efectivo","programado":true,"fecha":"FECHA_YEAR-06-25"}}
 "gasté 350 uber con TDC BBVA" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":350,"medio_pago":"TDC BBVA","fecha":"FECHA_HOY"}}
@@ -1054,7 +1102,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito
+MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito, Débito Banamex, Débito Revolut (usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito")
 Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
@@ -1067,6 +1115,9 @@ GASTO PROGRAMADO vs GASTO HECHO (¡CRÍTICO — no confundir!):
   → forma de pago entre paréntesis ("(efectivo)", "(tarjeta débito)") → medio_pago correspondiente.
 
 EJEMPLOS:
+"gasté 350 con débito banamex en super" → {"intent":"REGISTRO","items":[
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Despensa","concepto":"super","monto":350,"medio_pago":"Débito Banamex","fecha":"FECHA_HOY"}}
+]}
 "Ayer gasté 50 en tacos y 80 en uber con TDC BBVA" →
 {"intent":"REGISTRO","items":[
   {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_AYER"}},
@@ -1101,6 +1152,11 @@ function tryParseBatch(text, today) {
 
   function normMedio(s) {
     const r = s.toLowerCase().trim();
+    // Banco específico ANTES del genérico "débito" — si no, "débito banamex" caía
+    // en la rama genérica y se perdía la mención del banco (y con ella, el ajuste
+    // automático del saldo monitoreado de esa cuenta).
+    if (/\bbanamex\b/.test(r)) return 'Débito Banamex';
+    if (/\brevolut\b/.test(r)) return 'Débito Revolut';
     if (/tarjeta\s+d[eé]bito|t\.?\s*d[eé]bito|d[eé]bito/.test(r)) return 'débito';
     if (/efectivo/.test(r))      return 'efectivo';
     if (/transferencia/.test(r)) return 'transferencia';
@@ -2154,7 +2210,10 @@ app.post('/api/movimientos', async (req, res) => {
     const { user_phone, ...d } = req.body;
     const { data, error } = await sb.from('movimientos').insert({ ...d, user_phone }).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
-    if (d.tipo === 'GASTO') await learnPattern(user_phone, d);
+    if (d.tipo === 'GASTO') {
+      await learnPattern(user_phone, d);
+      await aplicarImpactoCuentas(user_phone, null, d);
+    }
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -2162,8 +2221,10 @@ app.post('/api/movimientos', async (req, res) => {
 app.put('/api/movimientos/:id', async (req, res) => {
   try {
     const { user_phone, ...d } = req.body;
+    const { data: before } = await sb.from('movimientos').select('*').eq('id', req.params.id).eq('user_phone', user_phone).maybeSingle();
     const { data, error } = await sb.from('movimientos').update(d).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
+    await aplicarImpactoCuentas(user_phone, before, data);
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -2184,8 +2245,10 @@ app.patch('/api/movimientos/:id', async (req, res) => {
 app.delete('/api/movimientos/:id', async (req, res) => {
   try {
     const { user_phone } = req.body;
+    const { data: before } = await sb.from('movimientos').select('*').eq('id', req.params.id).eq('user_phone', user_phone).maybeSingle();
     const { error } = await sb.from('movimientos').delete().eq('id', req.params.id).eq('user_phone', user_phone);
     if (error) return res.status(400).json({ success: false, error: error.message });
+    await aplicarImpactoCuentas(user_phone, before, null);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

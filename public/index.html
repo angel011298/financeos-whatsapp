@@ -228,6 +228,8 @@ textarea{min-height:64px;resize:vertical}
 .cuenta-val{font-family:'Space Grotesk',system-ui,sans-serif;font-size:19px;font-weight:700;color:var(--text-1);cursor:pointer;border-radius:5px;padding:1px 3px;transition:background .12s;font-variant-numeric:tabular-nums}
 .cuenta-card:not(.cuenta-total) .cuenta-val:hover{background:var(--border-default)}
 .cuenta-inp{font-family:'Space Grotesk',system-ui,sans-serif;font-size:18px;font-weight:700;width:100%;padding:2px 5px;border:1px solid var(--accent-primary);border-radius:5px;background:var(--bg-surface);color:var(--text-1);outline:none}
+.cuenta-retiro-btn{background:transparent;border:1px solid var(--border-default);border-radius:6px;cursor:pointer;color:var(--text-3);font-size:10px;padding:3px 7px;display:inline-flex;align-items:center;gap:3px;font-family:inherit;white-space:nowrap;flex-shrink:0;transition:color .12s,border-color .12s}
+.cuenta-retiro-btn:hover{color:var(--color-expense);border-color:var(--color-expense)}
 
 /* ── NOTAS por pestaña (editor tipo Notas de iPhone) ── */
 .notas-box{margin-bottom:14px}
@@ -1149,7 +1151,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 <script>
 // ── CONSTANTES ──────────────────────────────────────────────────────────────
 const CATS   = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
-const MEDIOS = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito'];
+const MEDIOS = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito','Débito Banamex','Débito Revolut'];
 const CLR    = ['#818cf8','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
 const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Hormiga':'#fbbf24','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
 
@@ -2206,8 +2208,9 @@ function exportIngresosQuincena(ctx) {
 // Saldos informativos de cuentas propias. NO son movimientos: nunca entran en
 // gastos, ingresos, balance ni en ningún otro cálculo del dashboard.
 const CUENTAS_DEF = [
-  { key:'banamex', label:'Banamex · Débito', icon:'ti-credit-card', color:'#0ea5e9' },
-  { key:'revolut', label:'Revolut · Ahorro', icon:'ti-pig-money',   color:'#8b5cf6' },
+  { key:'banamex',        label:'Banamex · Débito', icon:'ti-credit-card', color:'#0ea5e9' },
+  { key:'revolut_debito', label:'Revolut · Débito', icon:'ti-credit-card', color:'#14b8a6' },
+  { key:'revolut',        label:'Revolut · Ahorro', icon:'ti-pig-money',   color:'#8b5cf6' },
 ];
 
 function rCuentasWidget() {
@@ -2221,7 +2224,10 @@ function rCuentasWidget() {
   <div class="cuentas-grid">
     ${CUENTAS_DEF.map(d => `<div class="cuenta-card" style="border-left:3px solid ${d.color}">
       <div class="cuenta-lbl"><i class="ti ${d.icon}" style="color:${d.color}"></i> ${d.label}</div>
-      <div class="cuenta-val" title="Clic para editar el saldo" onclick="editCuenta(this,'${d.key}')">${fmt(Number(c[d.key]) || 0)}</div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:6px">
+        <div class="cuenta-val" title="Clic para editar el saldo" onclick="editCuenta(this,'${d.key}')">${fmt(Number(c[d.key]) || 0)}</div>
+        <button type="button" class="cuenta-retiro-btn" title="Registrar retiro de efectivo (no cuenta como gasto)" onclick="oRetiro('${d.key}')"><i class="ti ti-minus"></i> Retirar</button>
+      </div>
     </div>`).join('')}
     <div class="cuenta-card cuenta-total">
       <div class="cuenta-lbl"><i class="ti ti-sigma"></i> Total monitoreado</div>
@@ -2229,6 +2235,17 @@ function rCuentasWidget() {
     </div>
   </div>
 </div>`;
+}
+
+function oRetiro(key) {
+  const def = CUENTAS_DEF.find(d => d.key === key);
+  S.mctx = { mode: 'retiro-cuenta', key };
+  $('m-title').textContent = `Retirar efectivo — ${def?.label || key}`;
+  $('m-body').innerHTML = `
+<div class="fr"><label>Monto retirado ($)</label><input id="ret-monto" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+<div style="font-size:11px;color:var(--text-3)">Se resta del saldo monitoreado de ${def?.label || key}. No se registra como gasto — el efectivo sigue siendo tuyo, solo cambió de lugar.</div>`;
+  $('ovl').classList.add('open');
+  setTimeout(() => $('ret-monto')?.focus(), 50);
 }
 
 function editCuenta(el, key) {
@@ -4903,6 +4920,19 @@ async function saveM() {
   if (ctx?.mode === '_neg_cb' && ctx._cb) {
     const ok = await ctx._cb();
     if (ok !== false) closeM();
+    return;
+  }
+
+  if (ctx.mode === 'retiro-cuenta') {
+    const monto = parseFloat($('ret-monto')?.value);
+    if (!monto || monto <= 0) { alert('Ingresa un monto válido'); return; }
+    const cur   = Number((((S.data.user || {}).external_refs || {}).cuentas || {})[ctx.key]) || 0;
+    const nuevo = Math.round((cur - monto) * 100) / 100;
+    try {
+      await api('POST', '/api/update-refs', { phone: S.phone, field: 'cuentas', action: 'set', itemId: ctx.key, value: nuevo });
+      closeM(); await load();
+      toast(`Retiro registrado — nuevo saldo ${fmt(nuevo)} ✓`);
+    } catch(e) { alert('Error: ' + e.message); }
     return;
   }
 
