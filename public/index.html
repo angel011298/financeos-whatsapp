@@ -276,6 +276,7 @@ textarea{min-height:64px;resize:vertical}
   font-size:clamp(15px,2vw,22px);font-weight:700;letter-spacing:-0.5px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+.card-sub{font-size:var(--text-xs);margin-top:3px;color:var(--text-3)}
 
 /* ═══════════════════════════════════════════════════════ CHARTS */
 .charts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;margin-bottom:16px}
@@ -3026,6 +3027,11 @@ function rDash() {
   const gasC   = pMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
   const ingC   = pMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
   const ingShow = ingC;
+  // Ingreso esperado (prorrateado al período) — mismo respaldo que ya usa el panel de
+  // quincena para su BALANCE (esperado si no hay real aún registrado). Antes, este
+  // indicador superior solo miraba el real y podía contradecir al panel de abajo.
+  const ingEsp = calcIngresosEsperadosPeriodo(refs, r.from, r.to);
+  const ingBal = ingC || ingEsp;
   const tdcP   = (S.data.tdc||[]).reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
   const pats = S.data.patrones||[];
   S._patData = {};
@@ -3046,7 +3052,7 @@ ${periodoSelectorHTML()}
     <span>${pMovs.length} movimiento${pMovs.length!==1?'s':''}</span>
     ${r.from!==r.to?`<span style="color:var(--text-3)">${fmtDate(r.from)} → ${fmtDate(r.to)}</span>`:''}
   </span>
-  ${ingShow-gasC>=0
+  ${ingBal-gasC>=0
     ? `<span style="font-size:11px;color:var(--color-income);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-up"></i> Balance positivo</span>`
     : `<span style="font-size:11px;color:var(--color-expense);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-down"></i> Balance negativo</span>`}
 </div>
@@ -3058,6 +3064,7 @@ ${periodoSelectorHTML()}
   <div class="card" style="cursor:pointer" onclick="oMov('INGRESO')" title="Doble clic para editar · Clic para registrar ingreso">
     <div class="card-lbl">Ingresos <i class="ti ti-pencil" style="font-size:9px;opacity:.3"></i></div>
     <div class="card-val green" ondblclick="editKpiIngresos(event,this)">${fmt(ingShow)}</div>
+    ${ingEsp>0?`<div class="card-sub">esperado ${fmt(ingEsp)}</div>`:''}
   </div>
   <div class="card" style="cursor:pointer" onclick="go('deudas')" title="Ver deudas TDC">
     <div class="card-lbl">Deuda TDC <i class="ti ti-chevron-right" style="font-size:9px;opacity:.5"></i></div>
