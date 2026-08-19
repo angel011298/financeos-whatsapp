@@ -2237,7 +2237,7 @@ function editCuenta(el, key) {
   const prev = el.innerHTML;
   el.innerHTML = '';
   const inp = document.createElement('input');
-  inp.type = 'number'; inp.step = 'any'; inp.className = 'cuenta-inp';
+  inp.type = 'number'; inp.step = 'any'; inp.inputMode = 'decimal'; inp.className = 'cuenta-inp';
   inp.value = cur || '';
   el.appendChild(inp);
   inp.focus(); inp.select();
