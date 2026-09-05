@@ -4223,14 +4223,31 @@ function renderMovChart(filtered) {
       ? gastos.filter(m => m.categoria==='Ocio' && /\balicia\b/i.test(m.comentarios||'')).reduce((a,m)=>a+(m.monto||0),0)
       : 0;
     const ocioResto  = Math.max(0, ocioTotal - ocioAlicia);
-    const order = Object.keys(bC).filter(k=>k!=='Ocio').concat(ocioTotal>0?['Ocio']:[])
-      .sort((a,b)=>(b==='Ocio'?ocioTotal:bC[b])-(a==='Ocio'?ocioTotal:bC[a]));
+
+    // Separar Personales en "resto" y "Ahorro" (transferencias a cuentas de ahorro, ej. "ahorro
+    // revolut" en concepto o comentarios) para verlo aparte con un color propio — no es un gasto
+    // real, es dinero que sigue siendo tuyo, así que debe distinguirse a simple vista del resto.
+    const AHORRO_CLR    = '#10b981';
+    const esAhorro       = m => /\bahorro\b/i.test(m.concepto||'') || /\bahorro\b/i.test(m.comentarios||'');
+    const personalesTot    = bC['Personales'] || 0;
+    const personalesAhorro = personalesTot > 0
+      ? gastos.filter(m => m.categoria==='Personales' && esAhorro(m)).reduce((a,m)=>a+(m.monto||0),0)
+      : 0;
+    const personalesResto  = Math.max(0, personalesTot - personalesAhorro);
+
+    const order = Object.keys(bC).filter(k=>k!=='Ocio'&&k!=='Personales')
+      .concat(ocioTotal>0?['Ocio']:[])
+      .concat(personalesTot>0?['Personales']:[])
+      .sort((a,b)=>(b==='Ocio'?ocioTotal:b==='Personales'?personalesTot:bC[b])-(a==='Ocio'?ocioTotal:a==='Personales'?personalesTot:bC[a]));
 
     const keys=[], vals=[], bgs=[], bds=[], offs=[];
     order.forEach(k => {
       if (k==='Ocio') {
         if (ocioResto>0)  { keys.push('Ocio');          vals.push(ocioResto);  bgs.push((CAT_CLR.Ocio)+'bb'); bds.push(CAT_CLR.Ocio); offs.push(0); }
         if (ocioAlicia>0) { keys.push('Ocio · Alicia');  vals.push(ocioAlicia); bgs.push(ALICIA_CLR+'ee');     bds.push(ALICIA_CLR);   offs.push(14); }
+      } else if (k==='Personales') {
+        if (personalesResto>0)  { keys.push('Personales');          vals.push(personalesResto);  bgs.push((CAT_CLR.Personales)+'bb'); bds.push(CAT_CLR.Personales); offs.push(0); }
+        if (personalesAhorro>0) { keys.push('Personales · Ahorro'); vals.push(personalesAhorro); bgs.push(AHORRO_CLR+'ee');           bds.push(AHORRO_CLR);         offs.push(14); }
       } else {
         keys.push(k); vals.push(bC[k]); bgs.push((CAT_CLR[k]||'#94a3b8')+'bb'); bds.push(CAT_CLR[k]||'#94a3b8'); offs.push(0);
       }
