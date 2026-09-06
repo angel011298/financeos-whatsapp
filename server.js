@@ -645,6 +645,17 @@ function medioPagoACuentaKey(medioPago) {
   return null;
 }
 
+// Única cuenta de "ahorro" monitoreada hoy (Revolut · Ahorro). Si algún día hay más de una,
+// esto se vuelve una función que decida el destino por texto — por ahora solo hay una.
+const AHORRO_CUENTA_KEY = 'revolut';
+
+// Mismo criterio que el resaltado "Ahorro" de la gráfica de dona (frontend, esAhorro()): "ahorro"
+// en el concepto o los comentarios marca al GASTO como una TRANSFERENCIA a la cuenta de ahorro,
+// no un gasto real.
+function esTransferenciaAhorro(mov) {
+  return /\bahorro\b/i.test(mov?.concepto || '') || /\bahorro\b/i.test(mov?.comentarios || '');
+}
+
 async function ajustarSaldoCuentaKey(phone, key, delta) {
   if (!key || !delta) return;
   try {
@@ -657,22 +668,32 @@ async function ajustarSaldoCuentaKey(phone, key, delta) {
   } catch (e) { console.error('ajustarSaldoCuentaKey error:', e.message); }
 }
 
-// Traduce un movimiento a su impacto en cuentas (o null si no aplica: no es GASTO,
-// o su medio_pago no corresponde a ninguna cuenta monitoreada).
+// Traduce un movimiento a su(s) efecto(s) en cuentas: [] si no aplica (no es GASTO, monto 0, o su
+// medio_pago no corresponde a ninguna cuenta monitoreada Y tampoco es una transferencia a ahorro).
+// Un GASTO normal solo resta de la cuenta de origen (medio_pago). Un GASTO que ADEMÁS es una
+// transferencia a ahorro resta de la cuenta de origen Y suma a la cuenta de ahorro — refleja
+// ambos lados de la transferencia interna. Antes solo se restaba del débito y el widget de
+// ahorro se quedaba desincronizado (había que actualizarlo a mano, y podía desfasarse).
 function impactoCuenta(mov) {
-  if (!mov || mov.tipo !== 'GASTO') return null;
-  const key = medioPagoACuentaKey(mov.medio_pago);
-  if (!key) return null;
-  return { key, monto: Number(mov.monto) || 0 };
+  if (!mov || mov.tipo !== 'GASTO') return [];
+  const monto = Number(mov.monto) || 0;
+  if (!monto) return [];
+  const efectos = [];
+  const origenKey = medioPagoACuentaKey(mov.medio_pago);
+  if (origenKey) efectos.push({ key: origenKey, delta: -monto });
+  if (esTransferenciaAhorro(mov)) efectos.push({ key: AHORRO_CUENTA_KEY, delta: +monto });
+  return efectos;
 }
 
-// Revierte el impacto de "before" (estado previo, o null si es un alta) y aplica el de
-// "after" (estado nuevo, o null si es baja). Cubre crear/editar/eliminar con una sola función.
+// Revierte el/los efecto(s) de "before" (estado previo, o null si es un alta) y aplica el/los de
+// "after" (estado nuevo, o null si es baja). Cubre crear/editar/eliminar con una sola función,
+// incluyendo cambios de banco, de monto, o que el texto deje de/empiece a mencionar "ahorro".
 async function aplicarImpactoCuentas(phone, before, after) {
-  const b = impactoCuenta(before);
-  const a = impactoCuenta(after);
-  if (b) await ajustarSaldoCuentaKey(phone, b.key, +b.monto);
-  if (a) await ajustarSaldoCuentaKey(phone, a.key, -a.monto);
+  const efectos = [
+    ...impactoCuenta(before).map(e => ({ key: e.key, delta: -e.delta })), // revertir lo anterior
+    ...impactoCuenta(after),                                              // aplicar lo nuevo
+  ];
+  for (const e of efectos) await ajustarSaldoCuentaKey(phone, e.key, e.delta);
 }
 
 // Detecta si un GASTO debe tratarse como programado (presupuesto) y no como movimiento real.
