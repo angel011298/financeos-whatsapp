@@ -79,7 +79,8 @@ async function enviarWhatsApp(to, body) {
 }
 
 // ── Helpers: formato y fechas ────────────────────────────────────────────────
-const fmt       = n => '$' + Math.round(Math.abs(+n || 0)).toLocaleString('es-MX');
+// Nunca redondear centavos: mostrar SIEMPRE los 2 decimales exactos del monto real.
+const fmt       = n => '$' + Math.abs(+n || 0).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2});
 const hoy       = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
 const mesActual = () => hoy().slice(0, 7);
 
@@ -3830,7 +3831,7 @@ app.get('/api/health', (_req, res) => res.json({ status: 'Us v6 ✅', build: 'qu
 app.post('/api/quincenal-ia', async (req, res) => {
   try {
     const { phone, qLabel, qFrom, qTo, espIngreso, realIngreso, espGasto, realGasto, items } = req.body;
-    const fmt2 = n => '$' + Math.round(n||0).toLocaleString('es-MX');
+    const fmt2 = n => '$' + (+n||0).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2});
     const prompt = `Eres el asistente de Us, asesor financiero personal cercano. Analiza este período financiero y da 3-4 recomendaciones concretas y accionables:
 
 Período: ${qLabel} (${qFrom} al ${qTo})

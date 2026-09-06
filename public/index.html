@@ -1172,7 +1172,8 @@ const S = {
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const fmt  = n => '$' + Math.round(n||0).toLocaleString('es-MX');
+// Nunca redondear centavos: mostrar SIEMPRE los 2 decimales exactos del monto real.
+const fmt  = n => '$' + (+n||0).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2});
 const fd   = d => d ? d.substring(0,10) : '';
 const fmtPhone = r => { const d=r.replace(/\D/g,''); return 'whatsapp:+'+(d.startsWith('52')?d:'52'+d); };
 const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -2968,7 +2969,7 @@ function rDailySnapshot() {
   const movs = S.data.movs || [];
   const tdcs  = S.data.tdc  || [];
   const now   = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = toISO(now);
   const cm    = curMes();
   const diaActual = now.getDate();
   const diasMes   = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -4406,7 +4407,7 @@ function iePatron(td, id, field) {
 async function duplicarMov(id) {
   const m=S._movData[id]; if(!m)return;
   const datos={tipo:m.tipo,categoria:m.categoria,concepto:m.concepto,medio_pago:m.medio_pago,
-               monto:m.monto,fecha:new Date().toISOString().split('T')[0],comentarios:''};
+               monto:m.monto,fecha:toISO(new Date()),comentarios:''};
   try{ await api('POST','/api/movimientos',{user_phone:S.phone,...datos}); await load(); }
   catch(e){ alert('Error al duplicar: '+e.message); }
 }
@@ -4663,7 +4664,7 @@ async function changeCat(id, newCat) {
 function _calGridHTML(evts, y, mo, refs, niditoItems) {
   const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const first=new Date(y,mo,1), last=new Date(y,mo+1,0);
-  const today=new Date().toISOString().split('T')[0];
+  const today=toISO(new Date());
   const mm=String(mo+1).padStart(2,'0');
   const payDays=new Set([...(refs.dias_pago||[]),...getIngresosEsperados(refs).flatMap(i=>i.dias||[])]);
   // Build per-day event map
@@ -4712,7 +4713,7 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
 }
 
 function _calUpcomingHTML(evts) {
-  const today=new Date().toISOString().split('T')[0];
+  const today=toISO(new Date());
   const up=evts.filter(e=>fd(e.fecha)>=today).sort((a,b)=>(fd(a.fecha)||'').localeCompare(fd(b.fecha)||'')).slice(0,100);
   return tglBtn('tbl-cal') + mkTable({ id:'tbl-cal', exportName:'calendario', numbered:true, limit:80, empty:'Sin eventos próximos',
     columns:[
@@ -4830,7 +4831,7 @@ function oMov(tipo='GASTO', rec=null) {
   $('m-title').textContent = rec
     ? (esIng ? 'Editar Ingreso' : 'Editar Gasto')
     : (esIng ? 'Nuevo Ingreso' : 'Nuevo Gasto');
-  const today = new Date().toISOString().split('T')[0];
+  const today = toISO(new Date());
 
   if (esIng) {
     const TIPOS_ING = ['Sueldo','Beca','Freelance','Vales','Bono','Otro'];
@@ -4891,7 +4892,7 @@ function eMov(rec) { oMov(rec.tipo||'GASTO', rec); }
 function oEvt(rec=null) {
   S.mctx = { tabla:'calendario', id:rec?.id||null };
   $('m-title').textContent = rec?.id ? 'Editar Evento' : 'Nuevo Evento';
-  const today=new Date().toISOString().split('T')[0];
+  const today=toISO(new Date());
   $('m-body').innerHTML=`
 <div class="fr"><label>Título</label><input id="f-titulo" value="${rec?.titulo||''}" placeholder="Pago BBVA, cumpleaños, cepillo de dientes…"></div>
 <div class="f2">
@@ -5497,7 +5498,7 @@ async function marcarPagado(nombre, esp, pagadoId) {
         descripcion:  '',
         monto:        esp,
         medio_pago:   'efectivo',
-        fecha:        new Date().toISOString().split('T')[0],
+        fecha:        toISO(new Date()),
         comentarios:  ''
       });
     }
@@ -5527,7 +5528,7 @@ async function marcarGastoQ(itemId, pagadoId) {
         descripcion: '',
         monto:       g.monto || 0,
         medio_pago:  fp,
-        fecha:       new Date().toISOString().split('T')[0],
+        fecha:       toISO(new Date()),
         comentarios: g.comentarios || ''
       });
     }
@@ -5561,8 +5562,8 @@ function _negRenderLista(el) {
   const neg   = S.data?.negocios || {};
   const neto  = neg.neto_personal || 0;
   const eventos = (neg.eventos || []).filter(e => {
-    const hoy = new Date().toISOString().slice(0,10);
-    return e.fecha && e.fecha <= new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+    const hoy = toISO(new Date());
+    return e.fecha && e.fecha >= hoy && e.fecha <= toISO(new Date(Date.now()+30*864e5));
   }).slice(0,5);
 
   const evHtml = eventos.length ? `
@@ -6176,7 +6177,7 @@ function negNuevaTrans(proyId) {
   <div class="neg-form-full"><label>Concepto *</label><input id="nt-conc" class="inp" placeholder="Venta de servicio"></div>
   <div><label>Tipo</label><select id="nt-tipo" class="inp"><option value="INGRESO">INGRESO</option><option value="GASTO">GASTO</option></select></div>
   <div><label>Monto ($) *</label><input id="nt-monto" class="inp" type="number" min="0" placeholder="0"></div>
-  <div><label>Fecha</label><input id="nt-fecha" class="inp" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+  <div><label>Fecha</label><input id="nt-fecha" class="inp" type="date" value="${toISO(new Date())}"></div>
   <div><label>Categoría</label><input id="nt-cat" class="inp" placeholder="Opcional"></div>
   <div><label>Medio de pago</label><select id="nt-medio" class="inp">
     ${['Efectivo','Transferencia','Tarjeta débito','Tarjeta crédito','Otro'].map(m=>`<option value="${m}">${m}</option>`).join('')}
