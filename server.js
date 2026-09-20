@@ -770,6 +770,165 @@ async function addGastoProgramado(phone, datos, origen, texto_original) {
   return { qKey, item, fecha };
 }
 
+// ── WISHLIST — reparto automático entre quincenas ────────────────────────────
+// El usuario manda una lista de deseos por chat y el algoritmo la acomoda en las
+// próximas quincenas según lo que realmente le quepa a cada una.
+// Reglas acordadas con el usuario: arranca en la quincena SIGUIENTE (la actual ya
+// está planeada), mete primero los artículos más baratos, y de lo libre de cada
+// quincena solo ocupa el 80% — el 20% restante queda como colchón.
+const WISHLIST_RESERVA       = 0.20;
+const WISHLIST_INGRESO_BASE  = 14100;  // ingreso quincenal promedio, para quincenas aún sin ingresos capturados
+const WISHLIST_MAX_QUINCENAS = 48;     // tope de seguridad: un artículo más caro que cualquier quincena no debe iterar al infinito
+
+function siguienteQuincena(q) {
+  const d = new Date(q.fin + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return getQuincena(d);
+}
+
+function _aplicaEnQuincena(item, letra) {
+  const dias = item.dias || [];
+  if (!dias.length) return true;
+  return dias.some(d => letra === 'A' ? (d >= 10 && d <= 24) : (d >= 25 || d <= 9));
+}
+
+// Espejo server-side de getGastosEsperados() del frontend: los gastos propios de la
+// quincena (budget_q) mandan, y la plantilla global rellena lo que no esté cubierto.
+function gastosEsperadosQuincena(refs, qKey) {
+  const letra  = String(qKey || '').slice(-1);
+  const global = (Array.isArray(refs.gastos_esperados) ? refs.gastos_esperados : [])
+    .filter(g => _aplicaEnQuincena(g, letra));
+  const qb = (refs.budget_q || {})[qKey];
+  if (!qb) return global;
+  const qItems = Array.isArray(qb.gastos) ? qb.gastos : [];
+  const descs  = new Set(qItems.map(g => (g.descripcion || '').toLowerCase().trim()));
+  return [...qItems, ...global.filter(g => !descs.has((g.descripcion || '').toLowerCase().trim()))];
+}
+
+// Ingreso de la quincena: el capturado para ESA quincena si existe; si no, el promedio.
+function ingresoEsperadoQuincena(refs, qKey) {
+  const qb = (refs.budget_q || {})[qKey];
+  if (qb && Array.isArray(qb.ingresos) && qb.ingresos.length)
+    return qb.ingresos.reduce((a, i) => a + (Number(i.monto) || 0), 0);
+  return WISHLIST_INGRESO_BASE;
+}
+
+// Cuánto puede ocupar la wishlist en una quincena: lo libre, menos el colchón del 20%.
+function capacidadWishlist(refs, qKey) {
+  const ingreso = ingresoEsperadoQuincena(refs, qKey);
+  const gastos  = gastosEsperadosQuincena(refs, qKey).reduce((a, g) => a + (Number(g.monto) || 0), 0);
+  const libre   = ingreso - gastos;
+  if (libre <= 0) return 0;
+  return Math.round(libre * (1 - WISHLIST_RESERVA) * 100) / 100;
+}
+
+// Arma el plan de reparto sin escribir nada. Los artículos van ordenados de menor a
+// mayor monto, así que en cuanto uno no quepa en la quincena, ninguno de los
+// siguientes cabe tampoco y se pasa a la quincena que sigue.
+function planearWishlist(refs, items, desdeQuincena) {
+  const pendientes = [...items].sort((a, b) => (Number(a.monto) || 0) - (Number(b.monto) || 0));
+  const plan = [];
+  let q = desdeQuincena;
+  for (let i = 0; i < WISHLIST_MAX_QUINCENAS && pendientes.length; i++) {
+    let libre = capacidadWishlist(refs, q.key);
+    const asignados = [];
+    while (pendientes.length && (Number(pendientes[0].monto) || 0) <= libre) {
+      const it = pendientes.shift();
+      libre -= Number(it.monto) || 0;
+      asignados.push(it);
+    }
+    if (asignados.length) plan.push({ qKey: q.key, items: asignados, sobrante: libre });
+    q = siguienteQuincena(q);
+  }
+  return { plan, sinAcomodar: pendientes };
+}
+
+async function distribuirWishlist(phone, items, origen = 'web', textoOriginal = '') {
+  const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+  const refs = { ...(cur?.external_refs || {}) };
+  const arranque = siguienteQuincena(getQuincena(hoy()));   // nunca toca la quincena en curso
+  const { plan, sinAcomodar } = planearWishlist(refs, items, arranque);
+
+  if (!refs.budget_q) refs.budget_q = {};
+  const stamp = Date.now();
+  let n = 0;
+  for (const { qKey, items: asignados } of plan) {
+    if (!refs.budget_q[qKey]) refs.budget_q[qKey] = { gastos: [], ingresos: [] };
+    if (!Array.isArray(refs.budget_q[qKey].gastos)) refs.budget_q[qKey].gastos = [];
+    for (const it of asignados) {
+      refs.budget_q[qKey].gastos.push({
+        _id:         `wl-${stamp}-${n++}`,
+        descripcion: it.descripcion,
+        monto:       Number(it.monto) || 0,
+        categoria:   it.categoria || 'Personales',
+        forma_pago:  it.forma_pago || '',
+        comentarios: 'Wishlist',
+      });
+    }
+  }
+  // Lo que no cabe en ninguna quincena no se pierde: queda apartado para revisarlo.
+  if (sinAcomodar.length) {
+    refs.wishlist_pendientes = [
+      ...(Array.isArray(refs.wishlist_pendientes) ? refs.wishlist_pendientes : []),
+      ...sinAcomodar.map((it, i) => ({
+        _id: `wp-${stamp}-${i}`, descripcion: it.descripcion, monto: Number(it.monto) || 0,
+      })),
+    ];
+  }
+
+  const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+  if (error) return { error: error.message };
+  await writeAuditLog(phone, 'usuarios', 'wishlist_distribuida', phone, null,
+    { plan: plan.map(p => ({ qKey: p.qKey, n: p.items.length })), sinAcomodar: sinAcomodar.length },
+    origen, textoOriginal);
+  return { plan, sinAcomodar };
+}
+
+// Detecta y parsea una wishlist. Devuelve null si el texto no es una wishlist.
+function parseWishlist(text) {
+  const t = String(text || '').trim();
+  if (!/\b(wish\s*list|lista\s+de\s+deseos)\b/i.test(t)) return null;
+  let cuerpo = t.replace(/^[^\n:]*\b(wish\s*list|lista\s+de\s+deseos)\b[^\n:]*:?/i, '').trim();
+  if (!cuerpo) return null;
+  // La coma separa artículos, pero también es separador de miles ("2,300"). Se quitan
+  // primero las comas que van entre dígitos para no partir un monto a la mitad.
+  cuerpo = cuerpo.replace(/(\d),(?=\d{3}\b)/g, '$1');
+  const items = [];
+  for (const linea of cuerpo.split(/\n|,|;|·|•/).map(s => s.trim()).filter(Boolean)) {
+    // El monto es el último número del renglón; todo lo anterior es la descripción.
+    const m = linea.match(/^(.*?)[\s:–-]*\$?\s*(\d[\d,.]*)\s*(?:pesos|mxn|mx)?$/i);
+    if (!m) continue;
+    const descripcion = m[1].replace(/^[-*•\d.)\s]+/, '').trim();
+    const monto       = parseFloat(m[2].replace(/,/g, ''));
+    if (!descripcion || !isFinite(monto) || monto <= 0) continue;
+    const cat = aplicarReglasCategoria({ tipo: 'GASTO', concepto: descripcion, categoria: 'Personales' }, descripcion);
+    items.push({ descripcion, monto, categoria: cat.categoria || 'Personales' });
+  }
+  return items.length ? items : null;
+}
+
+function formatWishlistReply(plan, sinAcomodar) {
+  const nItems = plan.reduce((a, p) => a + p.items.length, 0);
+  const total  = plan.reduce((a, p) => a + p.items.reduce((s, i) => s + (Number(i.monto) || 0), 0), 0);
+  if (!nItems && sinAcomodar.length) {
+    return `⚠️ Ningún artículo cabe en las próximas quincenas sin pasarte del 80% de lo libre.\n` +
+           sinAcomodar.map(i => `  • ${i.descripcion} — ${fmt(i.monto)}`).join('\n') +
+           `\n\nQuedaron apartados en pendientes.`;
+  }
+  let out = `🛍️ *Wishlist repartida* — ${nItems} artículo${nItems !== 1 ? 's' : ''} · ${fmt(total)}`;
+  for (const p of plan) {
+    const sub = p.items.reduce((s, i) => s + (Number(i.monto) || 0), 0);
+    out += `\n\n📅 *${labelQuincena(p.qKey)}* · ${fmt(sub)} _(quedan ${fmt(p.sobrante)} libres)_\n`;
+    out += p.items.map(i => `  • ${i.descripcion} — ${fmt(i.monto)}`).join('\n');
+  }
+  if (sinAcomodar.length) {
+    out += `\n\n⚠️ *Sin acomodar* (más caros que cualquier quincena):\n` +
+           sinAcomodar.map(i => `  • ${i.descripcion} — ${fmt(i.monto)}`).join('\n');
+  }
+  out += `\n\n_Cada quincena se llenó solo hasta el 80% de lo libre; el resto queda de colchón._`;
+  return out;
+}
+
 async function executeDbAction(phone, arg, origen = 'whatsapp') {
   const { tabla, accion, id, datos, texto_original } = arg;
   try {
@@ -3317,6 +3476,7 @@ app.post('/webhook', async (req, res) => {
   try {
     const usuario = await identificarUsuario(From);
     const lower   = (Body || '').trim().toLowerCase();
+    const wishWA  = parseWishlist(Body);
 
     if (lower === 'ayuda' || lower === 'help') {
       reply = `🤖 *Hola ${usuario.nombre}, soy tu asistente Us*\n\nTus comandos:\n` +
@@ -3436,6 +3596,11 @@ app.post('/webhook', async (req, res) => {
         `Los registros con soft-delete se purgarán definitivamente en 30 días.\n` +
         `Esta acción requiere doble confirmación.\n\n` +
         `*1* Sí, continuar · *3* Cancelar`;
+
+    } else if (wishWA) {
+      const r = await distribuirWishlist(From, wishWA, 'whatsapp', Body);
+      reply = r.error ? `❌ Error al repartir la wishlist: ${r.error}`
+                      : formatWishlistReply(r.plan, r.sinAcomodar);
 
     } else if (lower === 'borrar ultimo') {
       const { data: ultimo } = await sb.from('movimientos')
@@ -3670,6 +3835,17 @@ app.post('/api/chat-web', async (req, res) => {
     else if (['calendario','agenda','eventos'].includes(lower))  reply = await cmdCalendario(phone);
     else {
       const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
+
+      // Wishlist: se detecta y reparte sin pasar por Gemini (determinista y sin límite de artículos).
+      const wishItems = parseWishlist(input);
+      if (wishItems) {
+        const r = await distribuirWishlist(phone, wishItems, 'web', input);
+        reply = r.error ? `❌ Error al repartir la wishlist: ${r.error}`
+                        : formatWishlistReply(r.plan, r.sinAcomodar);
+        await guardarMensaje(phone, 'assistant', reply);
+        _resolveInFlight(reply);
+        return res.json({ reply, transcription: isAudio ? text : undefined });
+      }
 
       const { intent, items } = await withTimeout(
         extractIntentBatch(input, phone),
