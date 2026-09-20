@@ -2663,6 +2663,7 @@ function rQuincenaPanel(ctx) {
             <td style="padding:10px;text-align:center;color:var(--text-3);font-size:13px">${g.comentarios||'—'}</td>
             <td style="padding:10px;text-align:center;white-space:nowrap">
               <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+              <button class="edit-pill-btn" title="Posponer a la siguiente quincena" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
               <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
             </td>
           </tr>`;
@@ -2790,6 +2791,47 @@ async function removeExpItem(field, id) {
     await api('POST', '/api/update-refs', { phone: S.phone, field, action: 'remove', itemId: id });
   }
   await load();
+}
+
+// Mueve un gasto esperado de esta quincena a la siguiente. Funciona tanto para gastos ya
+// específicos de esta quincena (budget_q) como para los heredados de la plantilla recurrente
+// global — en ambos casos se materializa la lista de la quincena actual (sin el ítem) y la de
+// la siguiente (con el ítem agregado, salvo que ya fuera a aparecer ahí por la plantilla, para
+// no duplicarlo).
+async function posponerGasto(id) {
+  const meta = S._expItemData?.[id];
+  if (!meta) return;
+  const refs = (S.data.user || {}).external_refs || {};
+  const qOff = S.qOffset || 0;
+  const qi     = getQuincenaInfo(qOff);
+  const qKey   = getQKey(qi);
+  const qiNext = getQuincenaInfo(qOff + 1);
+  const qKeyNext = getQKey(qiNext);
+
+  if (!confirm(`¿Posponer "${meta.descripcion}" (${fmt(meta.monto)}) a ${qiNext.label}?`)) return;
+
+  // OJO: aquí NO se filtra la entrada "Despensa" (a diferencia del renderizado de la tabla, que sí
+  // la excluye por mostrarse aparte). Este array se vuelve a GUARDAR completo vía action:'replace',
+  // así que debe conservar cualquier entrada real tal cual — filtrarla la borraría de la BD.
+  const stripTransient = g => { const { _fromQ, ...rest } = g; return rest; };
+
+  const curList  = getGastosEsperados(refs, qKey);
+  const newCur   = curList.filter(g => (g._id || g.id || g.descripcion) !== id).map(stripTransient);
+
+  const nextList = getGastosEsperados(refs, qKeyNext);
+  const yaExiste = nextList.some(g => (g.descripcion || '').toLowerCase().trim() === (meta.descripcion || '').toLowerCase().trim());
+  const itemPuro = stripTransient({ ...meta });
+  delete itemPuro._tipo; delete itemPuro._qKey;
+  const newNext  = yaExiste
+    ? nextList.map(stripTransient)
+    : [...nextList.map(stripTransient), { ...itemPuro, _id: itemPuro._id || Date.now().toString() }];
+
+  try {
+    await api('POST', '/api/update-refs', { phone: S.phone, field: 'budget_q', qKey,     tipo: 'gastos', action: 'replace', items: newCur });
+    await api('POST', '/api/update-refs', { phone: S.phone, field: 'budget_q', qKey: qKeyNext, tipo: 'gastos', action: 'replace', items: newNext });
+    await load();
+    toast(`"${meta.descripcion}" pospuesto a ${qiNext.label} ✓`);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function deleteAutoMovs(categoria) {
