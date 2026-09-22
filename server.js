@@ -929,6 +929,23 @@ function formatWishlistReply(plan, sinAcomodar) {
   return out;
 }
 
+// Reintenta una operación de Supabase ante fallas transitorias del lado de PostgREST/red.
+// Visto en producción: bajo carga, el pool de conexiones mata el hilo a medio camino y el
+// insert nunca llega a comprometerse — pero sin reintento, executeDbAction no se entera y
+// termina confirmándole al usuario un registro que en realidad jamás se guardó.
+async function conReintentos(fn, intentos = 3, esperaMs = 400) {
+  let ultimoError;
+  for (let i = 0; i < intentos; i++) {
+    try {
+      const r = await fn();
+      if (r?.error) ultimoError = r.error;
+      else return r;
+    } catch (e) { ultimoError = e; }
+    if (i < intentos - 1) await new Promise(res => setTimeout(res, esperaMs * (i + 1)));
+  }
+  return { data: null, error: ultimoError || new Error('Operación fallida tras reintentos') };
+}
+
 async function executeDbAction(phone, arg, origen = 'whatsapp') {
   const { tabla, accion, id, datos, texto_original } = arg;
   try {
@@ -1063,8 +1080,12 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
         return `✅📅 Gasto programado en Presupuesto: ${datos.concepto || ''} · ${fmt(datos.monto || 0)} → ${labelQuincena(r.qKey)}`;
       }
       const { programado, ...cleanDatos } = datos || {};   // 'programado' no es columna de la tabla
-      const { data, error } = await sb.from(tabla).insert({ ...cleanDatos, user_phone: phone }).select().single();
-      if (error) return `❌ Error: ${error.message}`;
+      const { data, error } = await conReintentos(() =>
+        sb.from(tabla).insert({ ...cleanDatos, user_phone: phone }).select().single()
+      );
+      // Sin fila+id de vuelta NO se considera exitoso, aunque no haya `error` explícito —
+      // así nunca se le confirma al usuario un registro que en realidad no quedó guardado.
+      if (error || !data?.id) return `❌ Error: ${error?.message || 'no se pudo confirmar el registro, intenta de nuevo'}`;
       if (tabla === 'movimientos' && cleanDatos?.tipo === 'GASTO') {
         await learnPattern(phone, cleanDatos);
         await verificarLimitePresupuesto(phone, cleanDatos.categoria, mesActual()).catch(() => null);
@@ -2224,7 +2245,11 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     const qActual = getQuincenaActual().key;
     const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin, negProys] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
-      sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).limit(500),
+      // Segundo criterio de orden (created_at) para desempatar filas con la misma fecha de
+      // forma determinista — sin él, Postgres puede devolver un subconjunto distinto de "hoy"
+      // en cada consulta una vez que el total de movimientos supera el límite, haciendo que
+      // algunos registros del día parezcan desaparecer de la tabla sin haberse borrado.
+      sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(2000),
       sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
       sb.from('usuarios').select('*').eq('telefono', phone).single(),
       sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha'),
@@ -2389,8 +2414,10 @@ app.get('/api/whoami/:phone', async (req, res) => {
 app.post('/api/movimientos', async (req, res) => {
   try {
     const { user_phone, ...d } = req.body;
-    const { data, error } = await sb.from('movimientos').insert({ ...d, user_phone }).select().single();
-    if (error) return res.status(400).json({ success: false, error: error.message });
+    const { data, error } = await conReintentos(() =>
+      sb.from('movimientos').insert({ ...d, user_phone }).select().single()
+    );
+    if (error || !data?.id) return res.status(400).json({ success: false, error: error?.message || 'no se pudo confirmar el registro, intenta de nuevo' });
     if (d.tipo === 'GASTO') {
       await learnPattern(user_phone, d);
       await aplicarImpactoCuentas(user_phone, null, d);

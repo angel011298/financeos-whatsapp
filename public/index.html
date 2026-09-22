@@ -1313,6 +1313,7 @@ function showApp(id, firstTime = false) {
   const isPWA = window.navigator.standalone === true ||
                 window.matchMedia('(display-mode: standalone)').matches;
   load().then(() => {
+    _startLivePoll();
     if (S._autoGhost) {
       S._autoGhost = false;
       setTimeout(() => toggleGhost(), 120); // activa ghost mode para ver a Alicia
@@ -1382,8 +1383,36 @@ async function load() {
   if (r.success) {
     S.data = r.data || {};
     S.data.despensa = rd.success ? (rd.data || []) : [];
+    S._liveSig = JSON.stringify(r.data || {});
   }
   renderTab(S.tab);
+}
+
+// ── SINCRONIZACIÓN EN TIEMPO REAL (≤3s) ───────────────────────────────────────
+// Un gasto registrado por chat en un dispositivo debe verse en la tabla de
+// movimientos de OTRO dispositivo/pestaña sin que nadie tenga que recargar. El
+// propio chat ya refresca su misma pestaña tras responder (ver _askBot); esto
+// cubre cualquier otra vista abierta. Se compara contra la última carga conocida
+// para no forzar un re-render (que interrumpiría scroll/edición) cuando no cambió
+// nada, y se pausa mientras hay un modal abierto para no pisar una edición en curso.
+let _livePollTimer = null;
+function _startLivePoll() {
+  if (_livePollTimer) return;
+  _livePollTimer = setInterval(async () => {
+    if (!S.phone) return;
+    if (document.visibilityState !== 'visible') return;
+    if ($('ovl')?.classList.contains('open')) return;
+    try {
+      const r = await api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}?_t=${Date.now()}`);
+      if (!r.success) return;
+      const fresh = JSON.stringify(r.data || {});
+      if (fresh !== S._liveSig) {
+        S._liveSig = fresh;
+        S.data = r.data || {};
+        renderTab(S.tab);
+      }
+    } catch { /* un poll fallido no debe interrumpir al usuario; se reintenta en 2s */ }
+  }, 2000);
 }
 
 // ── IA PREFERENCE ────────────────────────────────────────────────────────────
