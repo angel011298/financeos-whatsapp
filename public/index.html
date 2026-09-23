@@ -297,6 +297,42 @@ textarea{min-height:64px;resize:vertical}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .card-sub{font-size:var(--text-xs);margin-top:3px;color:var(--text-3)}
+/* ── Desglose interactivo: al tocar una tarjeta se abre su composición ────── */
+.card.has-dsg{cursor:pointer;position:relative}
+.card.has-dsg .card-lbl{display:flex;align-items:center;gap:5px}
+.dsg-chev{margin-left:auto;font-size:12px;color:var(--text-3);transition:transform var(--t-base) var(--ease-spring)}
+.card.dsg-open .dsg-chev{transform:rotate(180deg);color:var(--accent-primary)}
+.card-dsg{
+  max-height:0;opacity:0;overflow:hidden;
+  transition:max-height var(--t-base) var(--ease-spring),opacity var(--t-fast),margin-top var(--t-base);
+}
+.card.dsg-open .card-dsg{max-height:min(520px,60vh);opacity:1;margin-top:12px;overflow-y:auto}
+.dsg-inner{border-top:1px solid var(--border-default);padding-top:10px}
+.dsg-row{padding:6px 0;font-size:var(--text-xs)}
+.dsg-row + .dsg-row{border-top:1px solid var(--border-default)}
+.dsg-l1{display:flex;align-items:baseline;gap:6px}
+.dsg-l2{display:flex;align-items:center;gap:6px;margin-top:3px}
+.dsg-name{flex:1;min-width:0;color:var(--text-1);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsg-meta{color:var(--text-3);font-size:10px;white-space:nowrap;flex-shrink:0}
+.dsg-amt{font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:-.3px;flex-shrink:0}
+.dsg-bar{height:5px;border-radius:var(--radius-pill);background:var(--bg-surface-3);overflow:hidden;flex:1;min-width:0}
+.dsg-bar span{display:block;height:100%;border-radius:var(--radius-pill);transition:width var(--t-slow) var(--ease-spring)}
+.dsg-empty{font-size:var(--text-xs);color:var(--text-3);padding:6px 0;font-style:italic}
+/* Aviso de presupuesto restante dentro del formulario de gasto */
+.ppto-hint{max-height:0;opacity:0;overflow:hidden;transition:max-height var(--t-base) var(--ease-spring),opacity var(--t-fast),margin-top var(--t-base)}
+.ppto-hint.show{max-height:80px;opacity:1;margin-top:10px;display:flex;align-items:center;gap:7px;
+  padding:9px 12px;border-radius:var(--radius-md);font-size:var(--text-xs);line-height:1.35}
+.ppto-hint.ok{background:rgba(92,158,0,.10);color:var(--color-income)}
+.ppto-hint.warn{background:rgba(232,144,58,.12);color:var(--color-warning)}
+.ppto-hint.dng{background:rgba(240,91,83,.12);color:var(--color-expense)}
+.ppto-hint strong{font-weight:800}
+.dsg-foot{margin-top:8px;display:flex;justify-content:flex-end}
+.dsg-act{background:transparent;border:1px solid var(--border-default);border-radius:var(--radius-pill);color:var(--text-2);font-size:10px;font-weight:700;padding:4px 11px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;transition:transform var(--t-fast) var(--ease-spring),color var(--t-fast),border-color var(--t-fast)}
+.dsg-act:hover{color:var(--accent-primary);border-color:var(--accent-primary)}
+.dsg-act:active{transform:scale(.94)}
+.card-ico-btn{background:transparent;border:none;cursor:pointer;color:inherit;padding:0 2px;font-size:inherit;line-height:1;opacity:.55;transition:opacity var(--t-fast),transform var(--t-fast) var(--ease-spring)}
+.card-ico-btn:hover{opacity:1}
+.card-ico-btn:active{transform:scale(.88)}
 
 /* ═══════════════════════════════════════════════════════ CHARTS */
 .charts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;margin-bottom:16px}
@@ -369,9 +405,21 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .pfill{height:100%;border-radius:var(--radius-pill);background:var(--accent-primary)}
 .pfill.warn{background:var(--color-warning)}.pfill.dng{background:var(--color-expense)}
 /* Budget progress bars — full-width 3-state */
-.bpbar{background:var(--bg-surface-2);border-radius:var(--radius-pill);height:7px;width:100%;overflow:hidden}
-.bpfill{height:100%;border-radius:var(--radius-pill);background:var(--accent-primary);transition:width .35s ease}
-.bpfill.warn{background:var(--color-warning)}.bpfill.dng{background:var(--color-expense)}
+/* Barra de presupuesto estilo MonAi: el CONTORNO PUNTEADO es el límite y el
+   relleno es lo gastado. Si te pasas, el exceso se ve fuera del contorno en vez
+   de toparse en 100% como antes. */
+.bpbar{background:var(--bg-surface-2);border-radius:var(--radius-pill);height:9px;width:100%;
+  border:1.5px dashed var(--border-default);padding:1px;position:relative;box-sizing:border-box}
+.bpfill{height:100%;border-radius:var(--radius-pill);background:var(--accent-primary);
+  transition:width var(--t-slow) var(--ease-spring);max-width:100%}
+.bpfill.warn{background:var(--color-warning)}
+.bpfill.dng{background:var(--color-expense)}
+/* Excedido: el contorno se tiñe y aparece una cola que sobresale. */
+.bpbar.over{border-color:var(--color-expense);border-style:solid}
+.bpbar.over .bpfill{background:var(--color-expense)}
+.bpover{position:absolute;top:-2px;right:-3px;height:calc(100% + 4px);border-radius:var(--radius-pill);
+  background:repeating-linear-gradient(45deg,var(--color-expense),var(--color-expense) 2px,transparent 2px,transparent 4px);
+  transition:width var(--t-slow) var(--ease-spring)}
 /* Rebalanceo suggestion card */
 .rebal-card{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.2);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:14px}
 .rebal-hdr{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#60A5FA;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:5px}
@@ -1171,7 +1219,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 <script>
 // ── CONSTANTES ──────────────────────────────────────────────────────────────
 const CATS   = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
-const MEDIOS = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito','Débito Banamex','Débito Revolut'];
+const MEDIOS = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut'];
 const CLR    = ['#818cf8','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
 const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Hormiga':'#fbbf24','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
 
@@ -3127,6 +3175,113 @@ function rDailySnapshot() {
 </div>`;
 }
 
+// ── DESGLOSE INTERACTIVO DE WIDGETS ──────────────────────────────────────────
+// Cualquier tarjeta puede abrirse para mostrar de qué se compone su cifra.
+// Se calcula en el momento del clic (no al renderizar) para no pesar el dashboard.
+function toggleDesglose(key, el) {
+  const card = el.closest('.card');
+  if (!card) return;
+  const box = card.querySelector('.card-dsg');
+  if (!box) return;
+  const abierto = card.classList.contains('dsg-open');
+  // Cierra cualquier otro desglose abierto: solo uno a la vez, se lee mejor.
+  document.querySelectorAll('.card.dsg-open').forEach(c => {
+    if (c !== card) c.classList.remove('dsg-open');
+  });
+  if (abierto) { card.classList.remove('dsg-open'); return; }
+  box.innerHTML = desgloseHTML(key);
+  card.classList.add('dsg-open');
+  // Las barras arrancan en 0 y crecen: da el efecto "armónico" al desplegarse.
+  requestAnimationFrame(() => box.querySelectorAll('.dsg-bar span').forEach(b => {
+    b.style.width = (b.dataset.w || '0') + '%';
+  }));
+}
+
+function _dsgRow(nombre, monto, color, pct, meta) {
+  return `<div class="dsg-row">
+    <div class="dsg-l1">
+      <span class="dsg-name">${nombre}</span>
+      <span class="dsg-amt" style="color:${color}">${fmt(monto)}</span>
+    </div>
+    ${(meta || pct != null) ? `<div class="dsg-l2">
+      ${meta ? `<span class="dsg-meta">${meta}</span>` : ''}
+      ${pct != null ? `<span class="dsg-bar"><span data-w="${pct}" style="width:0;background:${color}"></span></span>` : ''}
+    </div>` : ''}
+  </div>`;
+}
+
+function _dsgVacio(msg) { return `<div class="dsg-inner"><div class="dsg-empty">${msg}</div></div>`; }
+
+function desgloseHTML(key) {
+  const r     = getPeriodoRange();
+  const pMovs = filterMovs(S.data.movs || [], r.from, r.to);
+
+  if (key === 'gastos' || key === 'ingresos') {
+    const tipo = key === 'gastos' ? 'GASTO' : 'INGRESO';
+    const list = pMovs.filter(m => m.tipo === tipo);
+    if (!list.length) return _dsgVacio(`Sin ${key} registrados en ${r.label}.`);
+    const total = list.reduce((a, m) => a + (m.monto || 0), 0);
+
+    if (key === 'gastos') {
+      // Los gastos se agrupan por categoría (suelen ser decenas de movimientos).
+      const porCat = {};
+      list.forEach(m => {
+        const c = m.categoria || 'OTROS';
+        porCat[c] = porCat[c] || { monto: 0, n: 0 };
+        porCat[c].monto += m.monto || 0; porCat[c].n++;
+      });
+      const rows = Object.entries(porCat).sort((a, b) => b[1].monto - a[1].monto)
+        .map(([cat, d]) => _dsgRow(cat, d.monto, CAT_CLR[cat] || 'var(--text-2)',
+              Math.round(d.monto / total * 100), `${d.n} mov · ${Math.round(d.monto / total * 100)}%`));
+      return `<div class="dsg-inner">${rows.join('')}
+        <div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();go('dashboard');setTimeout(()=>document.getElementById('movs-section')?.scrollIntoView({behavior:'smooth'}),250)"><i class="ti ti-list"></i> Ver movimientos</button></div></div>`;
+    }
+    // Los ingresos son pocos: se listan uno por uno.
+    const rows = [...list].sort((a, b) => (b.monto || 0) - (a.monto || 0))
+      .map(m => _dsgRow(m.concepto || m.descripcion || 'Ingreso', m.monto,
+            'var(--color-income)', null, fmtDate(fd(m.fecha))));
+    const refs   = (S.data.user || {}).external_refs || {};
+    const esp    = calcIngresosEsperadosPeriodo(refs, r.from, r.to);
+    const faltan = esp - total;
+    return `<div class="dsg-inner">${rows.join('')}
+      ${esp > 0 ? `<div class="dsg-row" style="border-top:1px solid var(--border-default);margin-top:2px">
+        <span class="dsg-name" style="color:var(--text-2);font-weight:600">Esperado del período</span>
+        <span class="dsg-amt" style="color:var(--text-2)">${fmt(esp)}</span></div>
+      ${faltan > 0 ? `<div class="dsg-row"><span class="dsg-name" style="color:var(--text-3);font-weight:600">Por recibir</span>
+        <span class="dsg-amt" style="color:var(--color-warning)">${fmt(faltan)}</span></div>` : ''}` : ''}</div>`;
+  }
+
+  if (key === 'tdc') {
+    const tdcs = (S.data.tdc || []).map(t => ({ ...t, saldo: Math.max(0, (t.a_pagar || 0) - (t.pagado || 0)) }))
+                   .filter(t => t.saldo > 0).sort((a, b) => b.saldo - a.saldo);
+    if (!tdcs.length) return _dsgVacio('Sin deuda pendiente en tus tarjetas. 🎉');
+    const total = tdcs.reduce((a, t) => a + t.saldo, 0);
+    const rows = tdcs.map(t => _dsgRow(t.nombre, t.saldo, 'var(--color-warning)',
+                   Math.round(t.saldo / total * 100),
+                   t.a_pagar > 0 ? `${Math.round((t.pagado || 0) / t.a_pagar * 100)}% pagado` : ''));
+    return `<div class="dsg-inner">${rows.join('')}
+      <div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();go('deudas')"><i class="ti ti-credit-card"></i> Ver deudas</button></div></div>`;
+  }
+
+  if (key === 'negocios') {
+    const proys = (S.data.negocios || {}).proyectos || [];
+    if (!proys.length) return _dsgVacio('Sin proyectos activos.');
+    const total = proys.reduce((a, p) => a + (p.monto_meta || 0), 0) || 1;
+    const rows = proys.map(p => _dsgRow(p.nombre, p.monto_meta || 0, p.color || 'var(--accent-primary)',
+                   Math.round((p.monto_meta || 0) / total * 100), p.estado || ''));
+    return `<div class="dsg-inner">${rows.join('')}
+      <div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();go('negocios')"><i class="ti ti-briefcase"></i> Ver negocios</button></div></div>`;
+  }
+
+  if (key === 'cuentas') {
+    const c = ((S.data.user || {}).external_refs || {}).cuentas || {};
+    const rows = CUENTAS_DEF.map(d => _dsgRow(d.label, Number(c[d.key]) || 0, d.color, null, ''));
+    return `<div class="dsg-inner">${rows.join('')}</div>`;
+  }
+
+  return _dsgVacio('Sin desglose disponible.');
+}
+
 // ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
 function rDash() {
   const movs = S.data.movs || [];
@@ -3166,27 +3321,39 @@ ${periodoSelectorHTML()}
     : `<span style="font-size:11px;color:var(--color-expense);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-down"></i> Balance negativo</span>`}
 </div>
 <div class="cards">
-  <div class="card" style="cursor:pointer" onclick="oMov('GASTO')" title="Doble clic para editar · Clic para registrar gasto">
-    <div class="card-lbl">Gastos <i class="ti ti-plus" style="font-size:9px;opacity:.5"></i></div>
-    <div class="card-val red" ondblclick="editKpiGastos(event,this)">${fmt(gasC)}</div>
+  <div class="card has-dsg" onclick="toggleDesglose('gastos',this)" title="Clic para ver de qué se compone">
+    <div class="card-lbl">Gastos
+      <button class="card-ico-btn" title="Registrar gasto" onclick="event.stopPropagation();oMov('GASTO')"><i class="ti ti-plus"></i></button>
+      <i class="ti ti-chevron-down dsg-chev"></i></div>
+    <div class="card-val red" ondblclick="event.stopPropagation();editKpiGastos(event,this)">${fmt(gasC)}</div>
+    <div class="card-dsg"></div>
   </div>
-  <div class="card" style="cursor:pointer" onclick="oMov('INGRESO')" title="Doble clic para editar · Clic para registrar ingreso">
-    <div class="card-lbl">Ingresos <i class="ti ti-pencil" style="font-size:9px;opacity:.3"></i></div>
-    <div class="card-val green" ondblclick="editKpiIngresos(event,this)">${fmt(ingShow)}</div>
+  <div class="card has-dsg" onclick="toggleDesglose('ingresos',this)" title="Clic para ver de qué se compone">
+    <div class="card-lbl">Ingresos
+      <button class="card-ico-btn" title="Registrar ingreso" onclick="event.stopPropagation();oMov('INGRESO')"><i class="ti ti-plus"></i></button>
+      <i class="ti ti-chevron-down dsg-chev"></i></div>
+    <div class="card-val green" ondblclick="event.stopPropagation();editKpiIngresos(event,this)">${fmt(ingShow)}</div>
     ${ingEsp>0?`<div class="card-sub">esperado ${fmt(ingEsp)}</div>`:''}
+    <div class="card-dsg"></div>
   </div>
-  <div class="card" style="cursor:pointer" onclick="go('deudas')" title="Ver deudas TDC">
-    <div class="card-lbl">Deuda TDC <i class="ti ti-chevron-right" style="font-size:9px;opacity:.5"></i></div>
+  <div class="card has-dsg" onclick="toggleDesglose('tdc',this)" title="Clic para ver de qué se compone">
+    <div class="card-lbl">Deuda TDC
+      <button class="card-ico-btn" title="Ver deudas" onclick="event.stopPropagation();go('deudas')"><i class="ti ti-chevron-right"></i></button>
+      <i class="ti ti-chevron-down dsg-chev"></i></div>
     <div class="card-val yellow">${fmt(tdcP)}</div>
+    <div class="card-dsg"></div>
   </div>
   ${(() => {
     const neg = S.data?.negocios || {};
     const proys = neg.proyectos || [];
     const neto = neg.neto_personal || 0;
     const utilidad = (proys || []).reduce((a, p) => a + (p.monto_meta || 0), 0);
-    return proys.length ? `<div class="card" style="cursor:pointer;background:var(--bg-surface-2)" onclick="go('negocios')" title="Ver proyectos y negocio">
-    <div class="card-lbl">Negocios <i class="ti ti-briefcase" style="font-size:9px;opacity:.5"></i></div>
+    return proys.length ? `<div class="card has-dsg" style="background:var(--bg-surface-2)" onclick="toggleDesglose('negocios',this)" title="Clic para ver de qué se compone">
+    <div class="card-lbl">Negocios
+      <button class="card-ico-btn" title="Ver negocios" onclick="event.stopPropagation();go('negocios')"><i class="ti ti-briefcase"></i></button>
+      <i class="ti ti-chevron-down dsg-chev"></i></div>
     <div class="card-val accent">${fmt(utilidad)}</div>
+    <div class="card-dsg"></div>
     <div style="font-size:9px;color:var(--text-3);margin-top:3px">Neto Q: <span style="color:${neto>=0?'var(--green)':'var(--red)'}">
       ${neto>=0?'+':''}${fmt(neto)}</span></div>
   </div>` : '';
@@ -3907,7 +4074,7 @@ ${rows.length ? tglBtn('tbl-prsp') : ''}${rows.length ? mkTable({ id:'tbl-prsp',
   <td class="red">${fmt(r)}</td>
   <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto(this,'${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3)\'>+ límite</span>'}</td>
   <td class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</td>
-  <td>${l>0?`<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:600;color:${p>=100?'var(--color-expense)':p>=80?'var(--color-warning)':'var(--text-2)'}">${p}%</span>${stLbl}</div><div class="bpbar"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div></div></div>`:'—'}</td>
+  <td>${l>0?(()=>{const pReal=Math.round(r/l*100);const exc=Math.min(35,Math.max(0,pReal-100));return `<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;color:${pReal>=100?'var(--color-expense)':pReal>=80?'var(--color-warning)':'var(--text-2)'}">${pReal}%</span>${stLbl}</div><div class="bpbar${pReal>100?' over':''}"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div>${exc>0?`<div class="bpover" style="width:${exc}%"></div>`:''}</div></div>`;})():'—'}</td>
   <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
 </tr>`} }) : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-heart-handshake" style="color:var(--accent-couple)"></i> Proyectos y Metas del Nidito</h2><div class="sec-hdr-sub"><a style="font-size:11px;color:var(--accent-couple);cursor:pointer" onclick="go('nidito')">Ver detalle →</a></div></div></div>
@@ -4968,9 +5135,50 @@ function oMov(tipo='GASTO', rec=null) {
   <div class="fr"><label>Medio de pago</label><select id="f-medio">${MEDIOS.map(m=>`<option${(rec?.medio_pago||'efectivo')===m?' selected':''}>${m}</option>`).join('')}</select></div>
   <div class="fr"><label>Fecha</label><input id="f-fecha" type="date" value="${rec?.fecha?fd(rec.fecha):today}"></div>
 </div>
-<div class="fr"><label>Comentarios (con quién, emergencia, error…)</label><textarea id="f-com" placeholder="Con Alicia, fue emergencia...">${rec?.comentarios||''}</textarea></div>`;
+${rec?'':`<div class="fr"><label>Repetir <span style="color:var(--muted);font-size:10px">(se registra solo)</span></label>
+  <select id="f-repetir">
+    <option value="">No se repite</option>
+    <option value="semanal">Cada semana</option>
+    <option value="quincenal">Cada quincena</option>
+    <option value="mensual">Cada mes</option>
+  </select></div>`}
+<div class="fr"><label>Comentarios (con quién, emergencia, error…)</label><textarea id="f-com" placeholder="Con Alicia, fue emergencia...">${rec?.comentarios||''}</textarea></div>
+<div id="f-ppto-hint" class="ppto-hint"></div>`;
   }
   $('ovl').classList.add('open');
+  if (!esIng) {
+    // "Presupuesto restante al agregar gastos" (idea de MonAi): saber ANTES de
+    // guardar cuánto te queda en esa categoría, no enterarte después.
+    actualizarHintPpto();
+    $('f-cat')?.addEventListener('change', actualizarHintPpto);
+    $('f-monto')?.addEventListener('input', actualizarHintPpto);
+  }
+}
+
+// Calcula, para la categoría elegida, cuánto llevas gastado del límite del mes y
+// cómo quedaría si guardas este gasto.
+function actualizarHintPpto() {
+  const box = $('f-ppto-hint');
+  if (!box) return;
+  const cat = $('f-cat')?.value;
+  const lim = (S.data.presupuesto || []).find(p => p.categoria === cat && p.mes === curMes());
+  if (!lim || !(lim.limite > 0)) { box.className = 'ppto-hint'; box.innerHTML = ''; return; }
+
+  const cm = curMes();
+  const gastado = (S.data.movs || [])
+    .filter(m => m.tipo === 'GASTO' && m.categoria === cat && (m.fecha || '').startsWith(cm))
+    .reduce((a, m) => a + (m.monto || 0), 0);
+  const monto  = parseFloat($('f-monto')?.value) || 0;
+  const tras   = gastado + monto;
+  const queda  = lim.limite - tras;
+  const pct    = Math.round(tras / lim.limite * 100);
+  const estado = pct >= 100 ? 'dng' : pct >= 80 ? 'warn' : 'ok';
+  const icono  = estado === 'dng' ? 'ti-alert-triangle' : estado === 'warn' ? 'ti-alert-circle' : 'ti-circle-check';
+  const texto  = queda >= 0
+    ? `Te quedarían <strong>${fmt(queda)}</strong> de tu límite de ${fmt(lim.limite)} en ${cat}`
+    : `Te pasarías por <strong>${fmt(Math.abs(queda))}</strong> del límite de ${fmt(lim.limite)} en ${cat}`;
+  box.className = 'ppto-hint show ' + estado;
+  box.innerHTML = `<i class="ti ${icono}"></i><span>${texto} · ${pct}%</span>`;
 }
 
 function toggleIngOtro(val) {
@@ -5164,6 +5372,7 @@ async function saveM() {
       datos={ tipo:'GASTO', categoria:$('f-cat')?.value||'Otros', monto:parseFloat($('f-monto')?.value)||0,
               concepto:$('f-cpto')?.value||'', medio_pago:$('f-medio')?.value||'efectivo',
               fecha:$('f-fecha')?.value, comentarios:$('f-com')?.value||'' };
+      ctx._repetir = $('f-repetir')?.value || '';
     }
     if (!datos.monto) { alert('Ingresa el monto'); return; }
   } else if (ctx.tabla==='calendario') {
@@ -5189,6 +5398,17 @@ async function saveM() {
     r = isE ? await api('PUT',`/api/metas/${ctx.id}`,{user_phone:S.phone,...datos})
             : await api('POST','/api/metas',{user_phone:S.phone,...datos});
   if (r?.success===false) { alert('Error: '+(r.error||'')); return; }
+  // Si se pidió repetición, se guarda la regla: a partir de aquí el servidor lo
+  // registra solo cada vez que toque (al abrir la app), sin volver a capturarlo.
+  if (ctx.tabla==='movimientos' && !isE && ctx._repetir) {
+    try {
+      await api('POST','/api/recurrentes',{ phone:S.phone, recurrente:{
+        tipo:datos.tipo, categoria:datos.categoria, concepto:datos.concepto,
+        monto:datos.monto, medio_pago:datos.medio_pago,
+        frecuencia:ctx._repetir, desde:datos.fecha }});
+      toast(`Se repetirá ${({semanal:'cada semana',quincenal:'cada quincena',mensual:'cada mes'})[ctx._repetir]} ✓`);
+    } catch(e) { toast('Se guardó el gasto, pero no la repetición: '+e.message,'warn'); }
+  }
   closeM(); await load();
 }
 
@@ -6421,6 +6641,12 @@ function rChat() {
     <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
       <i class="ti ti-microphone" id="mic-icon"></i>
     </button>
+    <button type="button" class="round-btn" id="foto-btn" style="background:var(--bg-surface-2)"
+      onclick="document.getElementById('foto-input').click()" title="Foto de un ticket">
+      <i class="ti ti-camera" id="foto-icon"></i>
+    </button>
+    <input type="file" id="foto-input" accept="image/*" capture="environment"
+      style="display:none" onchange="enviarFotoTicket(this)">
     <textarea id="chat-input" rows="1" placeholder="Escribe un mensaje…"
       autocomplete="off" enterkeyhint="send"
       oninput="autoGrowChat(this)"
@@ -6562,13 +6788,38 @@ async function sendChat() {
   await _askBot(text);
 }
 
-async function _askBot(message, audioB64 = null, audioMime = null) {
+// Foto de un ticket → el servidor la lee con visión y la registra como gasto.
+async function enviarFotoTicket(input) {
+  const file = input.files?.[0];
+  input.value = '';                       // permite volver a elegir la misma foto
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { _appendMsg('bot', '📷 La foto pesa más de 8 MB. Intenta con una más ligera.'); return; }
+  const ico = $('foto-icon');
+  if (ico) ico.className = 'ti ti-loader-2';
+  try {
+    const b64 = await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload  = () => res(String(fr.result).split(',')[1]);
+      fr.onerror = () => rej(new Error('No se pudo leer la foto'));
+      fr.readAsDataURL(file);
+    });
+    _appendMsg('user', '📷 Foto de ticket');
+    await _askBot('', null, null, b64, file.type || 'image/jpeg');
+  } catch (e) {
+    _appendMsg('bot', '📷 Error al leer la foto: ' + e.message);
+  } finally {
+    if (ico) ico.className = 'ti ti-camera';
+  }
+}
+
+async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = null, imageMime = null) {
   _showTyping();
   const btn = $('chat-input');
   if (btn) btn.disabled = true;
   try {
     const body = { phone: S.phone, message: message || '' };
     if (audioB64) { body.audio_b64 = audioB64; body.audio_mime = audioMime; }
+    if (imageB64) { body.image_b64 = imageB64; body.image_mime = imageMime; }
     // Timeout generoso: registrar varios gastos en un solo mensaje puede tardar
     // más que el default (Gemini + inserciones secuenciales en el servidor).
     const r = await api('POST', '/api/chat-web', body, { timeout: 90000 });

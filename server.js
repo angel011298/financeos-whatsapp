@@ -168,7 +168,7 @@ app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModifi
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
 const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
-const MEDIOS_PAGO = ['efectivo','TDC BBVA','TDC HEY','TDC Liverpool','TDC AMEX','TDC NU','TDC Rappi','TDC Palacio','transferencia','débito','Débito Banamex','Débito Revolut'];
+const MEDIOS_PAGO = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut'];
 
 // Corre `promise` pero si tarda más de `ms` devuelve `fallback` en lugar de colgar.
 const withTimeout = (promise, ms, fallback) =>
@@ -946,6 +946,80 @@ async function conReintentos(fn, intentos = 3, esperaMs = 400) {
   return { data: null, error: ultimoError || new Error('Operación fallida tras reintentos') };
 }
 
+// ── RECURRENTES (modelo "perezoso", como MonAi) ──────────────────────────────
+// No hay cron: cada vez que se abre la app se revisa si algún recurrente ya venció
+// y se registra en ese momento. Si estuviste una semana sin entrar, al volver se
+// crean todos los que tocaban, uno por fecha.
+const _recEnCurso = new Set();    // evita que dos peticiones simultáneas dupliquen
+const _recUltimaRev = new Map();  // phone -> timestamp de la última revisión
+const REC_INTERVALO_MS = 10 * 60 * 1000;   // el dashboard se consulta cada 2s por la
+// sincronización en vivo; sin este freno haríamos una consulta extra cada 2 segundos.
+
+function _avanzarFecha(iso, frecuencia) {
+  const d = new Date(iso + 'T12:00:00');
+  if (frecuencia === 'semanal')       d.setDate(d.getDate() + 7);
+  else if (frecuencia === 'quincenal') d.setDate(d.getDate() + 15);
+  else                                 d.setMonth(d.getMonth() + 1);   // mensual
+  return d.toISOString().slice(0, 10);
+}
+
+async function procesarRecurrentes(phone, forzar = false) {
+  if (_recEnCurso.has(phone)) return 0;
+  const ultima = _recUltimaRev.get(phone) || 0;
+  if (!forzar && Date.now() - ultima < REC_INTERVALO_MS) return 0;
+  _recUltimaRev.set(phone, Date.now());
+  _recEnCurso.add(phone);
+  try {
+    const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+    const refs = { ...(cur?.external_refs || {}) };
+    const recs = Array.isArray(refs.recurrentes) ? refs.recurrentes : [];
+    if (!recs.length) return 0;
+
+    const hoyStr = hoy();
+    let creados = 0, cambio = false;
+
+    for (const rec of recs) {
+      if (rec.activo === false || !rec.proxima || !(Number(rec.monto) > 0)) continue;
+      // Tope de seguridad: si lleva meses sin abrirse, no crear cientos de golpe.
+      let vueltas = 0;
+      while (rec.proxima <= hoyStr && vueltas < 24) {
+        const payload = {
+          user_phone: phone,
+          tipo:       rec.tipo || 'GASTO',
+          categoria:  rec.categoria || 'OTROS',
+          concepto:   rec.concepto || 'Recurrente',
+          monto:      Number(rec.monto) || 0,
+          medio_pago: rec.medio_pago || 'efectivo',
+          fecha:      rec.proxima,
+          comentarios: 'Recurrente',
+        };
+        const { data, error } = await conReintentos(() =>
+          sb.from('movimientos').insert(payload).select().single()
+        );
+        if (error || !data?.id) { console.error('recurrente falló:', error?.message); break; }
+        if (payload.tipo === 'GASTO') {
+          await aplicarImpactoCuentas(phone, null, payload).catch(() => null);
+        }
+        await writeAuditLog(phone, 'movimientos', 'crear', data.id, null, data, 'recurrente', rec.concepto);
+        creados++; cambio = true; vueltas++;
+        rec.proxima = _avanzarFecha(rec.proxima, rec.frecuencia || 'mensual');
+      }
+    }
+
+    if (cambio) {
+      refs.recurrentes = recs;
+      await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+      console.log(`🔁 Recurrentes: ${creados} movimiento(s) creados para ${phone}`);
+    }
+    return creados;
+  } catch (e) {
+    console.error('procesarRecurrentes error:', e.message);
+    return 0;
+  } finally {
+    _recEnCurso.delete(phone);
+  }
+}
+
 async function executeDbAction(phone, arg, origen = 'whatsapp') {
   const { tabla, accion, id, datos, texto_original } = arg;
   try {
@@ -1171,7 +1245,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito, Débito Banamex, Débito Revolut (usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito")
+MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut (usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
 Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
@@ -1186,7 +1260,7 @@ EJEMPLOS:
 "gasté 350 con débito banamex en super" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Despensa","concepto":"super","monto":350,"medio_pago":"Débito Banamex","fecha":"FECHA_HOY"}}
 "programa airbnb 8000 para la quincena del 25 de junio" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"AIRBNB / HOTEL","monto":8000,"programado":true,"fecha":"FECHA_YEAR-06-25"}}
 "voy a pagar 2500 de afinación de la platina el 25 de junio en efectivo" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"Afinacion platina","monto":2500,"medio_pago":"efectivo","programado":true,"fecha":"FECHA_YEAR-06-25"}}
-"gasté 350 uber con TDC BBVA" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":350,"medio_pago":"TDC BBVA","fecha":"FECHA_HOY"}}
+"gasté 350 uber con débito" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":350,"medio_pago":"débito","fecha":"FECHA_HOY"}}
 "350 de gasolina" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"gasolina","monto":350,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
 "fuimos al cine con alicia 280" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"Alicia","fecha":"FECHA_HOY"}}
 "recibí mi sueldo $14,000" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"INGRESO","categoria":"OTROS","concepto":"Sueldo","monto":14000,"fecha":"FECHA_HOY"}}
@@ -1304,7 +1378,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO: efectivo, TDC BBVA, TDC HEY, TDC Liverpool, TDC AMEX, TDC NU, TDC Rappi, TDC Palacio, transferencia, débito, Débito Banamex, Débito Revolut (usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito")
+MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut (usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
 Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
@@ -1320,10 +1394,10 @@ EJEMPLOS:
 "gasté 350 con débito banamex en super" → {"intent":"REGISTRO","items":[
   {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Despensa","concepto":"super","monto":350,"medio_pago":"Débito Banamex","fecha":"FECHA_HOY"}}
 ]}
-"Ayer gasté 50 en tacos y 80 en uber con TDC BBVA" →
+"Ayer gasté 50 en tacos y 80 en uber con débito" →
 {"intent":"REGISTRO","items":[
   {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_AYER"}},
-  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":80,"medio_pago":"TDC BBVA","fecha":"FECHA_AYER"}}
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":80,"medio_pago":"débito","fecha":"FECHA_AYER"}}
 ]}
 "Gastos PROGRAMADOS:\nAIRBNB 8000 (quincena 25 de junio)\nAfinacion platina 2500 (quincena 25 de junio) (efectivo)\nEscritorio 6100 (quincena 10 de septiembre) (tarjeta débito)" →
 {"intent":"REGISTRO","items":[
@@ -1362,13 +1436,8 @@ function tryParseBatch(text, today) {
     if (/tarjeta\s+d[eé]bito|t\.?\s*d[eé]bito|d[eé]bito/.test(r)) return 'débito';
     if (/efectivo/.test(r))      return 'efectivo';
     if (/transferencia/.test(r)) return 'transferencia';
-    if (/bbva/.test(r))          return 'TDC BBVA';
-    if (/\bhey\b/.test(r))       return 'TDC HEY';
-    if (/liverpool/.test(r))     return 'TDC Liverpool';
-    if (/amex/.test(r))          return 'TDC AMEX';
-    if (/\bnu\b/.test(r))        return 'TDC NU';
-    if (/rappi/.test(r))         return 'TDC Rappi';
-    if (/palacio/.test(r))       return 'TDC Palacio';
+    // Las tarjetas de credito dejaron de ser medio de pago: se normalizan a debito.
+    if (/bbva|hey|liverpool|amex|nu|rappi|palacio/.test(r)) return 'débito';
     if (/tarjeta/.test(r))       return 'débito';
     return s.trim();
   }
@@ -2242,6 +2311,9 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: phone, role: 'USER_B', ai_preference: 'GEMINI' }]);
     }
+    // Registra los recurrentes vencidos antes de armar el dashboard, para que
+    // aparezcan de inmediato en los totales de esta misma respuesta.
+    await procesarRecurrentes(phone).catch(() => null);
     const qActual = getQuincenaActual().key;
     const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin, negProys] = await Promise.all([
       sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
@@ -3798,12 +3870,12 @@ const _chatInFlight = new Map(); // phone -> { text, ts, promise }
 const CHAT_DEDUP_WINDOW_MS = 5 * 60 * 1000; // 5 min — cubre el peor caso observado
 
 app.post('/api/chat-web', async (req, res) => {
-  const { phone, message, audio_b64, audio_mime } = req.body;
+  const { phone, message, audio_b64, audio_mime, image_b64, image_mime } = req.body;
   if (!phone) return res.status(400).json({ error: 'Missing phone' });
 
   // El dedup solo aplica a texto (el audio no siempre serializa idéntico y su
   // transcripción ya es no-determinista, así que no hay riesgo real de duplicar ahí).
-  const dedupText = !audio_b64 ? (message || '').trim() : null;
+  const dedupText = (!audio_b64 && !image_b64) ? (message || '').trim() : null;
   if (dedupText) {
     const prev = _chatInFlight.get(phone);
     if (prev && prev.text === dedupText && (Date.now() - prev.ts) < CHAT_DEDUP_WINDOW_MS) {
@@ -3842,6 +3914,40 @@ app.post('/api/chat-web', async (req, res) => {
       } catch (e) {
         console.error(`🎤 Error Gemini transcripción: ${e.message} | status=${e.status} | code=${e.code}`);
         return res.json({ reply: `⚠️ Error de transcripción: ${e.message?.slice(0,80) || 'desconocido'}. Escribe tu mensaje.` });
+      }
+    }
+
+    // Foto de recibo/ticket → Gemini lo lee y lo convierte a texto natural, que
+    // luego entra por el MISMO camino de registro que un mensaje escrito.
+    if (image_b64) {
+      const sizeKB = Math.round(image_b64.length * 0.75 / 1024);
+      console.log(`📷 Imagen recibida | mime=${image_mime} | size≈${sizeKB}KB`);
+      try {
+        const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const result = await model.generateContent([
+          { inlineData: { mimeType: image_mime || 'image/jpeg', data: image_b64 } },
+          `Eres un lector de tickets/recibos mexicanos. Extrae los gastos de esta imagen y
+devuélvelos como UNA SOLA LÍNEA de texto natural en español, con este formato exacto:
+"gasté <monto> en <concepto>, <monto> en <concepto>"
+Reglas:
+- Usa el TOTAL del ticket si es una compra única; si el ticket detalla productos de
+  categorías claramente distintas, sepáralos.
+- Solo números, sin símbolo de moneda ni comas de miles.
+- Si el ticket indica el establecimiento, úsalo como concepto (ej: "Oxxo", "Walmart").
+- Si NO logras leer ningún monto, responde exactamente: SIN_MONTO
+No expliques nada, devuelve solo esa línea.`
+        ]);
+        logUsage(phone, 'gemini-2.5-flash', result.response.usageMetadata, 'vision');
+        const leido = result.response.text().trim();
+        console.log(`📷 OCR: "${leido}"`);
+        if (/SIN_MONTO/i.test(leido) || !leido) {
+          return res.json({ reply: '📷 No pude leer un monto en la foto. Intenta con mejor luz o escríbelo.' });
+        }
+        // Si el usuario escribió algo junto a la foto, se respeta como contexto extra.
+        text = message && message.trim() ? `${leido}. ${message.trim()}` : leido;
+      } catch (e) {
+        console.error(`📷 Error Gemini visión: ${e.message}`);
+        return res.json({ reply: `⚠️ No pude leer la foto: ${e.message?.slice(0,80) || 'error'}. Escribe el gasto.` });
       }
     }
 
@@ -4080,6 +4186,51 @@ Instrucciones: sé específico con los números. Si hay overspending en alguna c
 });
 
 // ── UPDATE REFS — actualiza external_refs directamente (sin IA) ──────────────
+// ── RECURRENTES ───────────────────────────────────────────────────────────────
+app.post('/api/recurrentes', async (req, res) => {
+  try {
+    const { phone, recurrente } = req.body;
+    if (!phone || !recurrente?.frecuencia) {
+      return res.status(400).json({ success: false, error: 'Faltan phone o frecuencia' });
+    }
+    const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+    const refs = { ...(cur?.external_refs || {}) };
+    const recs = Array.isArray(refs.recurrentes) ? [...refs.recurrentes] : [];
+    // La primera repetición cae UNA frecuencia después de la fecha capturada: el
+    // movimiento de hoy ya se registró por separado, no hay que duplicarlo.
+    const desde = recurrente.desde || hoy();
+    recs.push({
+      _id:        'rec-' + Date.now(),
+      tipo:       recurrente.tipo || 'GASTO',
+      categoria:  recurrente.categoria || 'OTROS',
+      concepto:   recurrente.concepto || 'Recurrente',
+      monto:      Number(recurrente.monto) || 0,
+      medio_pago: recurrente.medio_pago || 'efectivo',
+      frecuencia: recurrente.frecuencia,
+      desde,
+      proxima:    _avanzarFecha(desde, recurrente.frecuencia),
+      activo:     true,
+    });
+    refs.recurrentes = recs;
+    const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: recs[recs.length - 1] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/recurrentes/:id', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+    const refs = { ...(cur?.external_refs || {}) };
+    refs.recurrentes = (Array.isArray(refs.recurrentes) ? refs.recurrentes : [])
+      .filter(r => r._id !== req.params.id);
+    const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.post('/api/update-refs', async (req, res) => {
   try {
     const { phone, field, action, item, itemId } = req.body;
