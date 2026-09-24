@@ -1163,6 +1163,9 @@ body.sheet-locked{overflow:hidden}
         <a onclick="go('dashboard')" id="n-dashboard" class="active">
           <i class="ti ti-layout-dashboard"></i><span>Dashboard</span>
         </a>
+        <a onclick="go('movimientos')" id="n-movimientos">
+          <i class="ti ti-arrows-exchange"></i><span>Movimientos</span>
+        </a>
         <a onclick="go('presupuesto')" id="n-presupuesto">
           <i class="ti ti-target"></i><span>Presupuesto y Metas</span>
         </a>
@@ -3407,9 +3410,10 @@ function abrirHoja(titulo, html, post) {
 function cerrarHoja() {
   const sheet = $('dash-sheet');
   if (!sheet || !sheet.classList.contains('open')) return;
-  // Devuelve la caja de notas a su tab si estaba prestada a la hoja.
+  // Devuelve la caja de notas a su tab si estaba prestada a la hoja (o descarta el
+  // duplicado si el tab ya remontó una durante un re-render).
   const nb = $('dash-sheet-body')?.querySelector('.notas-box');
-  if (nb) $('tab-dashboard')?.appendChild(nb);
+  if (nb) { const tab=$('tab-dashboard'); if (tab && !tab.querySelector('.notas-box')) tab.appendChild(nb); else nb.remove(); }
   sheet.classList.remove('open');
   document.body.classList.remove('sheet-locked');
   setTimeout(() => { sheet.style.display = 'none'; if ($('dash-sheet-body')) $('dash-sheet-body').innerHTML = ''; }, 260);
