@@ -1224,6 +1224,7 @@ body.sheet-locked{overflow:hidden}
       </div>
 
       <div id="tab-dashboard"   class="tab active"></div>
+      <div id="tab-movimientos" class="tab"></div>
       <div id="tab-nidito"      class="tab"></div>
       <div id="tab-deudas"      class="tab"></div>
       <div id="tab-presupuesto" class="tab"></div>
@@ -1237,9 +1238,21 @@ body.sheet-locked{overflow:hidden}
   <div class="mobile-nav" id="mobile-nav">
     <a onclick="go('chat')" id="mn-chat"><i class="ti ti-message-circle"></i><span>Chat</span></a>
     <a onclick="go('dashboard')" id="mn-dashboard"><i class="ti ti-layout-dashboard"></i><span>Inicio</span></a>
-    <a onclick="go('nidito')" id="mn-nidito"><i class="ti ti-heart-handshake"></i><span>Nidito</span></a>
+    <a onclick="go('movimientos')" id="mn-movimientos"><i class="ti ti-arrows-exchange"></i><span>Movimientos</span></a>
     <a onclick="go('presupuesto')" id="mn-presupuesto"><i class="ti ti-target"></i><span>Plan</span></a>
     <a onclick="openMobileMore()" id="mn-mas"><i class="ti ti-grid-dots"></i><span>Más</span></a>
+  </div>
+
+  <!-- ── HOJA INFERIOR GENÉRICA (emojis de Inicio) ──────── -->
+  <div id="dash-sheet" onclick="cerrarHoja()">
+    <div class="ds-panel" onclick="event.stopPropagation()">
+      <div class="ds-handle"></div>
+      <div class="ds-head">
+        <span class="ds-title" id="dash-sheet-title"></span>
+        <button class="ds-close" onclick="cerrarHoja()" aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="ds-body" id="dash-sheet-body"></div>
+    </div>
   </div>
 
   <!-- ── MOBILE MORE SHEET ──────────────────────────────── -->
