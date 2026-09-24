@@ -1091,7 +1091,6 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   box-shadow:0 8px 24px rgba(255,106,90,.4);
   transition:transform var(--t-fast) var(--ease-spring)}
 .mini-fab:active{transform:scale(.9)}
-@media(min-width:701px){ .mini-fab{display:none} }   /* en escritorio el header ya trae + Movimiento */
 
 /* Hoja inferior genérica para los emojis */
 #dash-sheet{display:none;position:fixed;inset:0;z-index:160;background:rgba(0,0,0,0);
@@ -1561,6 +1560,7 @@ function _startLivePoll() {
     if (!S.phone) return;
     if (document.visibilityState !== 'visible') return;
     if ($('ovl')?.classList.contains('open')) return;
+    if ($('dash-sheet')?.classList.contains('open')) return;
     try {
       const r = await api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}?_t=${Date.now()}`);
       if (!r.success) return;
@@ -1637,7 +1637,7 @@ function go(t) {
 function renderTab(t) {
   _flushNotas();   // no perder lo que se esté escribiendo al re-renderizar
   // Movimientos vive dentro de Dashboard (rDash) y Objetivos dentro de Presupuesto (rPresp).
-  ({ dashboard:rDash, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp,
+  ({ dashboard:rDash, movimientos:rMovimientos, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp,
      calendario:rCal, chat:rChat, negocios:rNegocios })[t]?.();
   _mountNotasSoon(t);
   setTimeout(_initCollapsibles, 120);
@@ -3325,7 +3325,7 @@ function desgloseHTML(key) {
         .map(([cat, d]) => _dsgRow(cat, d.monto, CAT_CLR[cat] || 'var(--text-2)',
               Math.round(d.monto / total * 100), `${d.n} mov · ${Math.round(d.monto / total * 100)}%`));
       return `<div class="dsg-inner">${rows.join('')}
-        <div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();go('dashboard');setTimeout(()=>document.getElementById('movs-section')?.scrollIntoView({behavior:'smooth'}),250)"><i class="ti ti-list"></i> Ver movimientos</button></div></div>`;
+        <div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();cerrarHoja();go('movimientos')"><i class="ti ti-list"></i> Ver movimientos</button></div></div>`;
     }
     // Los ingresos son pocos: se listan uno por uno.
     const rows = [...list].sort((a, b) => (b.monto || 0) - (a.monto || 0))
@@ -3373,103 +3373,101 @@ function desgloseHTML(key) {
   return _dsgVacio('Sin desglose disponible.');
 }
 
-// ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
-function rDash() {
-  const movs = S.data.movs || [];
-  const r    = getPeriodoRange();
-  const refs = (S.data.user || {}).external_refs || {};
-  const pMovs= filterMovs(movs, r.from, r.to);
-  const gasC   = pMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
-  const ingC   = pMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
-  const ingShow = ingC;
-  // Ingreso esperado (prorrateado al período) — mismo respaldo que ya usa el panel de
-  // quincena para su BALANCE (esperado si no hay real aún registrado). Antes, este
-  // indicador superior solo miraba el real y podía contradecir al panel de abajo.
-  const ingEsp = calcIngresosEsperadosPeriodo(refs, r.from, r.to);
-  const ingBal = ingC || ingEsp;
-  const tdcP   = (S.data.tdc||[]).reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
-  const pats = S.data.patrones||[];
-  S._patData = {};
-  pats.forEach(p => { S._patData[p.id] = p; });
-  const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
-
-  $('tab-dashboard').innerHTML = `
+// ── RENDER: MOVIMIENTOS (pestaña propia) ─────────────────────────────────────
+// Reutiliza rMovs() tal cual: solo le provee los contenedores que espera
+// (#movs-section y #movs-table-section) + el selector de periodo compartido.
+function rMovimientos() {
+  const el = $('tab-movimientos');
+  if (!el) return;
+  el.innerHTML = `
 <div class="hdr">
-  <h2><i class="ti ti-layout-dashboard"></i> Dashboard <span style="font-size:13px;color:var(--muted);font-weight:400">${who}</span></h2>
+  <h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2>
   <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
 </div>
 ${periodoSelectorHTML()}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
-  <span style="font-size:11px;color:var(--text-2);display:flex;align-items:center;gap:6px">
-    <i class="ti ti-calendar-stats" style="color:var(--accent-primary)"></i>
-    <strong style="color:var(--text-1)">${r.label}</strong>
-    <span style="color:var(--text-3)">·</span>
-    <span>${pMovs.length} movimiento${pMovs.length!==1?'s':''}</span>
-    ${r.from!==r.to?`<span style="color:var(--text-3)">${fmtDate(r.from)} → ${fmtDate(r.to)}</span>`:''}
-  </span>
-  ${ingBal-gasC>=0
-    ? `<span style="font-size:11px;color:var(--color-income);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-up"></i> Balance positivo</span>`
-    : `<span style="font-size:11px;color:var(--color-expense);display:flex;align-items:center;gap:4px"><i class="ti ti-trending-down"></i> Balance negativo</span>`}
-</div>
-<div class="cards">
-  <div class="card has-dsg" onclick="toggleDesglose('gastos',this)" title="Clic para ver de qué se compone">
-    <div class="card-lbl">Gastos
-      <button class="card-ico-btn" title="Registrar gasto" onclick="event.stopPropagation();oMov('GASTO')"><i class="ti ti-plus"></i></button>
-      <i class="ti ti-chevron-down dsg-chev"></i></div>
-    <div class="card-val red" ondblclick="event.stopPropagation();editKpiGastos(event,this)">${fmt(gasC)}</div>
-    <div class="card-dsg"></div>
-  </div>
-  <div class="card has-dsg" onclick="toggleDesglose('ingresos',this)" title="Clic para ver de qué se compone">
-    <div class="card-lbl">Ingresos
-      <button class="card-ico-btn" title="Registrar ingreso" onclick="event.stopPropagation();oMov('INGRESO')"><i class="ti ti-plus"></i></button>
-      <i class="ti ti-chevron-down dsg-chev"></i></div>
-    <div class="card-val green" ondblclick="event.stopPropagation();editKpiIngresos(event,this)">${fmt(ingShow)}</div>
-    ${ingEsp>0?`<div class="card-sub">esperado ${fmt(ingEsp)}</div>`:''}
-    <div class="card-dsg"></div>
-  </div>
-  <div class="card has-dsg" onclick="toggleDesglose('tdc',this)" title="Clic para ver de qué se compone">
-    <div class="card-lbl">Deuda TDC
-      <button class="card-ico-btn" title="Ver deudas" onclick="event.stopPropagation();go('deudas')"><i class="ti ti-chevron-right"></i></button>
-      <i class="ti ti-chevron-down dsg-chev"></i></div>
-    <div class="card-val yellow">${fmt(tdcP)}</div>
-    <div class="card-dsg"></div>
-  </div>
-  ${(() => {
-    const neg = S.data?.negocios || {};
-    const proys = neg.proyectos || [];
-    const neto = neg.neto_personal || 0;
-    const utilidad = (proys || []).reduce((a, p) => a + (p.monto_meta || 0), 0);
-    return proys.length ? `<div class="card has-dsg" style="background:var(--bg-surface-2)" onclick="toggleDesglose('negocios',this)" title="Clic para ver de qué se compone">
-    <div class="card-lbl">Negocios
-      <button class="card-ico-btn" title="Ver negocios" onclick="event.stopPropagation();go('negocios')"><i class="ti ti-briefcase"></i></button>
-      <i class="ti ti-chevron-down dsg-chev"></i></div>
-    <div class="card-val accent">${fmt(utilidad)}</div>
-    <div class="card-dsg"></div>
-    <div style="font-size:9px;color:var(--text-3);margin-top:3px">Neto Q: <span style="color:${neto>=0?'var(--green)':'var(--red)'}">
-      ${neto>=0?'+':''}${fmt(neto)}</span></div>
-  </div>` : '';
-  })()}
-</div>
-${rCuentasWidget()}
-<div id="quincena-dash-section"></div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2></div></div>
 <div id="movs-section"></div>
-<div id="movs-table-section"></div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis Gráfico</h2></div><div class="sec-hdr-sub">Gastos, ingresos y patrones del período</div></div>
-<div class="charts-grid charts-grid-lg">
+<div id="movs-table-section"></div>`;
+  rMovs();
+}
+
+// ── HOJA INFERIOR GENÉRICA (emojis del Inicio minimal) ───────────────────────
+// Muestra un componente EXISTENTE sin reescribirlo. `post` corre tras inyectar
+// el HTML (para los componentes que se auto-inicializan, p.ej. sus gráficas).
+function abrirHoja(titulo, html, post) {
+  const sheet = $('dash-sheet');
+  if (!sheet) return;
+  $('dash-sheet-title').textContent = titulo;
+  $('dash-sheet-body').innerHTML = html;
+  $('dash-sheet-body').scrollTop = 0;
+  sheet.style.display = 'flex';
+  requestAnimationFrame(() => sheet.classList.add('open'));
+  document.body.classList.add('sheet-locked');
+  if (post) requestAnimationFrame(() => { try { post(); } catch (e) { console.error('hoja post:', e); } });
+}
+function cerrarHoja() {
+  const sheet = $('dash-sheet');
+  if (!sheet || !sheet.classList.contains('open')) return;
+  // Devuelve la caja de notas a su tab si estaba prestada a la hoja.
+  const nb = $('dash-sheet-body')?.querySelector('.notas-box');
+  if (nb) $('tab-dashboard')?.appendChild(nb);
+  sheet.classList.remove('open');
+  document.body.classList.remove('sheet-locked');
+  setTimeout(() => { sheet.style.display = 'none'; if ($('dash-sheet-body')) $('dash-sheet-body').innerHTML = ''; }, 260);
+}
+
+// Despacha cada emoji a su hoja o a su navegación (conserva la navegación existente).
+function dashEmoji(key) {
+  switch (key) {
+    case 'cuentas':  abrirHoja('Mis cuentas', rCuentasWidget()); break;
+    case 'retiro':   abrirHoja('Retiro de efectivo', rCuentasWidget()); break;   // (a) los botones "Retirar" del widget
+    case 'deuda':    cerrarHoja(); go('deudas'); break;
+    case 'nidito':   cerrarHoja(); go('nidito'); break;
+    case 'ingQuinc': abrirHoja('Ingresos · esta quincena', '<div id="hoja-q"></div>',
+                       () => { $('hoja-q').innerHTML = rQuincenaPanel('sheet'); _hojaScroll('.q-stats'); }); break;
+    case 'gastQuinc':abrirHoja('Gastos · esta quincena', '<div id="hoja-q"></div>',
+                       () => { $('hoja-q').innerHTML = rQuincenaPanel('sheet'); _hojaScrollTexto('Gastos esta quincena'); }); break;
+    case 'analisis': abrirHoja('Análisis gráfico', _analisisHTML(), _analisisDraw); break;
+    case 'despensa': abrirHoja('Lista de despensa', '<div id="despensa-section"></div>', () => rDespensa()); break;
+    case 'consejos': abrirHoja('Consejos IA', '<div id="insights-section"></div>', () => fetchInsights(true)); break;
+    case 'notas':    _hojaNotas(); break;
+  }
+}
+
+// Scroll dentro de la hoja a un selector o a un encabezado por su texto.
+function _hojaScroll(sel) {
+  const t = $('dash-sheet-body')?.querySelector(sel);
+  if (t) t.scrollIntoView({ block: 'start' });
+}
+function _hojaScrollTexto(txt) {
+  const body = $('dash-sheet-body'); if (!body) return;
+  const h = [...body.querySelectorAll('h2')].find(x => x.textContent.includes(txt));
+  if (h) (h.closest('.sec-hdr') || h).scrollIntoView({ block: 'start' });
+}
+
+// Notas: reutiliza el editor existente moviendo su nodo real a la hoja.
+function _hojaNotas() {
+  if (!$('tab-dashboard')?.querySelector('.notas-box')) _mountNotas('dashboard');
+  abrirHoja('Notas', '', () => {
+    const nb = $('tab-dashboard')?.querySelector('.notas-box');
+    if (nb) { $('dash-sheet-body').appendChild(nb); if (!S._notasOpen?.dashboard) toggleNotas('dashboard'); }
+    else $('dash-sheet-body').innerHTML = '<p style="color:var(--text-3);font-size:12px;padding:10px 0">Notas no disponibles.</p>';
+  });
+}
+
+// Análisis gráfico: mismos 3 charts que traía el Inicio, ahora en la hoja.
+function _analisisHTML() {
+  const r = getPeriodoRange();
+  return `<div class="charts-grid">
   <div class="cbox"><h3>Gastos por Categoría — ${r.label}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div><div id="legend-c-cat" class="chart-legend"></div></div>
   <div class="cbox"><h3>Ingresos vs Gastos — últimos 6 meses</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div><div id="legend-c-men" class="chart-legend"></div></div>
   <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div><div id="legend-c-pat" class="chart-legend"></div></div>
-</div>
-<div class="sec-hdr" style="margin-top:16px"><div class="sec-hdr-row"><h2><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Lista de Despensa</h2></div></div>
-<div id="despensa-section"></div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-brain"></i> Consejos IA</h2></div><div class="sec-hdr-sub">Análisis personalizado de tus hábitos financieros</div></div>
-<div id="insights-section"></div>
-`;
-
-  $('quincena-dash-section').innerHTML = rQuincenaPanel('dash');
-  rMovs();
-  const cgRaw=byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
+</div>`;
+}
+function _analisisDraw() {
+  const movs = S.data.movs || [];
+  const r    = getPeriodoRange();
+  const pMovs = filterMovs(movs, r.from, r.to);
+  const cgRaw = byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
   const cg={}; Object.entries(cgRaw).forEach(([k,v])=>{ const nk=k==='Pasajes'?'Transporte':k; cg[nk]=(cg[nk]||0)+v; });
   const ck=Object.keys(cg).sort((a,b)=>cg[b]-cg[a]);
   if (ck.length) mkC('c-cat',S.ct['c-cat']||'doughnut',ck,[{data:ck.map(k=>cg[k]),label:'Gastos'}]);
@@ -3480,11 +3478,87 @@ ${rCuentasWidget()}
   mkC('c-men',S.ct['c-men']||'bar',ms,[
     {label:'Gastos',  data:menGas, backgroundColor:'#f8717155', borderColor:'#f87171'},
     {label:'Ingresos',data:menIng, backgroundColor:'#34d39955', borderColor:'#34d399'}]);
+  const pats = S.data.patrones||[];
   const top=pats.slice(0,8);
   if (top.length) mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
   else emptyChart('c-pat','Sin patrones registrados aún');
-  fetchInsights();
-  rDespensa();
+}
+
+// ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
+function rDash() {
+  const dash = $('tab-dashboard');
+  if (!dash) return;
+  dash.classList.add('mini');
+  const movs = S.data.movs || [];
+  const r    = getPeriodoRange();
+  const refs = (S.data.user || {}).external_refs || {};
+  const pMovs= filterMovs(movs, r.from, r.to);
+  const gasC = pMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
+  const ingC = pMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
+  // "esperado" de ingresos = mismo cálculo que ya usaba el indicador de balance del Inicio.
+  const ingEsp = calcIngresosEsperadosPeriodo(refs, r.from, r.to);
+  // "presup." de gastos = total de gastos fijos de la quincena vigente (mismos helpers que
+  // el panel de quincena; deriva la quincena desde el periodo igual que él).
+  const _qOff = S.periodo.tipo==='quincena' ? S.periodo.offset : getQuincenaOffsetFromDate(r.from);
+  const _qKey = getQKey(getQuincenaInfo(_qOff));
+  const gasEspTot = getGastosEsperados(refs, _qKey)
+    .filter(g=>!/^despensa$/i.test((g.descripcion||'').trim()))
+    .reduce((a,g)=>a+(g.monto||0),0);
+  const bal = (ingC || ingEsp) - gasC;   // misma expresión que el indicador de balance de hoy (ingBal - gasC)
+  const pats = S.data.patrones||[];
+  S._patData = {};
+  pats.forEach(p => { S._patData[p.id] = p; });
+  const who  = S.ghostMode ? 'Alicia' : (S.identity==='A'?'Ángel':'Alicia');
+
+  // Balance con centavos atenuados
+  const _bstr  = fmt(Math.abs(bal));
+  const _bdot  = _bstr.lastIndexOf('.');
+  const _bMain = _bdot>=0 ? _bstr.slice(0,_bdot) : _bstr;
+  const _bCent = _bdot>=0 ? _bstr.slice(_bdot)   : '';
+
+  const tipos = [['Sem','semana'],['Quinc','quincena'],['Mes','mes'],['Trim','trimestre'],['Año','año']];
+  const EMOJIS = [
+    ['💳','cuentas','Mis cuentas'],           ['🧾','deuda','Deuda TDC'],
+    ['💼','ingQuinc','Ingresos de la quincena'], ['🛍️','gastQuinc','Gastos de la quincena'],
+    ['🏦','retiro','Retiro de efectivo'],     ['🩵','nidito','Nidito'],
+    ['📊','analisis','Análisis gráfico'],     ['🛒','despensa','Lista de despensa'],
+    ['✨','consejos','Consejos IA'],          ['📝','notas','Notas'],
+  ];
+
+  dash.innerHTML = `
+<div class="mini-head">
+  <div class="mini-name">${who}</div>
+  <div class="mini-pills">${tipos.map(([l,v])=>
+    `<button class="mini-pill${S.periodo.tipo===v?' on':''}" onclick="setPeriodo('${v}')">${l}</button>`).join('')}</div>
+</div>
+<div class="mini-per">
+  <button onclick="navPeriodo(-1)" aria-label="Periodo anterior"><i class="ti ti-chevron-left"></i></button>
+  <span class="mini-per-lbl">${r.label}</span>
+  <button onclick="navPeriodo(1)" aria-label="Periodo siguiente"><i class="ti ti-chevron-right"></i></button>
+</div>
+<div class="mini-bal-wrap">
+  <div class="mini-bal-lbl">Balance <i class="ti ti-scale" style="font-size:12px"></i></div>
+  <div class="mini-bal${bal<0?' neg':''}">${bal<0?'-':''}${_bMain}<span class="cents">${_bCent}</span></div>
+  <div class="mini-sub ${bal>=0?'pos':'neg'}">
+    <i class="ti ti-trending-${bal>=0?'up':'down'}"></i>
+    Balance ${bal>=0?'positivo':'negativo'} · ${pMovs.length} movimiento${pMovs.length!==1?'s':''}</div>
+</div>
+<div class="mini-rows">
+  <div class="mini-row" onclick="dashEmoji('gastQuinc')" title="Ver gastos de la quincena">
+    <span class="emoji">💸</span>
+    <div class="rl"><b>Gastos</b>${gasEspTot>0?`<small>presup. ${fmt(gasEspTot)}</small>`:''}</div>
+    <span class="rv gasto">${fmt(gasC)}</span>
+  </div>
+  <div class="mini-row" onclick="dashEmoji('ingQuinc')" title="Ver ingresos de la quincena">
+    <span class="emoji">💰</span>
+    <div class="rl"><b>Ingresos</b>${ingEsp>0?`<small>esperado ${fmt(ingEsp)}</small>`:''}</div>
+    <span class="rv ingreso">${fmt(ingC)}</span>
+  </div>
+</div>
+<div class="mini-grid">${EMOJIS.map(([e,k,lbl])=>
+  `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}</button>`).join('')}</div>
+<button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>
+`;
 }
 
 // ── INSIGHTS IA ───────────────────────────────────────────────────────────────
@@ -7175,6 +7249,37 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') _check();
     });
+  })();
+
+  // Hoja del Inicio: cerrar con Escape + arrastrar hacia abajo para descartar.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $('dash-sheet')?.classList.contains('open')) cerrarHoja();
+  });
+  (function _dashSheetSwipe(){
+    const sheet = $('dash-sheet'); if (!sheet) return;
+    const panel = sheet.querySelector('.ds-panel'); if (!panel) return;
+    let y0=null, dy=0, fromTop=false;
+    const start = e => {
+      const body = $('dash-sheet-body');
+      // Solo inicia el arrastre si el contenido no está scrolleado (evita pelear con el scroll interno).
+      fromTop = !body || body.scrollTop <= 0;
+      y0 = e.touches ? e.touches[0].clientY : e.clientY; dy = 0;
+    };
+    const move = e => {
+      if (y0===null || !fromTop) return;
+      const y = e.touches ? e.touches[0].clientY : e.clientY;
+      dy = y - y0;
+      if (dy > 0) { panel.style.transform = `translateY(${dy}px)`; panel.style.transition='none'; }
+    };
+    const end = () => {
+      if (y0===null) return;
+      panel.style.transition=''; panel.style.transform='';
+      if (dy > 90) cerrarHoja();
+      y0=null; dy=0;
+    };
+    panel.addEventListener('touchstart', start, {passive:true});
+    panel.addEventListener('touchmove',  move,  {passive:true});
+    panel.addEventListener('touchend',   end);
   })();
 
   document.addEventListener('click', e => {
