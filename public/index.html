@@ -1032,6 +1032,84 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   .neg-form-grid{grid-template-columns:1fr}
   .neg-form-full{grid-column:1}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INICIO MINIMAL — estilos SCOPEados a #tab-dashboard.mini. No tocan tokens
+   globales, así el resto de las pantallas queda idéntico.
+   ═══════════════════════════════════════════════════════════════════════════ */
+#tab-dashboard.mini{
+  --ink:#0a0a0a; --mcard:#161616; --mbd:#232323;
+  --m-gasto:#ff7a6b; --m-ingreso:#9be07a; --m-deuda:#ffc978;
+  background:var(--ink); min-height:100dvh;
+  max-width:520px; margin:0 auto; padding:0 16px 120px;
+}
+#tab-dashboard.mini .notas-box{display:none}   /* la caja de notas se muestra en su hoja */
+.mini-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:14px 2px 8px}
+.mini-name{font-size:16px;font-weight:800;color:#f5f5f5;letter-spacing:-.3px}
+.mini-pills{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.mini-pill{background:transparent;border:none;border-radius:var(--radius-pill);color:#8a8a8a;
+  font-family:inherit;font-size:12px;font-weight:700;padding:5px 11px;cursor:pointer;white-space:nowrap;
+  transition:transform var(--t-fast) var(--ease-spring),background var(--t-fast),color var(--t-fast)}
+.mini-pill:active{transform:scale(.94)}
+.mini-pill.on{background:#f5f5f5;color:#0a0a0a}
+.mini-per{display:flex;align-items:center;justify-content:center;gap:12px;padding:2px 0 10px}
+.mini-per button{background:transparent;border:none;color:#8a8a8a;cursor:pointer;font-size:18px;line-height:1;
+  padding:4px 8px;border-radius:var(--radius-pill);transition:transform var(--t-fast) var(--ease-spring),color var(--t-fast)}
+.mini-per button:active{transform:scale(.9)}
+.mini-per button:hover{color:#f5f5f5}
+.mini-per-lbl{font-size:13px;font-weight:700;color:#cfcfcf;text-transform:capitalize}
+.mini-bal-wrap{text-align:center;padding:8px 0 4px}
+.mini-bal-lbl{font-size:12px;font-weight:700;color:#8a8a8a;display:inline-flex;align-items:center;gap:5px}
+.mini-bal{font-size:60px;font-weight:900;letter-spacing:-3px;line-height:1;margin:4px 0 6px;
+  font-variant-numeric:tabular-nums;color:#f5f5f5;word-break:break-all}
+.mini-bal .cents{color:#5f5f5f}
+.mini-bal.neg{color:var(--m-gasto)}
+.mini-sub{font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:5px}
+.mini-sub.pos{color:var(--m-ingreso)} .mini-sub.neg{color:var(--m-gasto)}
+.mini-rows{display:flex;flex-direction:column;gap:10px;margin:16px 0 4px}
+.mini-row{background:var(--mcard);border:1px solid var(--mbd);border-radius:20px;
+  padding:15px 18px;display:flex;align-items:center;gap:13px;cursor:pointer;
+  transition:transform var(--t-fast) var(--ease-spring),border-color var(--t-fast)}
+.mini-row:active{transform:scale(.985)}
+.mini-row .emoji{font-size:22px;flex-shrink:0;width:34px;text-align:center}
+.mini-row .rl{flex:1;min-width:0}
+.mini-row .rl b{display:block;font-size:15px;font-weight:800;color:#f5f5f5}
+.mini-row .rl small{font-size:11px;color:#8a8a8a;font-weight:600}
+.mini-row .rv{font-size:20px;font-weight:900;letter-spacing:-.6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mini-row .rv.gasto{color:var(--m-gasto)} .mini-row .rv.ingreso{color:var(--m-ingreso)}
+.mini-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:20px 0 8px}
+.mini-tile{aspect-ratio:1;background:var(--mcard);border:1px solid var(--mbd);border-radius:18px;
+  display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;
+  transition:transform var(--t-fast) var(--ease-spring),border-color var(--t-fast),background var(--t-fast)}
+.mini-tile:active{transform:scale(.9)}
+.mini-tile:hover{border-color:#3a3a3a}
+.mini-fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));
+  bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:90;
+  width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
+  background:#ff6a5a;color:#fff;font-size:30px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(255,106,90,.4);
+  transition:transform var(--t-fast) var(--ease-spring)}
+.mini-fab:active{transform:scale(.9)}
+@media(min-width:701px){ .mini-fab{display:none} }   /* en escritorio el header ya trae + Movimiento */
+
+/* Hoja inferior genérica para los emojis */
+#dash-sheet{display:none;position:fixed;inset:0;z-index:160;background:rgba(0,0,0,0);
+  align-items:flex-end;transition:background .24s ease}
+#dash-sheet.open{display:flex;background:rgba(0,0,0,.62)}
+.ds-panel{background:var(--bg-surface);width:100%;max-width:560px;margin:0 auto;
+  border-radius:24px 24px 0 0;border:1px solid var(--border-default);border-bottom:none;
+  max-height:88svh;display:flex;flex-direction:column;
+  transform:translateY(100%);transition:transform .3s cubic-bezier(.32,1,.56,1);
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+#dash-sheet.open .ds-panel{transform:translateY(0)}
+.ds-handle{width:40px;height:4px;border-radius:99px;background:var(--border-default);margin:9px auto 2px;flex-shrink:0}
+.ds-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 18px 10px;flex-shrink:0}
+.ds-title{font-size:16px;font-weight:800;color:var(--text-1)}
+.ds-close{background:var(--bg-surface-2);border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;
+  color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.ds-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 8px;flex:1}
+body.sheet-locked{overflow:hidden}
 </style>
 </head>
 <body>
