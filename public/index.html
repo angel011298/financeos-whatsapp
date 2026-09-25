@@ -1041,29 +1041,40 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 #tab-dashboard.mini{
   --ink:#0a0a0a; --mcard:#161616; --mbd:#232323;
   --m-gasto:#ff7a6b; --m-ingreso:#9be07a; --m-deuda:#ffc978;
+  --m-text:#f5f5f5; --m-text-2:#8a8a8a; --m-strong:#cfcfcf; --m-cents:#5f5f5f;
+  --m-pill-on-bg:#f5f5f5; --m-pill-on-tx:#0a0a0a; --m-tile-hover:#3a3a3a;
   background:var(--ink); min-height:100dvh;
   max-width:520px; margin:0 auto; padding:0 16px 120px;
 }
+/* Modo claro: el Inicio minimal mapea a los tokens claros de la app — misma
+   estructura, contraste legible sobre fondo blanco (tarjetas blancas, texto
+   oscuro, verde/coral atenuados para leerse sobre claro). */
+html.light #tab-dashboard.mini{
+  --ink:var(--bg-app); --mcard:var(--bg-surface); --mbd:var(--border-default);
+  --m-gasto:var(--color-expense); --m-ingreso:var(--color-income); --m-deuda:var(--color-warning);
+  --m-text:var(--text-1); --m-text-2:var(--text-2); --m-strong:var(--text-1); --m-cents:var(--text-3);
+  --m-pill-on-bg:#1A1A1A; --m-pill-on-tx:#fff; --m-tile-hover:var(--text-3);
+}
 #tab-dashboard.mini .notas-box{display:none}   /* la caja de notas se muestra en su hoja */
 .mini-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:14px 2px 8px}
-.mini-name{font-size:16px;font-weight:800;color:#f5f5f5;letter-spacing:-.3px}
+.mini-name{font-size:16px;font-weight:800;color:var(--m-text);letter-spacing:-.3px}
 .mini-pills{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
-.mini-pill{background:transparent;border:none;border-radius:var(--radius-pill);color:#8a8a8a;
+.mini-pill{background:transparent;border:none;border-radius:var(--radius-pill);color:var(--m-text-2);
   font-family:inherit;font-size:12px;font-weight:700;padding:5px 11px;cursor:pointer;white-space:nowrap;
   transition:transform var(--t-fast) var(--ease-spring),background var(--t-fast),color var(--t-fast)}
 .mini-pill:active{transform:scale(.94)}
-.mini-pill.on{background:#f5f5f5;color:#0a0a0a}
+.mini-pill.on{background:var(--m-pill-on-bg);color:var(--m-pill-on-tx)}
 .mini-per{display:flex;align-items:center;justify-content:center;gap:12px;padding:2px 0 10px}
-.mini-per button{background:transparent;border:none;color:#8a8a8a;cursor:pointer;font-size:18px;line-height:1;
+.mini-per button{background:transparent;border:none;color:var(--m-text-2);cursor:pointer;font-size:18px;line-height:1;
   padding:4px 8px;border-radius:var(--radius-pill);transition:transform var(--t-fast) var(--ease-spring),color var(--t-fast)}
 .mini-per button:active{transform:scale(.9)}
-.mini-per button:hover{color:#f5f5f5}
-.mini-per-lbl{font-size:13px;font-weight:700;color:#cfcfcf;text-transform:capitalize}
+.mini-per button:hover{color:var(--m-text)}
+.mini-per-lbl{font-size:13px;font-weight:700;color:var(--m-strong);text-transform:capitalize}
 .mini-bal-wrap{text-align:center;padding:8px 0 4px}
-.mini-bal-lbl{font-size:12px;font-weight:700;color:#8a8a8a;display:inline-flex;align-items:center;gap:5px}
+.mini-bal-lbl{font-size:12px;font-weight:700;color:var(--m-text-2);display:inline-flex;align-items:center;gap:5px}
 .mini-bal{font-size:60px;font-weight:900;letter-spacing:-3px;line-height:1;margin:4px 0 6px;
-  font-variant-numeric:tabular-nums;color:#f5f5f5;word-break:break-all}
-.mini-bal .cents{color:#5f5f5f}
+  font-variant-numeric:tabular-nums;color:var(--m-text);word-break:break-all}
+.mini-bal .cents{color:var(--m-cents)}
 .mini-bal.neg{color:var(--m-gasto)}
 .mini-sub{font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:5px}
 .mini-sub.pos{color:var(--m-ingreso)} .mini-sub.neg{color:var(--m-gasto)}
@@ -1074,8 +1085,8 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 .mini-row:active{transform:scale(.985)}
 .mini-row .emoji{font-size:22px;flex-shrink:0;width:34px;text-align:center}
 .mini-row .rl{flex:1;min-width:0}
-.mini-row .rl b{display:block;font-size:15px;font-weight:800;color:#f5f5f5}
-.mini-row .rl small{font-size:11px;color:#8a8a8a;font-weight:600}
+.mini-row .rl b{display:block;font-size:15px;font-weight:800;color:var(--m-text)}
+.mini-row .rl small{font-size:11px;color:var(--m-text-2);font-weight:600}
 .mini-row .rv{font-size:20px;font-weight:900;letter-spacing:-.6px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .mini-row .rv.gasto{color:var(--m-gasto)} .mini-row .rv.ingreso{color:var(--m-ingreso)}
 .mini-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:20px 0 8px}
@@ -1083,7 +1094,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;
   transition:transform var(--t-fast) var(--ease-spring),border-color var(--t-fast),background var(--t-fast)}
 .mini-tile:active{transform:scale(.9)}
-.mini-tile:hover{border-color:#3a3a3a}
+.mini-tile:hover{border-color:var(--m-tile-hover)}
 .mini-fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));
   bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:90;
   width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
