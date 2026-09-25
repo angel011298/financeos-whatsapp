@@ -6817,9 +6817,9 @@ function rChat() {
     <input type="file" id="foto-input" accept="image/*" capture="environment"
       style="display:none" onchange="enviarFotoTicket(this)">
     <textarea id="chat-input" rows="1" placeholder="Escribe un mensaje…"
-      autocomplete="off" enterkeyhint="send"
+      autocomplete="off"
       oninput="autoGrowChat(this)"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!_chatEsMovil()){event.preventDefault();sendChat()}"></textarea>
     <button type="submit" class="round-btn send-btn" title="Enviar">
       <i class="ti ti-send"></i>
     </button>
@@ -6945,6 +6945,13 @@ function autoGrowChat(ta) {
   if (!ta) return;
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, 168) + 'px';
+}
+
+// En móvil (mismo breakpoint que .mobile-nav), Enter en el chat se comporta como en
+// WhatsApp: solo inserta un salto de línea. Únicamente el botón naranja envía.
+// En escritorio se conserva el atajo Enter=enviar / Shift+Enter=salto de línea.
+function _chatEsMovil() {
+  return window.matchMedia('(max-width:700px)').matches;
 }
 
 async function sendChat() {
