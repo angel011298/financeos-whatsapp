@@ -128,6 +128,7 @@ aside{
   background:var(--bg-surface);border-right:1px solid var(--border-default);
   display:flex;flex-direction:column;overflow:hidden;
   transition:opacity .22s ease;min-width:0;
+  grid-column:1;grid-row:1;
 }
 .logo{
   padding:14px;border-bottom:1px solid var(--border-default);
@@ -166,7 +167,7 @@ nav a.active .ti{color:var(--accent-primary)}
   font-size:var(--text-xs);color:var(--text-3);
   text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;
 }
-main{overflow-y:auto;padding:24px;transition:padding .22s ease}
+main{overflow-y:auto;padding:24px;transition:padding .22s ease;grid-column:2;grid-row:1}
 .tab{display:none}.tab.active{display:block}
 
 /* ═══════════════════════════════════════════════════════ FLOATING SIDEBAR BTN */
@@ -1109,6 +1110,90 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 .ds-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 8px;flex:1}
 body.sheet-locked{overflow:hidden}
+
+/* Cabecera de Inicio: mismos 4 elementos (nombre, periodo, píldoras, +Movimiento)
+   reacomodados por CSS Grid según ancho — sin duplicar su lógica/datos. */
+.mini-topbar{display:grid;grid-template-areas:"name pills" "per per";grid-template-columns:1fr auto;
+  align-items:start;column-gap:10px;row-gap:0;padding:14px 2px 8px}
+.mini-topbar .mini-name{grid-area:name}
+.mini-topbar .mini-pills{grid-area:pills}
+.mini-topbar .mini-per{grid-area:per}
+.mini-addmov-btn{display:none;grid-area:addmov;white-space:nowrap}
+.mini-tile-lbl{display:none}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INICIO MINIMAL — versión escritorio (≥1024px). Reacomoda vía CSS el MISMO
+   HTML que genera rDash()/dashEmoji(): mismos datos, mismos handlers.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Rail de 84px: reemplaza al <aside> de 252px SOLO en este ancho — el <aside>
+   original no se borra y sigue viéndose entre 701–1023px. */
+.rail-desktop{
+  display:none; grid-column:1; grid-row:1; width:84px;
+  background:var(--bg-surface); border-right:1px solid var(--border-default);
+  flex-direction:column; align-items:center; padding:18px 0; gap:6px;
+}
+.rail-desktop img{width:30px;height:30px;border-radius:7px;margin-bottom:14px}
+.rail-desktop a{
+  width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+  color:var(--text-2);cursor:pointer;font-size:22px;position:relative;text-decoration:none;
+  transition:transform var(--t-fast) var(--ease-spring),background var(--t-fast),color var(--t-fast);
+}
+.rail-desktop a:hover{background:var(--bg-surface-2);color:var(--text-1)}
+.rail-desktop a:active{transform:scale(.92)}
+.rail-desktop a.active{background:var(--accent-primary);color:#fff}
+.rail-desktop a[data-tip]::after{
+  content:attr(data-tip);position:absolute;left:calc(100% + 10px);top:50%;
+  transform:translateY(-50%) translateX(-4px);
+  background:var(--bg-surface-3);color:var(--text-1);font-size:12px;font-weight:600;white-space:nowrap;
+  padding:6px 10px;border-radius:8px;border:1px solid var(--border-default);
+  opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;z-index:50;
+}
+.rail-desktop a:hover[data-tip]::after{opacity:1;transform:translateY(-50%) translateX(0)}
+
+@media(min-width:1024px){
+  .layout{grid-template-columns:84px 1fr}
+  aside{display:none}
+  #sb-float{display:none!important}
+  .rail-desktop{display:flex}
+
+  /* La tarjeta móvil (520px, centrada) se libera para usar el ancho de escritorio */
+  #tab-dashboard.mini{max-width:1400px;margin:0 auto;padding:0 32px 40px}
+
+  /* Encabezado: saludo+periodo a la izquierda; píldoras+"+Movimiento" a la derecha */
+  .mini-topbar{grid-template-areas:"name per pills addmov";grid-template-columns:auto auto 1fr auto;
+    align-items:center;column-gap:22px;padding:22px 0}
+  .mini-per{justify-content:flex-start;padding:0}
+  .mini-addmov-btn{display:inline-flex}
+  .mini-fab{display:none}   /* el botón del header cubre su función en escritorio */
+
+  /* Balance + Gastos + Ingresos en 3 columnas */
+  .mini-top-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px;align-items:stretch;margin:0 0 22px}
+  .mini-bal-wrap{background:var(--mcard);border:1px solid var(--mbd);border-radius:20px;
+    padding:20px 22px;text-align:left}
+  .mini-bal{font-size:44px;letter-spacing:-2px}
+  .mini-rows{display:contents}
+  .mini-row{height:100%;box-sizing:border-box}
+
+  /* 10 emojis en una sola fila, con etiqueta visible debajo */
+  .mini-grid{grid-template-columns:repeat(10,1fr);gap:10px;margin:0 0 8px}
+  .mini-tile{aspect-ratio:auto;flex-direction:column;gap:7px;padding:16px 6px 14px;font-size:24px}
+  .mini-tile-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-2);
+    text-align:center;line-height:1.2}
+
+  /* La hoja pasa de ser un sheet inferior a un panel lateral derecho de 440px */
+  #dash-sheet{justify-content:flex-end;align-items:stretch}
+  .ds-panel{width:440px;max-width:440px;margin:0;height:100dvh;max-height:100dvh;
+    border-radius:0;border-left:1px solid var(--border-default);border-top:none;border-bottom:none;
+    transform:translateX(100%);padding-bottom:0}
+  #dash-sheet.open .ds-panel{transform:translateX(0)}
+  .ds-handle{display:none}
+  .ds-head{padding:18px 20px 12px}
+  .ds-body{padding:0 20px 20px}
+
+  /* "Más" deja de ser full-bleed en pantallas anchas */
+  .sheet-inner{max-width:420px;margin:0 auto;border-radius:var(--radius-xl)}
+}
 </style>
 </head>
 <body>
@@ -1218,6 +1303,18 @@ body.sheet-locked{overflow:hidden}
       </div>
     </aside>
 
+    <!-- RAIL DE ESCRITORIO (≥1024px) — mismas 5 rutas que la barra inferior móvil,
+         solo iconos con tooltip. Deudas TDC/Presupuesto/Calendario/Negocios y ajustes
+         (tema, Alicia, cerrar sesión) viven en "Más", igual que en móvil. -->
+    <nav class="rail-desktop" id="rail-desktop" aria-label="Navegación principal">
+      <img src="/icon.svg" alt="Us">
+      <a onclick="go('dashboard')" id="rl-dashboard" data-tip="Inicio" aria-label="Inicio"><i class="ti ti-layout-dashboard"></i></a>
+      <a onclick="go('chat')" id="rl-chat" data-tip="Chat" aria-label="Chat"><i class="ti ti-message-circle"></i></a>
+      <a onclick="go('movimientos')" id="rl-movimientos" data-tip="Movimientos" aria-label="Movimientos"><i class="ti ti-arrows-exchange"></i></a>
+      <a onclick="go('presupuesto')" id="rl-presupuesto" data-tip="Plan" aria-label="Plan"><i class="ti ti-target"></i></a>
+      <a onclick="openMobileMore()" id="rl-mas" data-tip="Más" aria-label="Más"><i class="ti ti-grid-dots"></i></a>
+    </nav>
+
     <!-- MAIN -->
     <main>
       <div id="ghost-banner">
@@ -1251,7 +1348,7 @@ body.sheet-locked{overflow:hidden}
       <div class="ds-handle"></div>
       <div class="ds-head">
         <span class="ds-title" id="dash-sheet-title"></span>
-        <button class="ds-close" onclick="cerrarHoja()" aria-label="Cerrar"><i class="ti ti-x"></i></button>
+        <button class="ds-close" id="dash-sheet-close" onclick="cerrarHoja()" aria-label="Cerrar"><i class="ti ti-x"></i></button>
       </div>
       <div class="ds-body" id="dash-sheet-body"></div>
     </div>
@@ -1631,6 +1728,7 @@ function go(t) {
   $('tab-'+t)?.classList.add('active');
   $('n-'+t)?.classList.add('active');
   $('mn-'+t)?.classList.add('active');
+  $('rl-'+t)?.classList.add('active');
   S.tab = t;
   document.body.classList.toggle('chat-mode', t === 'chat');
   renderTab(t);
@@ -3406,6 +3504,7 @@ function abrirHoja(titulo, html, post) {
   requestAnimationFrame(() => sheet.classList.add('open'));
   document.body.classList.add('sheet-locked');
   if (post) requestAnimationFrame(() => { try { post(); } catch (e) { console.error('hoja post:', e); } });
+  _hojaFocusTrapOn();
 }
 function cerrarHoja() {
   const sheet = $('dash-sheet');
@@ -3417,6 +3516,36 @@ function cerrarHoja() {
   sheet.classList.remove('open');
   document.body.classList.remove('sheet-locked');
   setTimeout(() => { sheet.style.display = 'none'; if ($('dash-sheet-body')) $('dash-sheet-body').innerHTML = ''; }, 260);
+  _hojaFocusTrapOff();
+}
+
+// Atrapa el foco (Tab/Shift+Tab) dentro de la hoja mientras está abierta, y lo
+// regresa a quien la abrió al cerrarla — igual en el sheet inferior móvil que
+// en el panel lateral de escritorio (misma función, solo cambia el CSS).
+function _hojaFocusables() {
+  const panel = document.querySelector('#dash-sheet .ds-panel');
+  if (!panel) return [];
+  return [...panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+    .filter(el => el.offsetParent !== null);
+}
+function _hojaTrapKeydown(e) {
+  if (e.key !== 'Tab') return;
+  const items = _hojaFocusables();
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+function _hojaFocusTrapOn() {
+  S._hojaFocusPrevio = document.activeElement;
+  document.addEventListener('keydown', _hojaTrapKeydown);
+  setTimeout(() => { ($('dash-sheet-close') || _hojaFocusables()[0])?.focus(); }, 60);
+}
+function _hojaFocusTrapOff() {
+  document.removeEventListener('keydown', _hojaTrapKeydown);
+  const prev = S._hojaFocusPrevio;
+  if (prev && document.body.contains(prev) && prev.focus) prev.focus();
+  S._hojaFocusPrevio = null;
 }
 
 // Despacha cada emoji a su hoja o a su navegación (conserva la navegación existente).
@@ -3530,37 +3659,40 @@ function rDash() {
   ];
 
   dash.innerHTML = `
-<div class="mini-head">
+<div class="mini-topbar">
   <div class="mini-name">${who}</div>
+  <div class="mini-per">
+    <button onclick="navPeriodo(-1)" aria-label="Periodo anterior"><i class="ti ti-chevron-left"></i></button>
+    <span class="mini-per-lbl">${r.label}</span>
+    <button onclick="navPeriodo(1)" aria-label="Periodo siguiente"><i class="ti ti-chevron-right"></i></button>
+  </div>
   <div class="mini-pills">${tipos.map(([l,v])=>
     `<button class="mini-pill${S.periodo.tipo===v?' on':''}" onclick="setPeriodo('${v}')">${l}</button>`).join('')}</div>
+  <button class="mini-addmov-btn btn btn-accent btn-sm" onclick="oMov()" aria-label="Nuevo movimiento"><i class="ti ti-plus"></i> Movimiento</button>
 </div>
-<div class="mini-per">
-  <button onclick="navPeriodo(-1)" aria-label="Periodo anterior"><i class="ti ti-chevron-left"></i></button>
-  <span class="mini-per-lbl">${r.label}</span>
-  <button onclick="navPeriodo(1)" aria-label="Periodo siguiente"><i class="ti ti-chevron-right"></i></button>
-</div>
-<div class="mini-bal-wrap">
-  <div class="mini-bal-lbl">Balance <i class="ti ti-scale" style="font-size:12px"></i></div>
-  <div class="mini-bal${bal<0?' neg':''}">${bal<0?'-':''}${_bMain}<span class="cents">${_bCent}</span></div>
-  <div class="mini-sub ${bal>=0?'pos':'neg'}">
-    <i class="ti ti-trending-${bal>=0?'up':'down'}"></i>
-    Balance ${bal>=0?'positivo':'negativo'} · ${pMovs.length} movimiento${pMovs.length!==1?'s':''}</div>
-</div>
-<div class="mini-rows">
-  <div class="mini-row" onclick="dashEmoji('gastQuinc')" title="Ver gastos de la quincena">
-    <span class="emoji">💸</span>
-    <div class="rl"><b>Gastos</b>${gasEspTot>0?`<small>presup. ${fmt(gasEspTot)}</small>`:''}</div>
-    <span class="rv gasto">${fmt(gasC)}</span>
+<div class="mini-top-grid">
+  <div class="mini-bal-wrap">
+    <div class="mini-bal-lbl">Balance <i class="ti ti-scale" style="font-size:12px"></i></div>
+    <div class="mini-bal${bal<0?' neg':''}">${bal<0?'-':''}${_bMain}<span class="cents">${_bCent}</span></div>
+    <div class="mini-sub ${bal>=0?'pos':'neg'}">
+      <i class="ti ti-trending-${bal>=0?'up':'down'}"></i>
+      Balance ${bal>=0?'positivo':'negativo'} · ${pMovs.length} movimiento${pMovs.length!==1?'s':''}</div>
   </div>
-  <div class="mini-row" onclick="dashEmoji('ingQuinc')" title="Ver ingresos de la quincena">
-    <span class="emoji">💰</span>
-    <div class="rl"><b>Ingresos</b>${ingEsp>0?`<small>esperado ${fmt(ingEsp)}</small>`:''}</div>
-    <span class="rv ingreso">${fmt(ingC)}</span>
+  <div class="mini-rows">
+    <div class="mini-row" onclick="dashEmoji('gastQuinc')" title="Ver gastos de la quincena">
+      <span class="emoji">💸</span>
+      <div class="rl"><b>Gastos</b>${gasEspTot>0?`<small>presup. ${fmt(gasEspTot)}</small>`:''}</div>
+      <span class="rv gasto">${fmt(gasC)}</span>
+    </div>
+    <div class="mini-row" onclick="dashEmoji('ingQuinc')" title="Ver ingresos de la quincena">
+      <span class="emoji">💰</span>
+      <div class="rl"><b>Ingresos</b>${ingEsp>0?`<small>esperado ${fmt(ingEsp)}</small>`:''}</div>
+      <span class="rv ingreso">${fmt(ingC)}</span>
+    </div>
   </div>
 </div>
 <div class="mini-grid">${EMOJIS.map(([e,k,lbl])=>
-  `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}</button>`).join('')}</div>
+  `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span></button>`).join('')}</div>
 <button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>
 `;
 }
