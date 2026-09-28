@@ -648,7 +648,9 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .sheet-item .ti{font-size:22px;color:var(--text-1)}
 
 /* ═══════════════════════════════════════════════════════ CHAT */
-.chat-wrap{display:flex;flex-direction:column;height:calc(100svh - 80px)}
+/* Ancho máximo 760px, centrado: en móvil (<760px de viewport) min() no tiene
+   efecto (ya es 100%); en escritorio evita líneas de lectura kilométricas. */
+.chat-wrap{display:flex;flex-direction:column;height:calc(100svh - 80px);max-width:760px;width:100%;margin:0 auto}
 @supports not (height:100svh){.chat-wrap{height:calc(100dvh - 80px)}}
 .chat-msgs{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
 #chat-spacer{flex:1 1 0}
@@ -656,8 +658,10 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .msg-user{align-self:flex-end;background:var(--accent-primary);color:var(--on-accent);border-radius:var(--radius-lg) var(--radius-sm) var(--radius-lg) var(--radius-lg)}
 .msg-bot{align-self:flex-start;background:var(--bg-surface-2);border:1px solid var(--border-default);color:var(--text-1);border-radius:var(--radius-sm) var(--radius-lg) var(--radius-lg) var(--radius-lg)}
+/* El timestamp hereda el color del padre (--on-accent en msg-user, --text-1 en
+   msg-bot) — antes msg-user lo fijaba a blanco, incorrecto ahora que el acento
+   se invierte por tema (en modo día el texto de esa burbuja es oscuro). */
 .msg-time{font-size:var(--text-xs);opacity:.55;margin-top:4px;text-align:right}
-.msg-user .msg-time{color:rgba(255,255,255,.7)}
 .chat-bar{display:flex;align-items:center;gap:10px;padding:12px 0 0;padding-bottom:max(12px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--border-default);flex-shrink:0}
 .chat-bar input{flex:1;border-radius:var(--radius-pill);padding:12px 18px;font-size:16px}
 .round-btn{width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;transition:.15s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -665,7 +669,10 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .chat-nav-back{display:none;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-default);flex-shrink:0}
 .mic-btn{background:var(--bg-surface-2);color:var(--text-2);border:1px solid var(--border-default)}
 .mic-btn:hover{color:var(--text-1);border-color:var(--text-2)}
-.mic-btn.recording{background:var(--color-expense);color:#fff;border-color:var(--color-expense);animation:pulse 1s infinite}
+/* Fondo neutro + ícono rojo (no al revés): en modo noche --color-expense es un
+   rojo claro/salmón — texto blanco encima no cumple AA. Mismo principio que
+   los montos: semántica en el ícono, nunca en el fondo. */
+.mic-btn.recording{background:var(--bg-surface-2);color:var(--color-expense);border-color:var(--color-expense);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 .chat-empty{text-align:center;padding:40px 20px;color:var(--text-2);margin:auto}
 .chat-empty .ti{font-size:40px;display:block;margin-bottom:12px;opacity:.5}
