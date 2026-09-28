@@ -638,8 +638,8 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .chat-empty .ti{font-size:40px;display:block;margin-bottom:12px;opacity:.5}
 
 /* ═══════════════════════════════════════════════════════ RESPONSIVE */
-@media(max-width:700px){
-  /* ── Layout */
+@media(max-width:899px){
+  /* ── Layout — breakpoint único de la app: 900px (ver también ≥900px más abajo) */
   .layout{grid-template-columns:1fr}
   aside{display:none}
   #sb-float{display:none!important}
@@ -702,7 +702,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .cal-day-panel:not(.open){transform:translateY(110%)}
   .cal-day-panel.open{transform:translateY(0)}
 }
-@media(min-width:701px){#mobile-nav{display:none!important}}
+@media(min-width:900px){#mobile-nav{display:none!important}}
 
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -712,8 +712,8 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .snap-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);margin-bottom:5px;display:flex;align-items:center;gap:4px}
 .snap-val{font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" on;font-size:clamp(14px,2vw,20px);font-weight:800;letter-spacing:-0.5px;line-height:1.2}
 .snap-sub{font-size:11px;color:var(--text-2);margin-top:3px}
-@media(min-width:701px){.snap-item:nth-child(2){border-left:1px solid var(--border-default);border-right:1px solid var(--border-default)}}
-@media(max-width:700px){.snapshot-card{grid-template-columns:1fr}.snap-item{border-bottom:1px solid var(--border-default)}.snap-item:last-child{border-bottom:none}}
+@media(min-width:900px){.snap-item:nth-child(2){border-left:1px solid var(--border-default);border-right:1px solid var(--border-default)}}
+@media(max-width:899px){.snapshot-card{grid-template-columns:1fr}.snap-item{border-bottom:1px solid var(--border-default)}.snap-item:last-child{border-bottom:none}}
 
 /* ── REVIEW QUEUE */
 .dot-btn{background:none;border:none;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;flex-shrink:0}
@@ -1143,17 +1143,20 @@ body.sheet-locked{overflow:hidden}
    HTML que genera rDash()/dashEmoji(): mismos datos, mismos handlers.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Rail de 84px: reemplaza al <aside> de 252px SOLO en este ancho — el <aside>
-   original no se borra y sigue viéndose entre 701–1023px. */
+/* Rail de 84px: reemplaza al <aside> de 252px en TODO el rango ≥900px — el
+   <aside> original no se borra (sigue ahí para toggleSidebar/#sb-float) pero
+   queda oculto por CSS. Iconos a 44px (8 secciones + tema + salir + logo caben
+   con margen incluso a 657px de alto útil); overflow-y:auto como respaldo. */
 .rail-desktop{
   display:none; grid-column:1; grid-row:1; width:84px;
   background:var(--bg-surface); border-right:1px solid var(--border-default);
-  flex-direction:column; align-items:center; padding:18px 0; gap:6px;
+  flex-direction:column; align-items:center; padding:16px 0; gap:4px;
+  overflow-y:auto; overflow-x:hidden;
 }
-.rail-desktop img{width:30px;height:30px;border-radius:7px;margin-bottom:14px}
+.rail-desktop img{width:28px;height:28px;border-radius:7px;margin-bottom:10px;flex-shrink:0}
 .rail-desktop a{
-  width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;
-  color:var(--text-2);cursor:pointer;font-size:22px;position:relative;text-decoration:none;
+  width:44px;height:44px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;
+  color:var(--text-2);cursor:pointer;font-size:19px;position:relative;text-decoration:none;flex-shrink:0;
   transition:transform var(--t-fast) var(--ease-spring),background var(--t-fast),color var(--t-fast);
 }
 .rail-desktop a:hover{background:var(--bg-surface-2);color:var(--text-1)}
@@ -1168,14 +1171,21 @@ body.sheet-locked{overflow:hidden}
 }
 .rail-desktop a:hover[data-tip]::after{opacity:1;transform:translateY(-50%) translateX(0)}
 
-@media(min-width:1024px){
+@media(min-width:900px){
   .layout{grid-template-columns:84px 1fr}
   aside{display:none}
   #sb-float{display:none!important}
   .rail-desktop{display:flex}
 
-  /* La tarjeta móvil (520px, centrada) se libera para usar el ancho de escritorio */
-  #tab-dashboard.mini{max-width:1400px;margin:0 auto;padding:0 32px 40px}
+  /* Contenido: un único ancho máximo y padding para TODAS las pestañas (no solo
+     Inicio) — evita scroll horizontal a 1366×657 y da aire consistente. */
+  main{max-width:1180px;margin:0 auto;padding:40px}
+
+  /* La tarjeta móvil (520px, centrada) se libera: el ancho/padding ya los da `main`. */
+  #tab-dashboard.mini{max-width:none;margin:0;padding:0 0 24px}
+
+  /* Modal → diálogo centrado (antes 420px para cualquier ancho ≥701px) */
+  .modal{width:520px}
 
   /* Encabezado: saludo+periodo a la izquierda; píldoras+"+Movimiento" a la derecha */
   .mini-topbar{grid-template-areas:"name per pills addmov";grid-template-columns:auto auto 1fr auto;
@@ -1320,16 +1330,25 @@ body.sheet-locked{overflow:hidden}
       </div>
     </aside>
 
-    <!-- RAIL DE ESCRITORIO (≥1024px) — mismas 5 rutas que la barra inferior móvil,
-         solo iconos con tooltip. Deudas TDC/Presupuesto/Calendario/Negocios y ajustes
-         (tema, Alicia, cerrar sesión) viven en "Más", igual que en móvil. -->
+    <!-- RAIL DE ESCRITORIO (≥900px) — 8 secciones + tema + salir, solo iconos con
+         tooltip. Reemplaza al <aside> de 252px en todo el rango de escritorio
+         (el <aside> no se borra, sigue existiendo para toggleSidebar/#sb-float,
+         pero se oculta por CSS ≥900px). rl-mas queda oculto en escritorio (CSS)
+         y solo se usa si algún día el rail se ve <900px. -->
     <nav class="rail-desktop" id="rail-desktop" aria-label="Navegación principal">
       <img src="/icon.svg" alt="Us">
       <a onclick="go('dashboard')" id="rl-dashboard" data-tip="Inicio" aria-label="Inicio"><i class="ti ti-layout-dashboard"></i></a>
-      <a onclick="go('chat')" id="rl-chat" data-tip="Chat" aria-label="Chat"><i class="ti ti-message-circle"></i></a>
       <a onclick="go('movimientos')" id="rl-movimientos" data-tip="Movimientos" aria-label="Movimientos"><i class="ti ti-arrows-exchange"></i></a>
-      <a onclick="go('presupuesto')" id="rl-presupuesto" data-tip="Plan" aria-label="Plan"><i class="ti ti-target"></i></a>
-      <a onclick="openMobileMore()" id="rl-mas" data-tip="Más" aria-label="Más"><i class="ti ti-grid-dots"></i></a>
+      <a onclick="go('presupuesto')" id="rl-presupuesto" data-tip="Plan y Metas" aria-label="Presupuesto y Metas"><i class="ti ti-target"></i></a>
+      <a onclick="go('nidito')" id="rl-nidito" data-tip="Nidito" aria-label="Nidito" style="color:var(--accent-couple)"><i class="ti ti-heart-handshake"></i></a>
+      <a onclick="go('negocios')" id="rl-negocios" data-tip="Negocios" aria-label="Negocios"><i class="ti ti-building-store"></i></a>
+      <a onclick="go('calendario')" id="rl-calendario" data-tip="Calendario" aria-label="Calendario"><i class="ti ti-calendar"></i></a>
+      <a onclick="go('deudas')" id="rl-deudas" data-tip="Deudas TDC" aria-label="Deudas TDC"><i class="ti ti-credit-card"></i></a>
+      <a onclick="go('chat')" id="rl-chat" data-tip="Chat" aria-label="Chat"><i class="ti ti-message-circle"></i></a>
+      <a onclick="openMobileMore()" id="rl-mas" data-tip="Más" aria-label="Más" style="display:none"><i class="ti ti-grid-dots"></i></a>
+      <div style="flex:1"></div>
+      <a onclick="toggleTheme()" id="rl-theme-btn" data-tip="Modo día" aria-label="Cambiar tema"><i class="ti ti-moon" id="rl-theme-icon"></i></a>
+      <a onclick="logout()" id="rl-logout" data-tip="Cerrar sesión" aria-label="Cerrar sesión"><i class="ti ti-logout"></i></a>
     </nav>
 
     <!-- MAIN -->
@@ -1527,6 +1546,9 @@ function toggleTheme() {
   const mni = $('mn-theme-icon'), mnl = $('mn-theme-label');
   if (mni) mni.className = isLight ? 'ti ti-sun' : 'ti ti-moon';
   if (mnl) mnl.textContent = isLight ? 'Modo noche' : 'Modo día';
+  const rli = $('rl-theme-icon'), rlb = $('rl-theme-btn');
+  if (rli) rli.className = isLight ? 'ti ti-sun' : 'ti ti-moon';
+  if (rlb) rlb.setAttribute('data-tip', isLight ? 'Modo noche' : 'Modo día');
   localStorage.setItem('fos_theme', isLight ? 'light' : 'dark');
   renderTab(S.tab); // redibujar charts con colores del nuevo tema
 }
@@ -7346,6 +7368,9 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     const mni = $('mn-theme-icon'); const mnl = $('mn-theme-label');
     if (mni) mni.className = 'ti ti-sun';
     if (mnl) mnl.textContent = 'Modo noche';
+    const rli = $('rl-theme-icon'); const rlb = $('rl-theme-btn');
+    if (rli) rli.className = 'ti ti-sun';
+    if (rlb) rlb.setAttribute('data-tip', 'Modo noche');
   }
   // Restaurar estado del sidebar
   if (localStorage.getItem('fos_sidebar') === '0') {
