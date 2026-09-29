@@ -122,8 +122,16 @@ const getQuincenaActual = () => getQuincena(hoy());
 // ── Compatibilidad con código existente ──────────────────────────────────────
 const path    = require('path');
 const fs      = require('fs');
-// Timestamp único por despliegue — cambia en cada reinicio del servidor (cada Railway deploy)
-const DEPLOY_TS = Date.now().toString(36);
+// Identificador de build: usa el commit de git que Render inyecta automáticamente
+// (RENDER_GIT_COMMIT — idéntico en TODAS las instancias que corren el mismo deploy)
+// cuando existe; si no (desarrollo local), cae a un timestamp de arranque.
+// Antes usábamos solo Date.now(), que genera un valor DISTINTO en cada proceso —
+// con eso, un reinicio sin deploy real (Render free plan: suspensión por
+// inactividad, reinicio por crash, o dos instancias solapadas unos segundos
+// durante un rolling deploy) hacía que el cliente detectara "nueva versión" sin
+// que hubiera código nuevo, disparando recargas de página (a veces en bucle).
+// Con el commit de git, un simple reinicio del mismo código ya no dispara nada.
+const DEPLOY_TS = process.env.RENDER_GIT_COMMIT || Date.now().toString(36);
 
 // Headers que previenen caché en browser, CDN Railway (Hikari) y proxies intermedios
 app.set('etag', false); // nunca enviar ETag — evita que CDNs interpreten respuestas como cacheables

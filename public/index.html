@@ -7527,6 +7527,31 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     if (f) f.style.display = 'flex';
   }
 
+  // Freno de seguridad contra bucles de recarga infinitos: las 3 señales de
+  // "hay versión nueva" de abajo (controllerchange, mensaje SW_UPDATED, polling
+  // de /api/version) llaman TODAS a _safeReload en vez de reload()/replace()
+  // directo. Antes, si el servidor reiniciaba repetidas veces sin que hubiera
+  // un deploy real (Render free plan: suspensión por inactividad, reinicio por
+  // crash, o dos instancias solapadas unos segundos durante un deploy), cada
+  // reinicio generaba un DEPLOY_TS distinto y cualquiera de las 3 señales
+  // disparaba location.reload() — y como cada recarga vuelve a arrancar con la
+  // bandera _swRefreshing en false, nada impedía que se repitiera sin fin
+  // (pantalla parpadeando en bucle). sessionStorage sí sobrevive a la recarga
+  // (a diferencia de una variable JS), así que aquí podemos contar de verdad y
+  // frenar después de unos intentos en poco tiempo.
+  function _safeReload(url) {
+    try {
+      const now  = Date.now();
+      const last = +(sessionStorage.getItem('_rlAt') || 0);
+      let   n    = +(sessionStorage.getItem('_rlN')  || 0);
+      n = (now - last < 120000) ? n + 1 : 1;
+      sessionStorage.setItem('_rlN', String(n));
+      sessionStorage.setItem('_rlAt', String(now));
+      if (n > 3) return; // demasiadas recargas en <2min: nos detenemos y dejamos la página como está
+    } catch {}
+    if (url) window.location.replace(url); else window.location.reload();
+  }
+
   // Registrar Service Worker para PWA
   // updateViaCache:'none' → el browser NUNCA usa su caché HTTP para buscar el sw.js
   // Esto garantiza que en cada visita se detecte el SW actualizado por Railway
@@ -7538,7 +7563,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!_swRefreshing && _hadController) {
         _swRefreshing = true;
-        window.location.reload();
+        _safeReload();
       }
     });
 
@@ -7546,7 +7571,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     navigator.serviceWorker.addEventListener('message', e => {
       if (e.data?.type === 'SW_UPDATED' && _hadController && !_swRefreshing) {
         _swRefreshing = true;
-        window.location.reload();
+        _safeReload();
       }
     });
 
@@ -7571,7 +7596,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
         if (!r.ok) return;
         const { v } = await r.json();
         if (v && v !== _bts) {
-          window.location.replace('/?_v=' + v);
+          _safeReload('/?_v=' + v);
         }
       } catch {}
     };
