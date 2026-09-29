@@ -871,23 +871,18 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
 .sel-sum-bar strong{color:var(--text-1);font-weight:700}
 
 /* ═══════════════════════════════════════════════════════ INSIGHT CARDS */
-.insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px;margin-top:4px;max-width:1400px;margin-left:auto;margin-right:auto}
-.insight-card{background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:22px 24px 20px;position:relative;overflow:hidden;text-align:center}
-.insight-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px;border-radius:5px 0 0 5px}
-.insight-card.ahorro::before{background:#34d399}
-.insight-card.alerta::before{background:#f87171}
-.insight-card.habito::before{background:#fbbf24}
-.insight-card.logro::before{background:var(--accent-primary)}
-.insight-card.patrones::before{background:#818cf8}
-.insight-badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:4px;margin-bottom:11px}
-.insight-card.ahorro .insight-badge{background:#34d39920;color:#34d399}
-.insight-card.alerta .insight-badge{background:#f8717120;color:#f87171}
-.insight-card.habito .insight-badge{background:#fbbf2420;color:#d97706}
-.insight-card.logro .insight-badge{background:color-mix(in srgb,var(--accent-primary) 18%,transparent);color:var(--accent-primary)}
-.insight-card.patrones .insight-badge{background:#818cf820;color:#818cf8}
-.insight-title{font-size:16px;font-weight:600;color:var(--text-1);margin-bottom:9px;line-height:1.3}
-.insight-body{font-size:14px;color:var(--text-2);line-height:1.7}
-.insight-skel{background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:22px 24px}
+.insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:4px;max-width:1400px;margin-left:auto;margin-right:auto}
+.insight-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px 20px;text-align:left}
+.insight-badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:var(--radius-pill);
+  background:var(--bg-surface-2);display:inline-flex;align-items:center;gap:4px;margin-bottom:11px}
+.insight-card.ahorro .insight-badge{color:var(--green)}
+.insight-card.alerta .insight-badge{color:var(--red)}
+.insight-card.habito .insight-badge{color:var(--color-warning)}
+.insight-card.logro .insight-badge{color:var(--accent-primary)}
+.insight-card.patrones .insight-badge{color:var(--text-2)}
+.insight-title{font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:8px;line-height:1.3}
+.insight-body{font-size:13.5px;color:var(--text-2);line-height:1.65}
+.insight-skel{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px 20px}
 .insight-skel-line{height:10px;background:var(--border);border-radius:4px;margin-bottom:10px;animation:ins-pulse 1.4s ease-in-out infinite}
 @keyframes ins-pulse{0%,100%{opacity:.9}50%{opacity:.35}}
 
@@ -1149,16 +1144,19 @@ html.light #tab-dashboard.mini{
 .mini-sub.pos{color:var(--m-ingreso)} .mini-sub.neg{color:var(--m-gasto)}
 .mini-rows{display:flex;flex-direction:column;gap:10px;margin:16px 0 4px}
 .mini-row{background:var(--mcard);border:1px solid var(--mbd);border-radius:20px;
-  padding:15px 18px;display:flex;align-items:center;gap:13px;cursor:pointer;
+  padding:15px 18px;display:flex;flex-direction:column;gap:3px;cursor:pointer;text-align:left;
   transition:transform var(--t-fast) var(--ease-spring),border-color var(--t-fast)}
 .mini-row:active{transform:scale(.985)}
-.mini-row .emoji{font-size:22px;flex-shrink:0;width:34px;text-align:center}
-.mini-row .rl{flex:1;min-width:0}
-.mini-row .rl b{display:block;font-size:15px;font-weight:800;color:var(--m-text)}
-.mini-row .rl small{font-size:11px;color:var(--m-text-2);font-weight:600}
-.mini-row .rv{font-size:20px;font-weight:900;letter-spacing:-.6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mini-row-hdr{display:flex;align-items:center;gap:7px}
+.mini-row .emoji{font-size:16px;flex-shrink:0;line-height:1}
+.mini-row-hdr b{font-size:13px;font-weight:700;color:var(--m-text-2)}
+.mini-row .rv{font-size:26px;font-weight:900;letter-spacing:-1px;white-space:nowrap;
+  font-variant-numeric:tabular-nums;margin-top:1px}
 .mini-row .rv.gasto{color:var(--m-gasto)} .mini-row .rv.ingreso{color:var(--m-ingreso)}
-.mini-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:20px 0 8px}
+.mini-row small{font-size:11px;color:var(--m-text-2);font-weight:600}
+.mini-grid-hdr{font-size:12px;font-weight:700;color:var(--m-text-2);margin:20px 2px 10px;
+  text-transform:uppercase;letter-spacing:.04em}
+.mini-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:0 0 8px}
 .mini-tile{aspect-ratio:1;background:var(--mcard);border:1px solid var(--mbd);border-radius:18px;
   display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;
   transition:transform var(--t-fast) var(--ease-spring),border-color var(--t-fast),background var(--t-fast)}
@@ -1437,7 +1435,6 @@ body.sheet-locked{overflow:hidden}
     <a onclick="go('chat')" id="mn-chat"><i class="ti ti-message-circle"></i><span>Chat</span></a>
     <a onclick="go('dashboard')" id="mn-dashboard"><i class="ti ti-layout-dashboard"></i><span>Inicio</span></a>
     <a onclick="go('movimientos')" id="mn-movimientos"><i class="ti ti-arrows-exchange"></i><span>Movimientos</span></a>
-    <a onclick="go('presupuesto')" id="mn-presupuesto"><i class="ti ti-target"></i><span>Plan</span></a>
     <a onclick="openMobileMore()" id="mn-mas"><i class="ti ti-grid-dots"></i><span>Más</span></a>
   </div>
 
@@ -1461,6 +1458,9 @@ body.sheet-locked{overflow:hidden}
         <button class="icon-btn" onclick="closeMobileMore()"><i class="ti ti-x"></i></button>
       </div>
       <div class="sheet-grid">
+        <div class="sheet-item" onclick="go('nidito');closeMobileMore()" style="color:var(--accent-couple)">
+          <i class="ti ti-heart-handshake" style="color:var(--accent-couple)"></i><span>Nidito</span>
+        </div>
         <div class="sheet-item" onclick="go('deudas');closeMobileMore()">
           <i class="ti ti-credit-card"></i><span>Deudas TDC</span>
         </div>
@@ -1472,6 +1472,9 @@ body.sheet-locked{overflow:hidden}
         </div>
         <div class="sheet-item" onclick="go('negocios');closeMobileMore()">
           <i class="ti ti-building-store"></i><span>Negocios</span>
+        </div>
+        <div class="sheet-item" onclick="_hojaNotas();closeMobileMore()">
+          <i class="ti ti-notes"></i><span>Notas</span>
         </div>
         <div class="sheet-item" onclick="toggleTheme();closeMobileMore()">
           <i class="ti ti-moon" id="mn-theme-icon"></i><span id="mn-theme-label">Modo día</span>
@@ -3657,6 +3660,9 @@ function dashEmoji(key) {
     case 'retiro':   abrirHoja('Retiro de efectivo', rCuentasWidget()); break;   // (a) los botones "Retirar" del widget
     case 'deuda':    cerrarHoja(); go('deudas'); break;
     case 'nidito':   cerrarHoja(); go('nidito'); break;
+    case 'presupuesto': cerrarHoja(); go('presupuesto'); break;
+    case 'objetivos':   cerrarHoja(); go('presupuesto'); setTimeout(()=>$('objs-section')?.scrollIntoView({behavior:'smooth'}),260); break;
+    case 'calendario':  cerrarHoja(); go('calendario'); break;
     case 'ingQuinc': abrirHoja('Ingresos · esta quincena', '<div id="hoja-q"></div>',
                        () => { $('hoja-q').innerHTML = rQuincenaPanel('sheet'); _hojaScroll('.q-stats'); }); break;
     case 'gastQuinc':abrirHoja('Gastos · esta quincena', '<div id="hoja-q"></div>',
@@ -3753,11 +3759,11 @@ function rDash() {
 
   const tipos = [['Sem','semana'],['Quinc','quincena'],['Mes','mes'],['Trim','trimestre'],['Año','año']];
   const EMOJIS = [
-    ['💳','cuentas','Mis cuentas'],           ['🧾','deuda','Deuda TDC'],
-    ['💼','ingQuinc','Ingresos de la quincena'], ['🛍️','gastQuinc','Gastos de la quincena'],
-    ['🏦','retiro','Retiro de efectivo'],     ['🩵','nidito','Nidito'],
-    ['📊','analisis','Análisis gráfico'],     ['🛒','despensa','Lista de despensa'],
-    ['✨','consejos','Consejos IA'],          ['📝','notas','Notas'],
+    ['💳','cuentas','Cuentas'],               ['🧾','deuda','Deudas TDC'],
+    ['📊','presupuesto','Presupuesto'],       ['🎯','objetivos','Objetivos'],
+    ['💗','nidito','Nidito'],                 ['📅','calendario','Calendario'],
+    ['🏦','retiro','Efectivo'],               ['📈','analisis','Análisis'],
+    ['🛒','despensa','Despensa'],             ['✨','consejos','Consejos IA'],
   ];
 
   dash.innerHTML = `
@@ -3782,17 +3788,18 @@ function rDash() {
   </div>
   <div class="mini-rows">
     <div class="mini-row" onclick="dashEmoji('gastQuinc')" title="Ver gastos de la quincena">
-      <span class="emoji">💸</span>
-      <div class="rl"><b>Gastos</b>${gasEspTot>0?`<small>presup. ${fmt(gasEspTot)}</small>`:''}</div>
+      <div class="mini-row-hdr"><span class="emoji">💸</span><b>Gastos</b></div>
       <span class="rv gasto">${fmt(gasC)}</span>
+      ${gasEspTot>0?`<small>presup. ${fmt(gasEspTot)}</small>`:''}
     </div>
     <div class="mini-row" onclick="dashEmoji('ingQuinc')" title="Ver ingresos de la quincena">
-      <span class="emoji">💰</span>
-      <div class="rl"><b>Ingresos</b>${ingEsp>0?`<small>esperado ${fmt(ingEsp)}</small>`:''}</div>
+      <div class="mini-row-hdr"><span class="emoji">💰</span><b>Ingresos</b></div>
       <span class="rv ingreso">${fmt(ingC)}</span>
+      ${ingEsp>0?`<small>esperado ${fmt(ingEsp)}</small>`:''}
     </div>
   </div>
 </div>
+<div class="mini-grid-hdr">Todo lo demás</div>
 <div class="mini-grid">${EMOJIS.map(([e,k,lbl])=>
   `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span></button>`).join('')}</div>
 <button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>
@@ -3806,7 +3813,8 @@ function _insightSkeleton() {
   const card = `<div class="insight-skel">${
     ['40%','65%','90%','75%'].map(w=>`<div class="insight-skel-line" style="width:${w}"></div>`).join('')
   }</div>`;
-  return `<div class="insight-grid">${card.repeat(4)}</div>`;
+  return `<p style="color:var(--text-2);font-size:12.5px;margin-bottom:14px">Patrones detectados en tus hábitos</p>
+  <div class="insight-grid">${card.repeat(4)}</div>`;
 }
 
 function _patronesCard() {
@@ -3832,7 +3840,8 @@ function _patronesCard() {
 
 function _renderInsightCards(consejos) {
   const patronCard = _patronesCard();
-  return `<div class="insight-grid">${consejos.map(c=>{
+  return `<p style="color:var(--text-2);font-size:12.5px;margin-bottom:14px">Patrones detectados en tus hábitos</p>
+  <div class="insight-grid">${consejos.map(c=>{
     const tipo = c.tipo||'habito';
     return `<div class="insight-card ${tipo}">
       <span class="insight-badge">${INSIGHT_BADGE[tipo]||tipo}</span>
@@ -3840,11 +3849,9 @@ function _renderInsightCards(consejos) {
       <div class="insight-body">${(c.cuerpo||'').replace(/\n/g,'<br>')}</div>
     </div>`;
   }).join('')}${patronCard}</div>
-  <div style="text-align:right;margin-top:10px">
-    <button class="btn btn-ghost btn-xs" onclick="fetchInsights(true)" style="font-size:11px;gap:4px;opacity:.7">
-      <i class="ti ti-refresh"></i> Actualizar
-    </button>
-  </div>`;
+  <button class="btn btn-accent btn-sm" onclick="fetchInsights(true)" style="width:100%;justify-content:center;margin-top:14px">
+    <i class="ti ti-sparkles"></i> Generar recomendaciones
+  </button>`;
 }
 
 async function fetchInsights(force=false) {
