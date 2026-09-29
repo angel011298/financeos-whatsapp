@@ -611,10 +611,10 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .cal-main{flex:1;min-width:0}
 #cal-grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:14px}
 .ch{text-align:center;padding:8px 2px;font-size:10px;color:var(--text-3);font-weight:600;letter-spacing:.06em;background:var(--bg-surface-2);border-bottom:1px solid var(--border-default)}
-.cd{min-height:76px;background:var(--bg-base);padding:4px 5px;border-right:1px solid var(--border-default);border-bottom:1px solid var(--border-default);cursor:pointer;transition:background .1s;box-sizing:border-box;font-size:var(--text-xs)}
+.cd{min-height:76px;background:var(--bg-surface);padding:4px 5px;border-right:1px solid var(--border-default);border-bottom:1px solid var(--border-default);cursor:pointer;transition:background .1s;box-sizing:border-box;font-size:var(--text-xs)}
 .cd:nth-child(7n){border-right:none}.cd:hover{background:var(--bg-surface-2)}.cd.oth{opacity:.3;pointer-events:none}
 .cd.today .cdn{background:var(--accent-primary);color:var(--on-accent);border-radius:50%}
-.cd.cal-sel{background:rgba(124,106,247,.09)}
+.cd.cal-sel{background:var(--bg-surface-3)}
 .cdn{font-size:11px;font-weight:600;color:var(--text-2);width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:2px}
 .cev-bar{display:block;width:100%;padding:1px 4px;border-radius:3px;font-size:9px;line-height:1.5;margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:#fff}
 .cev-bar.cev-event{background:var(--accent-primary)}.cev-bar.cev-nidito{background:var(--accent-couple)}
@@ -702,6 +702,11 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   /* Presupuesto: tarjetas en vez de tabla con scroll horizontal */
   .prsp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px}
   .prsp-table-view{display:none}
+  /* Calendario — Próximos Eventos: tarjetas en vez de tabla con scroll horizontal */
+  .cal-table-view{display:none}
+  /* Calendario: grid mensual + panel lateral se apilan en vez de ir lado a lado */
+  .cal-wrap{flex-direction:column}
+  .cal-day-panel{width:100%!important}
   /* ── Layout — breakpoint único de la app: 900px (ver también ≥900px más abajo) */
   .layout{grid-template-columns:1fr}
   aside{display:none}
@@ -5464,10 +5469,33 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
 <div id="cal-grid">${cells}</div>`;
 }
 
+// Tarjetas de "Próximos Eventos" (<900px, ver CSS) — MISMOS datos/handlers que
+// la tabla de escritorio (eEvt/dEvt), solo presentación distinta. Editar abre
+// el formulario completo; no hay edición inline por campo en la tarjeta, ese
+// patrón (ieCal en <td>) es de escritorio.
+function _calCardsHTML(up) {
+  if (!up.length) return `<div class="tdc-cards-empty">Sin eventos próximos</div>`;
+  return `<div class="tdc-cards">${up.map(e => `<div class="tdc-card">
+      <div class="tdc-card-hdr">
+        <strong>${e.titulo||''}</strong>
+        <span class="badge b-activo">${e.tipo||'evento'}</span>
+      </div>
+      <div class="tdc-card-nums" style="grid-template-columns:1fr 1fr">
+        <div><span class="tdc-card-lbl">Fecha</span><span>${fmtDate(e.fecha)}</span></div>
+        <div><span class="tdc-card-lbl">Hora</span><span>${e.hora||'—'}</span></div>
+      </div>
+      ${e.descripcion ? `<div style="font-size:12px;color:var(--text-2);margin-top:6px">${e.descripcion}</div>` : ''}
+      <div class="tdc-card-acts">
+        <button class="btn btn-ghost btn-sm" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'><i class="ti ti-pencil"></i> Editar</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--color-expense)" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i> Eliminar</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
 function _calUpcomingHTML(evts) {
   const today=toISO(new Date());
   const up=evts.filter(e=>fd(e.fecha)>=today).sort((a,b)=>(fd(a.fecha)||'').localeCompare(fd(b.fecha)||'')).slice(0,100);
-  return tglBtn('tbl-cal') + mkTable({ id:'tbl-cal', exportName:'calendario', numbered:true, limit:80, empty:'Sin eventos próximos',
+  return _calCardsHTML(up.slice(0,80)) + `<div class="cal-table-view">` + tglBtn('tbl-cal') + mkTable({ id:'tbl-cal', exportName:'calendario', numbered:true, limit:80, empty:'Sin eventos próximos',
     columns:[
       {key:'fecha',label:'Fecha',filter:'text',value:e=>fd(e.fecha)||e.fecha||''},
       {key:'hora',label:'Hora',value:e=>e.hora||'—'},
@@ -5486,7 +5514,7 @@ function _calUpcomingHTML(evts) {
     <button class="btn btn-ghost" style="padding:6px 10px" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'><i class="ti ti-pencil"></i></button>
     <button class="btn btn-danger" style="padding:6px 10px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
   </td>
-</tr>`});
+</tr>`}) + `</div>`;
 }
 
 async function rCal() {
