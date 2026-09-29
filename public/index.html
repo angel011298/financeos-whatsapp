@@ -6978,7 +6978,7 @@ function negNuevaTrans(proyId) {
   <div><label>Fecha</label><input id="nt-fecha" class="inp" type="date" value="${toISO(new Date())}"></div>
   <div><label>Categoría</label><input id="nt-cat" class="inp" placeholder="Opcional"></div>
   <div><label>Medio de pago</label><select id="nt-medio" class="inp">
-    ${['Efectivo','Transferencia','Tarjeta débito','Tarjeta crédito','Otro'].map(m=>`<option value="${m}">${m}</option>`).join('')}
+    ${['Efectivo','Transferencia','Tarjeta débito','Otro'].map(m=>`<option value="${m}">${m}</option>`).join('')}
   </select></div>
   <div class="neg-form-full"><label>Notas</label><input id="nt-notas" class="inp" placeholder="Opcional"></div>
 </div>`, async () => {
