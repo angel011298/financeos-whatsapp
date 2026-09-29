@@ -122,8 +122,16 @@ const getQuincenaActual = () => getQuincena(hoy());
 // ── Compatibilidad con código existente ──────────────────────────────────────
 const path    = require('path');
 const fs      = require('fs');
-// Timestamp único por despliegue — cambia en cada reinicio del servidor (cada Railway deploy)
-const DEPLOY_TS = Date.now().toString(36);
+// Identificador de build: usa el commit de git que Render inyecta automáticamente
+// (RENDER_GIT_COMMIT — idéntico en TODAS las instancias que corren el mismo deploy)
+// cuando existe; si no (desarrollo local), cae a un timestamp de arranque.
+// Antes usábamos solo Date.now(), que genera un valor DISTINTO en cada proceso —
+// con eso, un reinicio sin deploy real (Render free plan: suspensión por
+// inactividad, reinicio por crash, o dos instancias solapadas unos segundos
+// durante un rolling deploy) hacía que el cliente detectara "nueva versión" sin
+// que hubiera código nuevo, disparando recargas de página (a veces en bucle).
+// Con el commit de git, un simple reinicio del mismo código ya no dispara nada.
+const DEPLOY_TS = process.env.RENDER_GIT_COMMIT || Date.now().toString(36);
 
 // Headers que previenen caché en browser, CDN Railway (Hikari) y proxies intermedios
 app.set('etag', false); // nunca enviar ETag — evita que CDNs interpreten respuestas como cacheables
@@ -2315,18 +2323,25 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     // aparezcan de inmediato en los totales de esta misma respuesta.
     await procesarRecurrentes(phone).catch(() => null);
     const qActual = getQuincenaActual().key;
+    // Todas las consultas de este endpoint llevan un criterio de orden secundario
+    // determinista (id) además de su criterio de negocio (prioridad/fecha/contador/orden).
+    // Sin él, Postgres puede devolver las filas empatadas en distinto orden en cada
+    // consulta aunque los datos no hayan cambiado; como este endpoint lo sondea
+    // _startLivePoll() cada 2s comparando JSON.stringify(data), ese reordenamiento
+    // espurio disparaba un re-render completo (parpadeo de gráficas/módulos) sin
+    // que hubiera datos nuevos.
     const [tdc, movs, metas, user, cal, pat, presp, nidAsig, nidDin, negProys] = await Promise.all([
-      sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad'),
+      sb.from('tdc').select('*').eq('user_phone', phone).order('prioridad').order('id'),
       // Segundo criterio de orden (created_at) para desempatar filas con la misma fecha de
       // forma determinista — sin él, Postgres puede devolver un subconjunto distinto de "hoy"
       // en cada consulta una vez que el total de movimientos supera el límite, haciendo que
       // algunos registros del día parezcan desaparecer de la tabla sin haberse borrado.
       sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(2000),
-      sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null),
+      sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null).order('id'),
       sb.from('usuarios').select('*').eq('telefono', phone).single(),
-      sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha'),
-      sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }),
-      sb.from('presupuesto').select('*').eq('user_phone', phone),
+      sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha').order('id'),
+      sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }).order('id'),
+      sb.from('presupuesto').select('*').eq('user_phone', phone).order('categoria').order('mes'),
       sb.from('nidito_asignaciones')
         .select('monto_quincenal, nidito_items!inner(deleted_at)')
         .eq('user_phone', phone)
@@ -2334,7 +2349,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', qActual).maybeSingle(),
       sb.from('neg_proyectos')
         .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden')
-        .eq('user_phone', phone).is('deleted_at', null).order('orden'),
+        .eq('user_phone', phone).is('deleted_at', null).order('orden').order('id'),
     ]);
     const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
     const nidito_dinerito_val = nidDin.data?.monto || 0;
