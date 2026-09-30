@@ -91,6 +91,10 @@ html.light {
 
 /* ═══════════════════════════════════════════════════════ BASE */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* Barras de scroll ocultas en toda la app — el scroll sigue funcionando igual,
+   solo no se dibuja la barra (pedido explícito de diseño). */
+*{scrollbar-width:none;-ms-overflow-style:none}
+*::-webkit-scrollbar{display:none;width:0;height:0}
 html{overscroll-behavior-y:none}
 body{
   background:var(--bg-app);color:var(--text-1);
@@ -357,6 +361,7 @@ textarea{min-height:64px;resize:vertical}
 .leg-item{display:flex;align-items:center;gap:5px;cursor:default}
 .leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .leg-val{margin-left:3px;color:var(--text-1);font-weight:500}
+.leg-pct{color:var(--text-3);font-weight:500}
 .empty-chart-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--text-3);font-size:12px;pointer-events:none}
 .empty-chart-msg .ti{font-size:28px}
 .goal-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:14px 16px}
@@ -616,8 +621,8 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .cd.today .cdn{background:var(--accent-primary);color:var(--on-accent);border-radius:50%}
 .cd.cal-sel{background:var(--bg-surface-3)}
 .cdn{font-size:11px;font-weight:600;color:var(--text-2);width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:2px}
-.cev-bar{display:block;width:100%;padding:1px 4px;border-radius:3px;font-size:9px;line-height:1.5;margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:#fff}
-.cev-bar.cev-event{background:var(--accent-primary)}.cev-bar.cev-nidito{background:var(--accent-couple)}
+.cev-bar{display:block;width:100%;padding:1px 4px;border-radius:3px;font-size:9px;line-height:1.5;margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.cev-bar.cev-event{background:var(--accent-primary);color:var(--on-accent)}.cev-bar.cev-nidito{background:var(--accent-couple);color:var(--on-accent)}
 .cev-more{font-size:9px;color:var(--text-3);padding:0 4px;font-weight:500}
 .cal-pay-dot{display:inline-block;width:5px;height:5px;background:var(--green);border-radius:50%;margin-left:3px;vertical-align:middle;flex-shrink:0}
 .cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px}
@@ -1764,6 +1769,7 @@ async function load() {
 // para no forzar un re-render (que interrumpiría scroll/edición) cuando no cambió
 // nada, y se pausa mientras hay un modal abierto para no pisar una edición en curso.
 let _livePollTimer = null;
+let _livePollBusy  = false;   // evita solapar peticiones si una tarda más de 2s (red lenta)
 function _startLivePoll() {
   if (_livePollTimer) return;
   _livePollTimer = setInterval(async () => {
@@ -1771,6 +1777,11 @@ function _startLivePoll() {
     if (document.visibilityState !== 'visible') return;
     if ($('ovl')?.classList.contains('open')) return;
     if ($('dash-sheet')?.classList.contains('open')) return;
+    // Si la petición anterior sigue en vuelo (conexión lenta), no lancemos otra
+    // encima — dos respuestas resolviendo casi juntas disparaban dos renderTab()
+    // seguidos (pantalla "parpadeando") aunque los datos fueran los mismos.
+    if (_livePollBusy) return;
+    _livePollBusy = true;
     try {
       const r = await api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}?_t=${Date.now()}`);
       if (!r.success) return;
@@ -1781,6 +1792,7 @@ function _startLivePoll() {
         renderTab(S.tab);
       }
     } catch { /* un poll fallido no debe interrumpir al usuario; se reintenta en 2s */ }
+    finally { _livePollBusy = false; }
   }, 2000);
 }
 
@@ -1911,7 +1923,15 @@ function mkC(id, type, labels, datasets, extra={}) {
       plugins:{
         legend:{ display:false },
         tooltip:{ backgroundColor:bgSurf, titleColor:text1, bodyColor:tickClr,
-                  borderColor:borderC, borderWidth:1, padding:10, cornerRadius:8 }
+                  borderColor:borderC, borderWidth:1, padding:10, cornerRadius:8,
+                  callbacks:{ label: ctx => {
+                    const ds = ctx.chart.data.datasets[ctx.datasetIndex].data;
+                    const total = ds.reduce((a,v)=>a+(Number(v)||0),0);
+                    const val = Number(ctx.raw)||0;
+                    const pct = total>0 ? (val/total*100).toFixed(1) : '0.0';
+                    const lbl = ctx.dataset.label ? ctx.dataset.label+': ' : (ctx.label?ctx.label+': ':'');
+                    return `${lbl}${fmt(val)} (${pct}%)`;
+                  } } }
       },
       scales: rad ? {} : {
         x:{ticks:{color:tickClr,font:{size:10}},grid:{color:gridClr}},
@@ -1922,10 +1942,12 @@ function mkC(id, type, labels, datasets, extra={}) {
   if (leg && rad) {
     const ds0 = S.ch[id].data.datasets[0];
     const bgs = Array.isArray(ds0.borderColor) ? ds0.borderColor : [ds0.borderColor];
+    const total = (ds0.data || []).reduce((a,v)=>a+(Number(v)||0),0);
     leg.innerHTML = labels.map((l,i) => {
       const clr = isCatLabels ? (CAT_CLR[l]||CLR[i%CLR.length]) : (bgs[i]||CLR[i%CLR.length]);
       const val  = ds0.data ? ds0.data[i] : '';
-      return `<span class="leg-item"><span class="leg-dot" style="background:${clr}"></span>${l}${val?'<span class="leg-val">'+fmt(val)+'</span>':''}</span>`;
+      const pct  = total>0 && val ? ` <span class="leg-pct">(${(Number(val)/total*100).toFixed(1)}%)</span>` : '';
+      return `<span class="leg-item"><span class="leg-dot" style="background:${clr}"></span>${l}${val?'<span class="leg-val">'+fmt(val)+'</span>':''}${pct}</span>`;
     }).join('');
   } else if (leg) {
     leg.innerHTML = '';
@@ -3781,7 +3803,10 @@ function rDash() {
   </div>
   <div class="mini-pills">${tipos.map(([l,v])=>
     `<button class="mini-pill${S.periodo.tipo===v?' on':''}" onclick="setPeriodo('${v}')">${l}</button>`).join('')}</div>
-  <button class="mini-addmov-btn btn btn-accent btn-sm" onclick="oMov()" aria-label="Nuevo movimiento"><i class="ti ti-plus"></i> Movimiento</button>
+  <div class="mini-addmov-btn" style="gap:8px">
+    <button class="btn btn-ghost btn-sm" onclick="_hojaNotas()" aria-label="Notas" title="Notas"><i class="ti ti-notes"></i></button>
+    <button class="btn btn-accent btn-sm" onclick="oMov()" aria-label="Nuevo movimiento"><i class="ti ti-plus"></i> Movimiento</button>
+  </div>
 </div>
 <div class="mini-top-grid">
   <div class="mini-bal-wrap">
@@ -5565,8 +5590,8 @@ function calDay(ds) {
   ${e.hora?`<div style="opacity:.75;font-size:11px;margin-top:2px"><i class="ti ti-clock" style="font-size:10px"></i> ${e.hora}</div>`:''}
   ${e.descripcion?`<div style="opacity:.8;font-size:11px;margin-top:3px">${e.descripcion}</div>`:''}
   <div style="margin-top:8px;display:flex;gap:5px">
-    <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:none;padding:4px 10px;font-size:11px" onclick="closeCalDay();eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})"><i class="ti ti-pencil"></i> Editar</button>
-    <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:4px 8px;font-size:11px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
+    <button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-accent) 20%,transparent);color:var(--on-accent);border:none;padding:4px 10px;font-size:11px" onclick="closeCalDay();eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})"><i class="ti ti-pencil"></i> Editar</button>
+    <button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-accent) 15%,transparent);color:var(--on-accent);border:none;padding:4px 8px;font-size:11px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
   </div>
 </div>`;
   });
