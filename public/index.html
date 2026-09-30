@@ -283,7 +283,24 @@ textarea{min-height:64px;resize:vertical}
 .notas-ed ul,.notas-ed ol{margin:5px 0;padding-left:24px}
 .notas-ed li{margin:3px 0}
 .notas-ed a{color:var(--accent-primary)}
-.notas-ed img{max-width:100%;height:auto;border-radius:6px}
+.notas-ed img{max-width:100%;height:auto;border-radius:6px;margin:4px 0}
+
+/* ── NOTAS DE INICIO — lista + editor de notas ilimitadas (solo Inicio) ─────── */
+.ni-empty{text-align:center;padding:30px 16px;color:var(--text-3);font-size:13px}
+.ni-list{display:flex;flex-direction:column;gap:8px}
+.ni-card{display:flex;align-items:flex-start;gap:8px;padding:12px 14px;
+  background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-lg);cursor:pointer;transition:border-color .15s}
+.ni-card:hover{border-color:var(--accent-primary)}
+.ni-card-mid{flex:1;min-width:0}
+.ni-card-title{font-size:14px;font-weight:700;color:var(--text-1);word-break:break-word}
+.ni-card-prev{font-size:12px;color:var(--text-2);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ni-card-date{font-size:11px;color:var(--text-3);margin-top:4px}
+.ni-editor-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ni-editor-hdr #ni-titulo{flex:1;background:transparent;border:none;outline:none;
+  font-size:17px;font-weight:700;color:var(--text-1);font-family:inherit;padding:6px 2px}
+.ni-editor-hdr #ni-titulo::placeholder{color:var(--text-3);font-weight:600}
 /* checklist estilo iPhone */
 .notas-ed ul.nt-chk{list-style:none;padding-left:6px}
 .notas-ed ul.nt-chk>li{position:relative;padding-left:27px;margin:5px 0}
@@ -460,17 +477,19 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .mov-card-ic{width:38px;height:38px;border-radius:var(--radius-md);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;font-size:17px}
 .mov-card-mid{flex:1;min-width:0}
+/* Sin truncar nunca: el concepto y la categoría/medio se ven completos siempre,
+   envolviendo a varias líneas si hace falta en vez de recortarse con "...". */
 .mov-card-title{font-size:14px;font-weight:700;color:var(--text-1);
-  display:flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mov-card-sub{font-size:12px;color:var(--text-3);margin-top:1px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  display:flex;align-items:center;flex-wrap:wrap;gap:4px;word-break:break-word}
+.mov-card-sub{font-size:12px;color:var(--text-3);margin-top:1px;word-break:break-word}
 .mov-card-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;
   white-space:nowrap;flex-shrink:0}
 .mov-card-acts{display:flex;gap:2px;flex-shrink:0}
 @media(max-width:420px){
-  .mov-card{flex-wrap:wrap}
-  .mov-card-val{order:3;margin-left:50px}
-  .mov-card-acts{order:4;margin-left:auto}
+  .mov-card{flex-wrap:wrap;align-items:flex-start}
+  .mov-card-mid{flex-basis:100%;order:2;margin-top:6px;margin-left:50px}
+  .mov-card-val{order:1;margin-left:auto}
+  .mov-card-acts{order:1}
 }
 /* Budget progress bars — full-width 3-state */
 /* Barra de presupuesto estilo MonAi: el CONTORNO PUNTEADO es el límite y el
@@ -2728,8 +2747,11 @@ function editCuenta(el, key) {
 }
 
 // ── NOTAS POR PESTAÑA (editor de texto enriquecido tipo Notas de iPhone) ──────
+// 'dashboard' NO está aquí: Inicio tiene su propio módulo de notas ilimitadas
+// (ver niLoad/niRenderList más abajo), no la nota única de texto libre que
+// comparten estas otras 5 pestañas.
 const NOTAS_TABS = {
-  dashboard:'Dashboard', presupuesto:'Presupuesto y Metas', nidito:'Nidito',
+  presupuesto:'Presupuesto y Metas', nidito:'Nidito',
   negocios:'Negocios',   calendario:'Calendario',           deudas:'Deudas TDC',
 };
 
@@ -3742,13 +3764,188 @@ function _hojaScrollTexto(txt) {
 }
 
 // Notas: reutiliza el editor existente moviendo su nodo real a la hoja.
+// ── NOTAS DE INICIO — módulo de notas ilimitadas (título + imágenes) ────────
+// Independiente del sistema de nota única (notaSave/_mountNotas) que siguen
+// usando Presupuesto/Nidito/Negocios/Calendario/Deudas — no comparten código
+// a propósito, para no arriesgar esas 5 pestañas ya probadas.
 function _hojaNotas() {
-  if (!$('tab-dashboard')?.querySelector('.notas-box')) _mountNotas('dashboard');
-  abrirHoja('Notas', '', () => {
-    const nb = $('tab-dashboard')?.querySelector('.notas-box');
-    if (nb) { $('dash-sheet-body').appendChild(nb); if (!S._notasOpen?.dashboard) toggleNotas('dashboard'); }
-    else $('dash-sheet-body').innerHTML = '<p style="color:var(--text-3);font-size:12px;padding:10px 0">Notas no disponibles.</p>';
-  });
+  abrirHoja('Notas', '<div id="ni-root">Cargando…</div>', () => niLoad());
+}
+
+async function niLoad() {
+  if (!S.phone) return;
+  try {
+    const r = await api('GET', `/api/notas-inicio?phone=${encodeURIComponent(S.phone)}`);
+    S._notasInicio = r.data || [];
+    // Migración de una sola vez: si no hay notas nuevas pero existía la nota
+    // única vieja del Inicio, se conserva como la primera nota en vez de perderla.
+    const vieja = (((S.data.user || {}).external_refs || {}).notas || {}).dashboard;
+    if (!S._notasInicio.length && vieja && vieja.replace(/<[^>]*>/g, '').trim()) {
+      const created = await api('POST', '/api/notas-inicio', { user_phone: S.phone, titulo: 'Notas', contenido: vieja });
+      if (created?.success) S._notasInicio = [created.data];
+    }
+  } catch (e) { S._notasInicio = []; }
+  S._niCurrentId = null;
+  niRenderList();
+}
+
+function _niPreview(html) {
+  const txt = String(html || '').replace(/<img[^>]*>/gi, '🖼 ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return txt.slice(0, 90) || 'Sin contenido';
+}
+function _niFecha(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2,'0')} ${MESES_CORTO[d.getMonth()]}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function niRenderList() {
+  const root = $('ni-root'); if (!root) return;
+  const notas = S._notasInicio || [];
+  root.innerHTML = `
+  <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+    <button class="btn btn-accent btn-sm" onclick="niNueva()"><i class="ti ti-plus"></i> Nueva nota</button>
+  </div>
+  ${!notas.length ? `<div class="ni-empty"><i class="ti ti-notes" style="font-size:28px;display:block;margin-bottom:8px;opacity:.5"></i>Sin notas todavía</div>` : `
+  <div class="ni-list">${notas.map(n => `
+    <div class="ni-card" onclick="niOpen('${n.id}')">
+      <div class="ni-card-mid">
+        <div class="ni-card-title">${(n.titulo||'').trim() ? n.titulo : '<em style="color:var(--text-3);font-style:normal">Sin título</em>'}</div>
+        <div class="ni-card-prev">${_niPreview(n.contenido)}</div>
+        <div class="ni-card-date">${_niFecha(n.updated_at)}</div>
+      </div>
+      <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="event.stopPropagation();niDelete('${n.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+    </div>`).join('')}</div>`}`;
+}
+
+async function niNueva() {
+  if (!S.phone) return;
+  try {
+    const r = await api('POST', '/api/notas-inicio', { user_phone: S.phone, titulo: '', contenido: '' });
+    if (!r.success) throw new Error(r.error || 'No se pudo crear la nota');
+    S._notasInicio = [r.data, ...(S._notasInicio||[])];
+    niOpen(r.data.id);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function niDelete(id) {
+  if (!confirm('¿Eliminar esta nota?')) return;
+  try {
+    await api('DELETE', `/api/notas-inicio/${id}`, { user_phone: S.phone });
+    S._notasInicio = (S._notasInicio||[]).filter(n => n.id !== id);
+    if (S._niCurrentId === id) { S._niCurrentId = null; niRenderList(); } else niRenderList();
+    toast('Nota eliminada');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+function niOpen(id) {
+  const n = (S._notasInicio||[]).find(x => x.id === id); if (!n) return;
+  S._niCurrentId = id;
+  const root = $('ni-root'); if (!root) return;
+  root.innerHTML = `
+  <div class="ni-editor-hdr">
+    <button class="edit-pill-btn" onclick="niVolver()" title="Volver"><i class="ti ti-arrow-left"></i></button>
+    <input id="ni-titulo" placeholder="Título" value="${(n.titulo||'').replace(/"/g,'&quot;')}" oninput="niTouch()">
+    <span class="notas-status" id="ni-status"></span>
+  </div>
+  <div class="notas-tools">
+    <button type="button" class="nt-btn" title="Título" onmousedown="event.preventDefault()" onclick="niBlock('h2')" style="font-weight:700;font-size:12px">T</button>
+    <button type="button" class="nt-btn" title="Encabezado" onmousedown="event.preventDefault()" onclick="niBlock('h3')" style="font-weight:600;font-size:11px">t</button>
+    <button type="button" class="nt-btn" title="Texto normal" onmousedown="event.preventDefault()" onclick="niBlock('p')" style="font-size:11px">¶</button>
+    <span class="nt-sep"></span>
+    <button type="button" class="nt-btn" title="Negrita (Ctrl+B)" onmousedown="event.preventDefault()" onclick="niCmd('bold')"><i class="ti ti-bold"></i></button>
+    <button type="button" class="nt-btn" title="Cursiva (Ctrl+I)" onmousedown="event.preventDefault()" onclick="niCmd('italic')"><i class="ti ti-italic"></i></button>
+    <button type="button" class="nt-btn" title="Subrayado (Ctrl+U)" onmousedown="event.preventDefault()" onclick="niCmd('underline')"><i class="ti ti-underline"></i></button>
+    <span class="nt-sep"></span>
+    <button type="button" class="nt-btn" title="Lista con viñetas" onmousedown="event.preventDefault()" onclick="niCmd('insertUnorderedList')"><i class="ti ti-list"></i></button>
+    <button type="button" class="nt-btn" title="Lista numerada" onmousedown="event.preventDefault()" onclick="niCmd('insertOrderedList')"><i class="ti ti-list-numbers"></i></button>
+    <span class="nt-sep"></span>
+    <label class="nt-btn" title="Adjuntar imagen" style="cursor:pointer">
+      <i class="ti ti-photo-plus"></i>
+      <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none" onchange="niAttachImg(this)">
+    </label>
+  </div>
+  <div class="notas-ed" id="ni-ed" contenteditable="true" spellcheck="true"
+       data-ph="Escribe tu nota… también puedes pegar imágenes"
+       oninput="niTouch()" onpaste="niPaste(event)"></div>`;
+  $('ni-ed').innerHTML = _notaSanitize(n.contenido || '');
+}
+
+function niVolver() {
+  // Fuerza el guardado pendiente antes de volver, para no perder la última letra.
+  if (S._niT) { clearTimeout(S._niT); niSave(); }
+  S._niCurrentId = null;
+  niRenderList();
+}
+
+function _niFocus() { const ed = $('ni-ed'); if (ed) ed.focus(); return ed; }
+function niCmd(cmd)   { _niFocus(); document.execCommand(cmd, false, null); niTouch(); }
+function niBlock(tag) { _niFocus(); document.execCommand('formatBlock', false, tag); niTouch(); }
+
+async function niAttachImg(input) {
+  const file = input.files[0]; input.value = '';
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { toast('Imagen demasiado grande (máx 8 MB)', 'error'); return; }
+  const allowed = ['image/jpeg','image/png','image/gif','image/webp'];
+  if (!allowed.includes(file.type)) { toast('Solo imágenes jpg, png, gif o webp', 'error'); return; }
+  await _niUploadAndInsert(file);
+}
+
+async function niPaste(e) {
+  const items = e.clipboardData?.items || [];
+  for (const item of items) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (file) await _niUploadAndInsert(file);
+      return;
+    }
+  }
+  // Sin imagen en el portapapeles: mismo comportamiento que notaPaste (HTML saneado o texto plano).
+  e.preventDefault();
+  const html = e.clipboardData?.getData('text/html');
+  if (html) document.execCommand('insertHTML', false, _notaSanitize(html));
+  else      document.execCommand('insertText', false, e.clipboardData?.getData('text/plain') || '');
+  niTouch();
+}
+
+async function _niUploadAndInsert(file) {
+  const ed = _niFocus();
+  const st = $('ni-status'); if (st) st.textContent = 'Subiendo imagen…';
+  try {
+    const notaId = S._niCurrentId;
+    const r1 = await api('POST', '/api/notas-inicio/upload-url', { nombre: file.name, tipo: file.type, notaId });
+    if (!r1.success) throw new Error(r1.error || 'No se pudo obtener URL de subida');
+    const up = await fetch(r1.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!up.ok) throw new Error(`Error al subir imagen (${up.status})`);
+    const r2 = await api('POST', '/api/notas-inicio/upload-confirm', { path: r1.path, nombre: file.name, tipo: file.type });
+    if (!r2.success) throw new Error(r2.error || 'No se pudo confirmar subida');
+    if (ed) document.execCommand('insertImage', false, r2.url);
+    niTouch();
+    if (st) st.textContent = '';
+  } catch (e) { toast('Subida fallida: ' + e.message, 'error'); if (st) st.textContent = ''; }
+}
+
+function niTouch() {
+  clearTimeout(S._niT);
+  const st = $('ni-status'); if (st) st.textContent = 'Escribiendo…';
+  S._niT = setTimeout(niSave, 900);
+}
+
+async function niSave() {
+  const id = S._niCurrentId; if (!id) return;
+  const ed = $('ni-ed'); if (!ed) return;
+  clearTimeout(S._niT);
+  const titulo = $('ni-titulo')?.value || '';
+  const contenido = ed.innerHTML;
+  const st = $('ni-status');
+  try {
+    const r = await api('PUT', `/api/notas-inicio/${id}`, { user_phone: S.phone, titulo, contenido });
+    if (!r.success) throw new Error(r.error || 'Error al guardar');
+    const n = (S._notasInicio||[]).find(x => x.id === id);
+    if (n) { n.titulo = titulo; n.contenido = contenido; n.updated_at = r.data?.updated_at || new Date().toISOString(); }
+    if (st) { st.textContent = 'Guardado ✓'; setTimeout(() => { if (st.textContent === 'Guardado ✓') st.textContent = ''; }, 1800); }
+  } catch (e) { if (st) st.textContent = '⚠️ No se pudo guardar'; }
 }
 
 // Análisis gráfico: mismos 3 charts que traía el Inicio, ahora en la hoja.

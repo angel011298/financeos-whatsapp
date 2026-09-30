@@ -4201,6 +4201,83 @@ app.post('/api/nidito/upload-confirm', async (req, res) => {
   }
 });
 
+// ── NOTAS DE INICIO — notas ilimitadas con título e imágenes (solo Inicio;
+// las otras 5 pestañas conservan su nota única de texto libre en external_refs) ─
+const IMG_UPLOAD_ALLOWED = new Set(['image/jpeg','image/png','image/gif','image/webp']);
+app.get('/api/notas-inicio', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) return res.status(400).json({ success: false, error: 'phone requerido' });
+    const { data, error } = await sb.from('notas_inicio').select('*')
+      .eq('user_phone', phone).is('deleted_at', null).order('updated_at', { ascending: false });
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/notas-inicio', async (req, res) => {
+  try {
+    const { user_phone, titulo, contenido } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const { data, error } = await sb.from('notas_inicio')
+      .insert({ user_phone, titulo: titulo || '', contenido: contenido || '' }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/notas-inicio/:id', async (req, res) => {
+  try {
+    const { user_phone, titulo, contenido, imagenes } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const d = { updated_at: new Date().toISOString() };
+    if (titulo     !== undefined) d.titulo = titulo;
+    if (contenido  !== undefined) d.contenido = contenido;
+    if (imagenes   !== undefined) d.imagenes = imagenes;
+    const { data, error } = await sb.from('notas_inicio').update(d)
+      .eq('id', req.params.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/notas-inicio/:id', async (req, res) => {
+  try {
+    const { user_phone } = req.body;
+    const { error } = await sb.from('notas_inicio')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id).eq('user_phone', user_phone);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/notas-inicio/upload-url', async (req, res) => {
+  try {
+    const { nombre, tipo, notaId } = req.body;
+    if (!nombre || !tipo || !notaId) return res.status(400).json({ error: 'nombre, tipo, notaId requeridos' });
+    if (!IMG_UPLOAD_ALLOWED.has(tipo)) return res.status(400).json({ error: 'Solo imágenes (jpg, png, gif, webp)' });
+    const ext = (nombre.split('.').pop()||'jpg').toLowerCase().slice(0,10);
+    const path = `${notaId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { data, error } = await sb.storage.from('notas-adjuntos').createSignedUploadUrl(path);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, uploadUrl: data.signedUrl, path });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/notas-inicio/upload-confirm', async (req, res) => {
+  try {
+    const { path, nombre, tipo } = req.body;
+    if (!path) return res.status(400).json({ error: 'path requerido' });
+    const { data, error } = await sb.storage.from('notas-adjuntos').createSignedUrl(path, 315360000);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, url: data.signedUrl, path, nombre: nombre || path.split('/').pop(), tipo: tipo || 'image/jpeg' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'Us v6 ✅', build: 'quincenal-panel-full' }));
 
 // ── QUINCENAL IA — genera recomendaciones para una quincena ──────────────────
