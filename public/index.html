@@ -467,10 +467,11 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .mov-cards{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
 .mov-day-hdr{display:flex;align-items:center;justify-content:space-between;
   padding:16px 4px 8px;font-size:12px;font-weight:700;color:var(--text-3);
-  text-transform:uppercase;letter-spacing:.04em}
+  text-transform:uppercase;letter-spacing:.04em;cursor:pointer;user-select:none}
 .mov-day-hdr:first-child{padding-top:4px}
 .mov-day-hdr span:last-child{font-variant-numeric:tabular-nums;font-weight:800;
   text-transform:none;letter-spacing:normal;font-size:13px}
+.mov-day-chev{font-size:13px;margin-right:5px;vertical-align:-1px}
 .mov-card{display:flex;align-items:center;gap:12px;padding:12px 14px;
   background:var(--bg-surface);border:1px solid var(--border-default);
   border-radius:var(--radius-lg);margin-bottom:6px}
@@ -483,14 +484,8 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
   display:flex;align-items:center;flex-wrap:wrap;gap:4px;word-break:break-word}
 .mov-card-sub{font-size:12px;color:var(--text-3);margin-top:1px;word-break:break-word}
 .mov-card-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;
-  white-space:nowrap;flex-shrink:0}
+  white-space:nowrap;flex-shrink:0;margin-left:auto;text-align:right}
 .mov-card-acts{display:flex;gap:2px;flex-shrink:0}
-@media(max-width:420px){
-  .mov-card{flex-wrap:wrap;align-items:flex-start}
-  .mov-card-mid{flex-basis:100%;order:2;margin-top:6px;margin-left:50px}
-  .mov-card-val{order:1;margin-left:auto}
-  .mov-card-acts{order:1}
-}
 /* Budget progress bars — full-width 3-state */
 /* Barra de presupuesto estilo MonAi: el CONTORNO PUNTEADO es el límite y el
    relleno es lo gastado. Si te pasas, el exceso se ve fuera del contorno en vez
@@ -1321,8 +1316,9 @@ body.sheet-locked{overflow:hidden}
   .mini-rows{display:contents}
   .mini-row{height:100%;box-sizing:border-box}
 
-  /* 10 emojis en una sola fila, con etiqueta visible debajo */
-  .mini-grid{grid-template-columns:repeat(10,1fr);gap:10px;margin:0 0 8px}
+  /* Emojis en una sola fila, con etiqueta visible debajo (11 desde que Notas
+     se integró al grid — antes eran 10). */
+  .mini-grid{grid-template-columns:repeat(11,1fr);gap:10px;margin:0 0 8px}
   .mini-tile{aspect-ratio:auto;flex-direction:column;gap:7px;padding:16px 6px 14px;font-size:24px}
   .mini-tile-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-2);
     text-align:center;line-height:1.2}
@@ -4017,6 +4013,7 @@ function rDash() {
     ['💗','nidito','Nidito'],                 ['📅','calendario','Calendario'],
     ['🏦','retiro','Efectivo'],               ['📈','analisis','Análisis'],
     ['🛒','despensa','Despensa'],             ['✨','consejos','Consejos IA'],
+    ['📝','notas','Notas'],
   ];
 
   dash.innerHTML = `
@@ -4029,10 +4026,7 @@ function rDash() {
   </div>
   <div class="mini-pills">${tipos.map(([l,v])=>
     `<button class="mini-pill${S.periodo.tipo===v?' on':''}" onclick="setPeriodo('${v}')">${l}</button>`).join('')}</div>
-  <div class="mini-addmov-btn" style="gap:8px">
-    <button class="btn btn-ghost btn-sm" onclick="_hojaNotas()" aria-label="Notas" title="Notas"><i class="ti ti-notes"></i></button>
-    <button class="btn btn-accent btn-sm" onclick="oMov()" aria-label="Nuevo movimiento"><i class="ti ti-plus"></i> Movimiento</button>
-  </div>
+  <button class="mini-addmov-btn btn btn-accent btn-sm" onclick="oMov()" aria-label="Nuevo movimiento"><i class="ti ti-plus"></i> Movimiento</button>
 </div>
 <div class="mini-top-grid">
   <div class="mini-bal-wrap">
@@ -4058,8 +4052,11 @@ function rDash() {
 <div class="mini-grid-hdr">Todo lo demás</div>
 <div class="mini-grid">${EMOJIS.map(([e,k,lbl])=>
   `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span></button>`).join('')}</div>
+<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta quincena</h2></div></div>
+<div id="quincena-dash-section"></div>
 <button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>
 `;
+  refreshQuincenaPanel();
 }
 
 // ── INSIGHTS IA ───────────────────────────────────────────────────────────────
@@ -4774,13 +4771,11 @@ function rPresp() {
   const movs = filterMovs(S.data.movs||[], r.from, r.to).filter(m=>m.tipo==='GASTO');
   const prsp=(S.data.presupuesto||[]).filter(p=>p.mes===cm);
   const rows=CATS.map(c=>{const rv=movs.filter(m=>m.categoria===c).reduce((a,m)=>a+(m.monto||0),0);const l=(prsp.find(p=>p.categoria===c)||{}).limite||0;return{c,r:rv,l};}).filter(x=>x.r>0||x.l>0);
-  const qHtml = rQuincenaPanel('prsp');
   $('tab-presupuesto').innerHTML=`
 <div class="hdr">
   <h2><i class="ti ti-report-money"></i> Presupuesto y Metas</h2>
 </div>
 ${periodoSelectorHTML()}
-${qHtml}
 <div class="hdr" style="margin-bottom:8px">
   <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-list-details"></i> Gastos vs límites por categoría</span>
   <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAgregarLimitePpto('${cm}')"><i class="ti ti-plus"></i> Agregar categoría</button>
@@ -5527,13 +5522,18 @@ function _movCardsHTML(rows) {
     if (!byDate[d]) { byDate[d] = []; groups.push(d); }
     byDate[d].push(m);
   });
+  if (!S._movDayCollapsed) S._movDayCollapsed = {};
   return `<div class="mov-cards">${groups.map(d => {
     const ms = byDate[d];
     const neto = ms.reduce((a,m) => a + (m.tipo==='INGRESO' ? (m.monto||0) : -(m.monto||0)), 0);
     const [y,mo,da] = d.split('-');
     const lbl = d===todayStr ? `Hoy · ${+da} ${MESES_CORTO[+mo-1]}` : (mo&&da ? `${+da} ${MESES_CORTO[+mo-1]}` : d);
-    return `<div class="mov-day-hdr"><span>${lbl}</span><span class="${neto>=0?'green':'red'}">${neto>=0?'+':'−'}${fmt(Math.abs(neto))}</span></div>
-    ${ms.map(m => {
+    const collapsed = !!S._movDayCollapsed[d];
+    return `<div class="mov-day-hdr" onclick="toggleMovDay('${d}')">
+      <span><i class="ti ti-chevron-${collapsed?'right':'down'} mov-day-chev"></i>${lbl}</span>
+      <span class="${neto>=0?'green':'red'}">${neto>=0?'+':'−'}${fmt(Math.abs(neto))}</span>
+    </div>
+    <div class="mov-day-group" id="mov-day-${d}" style="display:${collapsed?'none':''}">${ms.map(m => {
       S._movData[m.id]=m;
       const cClr = CAT_CLR[m.categoria]||'#94a3b8';
       const isGasto = m.tipo==='GASTO';
@@ -5551,8 +5551,20 @@ function _movCardsHTML(rows) {
           <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMov(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
         </div>
       </div>`;
-    }).join('')}`;
+    }).join('')}</div>`;
   }).join('')}</div>`;
+}
+
+// Colapsa/expande los movimientos de un día sin re-renderizar toda la lista
+// (evita perder el scroll); el estado se recuerda por fecha en S._movDayCollapsed.
+function toggleMovDay(d) {
+  if (!S._movDayCollapsed) S._movDayCollapsed = {};
+  const collapsed = !S._movDayCollapsed[d];
+  S._movDayCollapsed[d] = collapsed;
+  const group = document.getElementById('mov-day-' + d);
+  if (group) group.style.display = collapsed ? 'none' : '';
+  const chev = group?.previousElementSibling?.querySelector('.mov-day-chev');
+  if (chev) chev.className = `ti ti-chevron-${collapsed?'right':'down'} mov-day-chev`;
 }
 
 // Renderiza SOLO #movs-table-section según estado colapsado/expandido.
@@ -5566,7 +5578,7 @@ function _updateMovsTable(filtered) {
     : filtered;
 
   const icon = S._movsCollapsed ? 'down' : 'up';
-  const lbl  = S._movsCollapsed ? 'Expandir tabla' : 'Contraer tabla';
+  const lbl  = S._movsCollapsed ? 'Más' : 'Menos';
 
   const footer = () => '';
 
@@ -5757,8 +5769,11 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
     const payDot=isPay?`<span class="cal-pay-dot" title="Día de cobro"></span>`:'';
     cells+=`<div class="cd${ds===today?' today':''}${S._calSel===ds?' cal-sel':''}" onclick="calDay('${ds}')"><div style="display:flex;align-items:center;margin-bottom:2px"><div class="cdn">${d}</div>${payDot}</div>${bars}${more}</div>`;
   }
+  // Siempre 6 filas (42 celdas) sin importar el mes, para que el tamaño del
+  // calendario no cambie al navegar entre meses con distinta cantidad de
+  // semanas visibles (algunos meses caben en 4-5 filas, otros en 6).
   const total=first.getDay()+last.getDate();
-  const rem=total%7; if(rem>0) for(let i=rem;i<7;i++) cells+=`<div class="cd oth"></div>`;
+  for(let i=total;i<42;i++) cells+=`<div class="cd oth"></div>`;
   const payList=[...payDays].sort((a,b)=>a-b).join(', ');
   return `
 <div class="cal-nav">
