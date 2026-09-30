@@ -965,10 +965,37 @@ const REC_INTERVALO_MS = 10 * 60 * 1000;   // el dashboard se consulta cada 2s p
 
 function _avanzarFecha(iso, frecuencia) {
   const d = new Date(iso + 'T12:00:00');
-  if (frecuencia === 'semanal')       d.setDate(d.getDate() + 7);
+  if (frecuencia === 'diario')         d.setDate(d.getDate() + 1);
+  else if (frecuencia === 'semanal')   d.setDate(d.getDate() + 7);
   else if (frecuencia === 'quincenal') d.setDate(d.getDate() + 15);
+  else if (frecuencia === 'anual')     d.setFullYear(d.getFullYear() + 1);
   else                                 d.setMonth(d.getMonth() + 1);   // mensual
   return d.toISOString().slice(0, 10);
+}
+
+// Eventos de calendario recurrentes (columna `recurrente`: diario/semanal/mensual/anual)
+// cuya fecha ya pasó: a diferencia de procesarRecurrentes (que CREA una fila de
+// movimiento nueva por cada vencimiento), aquí el recordatorio vive en una sola
+// fila y su `fecha` se adelanta en el lugar hasta quedar en el futuro — no hace
+// falta conservar cada ocurrencia pasada de "cambiar el filtro del agua".
+async function procesarEventosRecurrentes(phone) {
+  const hoyStr = hoy();
+  const { data: evts } = await sb.from('calendario')
+    .select('id, fecha, recurrente')
+    .eq('user_phone', phone).is('deleted_at', null)
+    .not('recurrente', 'is', null).neq('recurrente', 'no')
+    .lt('fecha', hoyStr);
+  if (!evts?.length) return 0;
+  let avanzados = 0;
+  for (const e of evts) {
+    let f = e.fecha, vueltas = 0;
+    while (f < hoyStr && vueltas < 60) { f = _avanzarFecha(f, e.recurrente); vueltas++; }
+    if (f !== e.fecha) {
+      const { error } = await sb.from('calendario').update({ fecha: f }).eq('id', e.id);
+      if (!error) avanzados++;
+    }
+  }
+  return avanzados;
 }
 
 async function procesarRecurrentes(phone, forzar = false) {
@@ -978,6 +1005,10 @@ async function procesarRecurrentes(phone, forzar = false) {
   _recUltimaRev.set(phone, Date.now());
   _recEnCurso.add(phone);
   try {
+    // Eventos de calendario (columna propia `recurrente`) — independiente de los
+    // recurrentes de movimientos de abajo, así que corre aunque `recs` esté vacío.
+    await procesarEventosRecurrentes(phone).catch(e => console.error('eventos recurrentes:', e.message));
+
     const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
     const refs = { ...(cur?.external_refs || {}) };
     const recs = Array.isArray(refs.recurrentes) ? refs.recurrentes : [];
@@ -2588,7 +2619,7 @@ app.post('/api/preferencia', async (req, res) => {
 app.get('/api/nidito/items', async (req, res) => {
   try {
     const { tipo, estado, phone } = req.query;
-    let q = sb.from('nidito_items').select('*, nidito_asignaciones(*), nidito_comentarios(id)').order('orden');
+    let q = sb.from('nidito_items').select('*, nidito_asignaciones(*), nidito_comentarios(id)').is('deleted_at', null).order('orden');
     if (tipo)   q = q.eq('tipo', tipo);
     if (estado) q = q.eq('estado', estado);
     const { data, error } = await q;
