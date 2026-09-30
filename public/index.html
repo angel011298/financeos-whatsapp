@@ -443,6 +443,35 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .tdc-card-obj{font-size:12px;color:var(--text-2);margin-bottom:10px;display:flex;align-items:center;gap:5px}
 .tdc-card-acts{display:flex;gap:8px}
 .tdc-card-acts .btn{flex:1;justify-content:center;min-height:40px}
+
+/* ── LISTA DE MOVIMIENTOS agrupada por fecha (mockup de Claude Design) ────────
+   Reemplaza la tabla como vista principal en TODOS los anchos — mismos
+   datos/handlers (eMov/dMov/markReviewed) que antes tenía movRow(). */
+.mov-cards{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.mov-day-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:16px 4px 8px;font-size:12px;font-weight:700;color:var(--text-3);
+  text-transform:uppercase;letter-spacing:.04em}
+.mov-day-hdr:first-child{padding-top:4px}
+.mov-day-hdr span:last-child{font-variant-numeric:tabular-nums;font-weight:800;
+  text-transform:none;letter-spacing:normal;font-size:13px}
+.mov-card{display:flex;align-items:center;gap:12px;padding:12px 14px;
+  background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-lg);margin-bottom:6px}
+.mov-card-ic{width:38px;height:38px;border-radius:var(--radius-md);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:17px}
+.mov-card-mid{flex:1;min-width:0}
+.mov-card-title{font-size:14px;font-weight:700;color:var(--text-1);
+  display:flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mov-card-sub{font-size:12px;color:var(--text-3);margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mov-card-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;
+  white-space:nowrap;flex-shrink:0}
+.mov-card-acts{display:flex;gap:2px;flex-shrink:0}
+@media(max-width:420px){
+  .mov-card{flex-wrap:wrap}
+  .mov-card-val{order:3;margin-left:50px}
+  .mov-card-acts{order:4;margin-left:auto}
+}
 /* Budget progress bars — full-width 3-state */
 /* Barra de presupuesto estilo MonAi: el CONTORNO PUNTEADO es el límite y el
    relleno es lo gastado. Si te pasas, el exceso se ve fuera del contorno en vez
@@ -5287,6 +5316,48 @@ function rMovs() {
   setTimeout(()=>renderMovChart(filtered),60);
 }
 
+// Lista de Movimientos agrupada por fecha (mockup de Claude Design) — MISMOS
+// datos/handlers que la tabla (eMov/dMov/markReviewed), solo presentación
+// distinta. mkTable() se sigue llamando en _updateMovsTable para registrar
+// la tabla (Excel export la lee de ahí), pero su HTML ya no se pinta: esta
+// lista es la vista real que ve el usuario, tabla y móvil por igual.
+function _movCardsHTML(rows) {
+  if (!rows.length) return `<div class="tdc-cards-empty">Sin movimientos en el período seleccionado</div>`;
+  const todayStr = toISO(new Date());
+  const groups = [], byDate = {};
+  rows.forEach(m => {
+    const d = fd(m.fecha) || '—';
+    if (!byDate[d]) { byDate[d] = []; groups.push(d); }
+    byDate[d].push(m);
+  });
+  return `<div class="mov-cards">${groups.map(d => {
+    const ms = byDate[d];
+    const neto = ms.reduce((a,m) => a + (m.tipo==='INGRESO' ? (m.monto||0) : -(m.monto||0)), 0);
+    const [y,mo,da] = d.split('-');
+    const lbl = d===todayStr ? `Hoy · ${+da} ${MESES_CORTO[+mo-1]}` : (mo&&da ? `${+da} ${MESES_CORTO[+mo-1]}` : d);
+    return `<div class="mov-day-hdr"><span>${lbl}</span><span class="${neto>=0?'green':'red'}">${neto>=0?'+':'−'}${fmt(Math.abs(neto))}</span></div>
+    ${ms.map(m => {
+      S._movData[m.id]=m;
+      const cClr = CAT_CLR[m.categoria]||'#94a3b8';
+      const isGasto = m.tipo==='GASTO';
+      const dot = m.revisado ? '' : `<button class="dot-btn" title="Marcar revisado" onclick="event.stopPropagation();markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
+      const sub = [m.categoria, m.medio_pago].filter(Boolean).join(' · ');
+      return `<div class="mov-card">
+        <div class="mov-card-ic" style="background:${cClr}22;color:${cClr}"><i class="ti ti-${isGasto?'arrow-down-right':'arrow-up-right'}"></i></div>
+        <div class="mov-card-mid">
+          <div class="mov-card-title">${dot}${m.concepto||'<em style="color:var(--text-3);font-style:normal">—</em>'}</div>
+          <div class="mov-card-sub">${sub||'—'}</div>
+        </div>
+        <div class="mov-card-val ${isGasto?'red':'green'}">${isGasto?'−':'+'}${fmt(m.monto)}</div>
+        <div class="mov-card-acts">
+          <button class="edit-pill-btn" title="Editar" onclick="eMov(S._movData[${m.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+          <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMov(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
+        </div>
+      </div>`;
+    }).join('')}`;
+  }).join('')}</div>`;
+}
+
 // Renderiza SOLO #movs-table-section según estado colapsado/expandido.
 // Nunca toca #movs-section ni .charts-grid — esas secciones no cambian de posición.
 function _updateMovsTable(filtered) {
@@ -5302,7 +5373,10 @@ function _updateMovsTable(filtered) {
 
   const footer = () => '';
 
-  const _movTable = mkTable({ id:'tbl-movs', exportName:'movimientos', empty:'Sin movimientos en el período seleccionado',
+  // mkTable sigue registrando la tabla en S._tables['tbl-movs'] (de ahí lee
+  // exportTableToExcel) pero su HTML ya no se pinta — _movCardsHTML(rows) es
+  // la vista real, misma data/orden/filtros ya aplicados en `rows`.
+  mkTable({ id:'tbl-movs', exportName:'movimientos', empty:'Sin movimientos en el período seleccionado',
     columns:[
       {key:'_dot',label:'',sortable:false,width:'36px'},
       {key:'concepto',label:'Concepto',filter:'text',value:m=>m.concepto||'',width:'180px'},
@@ -5315,6 +5389,7 @@ function _updateMovsTable(filtered) {
       {key:'_acts',label:'',sortable:false,width:'140px'}],
     rows, numbered:true, renderRow:movRow, footer
   });
+  const _movList = _movCardsHTML(rows);
 
   // Widgets de totales — siempre calculados sobre filtered completo
   const _gastos   = filtered.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
@@ -5338,14 +5413,17 @@ function _updateMovsTable(filtered) {
 </div>`;
 
   if (_tHost) {
-    _tHost.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+    _tHost.innerHTML = `<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px">
+      <button class="btn btn-ghost" onclick="exportTableToExcel('tbl-movs')" style="font-size:12px;padding:5px 14px;gap:6px">
+        <i class="ti ti-file-spreadsheet"></i> Excel
+      </button>
       <button class="btn" onclick="toggleMovsCollapsed()" style="font-size:12px;padding:5px 14px;gap:6px">
         <i class="ti ti-chevron-${icon}"></i> ${lbl}
       </button>
-    </div>${_movTable}${_totalsWidget}`;
+    </div>${_movList}${_totalsWidget}`;
   } else if (!S._movsCollapsed) {
     const host = $('movs-section') || $('tab-movimientos');
-    if (host) host.innerHTML += _movTable;
+    if (host) host.innerHTML += _movList;
   }
 }
 
