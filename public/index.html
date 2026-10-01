@@ -604,12 +604,55 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .f-pill:active{transform:scale(.94)}
 .f-pill.on{background:var(--accent-primary);color:var(--on-accent);border-color:var(--accent-primary)}
 .f-pill.preset{font-weight:500}
-.mov-search{position:relative;flex:1}
-.mov-search input{padding-left:34px;font-size:var(--text-sm);padding-top:8px;padding-bottom:8px}
-.mov-search .ti{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:14px;pointer-events:none}
+/* Barra de acciones de Movimientos: dos flechas (ingreso/gasto) + lupa + filtros.
+   Todos los controles son círculos del mismo tamaño para que la fila quede simétrica. */
+.mf-bar{display:flex;align-items:center;gap:8px}
+.mf-ico{width:38px;height:38px;flex:0 0 38px;padding:0;border-radius:50%;
+  border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-2);
+  display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;
+  font-family:inherit;transition:background .15s,border-color .15s}
+.mf-ico:hover{background:var(--bg-surface-2)}
+.mf-ico:active{transform:scale(.92)}
+.mf-ico-in{color:var(--color-income)}
+.mf-ico-out{color:var(--color-expense)}
+/* La búsqueda es solo la lupa hasta que se pulsa; entonces ocupa el ancho sobrante. */
+.mov-search{position:relative;display:flex;align-items:center;flex:0 0 auto;min-width:0}
+.mov-search input{display:none}
+.mov-search.open{flex:1 1 auto}
+.mov-search.open input{display:block;width:100%;padding-left:36px;font-size:var(--text-sm);
+  padding-top:8px;padding-bottom:8px}
+.mov-search.open .mf-ico{position:absolute;left:0;z-index:1;width:36px;flex-basis:36px;
+  height:36px;border:none;background:none;font-size:15px;color:var(--text-3)}
 /* Categoría/Medio plegados tras el botón 🎛️ — el panel existe siempre en el DOM
    (los filtros ya aplicados no dejan de estar activos por estar oculto), solo
    se anima su alto. */
+/* Botón minimalista de "Gastos esta quincena" en Inicio (centrado bajo los emojis) */
+.q-dash-wrap{display:flex;justify-content:center;margin:20px 0 10px}
+.q-dash-btn{display:inline-flex;align-items:center;gap:9px;padding:10px 20px;
+  border-radius:var(--radius-pill);border:1px solid var(--border-default);
+  background:var(--bg-surface);color:var(--text-1);font-family:inherit;font-size:13.5px;
+  font-weight:700;cursor:pointer;transition:background .15s,border-color .15s}
+.q-dash-btn:hover{background:var(--bg-surface-2);border-color:var(--accent-primary)}
+.q-dash-btn:active{transform:scale(.97)}
+.q-dash-btn>.ti:first-child{font-size:16px;color:var(--accent-primary)}
+.q-dash-chev{font-size:14px;color:var(--text-3)}
+/* Gastos de la quincena en tarjetas (misma estética que .mov-card) */
+.q-card-chk{background:none;border:none;cursor:pointer;padding:0;flex-shrink:0;
+  font-size:18px;display:flex;align-items:center}
+/* Forma de pago y acciones bajan a una fila propia: en móvil (tarjeta ~285px) no
+   caben junto al concepto y el importe, y el concepto se quedaba sin ancho. */
+.q-card{flex-wrap:wrap}
+.q-card-foot{flex:1 0 100%;display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.q-card-foot .mov-card-acts{margin-left:auto}
+.q-card-fp{display:flex;gap:4px;flex-wrap:wrap}
+.q-fp-pill{padding:2px 8px;border-radius:var(--radius-pill);border:1px solid var(--border-default);
+  background:transparent;color:var(--text-3);cursor:pointer;font-size:10.5px;font-family:inherit;
+  white-space:nowrap;display:inline-flex;align-items:center;gap:3px}
+.q-fp-pill.on{background:var(--bg-surface-2)}
+.q-fp-pill.on-ef{border-color:var(--color-income);color:var(--color-income)}
+.q-fp-pill.on-db{border-color:var(--accent-primary);color:var(--accent-primary)}
+.mov-card.pagado{background:var(--bg-surface-2)}
+.mov-card.pagado .mov-card-title{text-decoration:line-through;opacity:.65}
 .mf-toggle{flex-shrink:0;white-space:nowrap}
 .mf-toggle.on{background:var(--bg-surface-2);color:var(--text-1)}
 .mf-toggle-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:var(--radius-pill);background:var(--accent-primary);color:var(--on-accent);font-size:10px;font-weight:800}
@@ -1318,7 +1361,7 @@ body.sheet-locked{overflow:hidden}
 
   /* Emojis en una sola fila, con etiqueta visible debajo (11 desde que Notas
      se integró al grid — antes eran 10). */
-  .mini-grid{grid-template-columns:repeat(11,1fr);gap:10px;margin:0 0 8px}
+  .mini-grid{grid-template-columns:repeat(9,1fr);gap:10px;margin:0 0 8px}
   .mini-tile{aspect-ratio:auto;flex-direction:column;gap:7px;padding:16px 6px 14px;font-size:24px}
   .mini-tile-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-2);
     text-align:center;line-height:1.2}
@@ -2618,9 +2661,10 @@ document.addEventListener('click', function(e) {
 function _applyTblCollapse(tableId, collapsed) {
   const tbody = document.getElementById(tableId + '-body');
   if (!tbody) return;
-  Array.from(tbody.querySelectorAll('tr')).forEach((r, i) => {
-    r.style.display = (collapsed && i >= 5) ? 'none' : '';
-  });
+  // Soporta tanto <tbody> con <tr> como listas de tarjetas (Gastos de la quincena).
+  const trs   = tbody.querySelectorAll('tr');
+  const items = trs.length ? Array.from(trs) : Array.from(tbody.children);
+  items.forEach((r, i) => { r.style.display = (collapsed && i >= 5) ? 'none' : ''; });
 }
 function toggleTbl(tableId) {
   S._tblCollapsed[tableId] = !S._tblCollapsed[tableId];
@@ -2967,11 +3011,6 @@ function rQuincenaPanel(ctx) {
   S._gastosQRows[ctx]   = gasEsp;
   S._ingresosQRows[ctx] = ingEspQ;
 
-  // Retiro de efectivo = gastos fijos presupuestados marcados como efectivo
-  const retiroEfectivo = gasEsp
-    .filter(g => (fpMap[g.descripcion] || g.forma_pago || '') === 'efectivo')
-    .reduce((a, g) => a + (g.monto || 0), 0);
-
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
   // Chart (deferred after render)
@@ -2991,7 +3030,9 @@ function rQuincenaPanel(ctx) {
     <span style="font-size:12px;font-weight:600;color:var(--text-2)">${qi.label}</span>
   </div>
 
-  <!-- Stats row -->
+  <!-- Stats row — se omite en Inicio: el balance y los totales de Ingresos/Gastos ya
+       están arriba, en la cabecera del propio Inicio, y se verían duplicados. -->
+  ${ctx === 'dash' ? '' : `
   <div class="q-stats" style="grid-template-columns:repeat(3,1fr)">
     <div class="qstat" style="cursor:pointer" onclick="oMov('INGRESO')" title="Registrar ingreso">
       <div class="qstat-lbl">Ingresos <i class="ti ti-plus" style="font-size:9px;opacity:.4"></i></div>
@@ -3006,7 +3047,7 @@ function rQuincenaPanel(ctx) {
       <div class="qstat-lbl">Balance</div>
       <div class="qstat-val ${balReal>=0?'green':'red'}">${fmt(balReal)}</div>
     </div>
-  </div>
+  </div>`}
 
   <!-- Ingresos esperados this quincena -->
   <div style="margin-bottom:10px">
@@ -3029,115 +3070,72 @@ function rQuincenaPanel(ctx) {
     </div>`).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin ingresos esperados esta quincena. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('ingresos')">+ Agregar</button></div>`}
   </div>
 
-  <!-- Retiro de efectivo -->
-  ${retiroEfectivo > 0 ? `
-  <div style="margin-bottom:10px;padding:12px 16px;border-radius:var(--radius-lg);background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <div style="display:flex;align-items:center;gap:10px">
-      <div style="width:36px;height:36px;border-radius:50%;background:rgba(251,191,36,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <i class="ti ti-building-bank" style="color:var(--color-warning);font-size:18px"></i>
-      </div>
-      <div>
-        <div style="font-size:11px;color:var(--text-2);margin-bottom:1px">Retiro de efectivo esta quincena</div>
-        <div style="font-size:11px;color:var(--text-3)">Gastos marcados como efectivo</div>
-      </div>
-    </div>
-    <div style="font-size:22px;font-weight:700;color:var(--color-warning);font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">${fmt(retiroEfectivo)}</div>
-  </div>` : gasEsp.length > 0 ? `
-  <div style="margin-bottom:10px;padding:10px 14px;border-radius:var(--radius-lg);background:var(--bg-surface-2);border:1px dashed var(--border-default);font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px">
-    <i class="ti ti-building-bank"></i> Asigna "Efectivo" a tus gastos fijos para ver cuánto retirar del cajero
-  </div>` : ''}
-
   <!-- Gastos presupuestados esta quincena -->
   <div style="margin-bottom:10px">
+    ${ctx === 'dash' ? '' : `
     <div class="sec-hdr" style="margin:14px 0 12px">
       <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta quincena</h2></div>
-    </div>
+    </div>`}
     <div style="display:flex;justify-content:center;margin-bottom:14px">
       <button class="btn btn-accent" style="padding:11px 22px;font-size:15px;font-weight:700;gap:8px" onclick="oAddProxGasto()"><i class="ti ti-plus" style="font-size:17px"></i> Registrar Próximo Gasto</button>
     </div>
     ${gasEsp.length ? `
     ${tglBtn('tbl-gastos-q-'+ctx, "exportGastosQuincena('"+ctx+"')")}
-    <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;font-size:14px">
-      <thead>
-        <tr style="border-bottom:2px solid var(--border-default)">
-          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;width:36px">#</th>
-          <th style="padding:8px 10px;text-align:center;width:40px"></th>
-          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Concepto</th>
-          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Monto</th>
-          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Categoría</th>
-          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Forma de pago</th>
-          <th style="padding:8px 10px;text-align:center;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Comentarios</th>
-          <th style="width:56px"></th>
-        </tr>
-      </thead>
-      <tbody id="tbl-gastos-q-${ctx}-body">
-        ${gasEsp.map((g, i) => {
-          const pagadoMov = qMovs.find(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + g.descripcion);
-          const pagadoId  = pagadoMov?.id || null;
-          const pagadoArg = pagadoId ? ("'" + pagadoId + "'") : 'null';
-          const chkKey    = (g._id || g.id || g.descripcion || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-          const chkTitle  = pagadoId ? 'Quitar de movimientos' : 'Registrar como gasto realizado';
-          const chkColor  = pagadoId ? 'var(--color-income)' : 'var(--text-3)';
-          const chkIcon   = pagadoId ? 'checkbox' : 'square';
-          const chkBg     = pagadoId ? ';background:rgba(74,222,128,.06)' : '';
-          const chkTd     = `<td style="padding:6px;text-align:center"><button onclick="marcarGastoQ('${chkKey}',${pagadoArg})" title="${chkTitle}" style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;color:${chkColor}"><i class="ti ti-${chkIcon}"></i></button></td>`;
-          if (g._isDespensa) return `<tr style="border-bottom:1px solid var(--border-default)${chkBg}">
-            <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
-            ${chkTd}
-            <td style="padding:10px;text-align:center"><span style="display:inline-flex;align-items:center;gap:5px;font-weight:500"><i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Despensa</span></td>
-            <td style="padding:10px;text-align:center;font-weight:700;color:var(--red)">${fmt(g.monto)}</td>
-            <td style="padding:10px;text-align:center"><span class="cat-bdg" style="background:${(CAT_CLR['Despensa']||'#94a3b8')}20;color:${CAT_CLR['Despensa']||'#94a3b8'}">Despensa</span></td>
-            <td style="padding:10px;text-align:center;color:var(--text-3)">—</td>
-            <td style="padding:10px;text-align:center;color:var(--text-3)">—</td>
-            <td style="padding:10px;text-align:center;white-space:nowrap">
-              <button class="edit-pill-btn" title="Ver despensa" onclick="go('dashboard');setTimeout(()=>document.getElementById('despensa-section')?.scrollIntoView({behavior:'smooth'}),300)"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
-              <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
-            </td>
-          </tr>`;
-          const fp      = fpMap[g.descripcion] || g.forma_pago || '';
-          const _id     = g._id || g.id || g.descripcion;
-          const nomSafe = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-          const fpEfect = fp === 'efectivo';
-          const fpDebit = fp === 'tarjeta_debito';
-          const fpNone  = !fp;
-          const fpLabel = fpEfect ? '<i class="ti ti-cash" style="font-size:10px"></i> Efectivo'
-                        : fpDebit ? '<i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito'
-                        : '<span style="color:var(--text-3)">—</span>';
-          const fpColor = fpEfect ? 'var(--color-income)' : fpDebit ? 'var(--accent-primary)' : 'var(--text-3)';
-          const catG    = g.categoria || '';
-          const cClrG   = CAT_CLR[catG] || '#94a3b8';
-          const catCell = catG
-            ? `<span class="cat-bdg" style="background:${cClrG}20;color:${cClrG}">${catG}</span>`
-            : '<span style="color:var(--text-3)">—</span>';
-          return `<tr style="border-bottom:1px solid var(--border-default)${chkBg}">
-            <td style="padding:10px;text-align:center;color:var(--text-3);font-size:12px">${i+1}</td>
-            ${chkTd}
-            <td style="padding:10px;text-align:center;font-weight:500">${g.descripcion}</td>
-            <td style="padding:10px;text-align:center;font-weight:700;color:var(--red)">${fmt(g.monto)}</td>
-            <td style="padding:10px;text-align:center">${catCell}</td>
-            <td style="padding:10px;text-align:center">
-              <div style="display:inline-flex;gap:4px;align-items:center">
-                <button onclick="setFormaPago('${nomSafe}','efectivo')" title="Efectivo"
-                  style="padding:2px 7px;border-radius:var(--radius-pill);border:1px solid ${fpEfect?'var(--color-income)':'var(--border-default)'};background:${fpEfect?'var(--bg-surface-2)':'transparent'};color:${fpEfect?'var(--color-income)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;font-family:inherit">
-                  <i class="ti ti-cash" style="font-size:10px"></i> Efectivo
-                </button>
-                <button onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="T. Débito"
-                  style="padding:2px 7px;border-radius:var(--radius-pill);border:1px solid ${fpDebit?'var(--accent-primary)':'var(--border-default)'};background:${fpDebit?'var(--bg-surface-2)':'transparent'};color:${fpDebit?'var(--accent-primary)':fpNone?'var(--text-3)':'var(--text-2)'};cursor:pointer;font-size:11px;white-space:nowrap;font-family:inherit">
-                  <i class="ti ti-credit-card" style="font-size:10px"></i> T. Débito
-                </button>
+    <div class="mov-cards" id="tbl-gastos-q-${ctx}-body">
+      ${gasEsp.map(g => {
+        const pagadoMov = qMovs.find(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + g.descripcion);
+        const pagadoId  = pagadoMov?.id || null;
+        const pagadoArg = pagadoId ? ("'" + pagadoId + "'") : 'null';
+        const chkKey    = (g._id || g.id || g.descripcion || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const chkTitle  = pagadoId ? 'Quitar de movimientos' : 'Registrar como gasto realizado';
+        const chk = `<button class="q-card-chk" onclick="marcarGastoQ('${chkKey}',${pagadoArg})" title="${chkTitle}" style="color:${pagadoId?'var(--color-income)':'var(--text-3)'}"><i class="ti ti-${pagadoId?'checkbox':'square'}"></i></button>`;
+        if (g._isDespensa) {
+          const dClr = CAT_CLR['Despensa'] || '#94a3b8';
+          return `<div class="mov-card q-card${pagadoId?' pagado':''}">
+            ${chk}
+            <div class="mov-card-ic" style="background:${dClr}22;color:${dClr}"><i class="ti ti-shopping-cart"></i></div>
+            <div class="mov-card-mid">
+              <div class="mov-card-title">Despensa</div>
+              <div class="mov-card-sub">Despensa · lista de compras</div>
+            </div>
+            <div class="mov-card-val red">${fmt(g.monto)}</div>
+            <div class="q-card-foot">
+              <div class="mov-card-acts">
+                <button class="edit-pill-btn" title="Ver despensa" onclick="dashEmoji('despensa')"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
+                <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
               </div>
-            </td>
-            <td style="padding:10px;text-align:center;color:var(--text-3);font-size:13px">${g.comentarios||'—'}</td>
-            <td style="padding:10px;text-align:center;white-space:nowrap">
+            </div>
+          </div>`;
+        }
+        const fp      = fpMap[g.descripcion] || g.forma_pago || '';
+        const _id     = g._id || g.id || g.descripcion;
+        const nomSafe = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const fpEfect = fp === 'efectivo';
+        const fpDebit = fp === 'tarjeta_debito';
+        const catG    = g.categoria || '';
+        const cClrG   = CAT_CLR[catG] || '#94a3b8';
+        const sub     = [catG, g.comentarios].filter(Boolean).join(' · ') || '—';
+        return `<div class="mov-card q-card${pagadoId?' pagado':''}">
+          ${chk}
+          <div class="mov-card-ic" style="background:${cClrG}22;color:${cClrG}"><i class="ti ti-arrow-down-right"></i></div>
+          <div class="mov-card-mid">
+            <div class="mov-card-title">${g.descripcion}</div>
+            <div class="mov-card-sub">${sub}</div>
+          </div>
+          <div class="mov-card-val red">${fmt(g.monto)}</div>
+          <div class="q-card-foot">
+            <div class="q-card-fp">
+              <button class="q-fp-pill${fpEfect?' on on-ef':''}" onclick="setFormaPago('${nomSafe}','efectivo')" title="Marcar como efectivo"><i class="ti ti-cash"></i> Efectivo</button>
+              <button class="q-fp-pill${fpDebit?' on on-db':''}" onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="Marcar como tarjeta de débito"><i class="ti ti-credit-card"></i> T. Débito</button>
+            </div>
+            <div class="mov-card-acts">
               <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
               <button class="edit-pill-btn" title="Posponer a la siguiente quincena" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
               <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
     </div>
     <div class="q-total-widget">
       <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
@@ -4007,13 +4005,14 @@ function rDash() {
   const _bCent = _bdot>=0 ? _bstr.slice(_bdot)   : '';
 
   const tipos = [['Sem','semana'],['Quinc','quincena'],['Mes','mes'],['Trim','trimestre'],['Año','año']];
+  // Sin 🎯 Objetivos ni 🏦 Efectivo: abrían exactamente lo mismo que 📊 Presupuesto
+  // y 💳 Cuentas respectivamente, así que eran duplicados del mismo módulo.
   const EMOJIS = [
     ['💳','cuentas','Cuentas'],               ['🧾','deuda','Deudas TDC'],
-    ['📊','presupuesto','Presupuesto'],       ['🎯','objetivos','Objetivos'],
+    ['📊','presupuesto','Presupuesto y Metas'],
     ['💗','nidito','Nidito'],                 ['📅','calendario','Calendario'],
-    ['🏦','retiro','Efectivo'],               ['📈','analisis','Análisis'],
-    ['🛒','despensa','Despensa'],             ['✨','consejos','Consejos IA'],
-    ['📝','notas','Notas'],
+    ['📈','analisis','Análisis'],             ['🛒','despensa','Despensa'],
+    ['✨','consejos','Consejos IA'],          ['📝','notas','Notas'],
   ];
 
   dash.innerHTML = `
@@ -4052,8 +4051,14 @@ function rDash() {
 <div class="mini-grid-hdr">Todo lo demás</div>
 <div class="mini-grid">${EMOJIS.map(([e,k,lbl])=>
   `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span></button>`).join('')}</div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta quincena</h2></div></div>
-<div id="quincena-dash-section"></div>
+<div class="q-dash-wrap">
+  <button class="q-dash-btn" id="q-dash-btn" onclick="toggleQuincenaDash()"
+    aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">
+    <i class="ti ti-wallet"></i> Gastos esta quincena
+    <i class="ti ti-chevron-${S._qDashOpen?'up':'down'} q-dash-chev"></i>
+  </button>
+</div>
+<div id="quincena-dash-section" style="display:${S._qDashOpen?'':'none'}"></div>
 <button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>
 `;
   refreshQuincenaPanel();
@@ -5447,17 +5452,15 @@ function rMovs() {
 </div>
 
 <div class="mov-filter">
-  <div class="mf-row" style="gap:10px;margin-bottom:16px">
-    <button class="btn btn-income" style="flex:1;padding:12px 16px;font-size:15px" onclick="oMov('INGRESO')"><i class="ti ti-trending-up" style="margin-right:7px;font-size:17px;vertical-align:-2px;color:var(--color-income)"></i>Registrar Ingreso</button>
-    <button class="btn btn-expense" style="flex:1;padding:12px 16px;font-size:15px" onclick="oMov('GASTO')"><i class="ti ti-trending-down" style="margin-right:7px;font-size:17px;vertical-align:-2px;color:var(--color-expense)"></i>Registrar Gasto</button>
-  </div>
-  <div class="mf-row" style="gap:8px">
-    <div class="mov-search" style="flex:1">
-      <i class="ti ti-search"></i>
+  <div class="mf-row mf-bar">
+    <button type="button" class="mf-ico mf-ico-in" onclick="oMov('INGRESO')" title="Registrar ingreso" aria-label="Registrar ingreso"><i class="ti ti-arrow-up-right"></i></button>
+    <button type="button" class="mf-ico mf-ico-out" onclick="oMov('GASTO')" title="Registrar gasto" aria-label="Registrar gasto"><i class="ti ti-arrow-down-right"></i></button>
+    <div class="mov-search${(S._movSearchOpen||f.search)?' open':''}" id="mov-search-wrap">
+      <button type="button" class="mf-ico" onclick="toggleMovSearch()" title="Buscar" aria-label="Buscar"><i class="ti ti-search"></i></button>
       <input id="movf-search" placeholder="Concepto, comentario..." value="${f.search||''}"
         oninput="clearTimeout(S._ms);S._ms=setTimeout(applyMovSearch,380)">
     </div>
-    <button type="button" class="btn btn-ghost btn-sm mf-toggle${S._movFiltersOpen?' on':''}"
+    <button type="button" class="btn btn-ghost btn-sm mf-toggle${S._movFiltersOpen?' on':''}" style="margin-left:auto"
       onclick="toggleMovFiltersPanel()" aria-expanded="${S._movFiltersOpen?'true':'false'}" aria-controls="mf-collapse"
       title="Filtrar por categoría y medio">
       <span aria-hidden="true">🎛️</span> Filtros${(f.cats.length+f.medios.length)>0?` <span class="mf-toggle-badge">${f.cats.length+f.medios.length}</span>`:''}
@@ -5528,7 +5531,8 @@ function _movCardsHTML(rows) {
     const neto = ms.reduce((a,m) => a + (m.tipo==='INGRESO' ? (m.monto||0) : -(m.monto||0)), 0);
     const [y,mo,da] = d.split('-');
     const lbl = d===todayStr ? `Hoy · ${+da} ${MESES_CORTO[+mo-1]}` : (mo&&da ? `${+da} ${MESES_CORTO[+mo-1]}` : d);
-    const collapsed = !!S._movDayCollapsed[d];
+    // Colapsado por defecto: solo se expande el día que el usuario abre explícitamente.
+    const collapsed = S._movDayCollapsed[d] !== false;
     return `<div class="mov-day-hdr" onclick="toggleMovDay('${d}')">
       <span><i class="ti ti-chevron-${collapsed?'right':'down'} mov-day-chev"></i>${lbl}</span>
       <span class="${neto>=0?'green':'red'}">${neto>=0?'+':'−'}${fmt(Math.abs(neto))}</span>
@@ -5555,11 +5559,24 @@ function _movCardsHTML(rows) {
   }).join('')}</div>`;
 }
 
+// La lupa abre/cierra el campo de búsqueda. Al cerrarlo se limpia el texto: un filtro
+// activo pero invisible haría parecer que faltan movimientos.
+function toggleMovSearch() {
+  const wrap = document.getElementById('mov-search-wrap');
+  if (!wrap) return;
+  const open = !wrap.classList.contains('open');
+  S._movSearchOpen = open;
+  wrap.classList.toggle('open', open);
+  const inp = document.getElementById('movf-search');
+  if (open) setTimeout(() => inp?.focus(), 60);
+  else if (inp?.value) { inp.value = ''; applyMovSearch(); }
+}
+
 // Colapsa/expande los movimientos de un día sin re-renderizar toda la lista
 // (evita perder el scroll); el estado se recuerda por fecha en S._movDayCollapsed.
 function toggleMovDay(d) {
   if (!S._movDayCollapsed) S._movDayCollapsed = {};
-  const collapsed = !S._movDayCollapsed[d];
+  const collapsed = S._movDayCollapsed[d] === false;   // default (undefined) = colapsado
   S._movDayCollapsed[d] = collapsed;
   const group = document.getElementById('mov-day-' + d);
   if (group) group.style.display = collapsed ? 'none' : '';
@@ -6505,9 +6522,22 @@ async function updateDespensaField(id, field, value) {
   }
 }
 
+// El panel de la quincena en Inicio se pinta solo cuando está desplegado: cerrado no
+// se ve, y rQuincenaPanel es caro (recorre movimientos y monta una gráfica).
 function refreshQuincenaPanel() {
   const el = $('quincena-dash-section');
-  if (el) el.innerHTML = rQuincenaPanel('dash');
+  if (el && S._qDashOpen) el.innerHTML = rQuincenaPanel('dash');
+}
+
+function toggleQuincenaDash() {
+  S._qDashOpen = !S._qDashOpen;
+  const sec = $('quincena-dash-section'), btn = $('q-dash-btn');
+  if (!sec || !btn) return;
+  btn.setAttribute('aria-expanded', S._qDashOpen ? 'true' : 'false');
+  const chev = btn.querySelector('.q-dash-chev');
+  if (chev) chev.className = `ti ti-chevron-${S._qDashOpen?'up':'down'} q-dash-chev`;
+  sec.style.display = S._qDashOpen ? '' : 'none';
+  if (S._qDashOpen) refreshQuincenaPanel();
 }
 
 async function toggleCompraQ(id, val) {
