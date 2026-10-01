@@ -1193,6 +1193,24 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
         return `✅📅 Gasto programado en Presupuesto: ${datos.concepto || ''} · ${fmt(datos.monto || 0)} → ${labelQuincena(r.qKey)}`;
       }
       const { programado, ...cleanDatos } = datos || {};   // 'programado' no es columna de la tabla
+      // Anti-duplicado: conReintentos reintenta cuando PostgREST devuelve error, pero el
+      // insert puede haberse comprometido antes de que muriera la conexión — el reintento
+      // entonces mete la fila dos veces. Lo mismo pasa si el usuario reenvía el mensaje al
+      // no ver reflejado el registro. Si ya existe uno idéntico y reciente, no se inserta.
+      if (tabla === 'movimientos' && cleanDatos?.monto != null && cleanDatos?.concepto) {
+        const desde = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+        const { data: yaExiste } = await sb.from('movimientos')
+          .select('id').eq('user_phone', phone)
+          .eq('monto', cleanDatos.monto).eq('tipo', cleanDatos.tipo)
+          .eq('concepto', cleanDatos.concepto)
+          .eq('fecha', cleanDatos.fecha || hoy())
+          .is('deleted_at', null).gte('created_at', desde)
+          .limit(1).maybeSingle();
+        if (yaExiste?.id) {
+          arg._duplicado = true;   // el chat lo reporta como repetido, no como nuevo
+          return `♻️ Ya estaba registrado hace menos de 2 min ✓ ID: ${yaExiste.id}`;
+        }
+      }
       const { data, error } = await conReintentos(() =>
         sb.from(tabla).insert({ ...cleanDatos, user_phone: phone }).select().single()
       );
@@ -1731,8 +1749,11 @@ function buildWebChatReply(execs) {
 
   // Gastos programados (van a Presupuesto, no a movimientos)
   const prog = ok.filter(e => e.item._programado);
+  // Idénticos a uno recién creado: no se insertaron de nuevo, y hay que decirlo.
+  const dup  = ok.filter(e => e.item._duplicado);
   // Movimientos reales (ya hechos)
-  const movs = ok.filter(e => e.item.tabla === 'movimientos' && e.item.accion === 'crear' && !e.item._programado);
+  const movs = ok.filter(e => e.item.tabla === 'movimientos' && e.item.accion === 'crear'
+                           && !e.item._programado && !e.item._duplicado);
 
   const sections = [];
 
@@ -1765,8 +1786,13 @@ function buildWebChatReply(execs) {
     sections.push(lines.join('\n'));
   }
 
+  if (dup.length) {
+    const lines = dup.map(e => `  ${fmt(e.item.datos.monto)} · ${e.item.datos.concepto}`);
+    sections.push(`♻️ Ya estaba${dup.length>1?'n':''} registrado${dup.length>1?'s':''} (hace menos de 2 min), no lo${dup.length>1?'s':''} dupliqué:\n${lines.join('\n')}\n_Si de verdad fue otro gasto igual, regístralo desde el botón + de Movimientos._`);
+  }
+
   // Otras operaciones (metas, calendario, nidito, ediciones, etc.) sin resumen específico
-  if (!movs.length && !prog.length) sections.push(ok.map(e => e.result).join('\n'));
+  if (!movs.length && !prog.length && !dup.length) sections.push(ok.map(e => e.result).join('\n'));
 
   let reply = sections.join('\n\n');
   if (err.length) reply += `\n\n⚠️ No pude procesar ${err.length} operación(es): ${err.map(e => e.result).join(', ')}`;
@@ -2036,6 +2062,7 @@ REGLAS DE ACCIÓN:
 - Nidito y calendario: infiere detalles razonables sin preguntar.
 - Nota de voz: mismas reglas, confía en la transcripción.
 - SISTEMA DE CONFIRMACIÓN: cuando llames 'modificar_plataforma', tu texto debe ser vacío o máx 1 línea de contexto. La propuesta la maneja el sistema. NUNCA digas que algo quedó guardado.
+- PROHIBIDO MENTIR: la ÚNICA forma de guardar algo es llamando a 'modificar_plataforma'. Si no la llamaste, NO escribas "registré", "lo agregué", "ya quedó guardado" ni nada que dé a entender que se guardó: sería falso y el sistema lo bloquea. Si no puedes o no tienes datos suficientes, dilo claro ("no pude registrarlo porque…") y pide lo que falte. Prefiero un error honesto a una confirmación falsa.
 - DETECTA PATRONES: si gasta mucho en algo vs historial, avísalo en 1 línea.
 - PROYECCIONES: cuando des estimaciones de gasto futuro, tendencias o proyecciones de fin de mes, añade al final "— estimación basada en tu historial" (solo en respuestas analíticas; nunca en confirmaciones de registro ni comandos simples).
 - PREGUNTAS SOBRE GASTOS CON ALICIA (cuánto/promedio/quincena): usa SIEMPRE los totales de la sección "GASTOS CON ALICIA" (ya calculados sobre todo el historial). NUNCA sumes tú mismo desde "ÚLTIMOS MOVIMIENTOS" — esa lista está incompleta (solo los 10 más recientes) y daría un total incorrecto.
@@ -2237,6 +2264,33 @@ async function execToolsDirect(phone, argsList, textoOriginal = '') {
   return buildWebChatReply(execs);
 }
 
+// El modelo a veces contesta "listo, ya lo registré" SIN emitir la llamada a la
+// herramienta: no se escribe nada en la base y el usuario recibe una confirmación
+// falsa (el movimiento nunca aparece en la tabla). La ÚNICA vía de escritura es un
+// tool call, así que sin él cualquier afirmación en pasado y primera persona es
+// mentira y se reemplaza por un error explícito.
+// Nota: en JS \b no funciona tras vocal acentuada (é no es \w), de ahí el lookahead
+// final. Se exige la tilde del pretérito para no confundirlo con el subjuntivo
+// ("¿quieres que lo registre?" es una pregunta legítima, no una confirmación).
+const _FIN_PALABRA = '(?![a-záéíóúüñ])';
+const _RE_CONFIRMA_ESCRITURA = new RegExp(
+  '\\b(registr|agregu|anot|guard|program|actualic|elimin|borr|cre|agend|apunt)é' + _FIN_PALABRA +
+  '|\\bañadí' + _FIN_PALABRA +
+  '|\\b(quedó|queda|quedan|quedaron|está|están|ha quedado|han quedado)\\s+(ya\\s+)?' +
+    '(registrad|guardad|agregad|anotad|añadid|programad|cread|actualizad|eliminad|agendad)' +
+  '|\\b(listo|hecho|perfecto|ya)\\b[^.!?\\n]{0,40}\\b(lo|la|los|las|te)\\s+' +
+    '(registr|agregu|anot|guard|program|añad|apunt)',
+  'i');
+
+function _blindarRespuestaSinTool(texto) {
+  if (!texto || !_RE_CONFIRMA_ESCRITURA.test(texto)) return texto;
+  console.warn('⚠️ Confirmación falsa bloqueada (sin tool call):', texto.slice(0, 160));
+  return '⚠️ No se guardó nada. El motor de IA respondió como si hubiera hecho el ' +
+         'registro, pero no ejecutó ninguna operación en la base de datos, así que la ' +
+         'confirmación era falsa y la bloqueé.\n\nVuelve a intentarlo, o escríbelo en ' +
+         'formato directo: *gasté 200 en tacos con débito*.';
+}
+
 // Claude con tool calling — direct=true ejecuta sin confirmación (web); false propone (WhatsApp)
 async function callClaude(user, sysBlocks, messages, text, phone, direct = false) {
   if (!anthropic) {
@@ -2275,18 +2329,17 @@ async function callClaude(user, sysBlocks, messages, text, phone, direct = false
   }
 
   if (toolUses.length > 0) {
-    if (direct) {
-      // Web: ejecutar directo, sin menú de confirmación
-      const directReply = await execToolsDirect(phone, toolUses.map(t => t.input), text);
-      return [aiText.trim(), directReply].filter(Boolean).join('\n\n');
-    }
+    // Web: ejecutar directo, sin menú de confirmación. Se descarta aiText: es la prosa
+    // optimista del modelo ("¡listo, lo registré!"), que contradice al resumen real
+    // cuando la operación falla. El resumen de execToolsDirect es la única verdad.
+    if (direct) return await execToolsDirect(phone, toolUses.map(t => t.input), text);
     // WhatsApp: proposeDbAction decide auto-confirm o propuesta — short-circuit sin segundo turno
     const results = await Promise.all(toolUses.map(t => proposeDbAction(phone, t.input, text)));
     const proposalMsg = results.map(r => r.msg).join('\n');
     return [aiText.trim(), proposalMsg].filter(Boolean).join('\n\n');
   }
 
-  return aiText;
+  return _blindarRespuestaSinTool(aiText);
 }
 
 // Gemini con function calling — direct=true ejecuta sin confirmación (web); false propone (WhatsApp)
@@ -2325,7 +2378,7 @@ async function callGemini(user, sysBlocks, geminiHistory, text, phone, direct = 
     return results.map(r => r.msg).join('\n');
   }
 
-  return res.response.text();
+  return _blindarRespuestaSinTool(res.response.text());
 }
 
 // Dispatcher que enruta por preferencia del usuario. direct=true → ejecuta sin
