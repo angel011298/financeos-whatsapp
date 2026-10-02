@@ -1193,27 +1193,26 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
         return `✅📅 Gasto programado en Presupuesto: ${datos.concepto || ''} · ${fmt(datos.monto || 0)} → ${labelQuincena(r.qKey)}`;
       }
       const { programado, ...cleanDatos } = datos || {};   // 'programado' no es columna de la tabla
-      // Anti-duplicado: conReintentos reintenta cuando PostgREST devuelve error, pero el
-      // insert puede haberse comprometido antes de que muriera la conexión — el reintento
-      // entonces mete la fila dos veces. Lo mismo pasa si el usuario reenvía el mensaje al
-      // no ver reflejado el registro. Si ya existe uno idéntico y reciente, no se inserta.
-      if (tabla === 'movimientos' && cleanDatos?.monto != null && cleanDatos?.concepto) {
-        const desde = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-        const { data: yaExiste } = await sb.from('movimientos')
-          .select('id').eq('user_phone', phone)
-          .eq('monto', cleanDatos.monto).eq('tipo', cleanDatos.tipo)
-          .eq('concepto', cleanDatos.concepto)
-          .eq('fecha', cleanDatos.fecha || hoy())
-          .is('deleted_at', null).gte('created_at', desde)
-          .limit(1).maybeSingle();
-        if (yaExiste?.id) {
-          arg._duplicado = true;   // el chat lo reporta como repetido, no como nuevo
-          return `♻️ Ya estaba registrado hace menos de 2 min ✓ ID: ${yaExiste.id}`;
+      // Anti-duplicado SOLO para reintentos internos: si un intento falla con error pero el
+      // insert ya se había comprometido, el reintento metería la fila dos veces. Antes de
+      // reintentar se busca una fila idéntica creada DESPUÉS de empezar esta operación.
+      // No se compara contra movimientos previos: lo que el usuario escribe (incluso dos
+      // líneas idénticas en un mismo mensaje) se registra siempre; el reenvío accidental del
+      // mismo texto ya lo cubre el dedup de /api/chat-web.
+      const t0 = new Date(Date.now() - 1000).toISOString();
+      let intento = 0;
+      const { data, error } = await conReintentos(async () => {
+        if (intento++ > 0 && tabla === 'movimientos' && cleanDatos?.concepto != null) {
+          const { data: previo } = await sb.from('movimientos')
+            .select('*').eq('user_phone', phone)
+            .eq('monto', cleanDatos.monto).eq('tipo', cleanDatos.tipo)
+            .eq('concepto', cleanDatos.concepto)
+            .is('deleted_at', null).gte('created_at', t0)
+            .limit(1).maybeSingle();
+          if (previo?.id) return { data: previo, error: null };
         }
-      }
-      const { data, error } = await conReintentos(() =>
-        sb.from(tabla).insert({ ...cleanDatos, user_phone: phone }).select().single()
-      );
+        return sb.from(tabla).insert({ ...cleanDatos, user_phone: phone }).select().single();
+      });
       // Sin fila+id de vuelta NO se considera exitoso, aunque no haya `error` explícito —
       // así nunca se le confirma al usuario un registro que en realidad no quedó guardado.
       if (error || !data?.id) return `❌ Error: ${error?.message || 'no se pudo confirmar el registro, intenta de nuevo'}`;
@@ -1749,11 +1748,9 @@ function buildWebChatReply(execs) {
 
   // Gastos programados (van a Presupuesto, no a movimientos)
   const prog = ok.filter(e => e.item._programado);
-  // Idénticos a uno recién creado: no se insertaron de nuevo, y hay que decirlo.
-  const dup  = ok.filter(e => e.item._duplicado);
   // Movimientos reales (ya hechos)
   const movs = ok.filter(e => e.item.tabla === 'movimientos' && e.item.accion === 'crear'
-                           && !e.item._programado && !e.item._duplicado);
+                           && !e.item._programado);
 
   const sections = [];
 
@@ -1786,13 +1783,8 @@ function buildWebChatReply(execs) {
     sections.push(lines.join('\n'));
   }
 
-  if (dup.length) {
-    const lines = dup.map(e => `  ${fmt(e.item.datos.monto)} · ${e.item.datos.concepto}`);
-    sections.push(`♻️ Ya estaba${dup.length>1?'n':''} registrado${dup.length>1?'s':''} (hace menos de 2 min), no lo${dup.length>1?'s':''} dupliqué:\n${lines.join('\n')}\n_Si de verdad fue otro gasto igual, regístralo desde el botón + de Movimientos._`);
-  }
-
   // Otras operaciones (metas, calendario, nidito, ediciones, etc.) sin resumen específico
-  if (!movs.length && !prog.length && !dup.length) sections.push(ok.map(e => e.result).join('\n'));
+  if (!movs.length && !prog.length) sections.push(ok.map(e => e.result).join('\n'));
 
   let reply = sections.join('\n\n');
   if (err.length) reply += `\n\n⚠️ No pude procesar ${err.length} operación(es): ${err.map(e => e.result).join(', ')}`;
