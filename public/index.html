@@ -483,6 +483,8 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .mov-card-title{font-size:14px;font-weight:700;color:var(--text-1);
   display:flex;align-items:center;flex-wrap:wrap;gap:4px;word-break:break-word}
 .mov-card-sub{font-size:12px;color:var(--text-3);margin-top:1px;word-break:break-word}
+.mov-card-note{font-size:11.5px;color:var(--text-2);margin-top:3px;word-break:break-word;display:flex;align-items:flex-start;gap:4px}
+.mov-card-note .ti{font-size:12px;margin-top:1px;flex-shrink:0;color:var(--text-3)}
 .mov-card-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;
   white-space:nowrap;flex-shrink:0;margin-left:auto;text-align:right}
 .mov-card-acts{display:flex;gap:2px;flex-shrink:0}
@@ -5543,11 +5545,13 @@ function _movCardsHTML(rows) {
       const isGasto = m.tipo==='GASTO';
       const dot = m.revisado ? '' : `<button class="dot-btn" title="Marcar revisado" onclick="event.stopPropagation();markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
       const sub = [m.categoria, m.medio_pago].filter(Boolean).join(' · ');
+      const coment = (m.comentarios||'').trim().replace(/&/g,'&amp;').replace(/</g,'&lt;');
       return `<div class="mov-card">
         <div class="mov-card-ic" style="background:${cClr}22;color:${cClr}"><i class="ti ti-${isGasto?'arrow-down-right':'arrow-up-right'}"></i></div>
         <div class="mov-card-mid">
           <div class="mov-card-title">${dot}${m.concepto||'<em style="color:var(--text-3);font-style:normal">—</em>'}</div>
           <div class="mov-card-sub">${sub||'—'}</div>
+          ${coment?`<div class="mov-card-note"><i class="ti ti-message-2"></i> ${coment}</div>`:''}
         </div>
         <div class="mov-card-val ${isGasto?'red':'green'}">${isGasto?'−':'+'}${fmt(m.monto)}</div>
         <div class="mov-card-acts">
