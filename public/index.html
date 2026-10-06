@@ -630,6 +630,12 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
    se anima su alto. */
 /* Botón minimalista de "Gastos esta quincena" en Inicio (centrado bajo los emojis) */
 .q-dash-wrap{display:flex;justify-content:center;margin:20px 0 10px}
+/* Retiro de efectivo: icono 🏦 que despliega el monto al lado (mismo círculo que .mf-ico) */
+.retiro-wrap{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.retiro-ico.on{background:var(--bg-surface-2);border-color:var(--color-warning)}
+.retiro-card{display:inline-flex;align-items:center;padding:8px 16px;border-radius:var(--radius-pill);
+  background:var(--bg-surface);border:1px solid var(--color-warning)}
+.retiro-val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--color-warning)}
 .q-dash-btn{display:inline-flex;align-items:center;gap:9px;padding:10px 20px;
   border-radius:var(--radius-pill);border:1px solid var(--border-default);
   background:var(--bg-surface);color:var(--text-1);font-family:inherit;font-size:13.5px;
@@ -3013,6 +3019,11 @@ function rQuincenaPanel(ctx) {
   S._gastosQRows[ctx]   = gasEsp;
   S._ingresosQRows[ctx] = ingEspQ;
 
+  // Retiro de efectivo = gastos fijos presupuestados marcados como efectivo
+  const retiroEfectivo = gasEsp
+    .filter(g => (fpMap[g.descripcion] || g.forma_pago || '') === 'efectivo')
+    .reduce((a, g) => a + (g.monto || 0), 0);
+
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
   // Chart (deferred after render)
@@ -3078,6 +3089,14 @@ function rQuincenaPanel(ctx) {
     <div class="sec-hdr" style="margin:14px 0 12px">
       <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta quincena</h2></div>
     </div>`}
+    ${gasEsp.length ? `
+    <div class="retiro-wrap">
+      <button type="button" class="mf-ico retiro-ico${S._retiroOpen?' on':''}" id="retiro-btn-${ctx}" onclick="toggleRetiro()"
+        title="Retiro de efectivo" aria-label="Retiro de efectivo" aria-expanded="${S._retiroOpen?'true':'false'}">🏦</button>
+      <div class="retiro-card" id="retiro-card-${ctx}" style="display:${S._retiroOpen?'':'none'}" title="Gastos marcados como efectivo">
+        <span class="retiro-val">${fmt(retiroEfectivo)}</span>
+      </div>
+    </div>` : ''}
     <div style="display:flex;justify-content:center;margin-bottom:14px">
       <button class="btn btn-accent" style="padding:11px 22px;font-size:15px;font-weight:700;gap:8px" onclick="oAddProxGasto()"><i class="ti ti-plus" style="font-size:17px"></i> Registrar Próximo Gasto</button>
     </div>
@@ -6531,6 +6550,17 @@ async function updateDespensaField(id, field, value) {
 function refreshQuincenaPanel() {
   const el = $('quincena-dash-section');
   if (el && S._qDashOpen) el.innerHTML = rQuincenaPanel('dash');
+}
+
+// Muestra/oculta el monto del retiro de efectivo. El estado es global para que el icono
+// quede igual en Inicio y en la hoja, aunque estén los dos en el DOM.
+function toggleRetiro() {
+  S._retiroOpen = !S._retiroOpen;
+  document.querySelectorAll('[id^="retiro-card-"]').forEach(c => { c.style.display = S._retiroOpen ? '' : 'none'; });
+  document.querySelectorAll('[id^="retiro-btn-"]').forEach(b => {
+    b.classList.toggle('on', S._retiroOpen);
+    b.setAttribute('aria-expanded', S._retiroOpen ? 'true' : 'false');
+  });
 }
 
 function toggleQuincenaDash() {
