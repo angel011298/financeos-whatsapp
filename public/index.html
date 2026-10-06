@@ -636,14 +636,10 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .retiro-card{display:inline-flex;align-items:center;padding:8px 16px;border-radius:var(--radius-pill);
   background:var(--bg-surface);border:1px solid var(--color-warning)}
 .retiro-val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--color-warning)}
-.q-dash-btn{display:inline-flex;align-items:center;gap:9px;padding:10px 20px;
-  border-radius:var(--radius-pill);border:1px solid var(--border-default);
-  background:var(--bg-surface);color:var(--text-1);font-family:inherit;font-size:13.5px;
-  font-weight:700;cursor:pointer;transition:background .15s,border-color .15s}
-.q-dash-btn:hover{background:var(--bg-surface-2);border-color:var(--accent-primary)}
-.q-dash-btn:active{transform:scale(.97)}
-.q-dash-btn>.ti:first-child{font-size:16px;color:var(--accent-primary)}
-.q-dash-chev{font-size:14px;color:var(--text-3)}
+/* Gastos esta quincena: solo icono, mismo estilo (.mini-tile) que los emojis de arriba */
+.q-dash-btn.mini-tile{width:calc((100% - 40px)/5);padding:0;font-size:26px;
+  flex-direction:row;gap:0;color:inherit;font-family:inherit}
+.q-dash-btn.on{border-color:var(--accent-primary);background:var(--bg-surface-2)}
 /* Gastos de la quincena en tarjetas (misma estética que .mov-card) */
 .q-card-chk{background:none;border:none;cursor:pointer;padding:0;flex-shrink:0;
   font-size:18px;display:flex;align-items:center}
@@ -1373,6 +1369,7 @@ body.sheet-locked{overflow:hidden}
   .mini-tile{aspect-ratio:auto;flex-direction:column;gap:7px;padding:16px 6px 14px;font-size:24px}
   .mini-tile-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-2);
     text-align:center;line-height:1.2}
+  .q-dash-btn.mini-tile{width:72px;height:72px;aspect-ratio:auto;font-size:28px}
 
   /* La hoja pasa de ser un sheet inferior a un panel lateral derecho de 440px */
   #dash-sheet{justify-content:flex-end;align-items:stretch}
@@ -4073,11 +4070,9 @@ function rDash() {
 <div class="mini-grid">${EMOJIS.map(([e,k,lbl])=>
   `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span></button>`).join('')}</div>
 <div class="q-dash-wrap">
-  <button class="q-dash-btn" id="q-dash-btn" onclick="toggleQuincenaDash()"
-    aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">
-    <i class="ti ti-wallet"></i> Gastos esta quincena
-    <i class="ti ti-chevron-${S._qDashOpen?'up':'down'} q-dash-chev"></i>
-  </button>
+  <button class="q-dash-btn mini-tile${S._qDashOpen?' on':''}" id="q-dash-btn" onclick="toggleQuincenaDash()"
+    title="Gastos esta quincena" aria-label="Gastos esta quincena"
+    aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">🧮</button>
 </div>
 <div id="quincena-dash-section" style="display:${S._qDashOpen?'':'none'}"></div>
 <button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>
@@ -6568,8 +6563,7 @@ function toggleQuincenaDash() {
   const sec = $('quincena-dash-section'), btn = $('q-dash-btn');
   if (!sec || !btn) return;
   btn.setAttribute('aria-expanded', S._qDashOpen ? 'true' : 'false');
-  const chev = btn.querySelector('.q-dash-chev');
-  if (chev) chev.className = `ti ti-chevron-${S._qDashOpen?'up':'down'} q-dash-chev`;
+  btn.classList.toggle('on', S._qDashOpen);
   sec.style.display = S._qDashOpen ? '' : 'none';
   if (S._qDashOpen) refreshQuincenaPanel();
 }
