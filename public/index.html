@@ -2369,6 +2369,29 @@ function getQuincenaOffsetFromDate(dateStr) {
   return tgtQ - curQ;
 }
 
+// Remanente: sobrante REAL (ingresos − gastos registrados) de las quincenas ya cerradas,
+// arrastrado quincena a quincena y SOLO si es positivo (un déficit no se arrastra). Se
+// calcula al vuelo y no es un movimiento: así no infla los ingresos de los reportes
+// mensuales/anuales (el dinero ya se contó como ingreso cuando entró). Los gastos de
+// "Ahorro" ya cuentan como gasto, por lo que ese dinero no vuelve como remanente.
+// Quincenas futuras (off>0) no tienen: la anterior aún no termina.
+function getRemanente(off) {
+  off = off || 0;
+  if (off > 0) return 0;
+  const movs = (S.data.movs || []).filter(m => !m.deleted_at && m.fecha);
+  if (!movs.length) return 0;
+  const primera = movs.reduce((min, m) => (m.fecha < min ? m.fecha : min), movs[0].fecha);
+  const desde = Math.max(getQuincenaOffsetFromDate(primera), off - 48);
+  let rem = 0;
+  for (let o = desde; o < off; o++) {
+    const qi = getQuincenaInfo(o);
+    const net = filterMovs(movs, qi.from, qi.to)
+      .reduce((a, m) => a + (m.tipo === 'INGRESO' ? 1 : m.tipo === 'GASTO' ? -1 : 0) * (m.monto || 0), 0);
+    rem = Math.max(0, rem + net);
+  }
+  return Math.round(rem * 100) / 100;
+}
+
 function getPeriodoRange() {
   const { tipo, offset } = S.periodo;
   const now = new Date();
@@ -3005,7 +3028,8 @@ function rQuincenaPanel(ctx) {
   const gasDiff  = totalGasReal - totalGasEsp;
   const balEsp   = totalIngEsp - totalGasEsp;
   const ingQ     = totalIngEsp || totalIngReal; // usa esperado si existe, si no el real
-  const balReal  = ingQ - totalGasReal;
+  const remanente = getRemanente(qOff);
+  const balReal  = ingQ + remanente - totalGasReal;
 
   // Forma de pago por descripción de gasto fijo
   const fpMap = ((S.data.user || {}).external_refs || {}).forma_pago_gastos || {};
@@ -3068,6 +3092,11 @@ function rQuincenaPanel(ctx) {
         <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
       </div>
     </div>
+    ${remanente > 0 ? `
+    <div class="q-item-row">
+      <span style="font-size:12px">🔁 Remanente <span style="color:var(--muted);font-size:11px">de la quincena anterior</span></span>
+      <div style="display:flex;align-items:center;gap:6px"><span class="green" style="font-weight:600">${fmt(remanente)}</span></div>
+    </div>` : ''}
     ${ingEspQ.length ? ingEspQ.map(ing=>`
     <div class="q-item-row">
       <span style="font-size:12px">${ing.descripcion} <span style="color:var(--muted);font-size:11px">días ${(ing.dias||[]).filter(d=>dayInQuincena(d,qi)).join(', ')}</span></span>
@@ -4010,7 +4039,8 @@ function rDash() {
   const gasEspTot = getGastosEsperados(refs, _qKey)
     .filter(g=>!/^despensa$/i.test((g.descripcion||'').trim()))
     .reduce((a,g)=>a+(g.monto||0),0);
-  const bal = (ingC || ingEsp) - gasC;   // misma expresión que el indicador de balance de hoy (ingBal - gasC)
+  const remQ = S.periodo.tipo==='quincena' ? getRemanente(S.periodo.offset) : 0;   // solo en vista de quincena
+  const bal = (ingC || ingEsp) + remQ - gasC;   // misma expresión que el indicador de balance de hoy (ingBal - gasC)
   const pats = S.data.patrones||[];
   S._patData = {};
   pats.forEach(p => { S._patData[p.id] = p; });
@@ -4051,7 +4081,7 @@ function rDash() {
     <div class="mini-bal${bal<0?' neg':''}">${bal<0?'-':''}${_bMain}<span class="cents">${_bCent}</span></div>
     <div class="mini-sub ${bal>=0?'pos':'neg'}">
       <i class="ti ti-trending-${bal>=0?'up':'down'}"></i>
-      Balance ${bal>=0?'positivo':'negativo'} · ${pMovs.length} movimiento${pMovs.length!==1?'s':''}</div>
+      Balance ${bal>=0?'positivo':'negativo'} · ${pMovs.length} movimiento${pMovs.length!==1?'s':''}${remQ>0?` · incluye remanente ${fmt(remQ)}`:''}</div>
   </div>
   <div class="mini-rows">
     <div class="mini-row" onclick="dashEmoji('gastQuinc')" title="Ver gastos de la quincena">
