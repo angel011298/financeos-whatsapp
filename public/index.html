@@ -263,6 +263,7 @@ textarea{min-height:64px;resize:vertical}
 .cuenta-inp{font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:18px;font-weight:700;width:100%;padding:2px 5px;border:1px solid var(--accent-primary);border-radius:5px;background:var(--bg-surface);color:var(--text-1);outline:none}
 .cuenta-retiro-btn{background:transparent;border:1px solid var(--border-default);border-radius:6px;cursor:pointer;color:var(--text-3);font-size:10px;padding:3px 7px;display:inline-flex;align-items:center;gap:3px;font-family:inherit;white-space:nowrap;flex-shrink:0;transition:color .12s,border-color .12s}
 .cuenta-retiro-btn:hover{color:var(--color-expense);border-color:var(--color-expense)}
+.cuenta-tasa{font-size:10.5px;color:var(--text-3);margin-top:4px;font-variant-numeric:tabular-nums}
 
 /* ── NOTAS por pestaña (editor tipo Notas de iPhone) ── */
 .notas-box{margin-bottom:14px}
@@ -655,6 +656,7 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-fp-pill.on{background:var(--bg-surface-2)}
 .q-fp-pill.on-ef{border-color:var(--color-income);color:var(--color-income)}
 .q-fp-pill.on-db{border-color:var(--accent-primary);color:var(--accent-primary)}
+.q-fp-pill.on-px{border-color:#f97316;color:#f97316}
 .mov-card.pagado{background:var(--bg-surface-2)}
 .mov-card.pagado .mov-card-title{text-decoration:line-through;opacity:.65}
 .mf-toggle{flex-shrink:0;white-space:nowrap}
@@ -1613,7 +1615,7 @@ body.sheet-locked{overflow:hidden}
 <script>
 // ── CONSTANTES ──────────────────────────────────────────────────────────────
 const CATS   = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
-const MEDIOS = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut'];
+const MEDIOS = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut','Pluxee'];
 const CLR    = ['#818cf8','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
 const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Hormiga':'#fbbf24','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
 
@@ -2381,7 +2383,8 @@ function getRemanente(off) {
   const movs = (S.data.movs || []).filter(m => !m.deleted_at && m.fecha);
   if (!movs.length) return 0;
   const primera = movs.reduce((min, m) => (m.fecha < min ? m.fecha : min), movs[0].fecha);
-  const desde = Math.max(getQuincenaOffsetFromDate(primera), off - 48);
+  const ancla = ((S.data.user || {}).external_refs || {}).remanente_desde;   // cifras previas no confiables
+  const desde = Math.max(getQuincenaOffsetFromDate(primera), ancla ? getQuincenaOffsetFromDate(ancla) : -Infinity, off - 48);
   let rem = 0;
   for (let o = desde; o < off; o++) {
     const qi = getQuincenaInfo(o);
@@ -2721,7 +2724,7 @@ function exportGastosQuincena(ctx) {
   const fpLabel = g => {
     if (g._isDespensa) return '';
     const fp = fpMap[g.descripcion] || g.forma_pago || '';
-    return fp === 'efectivo' ? 'Efectivo' : fp === 'tarjeta_debito' ? 'T. Débito' : '';
+    return fp === 'efectivo' ? 'Efectivo' : fp === 'tarjeta_debito' ? 'T. Débito' : fp === 'pluxee' ? 'Pluxee' : '';
   };
   const cols = [
     { label: 'Concepto',      get: g => g._isDespensa ? 'Despensa' : (g.descripcion || '') },
@@ -2744,15 +2747,28 @@ function exportIngresosQuincena(ctx) {
 
 // ── CUENTAS (solo monitoreo) ─────────────────────────────────────────────────
 // Saldos informativos de cuentas propias. NO son movimientos: nunca entran en
-// gastos, ingresos, balance ni en ningún otro cálculo del dashboard.
+// gastos, ingresos, balance ni en ningún otro cálculo del dashboard. El servidor los
+// ajusta solo cuando un movimiento usa ese medio de pago (ver medioPagoACuentaKey).
+// retiro:true → desde esa cuenta se puede sacar efectivo del cajero (pasa a "Efectivo").
 const CUENTAS_DEF = [
-  { key:'banamex',        label:'Banamex · Débito', icon:'ti-credit-card', color:'#0ea5e9' },
-  { key:'revolut_debito', label:'Revolut · Débito', icon:'ti-credit-card', color:'#14b8a6' },
-  { key:'revolut',        label:'Revolut · Ahorro', icon:'ti-pig-money',   color:'#8b5cf6' },
+  { key:'efectivo',       label:'Efectivo',         icon:'ti-cash',        color:'#22c55e' },
+  { key:'banamex',        label:'Banamex · Débito', icon:'ti-credit-card', color:'#0ea5e9', retiro:true },
+  { key:'revolut_debito', label:'Revolut · Débito', icon:'ti-credit-card', color:'#14b8a6', retiro:true },
+  { key:'revolut',        label:'Revolut · Ahorro', icon:'ti-pig-money',   color:'#8b5cf6', retiro:true },
+  { key:'pluxee',         label:'Pluxee · Vales',   icon:'ti-basket',      color:'#f97316' },
 ];
 
+// Rendimiento estimado al mes a partir de la tasa ANUAL (external_refs.cuentas_tasa) — solo
+// informativo, nunca se suma al saldo: el saldo real es el que reporta el banco.
+function _rendimientoMensual(saldo, tasaAnual) {
+  if (!(saldo > 0) || !(tasaAnual > 0)) return 0;
+  return saldo * (Math.pow(1 + tasaAnual / 100, 1 / 12) - 1);
+}
+
 function rCuentasWidget() {
-  const c     = ((S.data.user || {}).external_refs || {}).cuentas || {};
+  const refs  = (S.data.user || {}).external_refs || {};
+  const c     = refs.cuentas || {};
+  const tasas = refs.cuentas_tasa || {};
   const total = CUENTAS_DEF.reduce((a, d) => a + (Number(c[d.key]) || 0), 0);
   return `<div class="cuentas-box">
   <div class="cuentas-hdr">
@@ -2760,13 +2776,19 @@ function rCuentasWidget() {
     <span class="cuentas-note">Solo monitoreo — no cuenta como ingreso ni gasto</span>
   </div>
   <div class="cuentas-grid">
-    ${CUENTAS_DEF.map(d => `<div class="cuenta-card" style="border-left:3px solid ${d.color}">
+    ${CUENTAS_DEF.map(d => {
+      const saldo = Number(c[d.key]) || 0;
+      const tasa  = Number(tasas[d.key]) || 0;
+      const rend  = _rendimientoMensual(saldo, tasa);
+      return `<div class="cuenta-card" style="border-left:3px solid ${d.color}">
       <div class="cuenta-lbl"><i class="ti ${d.icon}" style="color:${d.color}"></i> ${d.label}</div>
       <div class="cuenta-row">
-        <div class="cuenta-val" title="Clic para editar el saldo" onclick="editCuenta(this,'${d.key}')">${fmt(Number(c[d.key]) || 0)}</div>
-        <button type="button" class="cuenta-retiro-btn" title="Registrar retiro de efectivo (no cuenta como gasto)" onclick="oRetiro('${d.key}')"><i class="ti ti-minus"></i> Retirar</button>
+        <div class="cuenta-val" title="Clic para editar el saldo" onclick="editCuenta(this,'${d.key}')">${fmt(saldo)}</div>
+        ${d.retiro ? `<button type="button" class="cuenta-retiro-btn" title="Retiro de cajero: pasa a Efectivo (no cuenta como gasto)" onclick="oRetiro('${d.key}')"><i class="ti ti-minus"></i> Retirar</button>` : ''}
       </div>
-    </div>`).join('')}
+      ${tasa ? `<div class="cuenta-tasa" title="Estimado con la tasa anual; el saldo real es el que reporte tu banco">${tasa}% anual · ≈ +${fmt(rend)}/mes</div>` : ''}
+    </div>`;
+    }).join('')}
     <div class="cuenta-card cuenta-total">
       <div class="cuenta-lbl"><i class="ti ti-sigma"></i> Total monitoreado</div>
       <div class="cuenta-val" style="color:var(--accent-primary);cursor:default">${fmt(total)}</div>
@@ -2781,7 +2803,7 @@ function oRetiro(key) {
   $('m-title').textContent = `Retirar efectivo — ${def?.label || key}`;
   $('m-body').innerHTML = `
 <div class="fr"><label>Monto retirado ($)</label><input id="ret-monto" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
-<div style="font-size:11px;color:var(--text-3)">Se resta del saldo monitoreado de ${def?.label || key}. No se registra como gasto — el efectivo sigue siendo tuyo, solo cambió de lugar.</div>`;
+<div style="font-size:11px;color:var(--text-3)">Se resta de ${def?.label || key} y se suma a tu Efectivo. No se registra como gasto — el dinero sigue siendo tuyo, solo cambió de lugar.</div>`;
   $('ovl').classList.add('open');
   setTimeout(() => $('ret-monto')?.focus(), 50);
 }
@@ -3159,6 +3181,7 @@ function rQuincenaPanel(ctx) {
         const nomSafe = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
         const fpEfect = fp === 'efectivo';
         const fpDebit = fp === 'tarjeta_debito';
+        const fpPlux  = fp === 'pluxee';
         const catG    = g.categoria || '';
         const cClrG   = CAT_CLR[catG] || '#94a3b8';
         const sub     = [catG, g.comentarios].filter(Boolean).join(' · ') || '—';
@@ -3174,6 +3197,7 @@ function rQuincenaPanel(ctx) {
             <div class="q-card-fp">
               <button class="q-fp-pill${fpEfect?' on on-ef':''}" onclick="setFormaPago('${nomSafe}','efectivo')" title="Marcar como efectivo"><i class="ti ti-cash"></i> Efectivo</button>
               <button class="q-fp-pill${fpDebit?' on on-db':''}" onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="Marcar como tarjeta de débito"><i class="ti ti-credit-card"></i> T. Débito</button>
+              <button class="q-fp-pill${fpPlux?' on on-px':''}" onclick="setFormaPago('${nomSafe}','pluxee')" title="Marcar como vales Pluxee"><i class="ti ti-basket"></i> Pluxee</button>
             </div>
             <div class="mov-card-acts">
               <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
@@ -3258,6 +3282,7 @@ function _gastoFormBody(item) {
     <option value=""${!fp?' selected':''}>— Sin definir —</option>
     <option value="efectivo"${fp==='efectivo'?' selected':''}>Efectivo</option>
     <option value="tarjeta_debito"${fp==='tarjeta_debito'?' selected':''}>T. Débito</option>
+    <option value="pluxee"${fp==='pluxee'?' selected':''}>Pluxee (vales)</option>
   </select></div>
   <div class="fr"><label>Categoría</label><select id="ei-cat">
     <option value=""${!cat?' selected':''}>— Sin categoría —</option>
@@ -6145,12 +6170,10 @@ async function saveM() {
   if (ctx.mode === 'retiro-cuenta') {
     const monto = parseFloat($('ret-monto')?.value);
     if (!monto || monto <= 0) { alert('Ingresa un monto válido'); return; }
-    const cur   = Number((((S.data.user || {}).external_refs || {}).cuentas || {})[ctx.key]) || 0;
-    const nuevo = Math.round((cur - monto) * 100) / 100;
     try {
-      await api('POST', '/api/update-refs', { phone: S.phone, field: 'cuentas', action: 'set', itemId: ctx.key, value: nuevo });
+      await api('POST', '/api/update-refs', { phone: S.phone, field: 'cuentas', action: 'retiro', itemId: ctx.key, value: monto });
       closeM(); await load();
-      toast(`Retiro registrado — nuevo saldo ${fmt(nuevo)} ✓`);
+      toast(`Retiro de ${fmt(monto)} pasado a Efectivo ✓`);
     } catch(e) { alert('Error: ' + e.message); }
     return;
   }
@@ -6762,7 +6785,7 @@ async function marcarGastoQ(itemId, pagadoId) {
         concepto:    '[Ppto] ' + (g.descripcion || ''),
         descripcion: '',
         monto:       g.monto || 0,
-        medio_pago:  fp,
+        medio_pago:  fp === 'pluxee' ? 'Pluxee' : fp,   // mismo string que MEDIOS para filtros y saldo
         fecha:       toISO(new Date()),
         comentarios: g.comentarios || ''
       });

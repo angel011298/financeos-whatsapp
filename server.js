@@ -176,7 +176,7 @@ app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModifi
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
 const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
-const MEDIOS_PAGO = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut'];
+const MEDIOS_PAGO = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut','Pluxee'];
 
 // Corre `promise` pero si tarda más de `ms` devuelve `fallback` en lugar de colgar.
 const withTimeout = (promise, ms, fallback) =>
@@ -635,21 +635,31 @@ const TABLAS_SOFT_DELETE = ['movimientos','metas','calendario','nidito'];
 function medioToFormaPago(medio) {
   const m = (medio || '').toLowerCase();
   if (m === 'efectivo') return 'efectivo';
+  if (/\b(pluxee|vales)\b/.test(m)) return 'pluxee';
   if (m.includes('débito') || m.includes('debito')) return 'tarjeta_debito';
   return ''; // TDC / transferencia → no afecta el cálculo de retiro de efectivo
 }
 
-// ── SALDOS DE CUENTAS (monitoreo Banamex/Revolut) ─────────────────────────────
-// Un gasto pagado con "Débito Banamex" o "Débito Revolut" descuenta AUTOMÁTICAMENTE
-// del saldo monitoreado de esa cuenta (external_refs.cuentas), ADEMÁS de registrarse
-// como gasto normal (categoría, presupuesto, estadísticas) — ambas cosas son
-// independientes: el saldo es solo un espejo de "cuánto dinero real queda ahí".
-// Tolerante a variantes ("Débito Banamex", "banamex débito", "tarjeta banamex", etc.) — no
+// ── SALDOS DE CUENTAS (monitoreo) ─────────────────────────────────────────────
+// Cuentas monitoreadas en external_refs.cuentas. Un movimiento cuyo medio de pago
+// corresponde a una de ellas ajusta AUTOMÁTICAMENTE su saldo, ADEMÁS de registrarse
+// como gasto/ingreso normal — el saldo es solo un espejo de "cuánto dinero real queda ahí".
+const CUENTAS_LABEL = {
+  efectivo:       'Efectivo',
+  banamex:        'Banamex · Débito',
+  revolut_debito: 'Revolut · Débito',
+  revolut:        'Revolut · Ahorro',
+  pluxee:         'Pluxee · Vales de despensa',
+};
+
+// Tolerante a variantes ("Débito Banamex", "banamex débito", "tarjeta de vales", etc.) — no
 // depende de que la IA (o el usuario) use el string exacto del enum de medios de pago.
 function medioPagoACuentaKey(medioPago) {
-  const m = (medioPago || '').toLowerCase();
+  const m = (medioPago || '').toLowerCase().trim();
+  if (/\b(pluxee|vales)\b/.test(m)) return 'pluxee';
   if (/\bbanamex\b/.test(m)) return 'banamex';
   if (/\brevolut\b/.test(m)) return 'revolut_debito';   // gastar siempre pega a la cuenta de débito, nunca al ahorro
+  if (m === 'efectivo') return 'efectivo';
   return null;
 }
 
@@ -676,19 +686,21 @@ async function ajustarSaldoCuentaKey(phone, key, delta) {
   } catch (e) { console.error('ajustarSaldoCuentaKey error:', e.message); }
 }
 
-// Traduce un movimiento a su(s) efecto(s) en cuentas: [] si no aplica (no es GASTO, monto 0, o su
-// medio_pago no corresponde a ninguna cuenta monitoreada Y tampoco es una transferencia a ahorro).
-// Un GASTO normal solo resta de la cuenta de origen (medio_pago). Un GASTO que ADEMÁS es una
-// transferencia a ahorro resta de la cuenta de origen Y suma a la cuenta de ahorro — refleja
-// ambos lados de la transferencia interna. Antes solo se restaba del débito y el widget de
-// ahorro se quedaba desincronizado (había que actualizarlo a mano, y podía desfasarse).
+// Traduce un movimiento a su(s) efecto(s) en cuentas: [] si no aplica (monto 0, o su medio_pago
+// no corresponde a ninguna cuenta monitoreada Y tampoco es una transferencia a ahorro).
+// - GASTO: resta de la cuenta de origen (medio_pago). Si ADEMÁS es una transferencia a ahorro,
+//   suma a la cuenta de ahorro — refleja ambos lados de la transferencia interna.
+// - INGRESO: suma a la cuenta nombrada (p.ej. vales → Pluxee), EXCEPTO efectivo: el extractor
+//   usa "efectivo" como valor por defecto cuando el usuario no dice el medio, y sueldos o
+//   aguinaldos que llegan por banco terminarían inflando el efectivo con dinero que no existe.
 function impactoCuenta(mov) {
-  if (!mov || mov.tipo !== 'GASTO') return [];
+  if (!mov || (mov.tipo !== 'GASTO' && mov.tipo !== 'INGRESO')) return [];
   const monto = Number(mov.monto) || 0;
   if (!monto) return [];
+  const key = medioPagoACuentaKey(mov.medio_pago);
+  if (mov.tipo === 'INGRESO') return key && key !== 'efectivo' ? [{ key, delta: +monto }] : [];
   const efectos = [];
-  const origenKey = medioPagoACuentaKey(mov.medio_pago);
-  if (origenKey) efectos.push({ key: origenKey, delta: -monto });
+  if (key) efectos.push({ key, delta: -monto });
   if (esTransferenciaAhorro(mov)) efectos.push({ key: AHORRO_CUENTA_KEY, delta: +monto });
   return efectos;
 }
@@ -696,10 +708,18 @@ function impactoCuenta(mov) {
 // Revierte el/los efecto(s) de "before" (estado previo, o null si es un alta) y aplica el/los de
 // "after" (estado nuevo, o null si es baja). Cubre crear/editar/eliminar con una sola función,
 // incluyendo cambios de banco, de monto, o que el texto deje de/empiece a mencionar "ahorro".
+// Los movimientos creados ANTES de refs.cuentas_desde (momento en que se capturaron los saldos
+// reales) ya están reflejados en esos saldos: editarlos o borrarlos no debe moverlos.
 async function aplicarImpactoCuentas(phone, before, after) {
+  let desde = null;
+  try {
+    const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    desde = u?.external_refs?.cuentas_desde || null;
+  } catch { /* sin línea base: se aplica todo, como antes */ }
+  const cuenta = m => !(desde && m?.created_at && new Date(m.created_at) < new Date(desde));
   const efectos = [
-    ...impactoCuenta(before).map(e => ({ key: e.key, delta: -e.delta })), // revertir lo anterior
-    ...impactoCuenta(after),                                              // aplicar lo nuevo
+    ...(cuenta(before) ? impactoCuenta(before) : []).map(e => ({ key: e.key, delta: -e.delta })), // revertir lo anterior
+    ...(cuenta(after)  ? impactoCuenta(after)  : []),                                              // aplicar lo nuevo
   ];
   for (const e of efectos) await ajustarSaldoCuentaKey(phone, e.key, e.delta);
 }
@@ -717,10 +737,23 @@ function esGastoProgramado(datos, today) {
 // Se aplican a GASTOS sin importar lo que devuelva Gemini, para garantizar consistencia.
 // Mutan `datos` en sitio. Precedencia: transporte (concreto) > Platina > Alicia/golosinas.
 function aplicarReglasCategoria(datos, textoOriginal = '') {
-  if (!datos || datos.tipo !== 'GASTO') return datos;
+  if (!datos) return datos;
   const norm = s => String(s || '').toLowerCase()
     .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
     .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u');   // minúsculas + sin acentos
+
+  // 0) Pluxee (tarjeta de vales de despensa) — gastos E ingresos. "vales" en plural: "vale"
+  //    en singular suele ser "ok". El texto completo del mensaje solo se usa si trae un único
+  //    monto; en un mensaje con varios gastos, que UNA línea diga "vales" no debe marcar a todos.
+  const propio = norm(`${datos.concepto || ''} ${datos.comentarios || ''} ${datos.medio_pago || ''}`);
+  const unSoloMonto = (String(textoOriginal || '').match(/\d+(?:[.,]\d+)?/g) || []).length <= 1;
+  const RE_VALES = /\b(pluxee|vales)\b/;
+  const esPluxee = RE_VALES.test(propio) || (unSoloMonto && RE_VALES.test(norm(textoOriginal)));
+
+  if (datos.tipo !== 'GASTO') {
+    if (esPluxee) datos.medio_pago = 'Pluxee';
+    return datos;
+  }
   const blob = norm(`${datos.concepto || ''} ${datos.comentarios || ''} ${textoOriginal || ''}`);
   const has  = re => re.test(blob);
 
@@ -743,6 +776,9 @@ function aplicarReglasCategoria(datos, textoOriginal = '') {
 
   // 3) "transferencia" → siempre se guarda como pagado con tarjeta de débito
   if (has(/\btransfer(?:encia|i)\b/)) datos.medio_pago = 'débito';
+
+  // 4) Vales → Pluxee (va al final: nombrar la tarjeta de vales es la señal más explícita)
+  if (esPluxee) datos.medio_pago = 'Pluxee';
 
   return datos;
 }
@@ -1036,9 +1072,7 @@ async function procesarRecurrentes(phone, forzar = false) {
           sb.from('movimientos').insert(payload).select().single()
         );
         if (error || !data?.id) { console.error('recurrente falló:', error?.message); break; }
-        if (payload.tipo === 'GASTO') {
-          await aplicarImpactoCuentas(phone, null, payload).catch(() => null);
-        }
+        await aplicarImpactoCuentas(phone, null, data).catch(() => null);
         await writeAuditLog(phone, 'movimientos', 'crear', data.id, null, data, 'recurrente', rec.concepto);
         creados++; cambio = true; vueltas++;
         rec.proxima = _avanzarFecha(rec.proxima, rec.frecuencia || 'mensual');
@@ -1219,8 +1253,8 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
       if (tabla === 'movimientos' && cleanDatos?.tipo === 'GASTO') {
         await learnPattern(phone, cleanDatos);
         await verificarLimitePresupuesto(phone, cleanDatos.categoria, mesActual()).catch(() => null);
-        await aplicarImpactoCuentas(phone, null, cleanDatos);
       }
+      if (tabla === 'movimientos') await aplicarImpactoCuentas(phone, null, data);
       await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen, texto_original);
       return `✅ ${tabla === 'calendario' ? 'Evento agendado' : 'Registrado'} ✓ ID: ${data?.id}`;
     }
@@ -1301,7 +1335,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut (usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
+MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut, Pluxee ("Pluxee" es la tarjeta de VALES DE DESPENSA: úsalo SIEMPRE que el usuario mencione Pluxee, vales o vales de despensa — en gastos Y en ingresos, p.ej. "llegaron los vales" es un INGRESO con medio "Pluxee"; usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
 Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
@@ -1434,7 +1468,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut (usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
+MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut, Pluxee ("Pluxee" es la tarjeta de VALES DE DESPENSA: úsalo SIEMPRE que el usuario mencione Pluxee, vales o vales de despensa — en gastos Y en ingresos, p.ej. "llegaron los vales" es un INGRESO con medio "Pluxee"; usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
 Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
@@ -1487,6 +1521,7 @@ function tryParseBatch(text, today) {
     // Banco específico ANTES del genérico "débito" — si no, "débito banamex" caía
     // en la rama genérica y se perdía la mención del banco (y con ella, el ajuste
     // automático del saldo monitoreado de esa cuenta).
+    if (/\b(pluxee|vales)\b/.test(r)) return 'Pluxee';
     if (/\bbanamex\b/.test(r)) return 'Débito Banamex';
     if (/\brevolut\b/.test(r)) return 'Débito Revolut';
     if (/tarjeta\s+d[eé]bito|t\.?\s*d[eé]bito|d[eé]bito/.test(r)) return 'débito';
@@ -2155,6 +2190,9 @@ ${prspLines}${rebalLine}
 INFO PERSONAL:
 ${infoLines}
 
+SALDOS DE CUENTAS (monitoreo; se actualizan solos con cada movimiento que use ese medio de pago):
+${Object.entries(CUENTAS_LABEL).map(([k, l]) => `  ${l}: ${fmt(Number((refs.cuentas || {})[k]) || 0)}`).join('\n')}
+
 DEUDAS TDC:
 ${tdcs.map(t=>`  [${t.id}] ${t.nombre} (${t.estado}): pago ${fmt(t.a_pagar)} saldo ${fmt(Math.max(0,(t.a_pagar||0)-(t.pagado||0)))}`).join('\n')||'  Sin TDC'}
 ${movsSection}
@@ -2581,10 +2619,8 @@ app.post('/api/movimientos', async (req, res) => {
       sb.from('movimientos').insert({ ...d, user_phone }).select().single()
     );
     if (error || !data?.id) return res.status(400).json({ success: false, error: error?.message || 'no se pudo confirmar el registro, intenta de nuevo' });
-    if (d.tipo === 'GASTO') {
-      await learnPattern(user_phone, d);
-      await aplicarImpactoCuentas(user_phone, null, d);
-    }
+    if (d.tipo === 'GASTO') await learnPattern(user_phone, d);
+    await aplicarImpactoCuentas(user_phone, null, data);
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4412,7 +4448,16 @@ app.post('/api/update-refs', async (req, res) => {
       // Saldos de cuentas para MONITOREO (Banamex débito, Revolut ahorro).
       // No son movimientos: nunca entran en gastos/ingresos ni en ningún cálculo de balance.
       if (!refs.cuentas) refs.cuentas = {};
-      refs.cuentas[itemId] = Number(req.body.value) || 0;   // itemId = 'banamex' | 'revolut'
+      refs.cuentas[itemId] = Number(req.body.value) || 0;   // itemId = clave de CUENTAS_LABEL
+    } else if (field === 'cuentas' && action === 'retiro') {
+      // Retiro de cajero: el dinero cambia de lugar (cuenta → efectivo), no es gasto. En una sola
+      // escritura para que nunca quede restado de un lado sin haberse sumado al otro.
+      const monto = Math.abs(Number(req.body.value) || 0);
+      if (!CUENTAS_LABEL[itemId] || itemId === 'efectivo' || itemId === 'pluxee' || !monto) return res.status(400).json({ success: false, error: 'Retiro inválido' });
+      const c = { ...(refs.cuentas || {}) };
+      c[itemId]  = Math.round(((Number(c[itemId])  || 0) - monto) * 100) / 100;
+      c.efectivo = Math.round(((Number(c.efectivo) || 0) + monto) * 100) / 100;
+      refs.cuentas = c;
     } else if (field === 'notas' && action === 'set') {
       // Notas libres por pestaña (HTML enriquecido del editor tipo Notas de iPhone)
       if (!refs.notas) refs.notas = {};
