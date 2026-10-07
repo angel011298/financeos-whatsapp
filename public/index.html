@@ -285,6 +285,9 @@ textarea{min-height:64px;resize:vertical}
 .notas-ed li{margin:3px 0}
 .notas-ed a{color:var(--accent-primary)}
 .notas-ed img{max-width:100%;height:auto;border-radius:6px;margin:4px 0}
+/* Notas ya guardadas con color/fuente de otro sitio (negro sobre negro en modo noche): el tema manda */
+.notas-ed [style],.notas-ed font{color:inherit!important;background:transparent!important;font-family:inherit!important}
+.notas-ed a[style]{color:var(--accent-primary)!important}
 
 /* ── NOTAS DE INICIO — lista + editor de notas ilimitadas (solo Inicio) ─────── */
 .ni-empty{text-align:center;padding:30px 16px;color:var(--text-3);font-size:13px}
@@ -630,7 +633,7 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
    (los filtros ya aplicados no dejan de estar activos por estar oculto), solo
    se anima su alto. */
 /* Botón minimalista de "Gastos esta quincena" en Inicio (centrado bajo los emojis) */
-.q-dash-wrap{display:flex;justify-content:center;margin:20px 0 10px}
+.q-dash-wrap{display:flex;justify-content:center;gap:10px;margin:20px 0 10px}
 /* Retiro de efectivo: icono 🏦 que despliega el monto al lado (mismo círculo que .mf-ico) */
 .retiro-wrap{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .retiro-ico.on{background:var(--bg-surface-2);border-color:var(--color-warning)}
@@ -641,6 +644,64 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-dash-btn.mini-tile{width:calc((100% - 40px)/5);padding:0;font-size:26px;
   flex-direction:row;gap:0;color:inherit;font-family:inherit}
 .q-dash-btn.on{border-color:var(--accent-primary);background:var(--bg-surface-2)}
+/* ── WISHLIST ─────────────────────────────────────────────────────────────── */
+.wl-root{display:flex;flex-direction:column;gap:12px;padding-bottom:28px}
+.wl-bal{font-size:12px;color:var(--text-3);text-align:center}
+.wl-bal b{font-variant-numeric:tabular-nums;color:var(--text-1)}
+.wl-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.wl-stat{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-md);
+  padding:9px 6px;text-align:center;cursor:pointer;font-family:inherit;color:var(--text-1);transition:border-color .15s,background .15s}
+.wl-stat.on{border-color:var(--accent-primary);background:var(--bg-surface-2)}
+.wl-stat-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
+.wl-stat-v{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
+.wl-stat-n{font-size:10.5px;color:var(--text-3)}
+.wl-add{display:flex;gap:8px}
+.wl-add input{min-width:0;padding:10px 12px;font-size:14px}
+.wl-add #wl-new-n{flex:1}
+.wl-add #wl-new-p{width:96px;flex:0 0 96px}
+.wl-add-btn{flex:0 0 42px;border-radius:var(--radius-md);border:none;background:var(--accent-primary);color:var(--on-accent);
+  font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.wl-bar{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.wl-bar select{flex:1;min-width:0;padding:7px 10px;font-size:12.5px}
+.wl-list{display:flex;flex-direction:column;gap:8px}
+.wl-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:12px 14px}
+.wl-card.done{background:var(--bg-surface-2)}
+.wl-card.done .wl-name{text-decoration:line-through;opacity:.6}
+.wl-top{display:flex;align-items:flex-start;gap:10px}
+.wl-prio{background:none;border:none;cursor:pointer;font-size:15px;padding:2px;line-height:1;flex-shrink:0;margin-top:1px}
+.wl-mid{flex:1;min-width:0;cursor:pointer}
+.wl-name{font-size:14.5px;font-weight:700;color:var(--text-1);word-break:break-word}
+.wl-sub{font-size:12px;color:var(--text-3);margin-top:1px}
+.wl-price{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text-1);flex-shrink:0}
+.wl-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.wl-chip{font-size:10.5px;padding:2px 8px;border-radius:var(--radius-pill);background:var(--bg-surface-2);color:var(--text-2);white-space:nowrap}
+.wl-chip.ag{color:var(--accent-primary)}
+.wl-chip.ok{color:var(--color-income)}
+.wl-chip.al{color:var(--color-income)}
+.wl-chip.warn{color:var(--color-warning)}
+.wl-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
+.wl-act{background:var(--bg-surface-2);border:1px solid var(--border-default);color:var(--text-2);border-radius:var(--radius-pill);
+  padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;text-decoration:none}
+.wl-act:hover{border-color:var(--accent-primary);color:var(--text-1)}
+.wl-act.ico{padding:5px 9px}
+.wl-act.pri{color:var(--color-income)}
+.wl-act.del{color:var(--color-expense);margin-left:auto}
+.wl-edit,.wl-panel{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-default);display:flex;flex-direction:column;gap:8px}
+.wl-edit .fr,.wl-panel .fr{margin:0}
+.wl-edit label,.wl-panel label{font-size:11px;color:var(--text-3);display:block;margin-bottom:3px}
+.wl-edit input,.wl-edit select,.wl-edit textarea,.wl-panel select{width:100%;padding:8px 10px;font-size:13.5px}
+.wl-edit textarea{min-height:64px;resize:vertical;font-family:inherit}
+.wl-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wl-q-row{display:grid;grid-template-columns:1fr 1.4fr 1.2fr;gap:6px}
+.wl-prios{display:flex;gap:6px}
+.wl-pp{flex:1;padding:7px 4px;border-radius:var(--radius-pill);border:1px solid var(--border-default);background:transparent;
+  color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit}
+.wl-pp.on{border-color:var(--accent-primary);background:var(--bg-surface-2);color:var(--text-1);font-weight:700}
+.wl-panel-t{font-size:12.5px;font-weight:700;color:var(--text-1)}
+.wl-hint{font-size:11px;color:var(--text-3);line-height:1.4}
+.wl-st{font-size:11px;color:var(--text-3);min-height:14px}
+.wl-empty{text-align:center;padding:26px 12px;color:var(--text-3);font-size:13px;line-height:1.5}
+.wl-tip{font-size:11.5px;color:var(--text-3);text-align:center;line-height:1.5;padding:2px 8px}
 /* Gastos de la quincena en tarjetas (misma estética que .mov-card) */
 .q-card-chk{background:none;border:none;cursor:pointer;padding:0;flex-shrink:0;
   font-size:18px;display:flex;align-items:center}
@@ -2745,6 +2806,300 @@ function exportIngresosQuincena(ctx) {
   exportRowsToExcel(rows, cols, 'ingresos_quincena');
 }
 
+// ── WISHLIST (lista de deseos) ───────────────────────────────────────────────
+// Un deseo pasa por pendiente → agendado (queda como gasto presupuestado de una quincena en
+// "Gastos esta quincena") → comprado. El servidor concilia solo: si se marca como pagado en esa
+// quincena, o se quita de Presupuesto, el estado del deseo se actualiza al volver a abrir.
+const WL_PRIO = { alta:{ lbl:'Alta', ic:'🔴', o:0 }, media:{ lbl:'Media', ic:'🟡', o:1 }, baja:{ lbl:'Baja', ic:'🟢', o:2 } };
+const WL_REFLEXION_DIAS = 30;
+const _wlEsc  = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const _wlItem = id => (S._wl?.items || []).find(x => x.id === id);
+const _wlNorm = r => ({ ...r, precio: Number(r.precio) || 0 });
+
+function _wlQLabel(k) {
+  const m = String(k || '').match(/^(\d{4})-(\d{2})-([AB])$/);
+  return m ? `${m[3]==='A'?'1ª':'2ª'} ${MESES_CORTO[+m[2]-1]} ${m[1]}` : '';
+}
+function _wlDias(it) { return Math.max(0, Math.floor((Date.now() - new Date(it.created_at).getTime()) / 86400000)); }
+function _wlFechaCorta(iso) { const d = new Date(iso); return `${d.getDate()} ${MESES_CORTO[d.getMonth()]}`; }
+
+// Balance de la quincena actual (misma fórmula que el Inicio, incluye remanente).
+function _wlDisponible() {
+  const refs = (S.data.user || {}).external_refs || {};
+  const qi   = getQuincenaInfo(0);
+  const mv   = filterMovs(S.data.movs || [], qi.from, qi.to);
+  const ing  = mv.filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0);
+  const gas  = mv.filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0);
+  return (ing || calcIngresosEsperadosPeriodo(refs, qi.from, qi.to)) + getRemanente(0) - gas;
+}
+
+function wlAbrir() {
+  if (!S._wl) S._wl = { items: [], filtro: 'todos', orden: 'prioridad', editando: null, panel: null, error: '' };
+  S._wl.editando = null; S._wl.panel = null;
+  abrirHoja('Wishlist', '<div id="wl-root" class="wl-root"><div class="wl-empty">Cargando…</div></div>', wlCargar);
+}
+
+async function wlCargar() {
+  try {
+    const r = await api('GET', `/api/wishlist?phone=${encodeURIComponent(S.phone)}`);
+    S._wl.items = (r.data || []).map(_wlNorm);
+    S._wl.error = '';
+  } catch (e) { S._wl.error = e.message; }
+  wlRender();
+}
+
+function _wlHead(it) {
+  const p = WL_PRIO[it.prioridad] || WL_PRIO.media;
+  const disp = S._wl._disp;
+  let chips = '';
+  if (it.estado === 'agendado')      chips = `<span class="wl-chip ag">📅 ${_wlQLabel(it.quincena_key)}</span>`;
+  else if (it.estado === 'comprado') chips = `<span class="wl-chip ok">✓ Comprado${it.comprado_at ? ' · ' + _wlFechaCorta(it.comprado_at) : ''}</span>`;
+  else {
+    const d = _wlDias(it);
+    chips = d >= WL_REFLEXION_DIAS
+      ? `<span class="wl-chip ok" title="Regla de los 30 días: si lo sigues queriendo después de un mes, probablemente vale la pena">✓ Ya lo pensaste ${WL_REFLEXION_DIAS}+ días</span>`
+      : `<span class="wl-chip" title="Regla de los 30 días: espera un mes antes de comprar por impulso">⏳ Reflexión día ${d}/${WL_REFLEXION_DIAS}</span>`;
+    if (!(it.precio > 0)) chips += `<span class="wl-chip warn">Sin precio</span>`;
+    else if (disp >= it.precio) chips += `<span class="wl-chip al" title="Tu balance de esta quincena cubre este precio">💚 Alcanza esta quincena</span>`;
+  }
+  const sub = [it.categoria, it.notas ? it.notas.split('\n')[0].slice(0, 40) : ''].filter(Boolean).map(_wlEsc).join(' · ');
+  const hecho = it.estado === 'comprado';
+  return `<div class="wl-top">
+    <button class="wl-prio" onclick="wlCiclarPrio('${it.id}')" title="Prioridad ${p.lbl} — toca para cambiarla" aria-label="Prioridad ${p.lbl}">${p.ic}</button>
+    <div class="wl-mid" onclick="wlEditar('${it.id}')"><div class="wl-name">${_wlEsc(it.nombre)}</div><div class="wl-sub">${sub}</div></div>
+    <div class="wl-price">${fmt(it.precio)}</div>
+  </div>
+  <div class="wl-chips">${chips}</div>
+  <div class="wl-acts">
+    ${hecho
+      ? `<button class="wl-act" onclick="wlReabrir('${it.id}')"><i class="ti ti-rotate"></i> Reabrir</button>`
+      : `<button class="wl-act pri" onclick="wlPanel('${it.id}','comprar')"><i class="ti ti-shopping-cart-check"></i> Comprar</button>
+         <button class="wl-act" onclick="wlPanel('${it.id}','agendar')"><i class="ti ti-calendar-plus"></i> ${it.estado==='agendado'?'Reagendar':'Agendar'}</button>`}
+    ${it.enlace ? `<a class="wl-act ico" href="${_wlEsc(it.enlace)}" target="_blank" rel="noopener noreferrer" title="Abrir enlace"><i class="ti ti-external-link"></i></a>` : ''}
+    <button class="wl-act ico" onclick="wlEditar('${it.id}')" title="Editar"><i class="ti ti-pencil"></i></button>
+    <button class="wl-act ico del" onclick="wlEliminar('${it.id}')" title="Eliminar"><i class="ti ti-trash"></i></button>
+  </div>`;
+}
+
+function _wlEditor(it) {
+  const pp = Object.entries(WL_PRIO).map(([k, v]) =>
+    `<button type="button" class="wl-pp${it.prioridad===k?' on':''}" onclick="wlPrio('${it.id}','${k}')">${v.ic} ${v.lbl}</button>`).join('');
+  return `<div class="wl-edit">
+    <div><label>Deseo</label><input value="${_wlEsc(it.nombre)}" maxlength="200" oninput="wlCampo('${it.id}','nombre',this.value)"></div>
+    <div class="wl-row2">
+      <div><label>Precio ($)</label><input type="number" min="0" step="any" inputmode="decimal" value="${it.precio || ''}" placeholder="0" oninput="wlCampo('${it.id}','precio',this.value)"></div>
+      <div><label>Categoría</label><select onchange="wlCampo('${it.id}','categoria',this.value)">${CATS.map(c => `<option${it.categoria===c?' selected':''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <div><label>Prioridad</label><div class="wl-prios">${pp}</div></div>
+    <div><label>Enlace (tienda, producto…)</label><input type="url" value="${_wlEsc(it.enlace)}" placeholder="https://" oninput="wlCampo('${it.id}','enlace',this.value)"></div>
+    <div><label>Notas</label><textarea maxlength="2000" placeholder="Modelo, color, dónde lo viste…" oninput="wlCampo('${it.id}','notas',this.value)">${_wlEsc(it.notas)}</textarea></div>
+    <div class="wl-st" id="wl-st-${it.id}"></div>
+  </div>`;
+}
+
+function _wlPanel(it) {
+  const pn = S._wl.panel;
+  if (pn.tipo === 'agendar') {
+    const k  = it.quincena_key || getQKey(getQuincenaInfo(1));
+    const m  = k.match(/^(\d{4})-(\d{2})-([AB])$/);
+    const y0 = new Date().getFullYear();
+    const ys = []; for (let y = Math.min(y0, +m[1]); y <= y0 + 5; y++) ys.push(y);
+    return `<div class="wl-panel">
+      <div class="wl-panel-t">Agendar en una quincena</div>
+      <div class="wl-q-row">
+        <select id="wl-qy">${ys.map(y => `<option${y===+m[1]?' selected':''}>${y}</option>`).join('')}</select>
+        <select id="wl-qm">${MESES.map((n, i) => `<option value="${String(i+1).padStart(2,'0')}"${i+1===+m[2]?' selected':''}>${n[0]+n.slice(1).toLowerCase()}</option>`).join('')}</select>
+        <select id="wl-qq"><option value="A"${m[3]==='A'?' selected':''}>1ª (10–24)</option><option value="B"${m[3]==='B'?' selected':''}>2ª (25–9)</option></select>
+      </div>
+      <div class="wl-hint">Quedará como gasto presupuestado de esa quincena en “Gastos esta quincena”. Cuando lo marques como pagado ahí, el deseo pasa a comprado solo.</div>
+      <div class="wl-acts" style="margin:0">
+        <button class="wl-act pri" onclick="wlConfirmarAgenda('${it.id}')"><i class="ti ti-check"></i> ${it.estado==='agendado'?'Mover':'Agendar'}</button>
+        ${it.estado === 'agendado' ? `<button class="wl-act" onclick="wlQuitarAgenda('${it.id}')">Quitar de agenda</button>` : ''}
+        <button class="wl-act" onclick="wlCerrarPanel()">Cancelar</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="wl-panel">
+    <div class="wl-panel-t">Marcar como comprado</div>
+    <div><label>Medio de pago</label><select id="wl-mp">${MEDIOS.map(x => `<option${x==='efectivo'?' selected':''}>${x}</option>`).join('')}</select></div>
+    <div class="wl-hint">“Registrar gasto” lo suma a tus movimientos de hoy y descuenta el saldo de la cuenta de ese medio de pago. “Solo marcar” no mueve dinero (úsalo si ya lo registraste por otro lado).</div>
+    <div class="wl-acts" style="margin:0">
+      <button class="wl-act pri" onclick="wlConfirmarCompra('${it.id}',true)"><i class="ti ti-receipt"></i> Registrar gasto ${fmt(it.precio)}</button>
+      <button class="wl-act" onclick="wlConfirmarCompra('${it.id}',false)">Solo marcar</button>
+      <button class="wl-act" onclick="wlCerrarPanel()">Cancelar</button>
+    </div>
+  </div>`;
+}
+
+function _wlStatsHTML() {
+  const st = S._wl, items = st.items;
+  const def = [['pendiente','Pendientes'], ['agendado','Agendados'], ['comprado','Comprados']];
+  return def.map(([e, l]) => {
+    const sel = items.filter(i => i.estado === e);
+    return `<button class="wl-stat${st.filtro===e?' on':''}" onclick="wlFiltro('${e}')" title="Filtrar: ${l}">
+      <div class="wl-stat-l">${l}</div><div class="wl-stat-v">${fmt(sel.reduce((a, i) => a + i.precio, 0))}</div><div class="wl-stat-n">${sel.length} deseo${sel.length!==1?'s':''}</div></button>`;
+  }).join('');
+}
+
+function wlRender() {
+  const root = $('wl-root'); if (!root) return;
+  const st = S._wl;
+  const keepN = $('wl-new-n')?.value || '', keepP = $('wl-new-p')?.value || '';
+  st._disp = _wlDisponible();
+  const f = new Map([
+    ['prioridad',   (a, b) => WL_PRIO[a.prioridad].o - WL_PRIO[b.prioridad].o || new Date(b.created_at) - new Date(a.created_at)],
+    ['precio_desc', (a, b) => b.precio - a.precio],
+    ['precio_asc',  (a, b) => a.precio - b.precio],
+    ['recientes',   (a, b) => new Date(b.created_at) - new Date(a.created_at)],
+    ['antiguos',    (a, b) => new Date(a.created_at) - new Date(b.created_at)],
+    ['nombre',      (a, b) => a.nombre.localeCompare(b.nombre, 'es')],
+  ]).get(st.orden) || (() => 0);
+  const lista = st.items.filter(i => st.filtro === 'todos' || i.estado === st.filtro)
+    .sort((a, b) => (a.estado === 'comprado') - (b.estado === 'comprado') || f(a, b));
+  const cards = lista.map(it => `<div class="wl-card${it.estado==='comprado'?' done':''}" id="wl-c-${it.id}">
+      <div id="wl-h-${it.id}">${_wlHead(it)}</div>
+      ${st.editando === it.id ? _wlEditor(it) : ''}
+      ${st.panel?.id === it.id ? _wlPanel(it) : ''}
+    </div>`).join('');
+  const vacio = st.items.length
+    ? 'No hay deseos con ese filtro.'
+    : 'Tu lista está vacía.<br>Escribe arriba algo que quieras y su precio aproximado. Puedes agendarlo en la quincena que te convenga.';
+  root.innerHTML = `
+    ${st.error ? `<div class="wl-empty" style="color:var(--color-expense);padding:8px">No se pudo cargar: ${_wlEsc(st.error)}</div>` : ''}
+    <div class="wl-bal">Balance de esta quincena: <b style="color:${st._disp>=0?'var(--color-income)':'var(--color-expense)'}">${st._disp<0?'−':''}${fmt(Math.abs(st._disp))}</b></div>
+    <div class="wl-stats" id="wl-stats">${_wlStatsHTML()}</div>
+    <form class="wl-add" onsubmit="return wlAgregar(event)">
+      <input id="wl-new-n" placeholder="¿Qué deseas?" maxlength="200" autocomplete="off" aria-label="Nuevo deseo">
+      <input id="wl-new-p" type="number" min="0" step="any" inputmode="decimal" placeholder="Precio" aria-label="Precio aproximado">
+      <button class="wl-add-btn" type="submit" aria-label="Agregar deseo"><i class="ti ti-plus"></i></button>
+    </form>
+    <div class="wl-bar">
+      <select onchange="wlOrden(this.value)" aria-label="Ordenar">
+        ${[['prioridad','Ordenar: prioridad'],['precio_desc','Precio: mayor a menor'],['precio_asc','Precio: menor a mayor'],['recientes','Más recientes'],['antiguos','Más antiguos'],['nombre','Nombre A–Z']]
+          .map(([v, l]) => `<option value="${v}"${st.orden===v?' selected':''}>${l}</option>`).join('')}
+      </select>
+      <button class="wl-act" onclick="wlExcel()" title="Descargar como Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+    </div>
+    <div class="wl-list">${cards || `<div class="wl-empty">${vacio}</div>`}</div>
+    <div class="wl-tip">💡 Regla de los 30 días: si después de un mes lo sigues queriendo, probablemente vale la pena.</div>`;
+  if ($('wl-new-n')) { $('wl-new-n').value = keepN; $('wl-new-p').value = keepP; }
+}
+
+function wlFiltro(f)  { S._wl.filtro = S._wl.filtro === f ? 'todos' : f; wlRender(); }
+function wlOrden(v)   { S._wl.orden = v; wlRender(); }
+function wlCerrarPanel() { S._wl.panel = null; wlRender(); }
+function wlEditar(id) { S._wl.editando = S._wl.editando === id ? null : id; S._wl.panel = null; wlRender(); }
+
+function wlPanel(id, tipo) {
+  const same = S._wl.panel?.id === id && S._wl.panel.tipo === tipo;
+  S._wl.panel = same ? null : { id, tipo };
+  wlRender();
+}
+
+async function wlAgregar(e) {
+  e.preventDefault();
+  const nombre = $('wl-new-n').value.trim(), precio = parseFloat($('wl-new-p').value) || 0;
+  if (!nombre) { $('wl-new-n').focus(); return false; }
+  try {
+    const r = await api('POST', '/api/wishlist', { user_phone: S.phone, nombre, precio });
+    S._wl.items.unshift(_wlNorm(r.data));
+    $('wl-new-n').value = ''; $('wl-new-p').value = '';
+    wlRender(); $('wl-new-n')?.focus();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+  return false;
+}
+
+// Edición con guardado automático (rebote de 700 ms): nunca re-renderiza el editor mientras
+// se escribe — solo refresca la cabecera de la tarjeta y los totales.
+function wlCampo(id, campo, valor) {
+  const it = _wlItem(id); if (!it) return;
+  it[campo] = campo === 'precio' ? (Number(valor) || 0) : valor;
+  if (!S._wlPend) S._wlPend = {};
+  S._wlPend[id] = { ...(S._wlPend[id] || {}), [campo]: valor };
+  const h = $('wl-h-' + id); if (h) h.innerHTML = _wlHead(it);
+  const s = $('wl-stats');   if (s) s.innerHTML = _wlStatsHTML();
+  const t = $('wl-st-' + id); if (t) t.textContent = 'Guardando…';
+  clearTimeout((S._wlT = S._wlT || {})[id]);
+  S._wlT[id] = setTimeout(() => wlGuardar(id), 700);
+}
+
+async function wlGuardar(id) {
+  clearTimeout((S._wlT || {})[id]);
+  const pend = (S._wlPend || {})[id];
+  if (!pend) return;
+  delete S._wlPend[id];
+  try {
+    const r = await api('PUT', `/api/wishlist/${id}`, { user_phone: S.phone, ...pend });
+    const it = _wlItem(id);
+    if (it) { it.estado = r.data.estado; it.quincena_key = r.data.quincena_key; }
+    const t = $('wl-st-' + id); if (t) t.textContent = 'Guardado ✓';
+  } catch (err) {
+    S._wlPend[id] = { ...pend, ...(S._wlPend[id] || {}) };
+    const t = $('wl-st-' + id); if (t) t.textContent = 'No se pudo guardar';
+    toast('Error al guardar: ' + err.message, 'error');
+  }
+}
+
+function wlPrio(id, p) { wlCampo(id, 'prioridad', p); wlRender(); }
+function wlCiclarPrio(id) {
+  const it = _wlItem(id); if (!it) return;
+  wlPrio(id, { alta: 'media', media: 'baja', baja: 'alta' }[it.prioridad] || 'media');
+}
+
+async function _wlAccion(id, fn, okMsg) {
+  try {
+    await wlGuardar(id);   // que el servidor tenga el último precio/nombre antes de actuar
+    const r = await fn();
+    const i = S._wl.items.findIndex(x => x.id === id);
+    if (i >= 0 && r?.data) S._wl.items[i] = _wlNorm(r.data);
+    S._wl.panel = null;
+    wlRender();
+    if (okMsg) toast(okMsg);
+    return r;
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+function wlConfirmarAgenda(id) {
+  const qKey = `${$('wl-qy').value}-${$('wl-qm').value}-${$('wl-qq').value}`;
+  return _wlAccion(id, () => api('POST', `/api/wishlist/${id}/agendar`, { user_phone: S.phone, qKey }), `Agendado en la ${_wlQLabel(qKey)} ✓`);
+}
+function wlQuitarAgenda(id) {
+  return _wlAccion(id, () => api('POST', `/api/wishlist/${id}/desagendar`, { user_phone: S.phone }), 'Quitado de la agenda');
+}
+async function wlConfirmarCompra(id, registrar) {
+  const medio_pago = $('wl-mp')?.value || 'efectivo';
+  const r = await _wlAccion(id, () => api('POST', `/api/wishlist/${id}/comprar`, { user_phone: S.phone, registrar, medio_pago }),
+    registrar ? 'Gasto registrado y deseo comprado ✓' : 'Marcado como comprado ✓');
+  if (r && registrar) load();   // trae el movimiento y el saldo nuevos al Inicio
+}
+function wlReabrir(id) {
+  return _wlAccion(id, () => api('PUT', `/api/wishlist/${id}`, { user_phone: S.phone, estado: 'pendiente' }), 'Deseo reabierto');
+}
+
+async function wlEliminar(id) {
+  const it = _wlItem(id); if (!it) return;
+  if (!confirm(`¿Eliminar “${it.nombre}” de tu wishlist?${it.estado==='agendado' ? '\nTambién se quitará de ' + _wlQLabel(it.quincena_key) + ' en Presupuesto.' : ''}`)) return;
+  try {
+    await api('DELETE', `/api/wishlist/${id}`, { user_phone: S.phone });
+    S._wl.items = S._wl.items.filter(x => x.id !== id);
+    wlRender();
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+function wlExcel() {
+  const est = { pendiente: 'Pendiente', agendado: 'Agendado', comprado: 'Comprado' };
+  exportRowsToExcel(S._wl.items, [
+    { label: 'Deseo',     get: i => i.nombre },
+    { label: 'Precio',    get: i => i.precio, num: true },
+    { label: 'Prioridad', get: i => WL_PRIO[i.prioridad]?.lbl || '' },
+    { label: 'Categoría', get: i => i.categoria },
+    { label: 'Estado',    get: i => est[i.estado] || '' },
+    { label: 'Quincena',  get: i => _wlQLabel(i.quincena_key) },
+    { label: 'Enlace',    get: i => i.enlace },
+    { label: 'Notas',     get: i => i.notas },
+  ], 'wishlist');
+}
+
 // ── CUENTAS (solo monitoreo) ─────────────────────────────────────────────────
 // Saldos informativos de cuentas propias. NO son movimientos: nunca entran en
 // gastos, ingresos, balance ni en ningún otro cálculo del dashboard. El servidor los
@@ -2857,6 +3212,14 @@ function _notaSanitize(html) {
       if (n.startsWith('on')) el.removeAttribute(a.name);
       else if ((n === 'href' || n === 'src') && /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
     });
+    // Lo pegado desde otros sitios trae color, fuente y fondo propios (negro sobre negro en modo
+    // noche, serif de Word…). Se conserva solo el énfasis; el tema pone el resto.
+    const { textDecoration, fontWeight, fontStyle } = el.style;
+    el.removeAttribute('style');
+    ['color', 'face', 'bgcolor', 'background'].forEach(a => el.removeAttribute(a));
+    if (textDecoration) el.style.textDecoration = textDecoration;
+    if (fontWeight)     el.style.fontWeight = fontWeight;
+    if (fontStyle)      el.style.fontStyle = fontStyle;
   });
   return d.innerHTML;
 }
@@ -3815,6 +4178,7 @@ function dashEmoji(key) {
     case 'despensa': abrirHoja('Lista de despensa', '<div id="despensa-section"></div>', () => rDespensa()); break;
     case 'consejos': abrirHoja('Consejos IA', '<div id="insights-section"></div>', () => fetchInsights(true)); break;
     case 'notas':    _hojaNotas(); break;
+    case 'wishlist': wlAbrir(); break;
   }
 }
 
@@ -4128,6 +4492,7 @@ function rDash() {
   <button class="q-dash-btn mini-tile${S._qDashOpen?' on':''}" id="q-dash-btn" onclick="toggleQuincenaDash()"
     title="Gastos esta quincena" aria-label="Gastos esta quincena"
     aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">🧮</button>
+  <button class="q-dash-btn mini-tile" onclick="dashEmoji('wishlist')" title="Wishlist" aria-label="Wishlist">🎁</button>
 </div>
 <div id="quincena-dash-section" style="display:${S._qDashOpen?'':'none'}"></div>
 <button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>

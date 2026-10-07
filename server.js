@@ -4359,6 +4359,235 @@ app.post('/api/notas-inicio/upload-confirm', async (req, res) => {
   }
 });
 
+// ── WISHLIST (lista de deseos) ───────────────────────────────────────────────
+// Un deseo puede estar: pendiente → agendado (programado como gasto de una quincena en
+// Presupuesto, vía external_refs.budget_q) → comprado. Agendar reutiliza el mismo mecanismo
+// que los gastos programados del chat: el gasto aparece en "Gastos esta quincena" de esa
+// quincena y, al marcarse como pagado ahí, el deseo pasa a comprado (ver wlConciliar).
+const WL_RE_QKEY = /^\d{4}-(0[1-9]|1[0-2])-[AB]$/;
+
+// 'YYYY-MM-A' = días 10–24; 'YYYY-MM-B' = día 25 a 9 del mes siguiente (igual que getQuincena).
+function wlRangoQuincena(qKey) {
+  const [y, m, l] = qKey.split('-');
+  if (l === 'A') return { from: `${y}-${m}-10`, to: `${y}-${m}-24` };
+  const M = Number(m), nm = M === 12 ? 1 : M + 1, ny = M === 12 ? Number(y) + 1 : Number(y);
+  return { from: `${y}-${m}-25`, to: `${ny}-${String(nm).padStart(2, '0')}-09` };
+}
+
+// Solo los campos presentes, validados: nada del cliente llega a la base sin pasar por aquí.
+function wlLimpiar(b = {}) {
+  const d = {};
+  if (b.nombre    !== undefined) d.nombre    = String(b.nombre).trim().slice(0, 200);
+  if (b.precio    !== undefined) d.precio    = Math.min(1e9, Math.max(0, Math.round((Number(b.precio) || 0) * 100) / 100));
+  if (b.prioridad !== undefined) d.prioridad = ['alta', 'media', 'baja'].includes(b.prioridad) ? b.prioridad : 'media';
+  if (b.categoria !== undefined) d.categoria = CATEGORIAS.includes(b.categoria) ? b.categoria : 'OTROS';
+  if (b.notas     !== undefined) d.notas     = String(b.notas).slice(0, 2000);
+  if (b.enlace    !== undefined) {
+    let e = String(b.enlace).trim().slice(0, 500);
+    if (/^(javascript|data|vbscript):/i.test(e)) e = '';
+    else if (e && !/^https?:\/\//i.test(e)) e = 'https://' + e;
+    d.enlace = e;
+  }
+  return d;
+}
+
+async function wlGetRefs(phone) {
+  const { data } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+  return { ...(data?.external_refs || {}) };
+}
+const wlSaveRefs = (phone, refs) => sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+
+function wlEnPresupuesto(refs, qKey, wid) {
+  const g = refs.budget_q?.[qKey]?.gastos;
+  return Array.isArray(g) && g.some(x => x._id === 'wl-' + wid);
+}
+function wlQuitarDePresupuesto(refs, qKey, wid) {
+  const q = refs.budget_q?.[qKey];
+  if (!q || !Array.isArray(q.gastos)) return false;
+  const antes = q.gastos.length;
+  q.gastos = q.gastos.filter(x => x._id !== 'wl-' + wid);
+  return q.gastos.length !== antes;
+}
+function wlPonerEnPresupuesto(refs, qKey, row) {
+  if (!refs.budget_q) refs.budget_q = {};
+  const q = refs.budget_q[qKey] || (refs.budget_q[qKey] = { gastos: [], ingresos: [] });
+  if (!Array.isArray(q.gastos)) q.gastos = [];
+  const item = { _id: 'wl-' + row.id, descripcion: row.nombre, monto: Number(row.precio) || 0, categoria: row.categoria, comentarios: 'Wishlist' };
+  const i = q.gastos.findIndex(x => x._id === item._id);
+  if (i >= 0) q.gastos[i] = { ...q.gastos[i], ...item }; else q.gastos.push(item);
+}
+
+// Pone al día los deseos agendados: si el gasto ya no está en Presupuesto vuelve a pendiente;
+// si ya se marcó como pagado en esa quincena ("[Ppto] nombre") pasa a comprado.
+async function wlConciliar(phone, rows) {
+  const ag = rows.filter(r => r.estado === 'agendado' && r.quincena_key);
+  if (!ag.length) return rows;
+  const refs = await wlGetRefs(phone);
+  for (const r of ag) {
+    let cambio = null;
+    if (!wlEnPresupuesto(refs, r.quincena_key, r.id)) {
+      cambio = { estado: 'pendiente', quincena_key: null };
+    } else {
+      const { from, to } = wlRangoQuincena(r.quincena_key);
+      const { data: pagado } = await sb.from('movimientos').select('id')
+        .eq('user_phone', phone).eq('tipo', 'GASTO').eq('concepto', '[Ppto] ' + r.nombre)
+        .is('deleted_at', null).gte('fecha', from).lte('fecha', to).limit(1);
+      if (pagado?.length) cambio = { estado: 'comprado', comprado_at: new Date().toISOString() };
+    }
+    if (cambio) {
+      await sb.from('wishlist').update({ ...cambio, updated_at: new Date().toISOString() }).eq('id', r.id);
+      Object.assign(r, cambio);
+    }
+  }
+  return rows;
+}
+
+const wlFila = (id, phone) => sb.from('wishlist').select('*').eq('id', id).eq('user_phone', phone).is('deleted_at', null).maybeSingle();
+
+app.get('/api/wishlist', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) return res.status(400).json({ success: false, error: 'phone requerido' });
+    const { data, error } = await sb.from('wishlist').select('*')
+      .eq('user_phone', phone).is('deleted_at', null).order('orden', { ascending: false }).order('created_at', { ascending: false });
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: await wlConciliar(phone, data || []) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/wishlist', async (req, res) => {
+  try {
+    const { user_phone } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const d = wlLimpiar(req.body);
+    if (!d.nombre) return res.status(400).json({ success: false, error: 'Escribe qué deseas' });
+    const { data, error } = await sb.from('wishlist').insert({ user_phone, ...d }).select().single();
+    if (error || !data?.id) return res.status(400).json({ success: false, error: error?.message || 'No se pudo guardar el deseo' });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.put('/api/wishlist/:id', async (req, res) => {
+  try {
+    const { user_phone, estado } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const { data: row } = await wlFila(req.params.id, user_phone);
+    if (!row) return res.status(404).json({ success: false, error: 'Deseo no encontrado' });
+    const d = wlLimpiar(req.body);
+    if (d.nombre === '') delete d.nombre;   // un deseo nunca se queda sin nombre
+    let refs = null, refsCambiaron = false;
+
+    // Estado manual: solo pendiente/comprado. "agendado" únicamente por /agendar.
+    if ((estado === 'pendiente' || estado === 'comprado') && estado !== row.estado) {
+      d.estado = estado;
+      d.comprado_at = estado === 'comprado' ? new Date().toISOString() : null;
+      // Con quincena_key hay gasto presupuestado: agendado, o ya pagado y conciliado como comprado.
+      if (row.quincena_key) {
+        refs = await wlGetRefs(user_phone);
+        refsCambiaron = wlQuitarDePresupuesto(refs, row.quincena_key, row.id);
+      }
+      d.quincena_key = null;
+    } else if (row.estado === 'agendado' && row.quincena_key && (d.nombre !== undefined || d.precio !== undefined || d.categoria !== undefined)) {
+      // Lo agendado vive en Presupuesto: mantenerlo igual al deseo editado.
+      refs = await wlGetRefs(user_phone);
+      if (wlEnPresupuesto(refs, row.quincena_key, row.id)) { wlPonerEnPresupuesto(refs, row.quincena_key, { ...row, ...d }); refsCambiaron = true; }
+    }
+    if (refsCambiaron) { const r = await wlSaveRefs(user_phone, refs); if (r.error) return res.status(400).json({ success: false, error: r.error.message }); }
+    const { data, error } = await sb.from('wishlist').update({ ...d, updated_at: new Date().toISOString() })
+      .eq('id', row.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/wishlist/:id', async (req, res) => {
+  try {
+    const { user_phone } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const { data: row } = await wlFila(req.params.id, user_phone);
+    if (!row) return res.json({ success: true });
+    if (row.quincena_key) {
+      const refs = await wlGetRefs(user_phone);
+      if (wlQuitarDePresupuesto(refs, row.quincena_key, row.id)) await wlSaveRefs(user_phone, refs);
+    }
+    const { error } = await sb.from('wishlist').update({ deleted_at: new Date().toISOString() }).eq('id', row.id).eq('user_phone', user_phone);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/wishlist/:id/agendar', async (req, res) => {
+  try {
+    const { user_phone, qKey } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    if (!WL_RE_QKEY.test(String(qKey || ''))) return res.status(400).json({ success: false, error: 'Quincena inválida' });
+    const { data: row } = await wlFila(req.params.id, user_phone);
+    if (!row) return res.status(404).json({ success: false, error: 'Deseo no encontrado' });
+    if (row.estado === 'comprado') return res.status(400).json({ success: false, error: 'Ya está comprado: reábrelo para agendarlo de nuevo' });
+    if (!(Number(row.precio) > 0)) return res.status(400).json({ success: false, error: 'Ponle un precio antes de agendarlo' });
+    const refs = await wlGetRefs(user_phone);
+    if (row.quincena_key && row.quincena_key !== qKey) wlQuitarDePresupuesto(refs, row.quincena_key, row.id);
+    wlPonerEnPresupuesto(refs, qKey, row);
+    const r = await wlSaveRefs(user_phone, refs);
+    if (r.error) return res.status(400).json({ success: false, error: r.error.message });
+    const { data, error } = await sb.from('wishlist').update({ estado: 'agendado', quincena_key: qKey, updated_at: new Date().toISOString() })
+      .eq('id', row.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    await writeAuditLog(user_phone, 'wishlist', 'agendar', row.id, row, data, 'web', row.nombre);
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/wishlist/:id/desagendar', async (req, res) => {
+  try {
+    const { user_phone } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const { data: row } = await wlFila(req.params.id, user_phone);
+    if (!row) return res.status(404).json({ success: false, error: 'Deseo no encontrado' });
+    if (row.estado === 'agendado' && row.quincena_key) {
+      const refs = await wlGetRefs(user_phone);
+      if (wlQuitarDePresupuesto(refs, row.quincena_key, row.id)) await wlSaveRefs(user_phone, refs);
+    }
+    const { data, error } = await sb.from('wishlist').update({ estado: row.estado === 'agendado' ? 'pendiente' : row.estado, quincena_key: null, updated_at: new Date().toISOString() })
+      .eq('id', row.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Comprar: marca el deseo como comprado y, si se pide, registra el gasto real (con su medio de
+// pago, así Efectivo/Pluxee/etc. se descuentan igual que cualquier otro movimiento).
+app.post('/api/wishlist/:id/comprar', async (req, res) => {
+  try {
+    const { user_phone, registrar, medio_pago } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const { data: row } = await wlFila(req.params.id, user_phone);
+    if (!row) return res.status(404).json({ success: false, error: 'Deseo no encontrado' });
+    if (row.estado === 'comprado') return res.status(400).json({ success: false, error: 'Ya estaba marcado como comprado' });
+    let mov = null;
+    if (registrar) {
+      if (!(Number(row.precio) > 0)) return res.status(400).json({ success: false, error: 'Ponle un precio para registrar el gasto' });
+      const medio = MEDIOS_PAGO.includes(medio_pago) ? medio_pago : 'efectivo';
+      const { data, error } = await conReintentos(() => sb.from('movimientos').insert({
+        user_phone, tipo: 'GASTO', categoria: row.categoria, concepto: row.nombre, descripcion: '',
+        monto: Number(row.precio), medio_pago: medio, fecha: hoy(), comentarios: 'Wishlist',
+      }).select().single());
+      if (error || !data?.id) return res.status(400).json({ success: false, error: error?.message || 'No se pudo registrar el gasto' });
+      mov = data;
+      await aplicarImpactoCuentas(user_phone, null, data);
+      await writeAuditLog(user_phone, 'movimientos', 'crear', data.id, null, data, 'web', `wishlist: ${row.nombre}`);
+    }
+    if (row.estado === 'agendado' && row.quincena_key) {
+      const refs = await wlGetRefs(user_phone);
+      if (wlQuitarDePresupuesto(refs, row.quincena_key, row.id)) await wlSaveRefs(user_phone, refs);
+    }
+    const { data, error } = await sb.from('wishlist').update({ estado: 'comprado', quincena_key: null, comprado_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', row.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data, movimiento: mov });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'Us v6 ✅', build: 'quincenal-panel-full' }));
 
 // ── QUINCENAL IA — genera recomendaciones para una quincena ──────────────────
