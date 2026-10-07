@@ -2783,7 +2783,7 @@ function rCuentasWidget() {
       return `<div class="cuenta-card" style="border-left:3px solid ${d.color}">
       <div class="cuenta-lbl"><i class="ti ${d.icon}" style="color:${d.color}"></i> ${d.label}</div>
       <div class="cuenta-row">
-        <div class="cuenta-val" title="Clic para editar el saldo" onclick="editCuenta(this,'${d.key}')">${fmt(saldo)}</div>
+        <div class="cuenta-val"${saldo<0?' style="color:var(--color-expense)"':''} title="${saldo<0?'Saldo negativo: no puede ser real, revisa tus movimientos o corrígelo con un clic':'Clic para editar el saldo'}" onclick="editCuenta(this,'${d.key}')">${fmt(saldo)}</div>
         ${d.retiro ? `<button type="button" class="cuenta-retiro-btn" title="Retiro de cajero: pasa a Efectivo (no cuenta como gasto)" onclick="oRetiro('${d.key}')"><i class="ti ti-minus"></i> Retirar</button>` : ''}
       </div>
       ${tasa ? `<div class="cuenta-tasa" title="Estimado con la tasa anual; el saldo real es el que reporte tu banco">${tasa}% anual · ≈ +${fmt(rend)}/mes</div>` : ''}
