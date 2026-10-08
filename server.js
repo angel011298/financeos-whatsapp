@@ -2457,7 +2457,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }).order('id'),
       sb.from('presupuesto').select('*').eq('user_phone', phone).order('categoria').order('mes'),
       sb.from('nidito_asignaciones')
-        .select('monto_quincenal, nidito_items!inner(deleted_at)')
+        .select('item_id, monto_quincenal, nidito_items!inner(titulo, tipo, estado, fecha_inicio, fecha_fin, deleted_at)')
         .eq('user_phone', phone)
         .is('nidito_items.deleted_at', null),
       sb.from('nidito_dinerito').select('quincena_key, monto').eq('user_phone', phone),
@@ -2465,7 +2465,16 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden')
         .eq('user_phone', phone).is('deleted_at', null).order('orden').order('id'),
     ]);
-    const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
+    const nidito_compromisos = (nidAsig.data || []).filter(r => Number(r.monto_quincenal) > 0).map(r => ({
+      id: r.item_id, titulo: r.nidito_items?.titulo || 'Nidito', tipo: r.nidito_items?.tipo || '', estado: r.nidito_items?.estado || '',
+      fecha_inicio: r.nidito_items?.fecha_inicio || null, fecha_fin: r.nidito_items?.fecha_fin || null, monto: Number(r.monto_quincenal),
+    }));
+    // Compromiso de la quincena en curso: solo ítems ACTIVOS cuyo rango de fechas incluye esa quincena
+    // (uno pausado, completado o ya vencido no se está aportando).
+    const qActInfo = getQuincenaActual();
+    const nidito_compromiso   = nidito_compromisos
+      .filter(c => c.estado === 'ACTIVO' && (!c.fecha_inicio || c.fecha_inicio <= qActInfo.fin) && (!c.fecha_fin || c.fecha_fin >= qActInfo.inicio))
+      .reduce((a, c) => a + c.monto, 0);
     const dineritoAll = {};
     (nidDin.data || []).forEach(r => { dineritoAll[r.quincena_key] = Number(r.monto) || 0; });
     const nidito_dinerito_val = dineritoAll[qActual] || 0;
@@ -2526,6 +2535,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         total_quincenal:      nidito_compromiso + nidito_dinerito_val,
       },
       nidito_compromiso,
+      nidito_compromisos,   // [{ id, titulo, estado, fecha_inicio, fecha_fin, monto }] — se refleja en Gastos esta quincena
       nidito_dinerito: nidito_dinerito_val,
       nidito_dinerito_all: dineritoAll,   // { 'YYYY-MM-A|B': monto } — se refleja en Gastos esta quincena
       negocios: {
