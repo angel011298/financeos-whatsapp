@@ -2460,13 +2460,15 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         .select('monto_quincenal, nidito_items!inner(deleted_at)')
         .eq('user_phone', phone)
         .is('nidito_items.deleted_at', null),
-      sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', qActual).maybeSingle(),
+      sb.from('nidito_dinerito').select('quincena_key, monto').eq('user_phone', phone),
       sb.from('neg_proyectos')
         .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden')
         .eq('user_phone', phone).is('deleted_at', null).order('orden').order('id'),
     ]);
     const nidito_compromiso   = (nidAsig.data || []).reduce((a, r) => a + (r.monto_quincenal || 0), 0);
-    const nidito_dinerito_val = nidDin.data?.monto || 0;
+    const dineritoAll = {};
+    (nidDin.data || []).forEach(r => { dineritoAll[r.quincena_key] = Number(r.monto) || 0; });
+    const nidito_dinerito_val = dineritoAll[qActual] || 0;
     const negProjIds = (negProys.data || []).map(p => p.id);
     const negReflejos = negProjIds.length
       ? await sb.from('neg_transacciones').select('tipo, monto, reflejo_personal')
@@ -2525,6 +2527,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       },
       nidito_compromiso,
       nidito_dinerito: nidito_dinerito_val,
+      nidito_dinerito_all: dineritoAll,   // { 'YYYY-MM-A|B': monto } — se refleja en Gastos esta quincena
       negocios: {
         proyectos:        negProys.data || [],
         retiros_quincena: retiros_q,

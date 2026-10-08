@@ -783,6 +783,9 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-fp-pill.on-ef{border-color:var(--color-income);color:var(--color-income)}
 .q-fp-pill.on-db{border-color:var(--accent-primary);color:var(--accent-primary)}
 .q-fp-pill.on-px{border-color:#f97316;color:#f97316}
+.q-din-bar{height:4px;border-radius:2px;background:var(--bg-surface-2);margin-top:7px;overflow:hidden}
+.q-din-bar span{display:block;height:100%;background:var(--accent-couple);border-radius:2px}
+.q-din-bar.over span{background:var(--color-expense)}
 .mov-card.pagado{background:var(--bg-surface-2)}
 .mov-card.pagado .mov-card-title{text-decoration:line-through;opacity:.65}
 .mf-toggle{flex-shrink:0;white-space:nowrap}
@@ -3391,6 +3394,31 @@ function wlExcel() {
   ], 'wishlist');
 }
 
+// ── Dinerito de novios → "Gastos esta quincena" ──────────────────────────────
+// Lo asignado en Nidito → Dinerito de novios (por persona y quincena) cuenta como gasto
+// presupuestado de ESA quincena. Se inyecta solo al pintar/sumar, como la Despensa: NUNCA dentro
+// de getGastosEsperados, porque posponerGasto y otros vuelven a guardar esa lista en la base.
+const DINERITO_ID = '_dinerito_';
+const getDinerito = qKey => Number((((S.data || {}).nidito_dinerito_all) || {})[qKey]) || 0;
+function dineritoItem(qKey) {
+  const m = getDinerito(qKey);
+  return m > 0 ? { _id: DINERITO_ID, descripcion: 'Dinerito de novios', monto: m, categoria: 'Ocio', _isDinerito: true } : null;
+}
+// Mismo criterio que la tarjeta del Nidito: gastos de la quincena que mencionan a Alicia.
+function getDineritoGastado(from, to) {
+  return (S.data?.movs || []).filter(m => !m.deleted_at && m.tipo === 'GASTO' && (m.fecha || '') >= from && (m.fecha || '') <= to
+    && /alicia/i.test(`${m.concepto || ''} ${m.comentarios || ''} ${m.descripcion || ''}`)).reduce((a, m) => a + (m.monto || 0), 0);
+}
+// Abre Nidito parado en la quincena del renglón. Se fija S._niditoQ/_ndDin ANTES de navegar para que
+// la carga inicial de rNidito use la misma quincena y no pise el monto con el de otra.
+function ndIrADinerito(qKey) {
+  const m = String(qKey).match(/^(\d{4})-(\d{2})-([AB])$/);
+  if (m) { S._niditoQ = _ndQ(new Date(+m[1], +m[2] - 1, m[3] === 'A' ? 15 : 28)); S._ndDin = getDinerito(qKey); }
+  cerrarHoja();
+  go('nidito');
+  setTimeout(() => document.querySelector('.nd-din-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+}
+
 // ── CUENTAS (solo monitoreo) ─────────────────────────────────────────────────
 // Saldos informativos de cuentas propias. NO son movimientos: nunca entran en
 // gastos, ingresos, balance ni en ningún otro cálculo del dashboard. El servidor los
@@ -3683,6 +3711,9 @@ function rQuincenaPanel(ctx) {
     }
   }
 
+  const _dinItem = dineritoItem(qKey);   // Nidito → Dinerito de novios de ESTA quincena
+  if (_dinItem) gasEsp.push(_dinItem);
+
   // Populate lookup for inline editing; tag items with their storage key
   S._expItemData = {};
   allIngEsp.forEach(i => { const k = i._id || i.id || i.descripcion; if (k) S._expItemData[k] = { ...i, _tipo: 'ingresos', _qKey: hasQBudget ? qKey : null }; });
@@ -3812,6 +3843,25 @@ function rQuincenaPanel(ctx) {
         const chkKey    = (g._id || g.id || g.descripcion || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
         const chkTitle  = pagadoId ? 'Quitar de movimientos' : 'Registrar como gasto realizado';
         const chk = `<button class="q-card-chk" onclick="marcarGastoQ('${chkKey}',${pagadoArg})" title="${chkTitle}" style="color:${pagadoId?'var(--color-income)':'var(--text-3)'}"><i class="ti ti-${pagadoId?'checkbox':'square'}"></i></button>`;
+        if (g._isDinerito) {
+          // Solo lectura: se edita en Nidito. Sin casilla de "pagado" (el gasto real son los movimientos
+          // con Alicia; marcarlo crearía un movimiento duplicado por el monto completo).
+          const gastado = getDineritoGastado(qi.from, qi.to), rest = g.monto - gastado;
+          const pct = g.monto > 0 ? Math.min(100, Math.round(gastado / g.monto * 100)) : 0;
+          return `<div class="mov-card q-card">
+          <div class="mov-card-ic" style="background:var(--bg-surface-2);color:var(--accent-couple)"><i class="ti ti-heart"></i></div>
+          <div class="mov-card-mid">
+            <div class="mov-card-title">Dinerito de novios</div>
+            <div class="mov-card-sub">Nidito · ${rest >= 0 ? 'restan ' + fmt(rest) : 'excedido ' + fmt(-rest)}</div>
+            <div class="mov-card-sub">Gastado con Alicia: ${fmt(gastado)}</div>
+            <div class="q-din-bar${rest < 0 ? ' over' : ''}"><span style="width:${pct}%"></span></div>
+          </div>
+          <div class="mov-card-val red">${fmt(g.monto)}</div>
+          <div class="q-card-foot"><div class="mov-card-acts">
+            <button class="edit-pill-btn" title="Editar en Nidito" onclick="ndIrADinerito('${qKey}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+          </div></div>
+        </div>`;
+        }
         if (g._isDespensa) {
           const dClr = CAT_CLR['Despensa'] || '#94a3b8';
           return `<div class="mov-card q-card${pagadoId?' pagado':''}">
@@ -3900,14 +3950,16 @@ async function loadQIA(ctx, qi) {
     const movs     = S.data.movs || [];
     const qMovs    = filterMovs(movs, qi.from, qi.to);
     const ingEspQ  = getIngresosEsperados(refs).filter(i => (i.dias||[]).some(d => dayInQuincena(d, qi)));
-    const gasEsp   = getGastosEsperados(refs, getQKey(qi));
+    const _din     = dineritoItem(getQKey(qi));
+    const gasEsp   = [...getGastosEsperados(refs, getQKey(qi)), ...(_din ? [_din] : [])];
     const espIng   = ingEspQ.reduce((a,i) => a+(i.monto||0), 0);
     const espGas   = gasEsp.reduce((a,g) => a+(g.monto||0), 0);
     const realIng  = qMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0), 0);
     const realGas  = qMovs.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0), 0);
     const items    = gasEsp.map(g => ({
       desc: g.descripcion, esp: g.monto,
-      real: qMovs.filter(m=>m.tipo==='GASTO'&&(m.concepto||'').toLowerCase().includes(g.descripcion.toLowerCase())).reduce((a,m)=>a+(m.monto||0),0)
+      real: g._isDinerito ? getDineritoGastado(qi.from, qi.to)
+        : qMovs.filter(m=>m.tipo==='GASTO'&&(m.concepto||'').toLowerCase().includes(g.descripcion.toLowerCase())).reduce((a,m)=>a+(m.monto||0),0)
     }));
     const r = await api('POST', '/api/quincenal-ia', {
       phone: S.phone, qLabel: qi.label, qFrom: qi.from, qTo: qi.to,
@@ -4926,7 +4978,7 @@ function rDash() {
   const _qKey = getQKey(getQuincenaInfo(_qOff));
   const gasEspTot = getGastosEsperados(refs, _qKey)
     .filter(g=>!/^despensa$/i.test((g.descripcion||'').trim()))
-    .reduce((a,g)=>a+(g.monto||0),0);
+    .reduce((a,g)=>a+(g.monto||0),0) + getDinerito(_qKey);
   const remQ = S.periodo.tipo==='quincena' ? getRemanente(S.periodo.offset) : 0;   // solo en vista de quincena
   const bal = (ingC || ingEsp) + remQ - gasC;   // misma expresión que el indicador de balance de hoy (ingBal - gasC)
   const pats = S.data.patrones||[];
@@ -5125,6 +5177,12 @@ async function rNidito() {
   _ndPaint();
 }
 
+// /api/nidito/dinerito devuelve un objeto con ?phone= y una lista sin él: acepta ambos.
+function _ndDinMonto(d) {
+  const row = Array.isArray(d) ? d.find(x => x.user_phone === S.phone) : d;
+  return Number(row?.monto) || 0;
+}
+
 async function _ndFetch() {
   try {
     const qKey=(S._niditoQ||_ndQ()).key;
@@ -5133,7 +5191,7 @@ async function _ndFetch() {
       api('GET',`/api/nidito/dinerito?phone=${encodeURIComponent(S.phone)}&quincena=${qKey}`)
     ]);
     S._niditoItems=ri.data||[];
-    S._ndDin=(rd.data||[]).find(x=>x.user_phone===S.phone)?.monto||0;
+    S._ndDin=_ndDinMonto(rd.data);
   } catch(e) { S._niditoItems=[]; S._ndDin=0; }
 }
 
@@ -5446,8 +5504,8 @@ async function ndPickQ(q) {
   S._niditoQ=q;
   try {
     const rd=await api('GET',`/api/nidito/dinerito?phone=${encodeURIComponent(S.phone)}&quincena=${q.key}`);
-    S._ndDin=(rd.data||[]).find(x=>x.user_phone===S.phone)?.monto||0;
-  } catch(e) { S._ndDin=0; }
+    S._ndDin=_ndDinMonto(rd.data);
+  } catch(e) { S._ndDin=getDinerito(q.key); }
   _ndPaint();
 }
 
@@ -5456,6 +5514,7 @@ async function ndSaveDin() {
   try {
     await api('PUT','/api/nidito/dinerito',{user_phone:S.phone,monto:val,quincena:S._niditoQ?.key});
     S._ndDin=val;
+    if (S.data && S._niditoQ?.key) { if (!S.data.nidito_dinerito_all) S.data.nidito_dinerito_all = {}; S.data.nidito_dinerito_all[S._niditoQ.key] = val; }
     toast(`Dinerito guardado: ${fmt(val)}`);
   } catch(e) { toast('Error: '+e.message,'error'); }
 }
@@ -5876,7 +5935,7 @@ function rObjs() {
   // Savings capacity (current quincena)
   const qi    = getQuincenaInfo(0);
   const ingQ  = calcIngresosEsperadosPeriodo(refs, qi.from, qi.to);
-  const gasQ  = getGastosEsperados(refs, getQKey(qi)).reduce((a,g)=>a+(g.monto||0),0);
+  const gasQ  = getGastosEsperados(refs, getQKey(qi)).reduce((a,g)=>a+(g.monto||0),0) + getDinerito(getQKey(qi));
   const dispQ = Math.max(0, ingQ - gasQ);
   const ahorroQ = Math.round(dispQ * 0.2);
 
