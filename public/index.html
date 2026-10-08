@@ -3404,6 +3404,19 @@ function dineritoItem(qKey) {
   const m = getDinerito(qKey);
   return m > 0 ? { _id: DINERITO_ID, descripcion: 'Dinerito de novios', monto: m, categoria: 'Ocio', _isDinerito: true } : null;
 }
+// ── Compromiso al Nidito → "Gastos esta quincena" ────────────────────────────
+// Aportación quincenal (monto_quincenal) de esta persona a proyectos/metas del Nidito. Aplica a una
+// quincena solo si el ítem está ACTIVO y su rango de fechas la incluye; pausado, completado o ya
+// vencido no se está aportando. Como el Dinerito, se inyecta solo al pintar/sumar.
+const NIDITO_COMP_ID = '_nidito_comp_';
+function getCompromisosNidito(from, to) {
+  return ((S.data || {}).nidito_compromisos || []).filter(c => c.estado === 'ACTIVO' && c.monto > 0
+    && (!c.fecha_inicio || c.fecha_inicio <= to) && (!c.fecha_fin || c.fecha_fin >= from));
+}
+function compromisoNiditoItem(qi) {
+  const l = getCompromisosNidito(qi.from, qi.to), tot = l.reduce((a, c) => a + c.monto, 0);
+  return tot > 0 ? { _id: NIDITO_COMP_ID, descripcion: 'Compromiso al Nidito', monto: tot, categoria: 'Ocio', _isNiditoComp: true, _items: l } : null;
+}
 // Mismo criterio que la tarjeta del Nidito: gastos de la quincena que mencionan a Alicia.
 function getDineritoGastado(from, to) {
   return (S.data?.movs || []).filter(m => !m.deleted_at && m.tipo === 'GASTO' && (m.fecha || '') >= from && (m.fecha || '') <= to
@@ -3411,12 +3424,12 @@ function getDineritoGastado(from, to) {
 }
 // Abre Nidito parado en la quincena del renglón. Se fija S._niditoQ/_ndDin ANTES de navegar para que
 // la carga inicial de rNidito use la misma quincena y no pise el monto con el de otra.
-function ndIrADinerito(qKey) {
+function ndIrADinerito(qKey, destino) {
   const m = String(qKey).match(/^(\d{4})-(\d{2})-([AB])$/);
   if (m) { S._niditoQ = _ndQ(new Date(+m[1], +m[2] - 1, m[3] === 'A' ? 15 : 28)); S._ndDin = getDinerito(qKey); }
   cerrarHoja();
   go('nidito');
-  setTimeout(() => document.querySelector('.nd-din-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+  setTimeout(() => document.querySelector(destino === 'proyectos' ? '.nd-sec-hdr' : '.nd-din-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
 }
 
 // ── CUENTAS (solo monitoreo) ─────────────────────────────────────────────────
@@ -3713,6 +3726,8 @@ function rQuincenaPanel(ctx) {
 
   const _dinItem = dineritoItem(qKey);   // Nidito → Dinerito de novios de ESTA quincena
   if (_dinItem) gasEsp.push(_dinItem);
+  const _compItem = compromisoNiditoItem(qi);   // aportaciones activas a proyectos/metas del Nidito
+  if (_compItem) gasEsp.push(_compItem);
 
   // Populate lookup for inline editing; tag items with their storage key
   S._expItemData = {};
@@ -3843,6 +3858,20 @@ function rQuincenaPanel(ctx) {
         const chkKey    = (g._id || g.id || g.descripcion || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
         const chkTitle  = pagadoId ? 'Quitar de movimientos' : 'Registrar como gasto realizado';
         const chk = `<button class="q-card-chk" onclick="marcarGastoQ('${chkKey}',${pagadoArg})" title="${chkTitle}" style="color:${pagadoId?'var(--color-income)':'var(--text-3)'}"><i class="ti ti-${pagadoId?'checkbox':'square'}"></i></button>`;
+        if (g._isNiditoComp) {
+          // Solo lectura: se edita en Nidito (Proyectos y metas → Aportación por persona).
+          return `<div class="mov-card q-card">
+          <div class="mov-card-ic" style="background:var(--bg-surface-2);color:var(--accent-couple)"><i class="ti ti-heart-handshake"></i></div>
+          <div class="mov-card-mid">
+            <div class="mov-card-title">Compromiso al Nidito</div>
+            ${g._items.map(c => `<div class="mov-card-sub">${gxEsc(c.titulo)} · ${fmt(c.monto)}</div>`).join('')}
+          </div>
+          <div class="mov-card-val red">${fmt(g.monto)}</div>
+          <div class="q-card-foot"><div class="mov-card-acts">
+            <button class="edit-pill-btn" title="Editar en Nidito" onclick="ndIrADinerito('${qKey}','proyectos')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+          </div></div>
+        </div>`;
+        }
         if (g._isDinerito) {
           // Solo lectura: se edita en Nidito. Sin casilla de "pagado" (el gasto real son los movimientos
           // con Alicia; marcarlo crearía un movimiento duplicado por el monto completo).
@@ -3950,8 +3979,8 @@ async function loadQIA(ctx, qi) {
     const movs     = S.data.movs || [];
     const qMovs    = filterMovs(movs, qi.from, qi.to);
     const ingEspQ  = getIngresosEsperados(refs).filter(i => (i.dias||[]).some(d => dayInQuincena(d, qi)));
-    const _din     = dineritoItem(getQKey(qi));
-    const gasEsp   = [...getGastosEsperados(refs, getQKey(qi)), ...(_din ? [_din] : [])];
+    const _din     = dineritoItem(getQKey(qi)), _comp = compromisoNiditoItem(qi);
+    const gasEsp   = [...getGastosEsperados(refs, getQKey(qi)), ...(_din ? [_din] : []), ...(_comp ? [_comp] : [])];
     const espIng   = ingEspQ.reduce((a,i) => a+(i.monto||0), 0);
     const espGas   = gasEsp.reduce((a,g) => a+(g.monto||0), 0);
     const realIng  = qMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0), 0);
@@ -4978,7 +5007,7 @@ function rDash() {
   const _qKey = getQKey(getQuincenaInfo(_qOff));
   const gasEspTot = getGastosEsperados(refs, _qKey)
     .filter(g=>!/^despensa$/i.test((g.descripcion||'').trim()))
-    .reduce((a,g)=>a+(g.monto||0),0) + getDinerito(_qKey);
+    .reduce((a,g)=>a+(g.monto||0),0) + getDinerito(_qKey) + (compromisoNiditoItem(getQuincenaInfo(_qOff))?.monto || 0);
   const remQ = S.periodo.tipo==='quincena' ? getRemanente(S.periodo.offset) : 0;   // solo en vista de quincena
   const bal = (ingC || ingEsp) + remQ - gasC;   // misma expresión que el indicador de balance de hoy (ingBal - gasC)
   const pats = S.data.patrones||[];
@@ -5201,7 +5230,7 @@ function _ndPaint() {
   const q=S._niditoQ||_ndQ();
   const prevQ=_ndPrev(q), nextQ=_ndNext(q);
   const din=S._ndDin||0;
-  const comprQ=S.data?.nidito_compromiso||0;
+  const comprQ=getCompromisosNidito(q.inicio,q.fin).reduce((a,c)=>a+c.monto,0);
   const angelPh=S.adminPhone||localStorage.getItem('fos_phone_A')||S.phone;
   const aliciaPh=localStorage.getItem('fos_phone_B')||(S.phone!==angelPh?S.phone:null);
   const proyectos=items.filter(x=>x.tipo==='PROYECTO'&&x.estado!=='COMPLETADO');
@@ -5935,7 +5964,7 @@ function rObjs() {
   // Savings capacity (current quincena)
   const qi    = getQuincenaInfo(0);
   const ingQ  = calcIngresosEsperadosPeriodo(refs, qi.from, qi.to);
-  const gasQ  = getGastosEsperados(refs, getQKey(qi)).reduce((a,g)=>a+(g.monto||0),0) + getDinerito(getQKey(qi));
+  const gasQ  = getGastosEsperados(refs, getQKey(qi)).reduce((a,g)=>a+(g.monto||0),0) + getDinerito(getQKey(qi)) + (compromisoNiditoItem(qi)?.monto || 0);
   const dispQ = Math.max(0, ingQ - gasQ);
   const ahorroQ = Math.round(dispQ * 0.2);
 
