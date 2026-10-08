@@ -13,7 +13,6 @@
 <meta name="apple-mobile-web-app-title" content="Us">
 <meta name="theme-color" content="#0ABFBC">
 <!-- Libs -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <!-- Anti-FOWT: aplicar tema antes del primer render -->
@@ -385,6 +384,72 @@ textarea{min-height:64px;resize:vertical}
 .leg-pct{color:var(--text-3);font-weight:500}
 .empty-chart-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--text-3);font-size:12px;pointer-events:none}
 .empty-chart-msg .ti{font-size:28px}
+/* ── GX · sistema de gráficas SVG ──────────────────────────────────────────────
+   Variables aisladas bajo .gx / #grafPanel. Cada rol del sistema GX se enlaza a un token del
+   tema de la app, así las gráficas siguen solas el modo día/noche en vez de fijar una paleta. */
+.gx,#grafPanel{--gx-ac:var(--accent-primary);--gx-ac2:var(--text-2);--gx-in:var(--color-income);
+  --gx-out:var(--color-expense);--gx-pay:var(--color-warning);--gx-card:var(--bg-surface);
+  --gx-neu:var(--text-3);--gx-warn:var(--color-warning);--gx-cream:var(--bg-surface-2);
+  --gx-mut:var(--text-3);--gx-ink:var(--text-1);--gx-line:var(--border-default)}
+.gx-chart{position:absolute;inset:0}
+.gx-svg{display:block;width:100%;overflow:visible}
+.gx-svg text{font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.gx-grid{stroke:var(--gx-line);stroke-width:1;stroke-dasharray:3 4;opacity:.7}
+.gx-zero{stroke:var(--gx-mut);stroke-width:1;opacity:.6}
+.gx-ax{font-size:10px;fill:var(--gx-mut)}
+.gx-lbl{font-size:10.5px;fill:var(--gx-ink)}
+.gx-lbl-m{font-size:10px;fill:var(--gx-mut)}
+.gx-val{font-size:10px;fill:var(--gx-ink);font-weight:700}
+.gx-bar{fill-opacity:var(--o,.9);transition:fill-opacity .12s}
+.gx-bar:hover,.gx-slice:hover{fill-opacity:1;filter:brightness(1.12)}
+.gx-link{fill-opacity:.32;transition:fill-opacity .12s}
+.gx-link:hover{fill-opacity:.62}
+.gx-node{fill-opacity:.95}
+.gx-dot{stroke:var(--gx-card);stroke-width:1.5}
+.gx-slice{stroke:var(--gx-card);stroke-width:2;transition:filter .12s}
+.gx-cap{fill:transparent}
+.gx-cap:hover{fill:rgba(128,128,128,.10)}
+@keyframes gx-rise{from{transform:scaleY(.15);opacity:0}to{transform:scaleY(1);opacity:1}}
+@keyframes gx-fade{from{opacity:0}to{opacity:1}}
+@keyframes gx-growx{from{transform:scaleX(.08);opacity:0}to{transform:scaleX(1);opacity:1}}
+.gx-svg .gx-hb{transform-origin:0 50%;animation-name:gx-growx}
+.gx-svg .gx-bar{transform-box:fill-box;transform-origin:50% 100%;animation:gx-rise .5s cubic-bezier(.2,.8,.2,1) both}
+.gx-svg .gx-link{animation:gx-fade .6s ease both}
+@media (prefers-reduced-motion:reduce){.gx-svg .gx-bar,.gx-svg .gx-link{animation:none}}
+.gx-tip{position:fixed;z-index:9999;display:none;pointer-events:none;max-width:240px;padding:8px 11px;
+  background:var(--gx-card);color:var(--gx-ink);border:1px solid var(--gx-line);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-md,0 6px 20px rgba(0,0,0,.25));font-size:12px;line-height:1.45}
+.gx-tip b{display:block;margin-bottom:2px;font-size:12px}
+.gx-tip div{color:var(--gx-ac2)}
+.gx-leg{display:flex;flex-wrap:wrap;gap:5px 14px;margin-top:10px;font-size:11px;color:var(--gx-ac2)}
+.gx-leg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+/* Panel de Análisis */
+#grafPanel{display:flex;flex-direction:column;gap:12px;padding-bottom:24px}
+.gx-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.gx-tabs::-webkit-scrollbar{display:none}
+.gx-btn{flex:0 0 auto;background:transparent;border:1px solid var(--gx-line);color:var(--gx-ac2);border-radius:var(--radius-pill);
+  padding:7px 14px;font-size:12.5px;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.gx-btn:hover{border-color:var(--gx-ac);color:var(--gx-ink)}
+.gx-btn.on{background:var(--gx-ac);border-color:var(--gx-ac);color:var(--on-accent);font-weight:700}
+.gx-btn.sm{padding:4px 11px;font-size:11.5px}
+.gx-card{background:var(--gx-card);border:1px solid var(--gx-line);border-radius:var(--radius-lg);padding:16px}
+.gx-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.gx-head h3{font-size:15px;font-weight:800;color:var(--gx-ink);margin:0}
+.gx-sub{font-size:11.5px;color:var(--gx-mut)}
+.gx-opts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.gx-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.gx-kpi{background:var(--gx-cream);border-radius:var(--radius-md);padding:9px 11px;min-width:0}
+.gx-kpi-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gx-mut)}
+.gx-kpi-v{font-size:16px;font-weight:800;color:var(--gx-ink);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gx-kpi-v.in{color:var(--gx-in)}.gx-kpi-v.out{color:var(--gx-out)}.gx-kpi-v.pay{color:var(--gx-pay)}
+.gx-kpi-n{font-size:10.5px;color:var(--gx-mut);margin-top:1px}
+.gx-stage{position:relative;width:100%}
+.gx-note{font-size:11.5px;color:var(--gx-mut);line-height:1.5;margin-top:10px}
+.gx-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:12px}
+.gx-tbl th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gx-mut);font-weight:600;text-align:left;padding:6px 6px;border-bottom:1px solid var(--gx-line)}
+.gx-tbl td{padding:7px 6px;border-bottom:1px solid var(--gx-line);color:var(--gx-ink)}
+.gx-tbl td.r,.gx-tbl th.r{text-align:right;font-variant-numeric:tabular-nums}
+.gx-tbl tr:last-child td{border-bottom:none}
 .goal-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:14px 16px}
 .goal-done{border-color:rgba(74,222,128,.3);background:rgba(74,222,128,.03)}
 
@@ -2033,103 +2098,329 @@ function _flushNotas() {
 }
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
-function mkC(id, type, labels, datasets, extra={}) {
-  if (S.ch[id]) S.ch[id].destroy();
-  // Remove any lingering empty-state overlay from a previous emptyChart() call
-  const _canvas = $(id);
-  if (_canvas) { const _old = _canvas.parentElement?.querySelector('.empty-chart-msg'); if (_old) _old.remove(); }
-  const cs      = getComputedStyle(document.documentElement);
-  const isLight = document.documentElement.classList.contains('light');
-  const tickClr = cs.getPropertyValue('--text-2').trim() || (isLight ? '#6B6B6B' : '#8A8A8A');
-  const text1   = cs.getPropertyValue('--text-1').trim() || (isLight ? '#0F0F0F' : '#F5F5F5');
-  const bgSurf  = cs.getPropertyValue('--bg-surface').trim() || (isLight ? '#FFFFFF' : '#171717');
-  const borderC = cs.getPropertyValue('--border-default').trim() || (isLight ? '#E2E2E6' : '#2A2A2A');
-  const gridClr = borderC + '55';
-  const isH=type==='bar-h', isFill=type==='area';
-  const rt = isH?'bar':isFill?'line':type;
-  const ctx = $(id)?.getContext('2d');
-  if (!ctx) return;
-  const rad = ['pie','doughnut','polarArea','radar'].includes(rt);
-  // Auto-apply semantic category colors only when ALL labels are known categories
-  const isCatLabels = labels.length > 0 && labels.every(l => l in CAT_CLR);
-  S.ch[id] = new Chart(ctx, {
-    type: rt,
-    data: { labels, datasets: datasets.map((d,i) => {
-      const catColors  = isCatLabels ? labels.map((l,li) => CAT_CLR[l] || CLR[li%CLR.length]) : null;
-      // Single-dataset bar charts with multiple items get distinct palette colors per bar
-      const isMultiBar = (rt==='bar'||isH) && datasets.length===1 && labels.length>1 && !isCatLabels && !rad;
-      const barColors  = isMultiBar ? labels.map((_,li) => CLR[li%CLR.length]) : null;
-      const fallback   = CLR[i%CLR.length];
-      const bg = d.backgroundColor !== undefined ? d.backgroundColor
-               : rad    ? (catColors ? catColors.map(c=>c+'cc') : [fallback+'bb'])
-               : catColors ? catColors.map(c=>c+'55')
-               : barColors ? barColors.map(c=>c+'66')
-               : fallback+'55';
-      const bd = d.borderColor !== undefined ? d.borderColor
-               : catColors  ? catColors
-               : barColors  ? barColors
-               : fallback;
-      return { fill:isFill, tension:.35, borderRadius: rt==='bar'?4:0, ...d,
-               backgroundColor:bg, borderColor:bd,
-               borderWidth: d.borderWidth !== undefined ? d.borderWidth : 1.5 };
-    }) },
-    options: { indexAxis:isH?'y':'x', responsive:true, maintainAspectRatio:false,
-      cutout: rt==='doughnut'?'72%':undefined,
-      plugins:{
-        legend:{ display:false },
-        tooltip:{ backgroundColor:bgSurf, titleColor:text1, bodyColor:tickClr,
-                  borderColor:borderC, borderWidth:1, padding:10, cornerRadius:8,
-                  callbacks:{ label: ctx => {
-                    const ds = ctx.chart.data.datasets[ctx.datasetIndex].data;
-                    const total = ds.reduce((a,v)=>a+(Number(v)||0),0);
-                    const val = Number(ctx.raw)||0;
-                    const pct = total>0 ? (val/total*100).toFixed(1) : '0.0';
-                    const lbl = ctx.dataset.label ? ctx.dataset.label+': ' : (ctx.label?ctx.label+': ':'');
-                    return `${lbl}${fmt(val)} (${pct}%)`;
-                  } } }
-      },
-      scales: rad ? {} : {
-        x:{ticks:{color:tickClr,font:{size:10}},grid:{color:gridClr}},
-        y:{ticks:{color:tickClr,font:{size:10}},grid:{color:gridClr}} }, ...extra }
-  });
-  // Custom HTML legend for radial charts
-  const leg = $('legend-'+id);
-  if (leg && rad) {
-    const ds0 = S.ch[id].data.datasets[0];
-    const bgs = Array.isArray(ds0.borderColor) ? ds0.borderColor : [ds0.borderColor];
-    const total = (ds0.data || []).reduce((a,v)=>a+(Number(v)||0),0);
-    leg.innerHTML = labels.map((l,i) => {
-      const clr = isCatLabels ? (CAT_CLR[l]||CLR[i%CLR.length]) : (bgs[i]||CLR[i%CLR.length]);
-      const val  = ds0.data ? ds0.data[i] : '';
-      const pct  = total>0 && val ? ` <span class="leg-pct">(${(Number(val)/total*100).toFixed(1)}%)</span>` : '';
-      return `<span class="leg-item"><span class="leg-dot" style="background:${clr}"></span>${l}${val?'<span class="leg-val">'+fmt(val)+'</span>':''}${pct}</span>`;
-    }).join('');
-  } else if (leg) {
-    leg.innerHTML = '';
-  }
+// ── GX · MOTOR DE GRÁFICAS SVG (sin librerías externas) ──────────────────────
+// Todo se dibuja con SVG primitivo: barras, líneas, dona, Sankey… Cada builder recibe el ancho
+// real del contenedor y devuelve { html, h? }. Los estilos viven en .gx/#grafPanel (variables
+// --gx-*, enlazadas al tema) y los tooltips salen de atributos data-tip ("título|línea|línea").
+const GX = { uid: 0, tip: null };
+const gxEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const _gxN  = v => Number(v) || 0;
+const gxMoney = n => (n < 0 ? '−' : '') + fmt(Math.abs(n));
+function gxShort(n) {
+  const a = Math.abs(n), s = n < 0 ? '−' : '';
+  if (a >= 1e6) return s + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
+  if (a >= 1e3) return s + (a / 1e3).toFixed(a >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k';
+  return s + Math.round(a);
 }
-// Empty-state helper: clears chart and shows placeholder message
-function emptyChart(id, msg) {
-  if (S.ch[id]) { S.ch[id].destroy(); delete S.ch[id]; }
-  const canvas = $(id);
-  if (canvas) {
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+// Los dos colores semánticos de siempre pasan a las variables del sistema (siguen al tema).
+const gxCol = c => ({ '#f87171': 'var(--gx-out)', '#34d399': 'var(--gx-in)' })[String(c || '').slice(0, 7).toLowerCase()] || c;
+function gxTrunc(s, px, cw = 5.7) {
+  s = String(s ?? ''); const n = Math.max(3, Math.floor(px / cw));
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+// Ticks "bonitos" que cubren [min,max].
+function gxScale(min, max, n = 4) {
+  if (!(max > min)) max = min + 1;
+  const raw = (max - min) / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  const lo = Math.floor(min / step + 1e-9) * step, hi = Math.ceil(max / step - 1e-9) * step, ticks = [];
+  for (let v = lo; v <= hi + step * 1e-6; v += step) ticks.push(Math.round(v / step) * step);
+  return { lo, hi, ticks };
+}
+const _gxSvg = (w, h, inner, aria) =>
+  `<svg class="gx-svg" viewBox="0 0 ${w} ${h}" height="${h}" role="img" aria-label="${gxEsc(aria || 'Gráfica')}">${inner}</svg>`;
+
+// Tooltip único para todas las gráficas (hover en escritorio, toque en móvil).
+function gxTipInit() {
+  if (GX.tip) return;
+  const tip = GX.tip = document.createElement('div');
+  tip.className = 'gx-tip'; document.body.appendChild(tip);
+  const hide = () => { tip.style.display = 'none'; };
+  const show = e => {
+    const t = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (!t) return hide();
+    tip.textContent = '';
+    t.getAttribute('data-tip').split('|').forEach((l, i) => {
+      const d = document.createElement(i ? 'div' : 'b'); d.textContent = l; tip.appendChild(d);
+    });
+    tip.style.display = 'block';
+    const r = tip.getBoundingClientRect();
+    let x = e.clientX + 14, y = e.clientY + 16;
+    if (x + r.width  > innerWidth  - 8) x = e.clientX - r.width  - 14;
+    if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14;
+    tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px';
+  };
+  document.addEventListener('pointermove', show, { passive: true });
+  document.addEventListener('pointerdown', show, { passive: true });
+  document.addEventListener('scroll', hide, true);
+}
+
+// Sustituye el <canvas> heredado por el contenedor SVG (mismo id) sin tocar el HTML de los llamadores.
+function gxMount(id) {
+  let el = $(id); if (!el) return null;
+  if (el.tagName === 'CANVAS') {
+    const d = document.createElement('div'); d.id = id; d.className = 'gx gx-chart';
+    el.replaceWith(d); el = d;
   }
-  const leg = $('legend-'+id);
-  if (leg) leg.innerHTML = '';
-  const wrap = canvas?.parentElement;
-  if (wrap) {
-    const existing = wrap.querySelector('.empty-chart-msg');
-    if (!existing) {
-      const div = document.createElement('div');
-      div.className='empty-chart-msg';
-      div.innerHTML=`<i class="ti ti-chart-bar-off"></i><span>${msg||'Sin datos para este período'}</span>`;
-      wrap.appendChild(div);
-    }
+  return el;
+}
+// builder(w, h0) → { html, h? }. Se repinta solo al cambiar el ancho del contenedor.
+function gxDraw(el, builder) {
+  gxTipInit();
+  const wrap = el.parentElement;
+  const run = () => {
+    const w  = Math.round(wrap.clientWidth) || 320;
+    const h0 = el._h0 || (el._h0 = Math.round(wrap.clientHeight) || 200);
+    const r  = builder(w, h0);
+    el.innerHTML = r.html;
+    wrap.style.height = r.h ? r.h + 'px' : '';
+  };
+  el._run = run; run();
+  if (!el._ro && window.ResizeObserver) {
+    let lw = wrap.clientWidth;
+    el._ro = new ResizeObserver(() => {
+      if (!el.isConnected) { el._ro.disconnect(); return; }
+      if (wrap.clientWidth !== lw) { lw = wrap.clientWidth; el._run(); }
+    });
+    el._ro.observe(wrap);
   }
 }
 
+// ── barras verticales agrupadas (admite negativos y una línea superpuesta) ────
+function gxBars(w, h, labels, series, o = {}) {
+  const N = labels.length, K = series.length;
+  if (!N) return { html: '' };
+  const vals = series.flatMap(s => s.data); if (o.line) vals.push(...o.line.data);
+  const sc = gxScale(Math.min(0, ...vals), Math.max(0, ...vals), 4);
+  const m = { l: Math.max(30, 10 + 6 * Math.max(...sc.ticks.map(t => gxShort(t).length))), r: 8, t: 12, b: 24 };
+  const pw = w - m.l - m.r, ph = h - m.t - m.b;
+  const y = v => m.t + ph - (v - sc.lo) / (sc.hi - sc.lo) * ph, y0 = y(0);
+  const gw = pw / N, bw = Math.max(2, Math.min(36, gw * 0.76 / K));
+  let g = '';
+  sc.ticks.forEach(t => {
+    g += `<line class="${t === 0 && sc.lo < 0 ? 'gx-zero' : 'gx-grid'}" x1="${m.l}" x2="${w - m.r}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/>`
+       + `<text class="gx-ax" x="${m.l - 6}" y="${(y(t) + 3).toFixed(1)}" text-anchor="end">${gxShort(t)}</text>`;
+  });
+  const skip = Math.max(1, Math.ceil(34 / gw));
+  labels.forEach((l, i) => {
+    if (i % skip) return;
+    g += `<text class="gx-ax" x="${(m.l + gw * i + gw / 2).toFixed(1)}" y="${h - 8}" text-anchor="middle">${gxEsc(gxTrunc(l, gw * skip))}</text>`;
+  });
+  series.forEach((s, si) => {
+    const tot = s.data.reduce((a, v) => a + Math.max(0, v), 0);
+    s.data.forEach((v, i) => {
+      const x = m.l + gw * i + (gw - bw * K) / 2 + bw * si;
+      const top = v >= 0 ? y(v) : y0, bh = v === 0 ? 0 : Math.max(1, Math.abs(y(v) - y0));
+      const c = Array.isArray(s.colors) ? s.colors[i % s.colors.length] : s.colors;
+      const pct = tot > 0 && v > 0 && K === 1 ? ` (${(v / tot * 100).toFixed(1)}%)` : '';
+      const tip = `${labels[i]}|${s.label ? s.label + ': ' : ''}${gxMoney(v)}${pct}`;
+      g += `<rect class="gx-bar" x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="${Math.min(3, bw / 2).toFixed(1)}" style="fill:${c};--o:${s.op ?? 0.9}" data-tip="${gxEsc(tip)}"/>`;
+      if (N * K <= 10 && v) g += `<text class="gx-val" x="${(x + bw / 2).toFixed(1)}" y="${(v >= 0 ? top - 4 : top + bh + 11).toFixed(1)}" text-anchor="middle">${gxShort(v)}</text>`;
+    });
+  });
+  if (o.line) {
+    const pts = o.line.data.map((v, i) => [m.l + gw * i + gw / 2, y(v)]);
+    g += `<path d="M${pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('L')}" fill="none" style="stroke:${o.line.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    pts.forEach((p, i) => { g += `<circle class="gx-dot" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" style="fill:${o.line.color}" data-tip="${gxEsc(`${labels[i]}|${o.line.label}: ${gxMoney(o.line.data[i])}`)}"/>`; });
+  }
+  return { html: _gxSvg(w, h, g, o.aria) };
+}
+
+// ── barras horizontales (etiquetas largas, ranking, Pareto) ──────────────────
+function gxHBars(w, h, labels, series, o = {}) {
+  const N = labels.length, K = series.length;
+  if (!N) return { html: '' };
+  const rowH = K * 11 + 12, H = Math.max(140, N * rowH + 14);
+  const max = Math.max(1, ...series.flatMap(s => s.data));
+  const lw = Math.min(w * 0.4, Math.max(48, Math.max(...labels.map(l => String(l).length)) * 5.7 + 6));
+  const ew = o.extraW || 0, vw = K === 1 && !ew ? 46 : 6, bx = lw + 8, bmax = Math.max(20, w - bx - ew - vw - 4);
+  let g = '';
+  labels.forEach((l, i) => {
+    const cy = 8 + rowH * i;
+    g += `<text class="gx-lbl" x="${lw}" y="${(cy + rowH / 2 + 3).toFixed(1)}" text-anchor="end">${gxEsc(gxTrunc(l, lw))}</text>`;
+    series.forEach((s, si) => {
+      const v = s.data[i], bw = v > 0 ? Math.max(2, v / max * bmax) : 0;
+      const c = Array.isArray(s.colors) ? s.colors[i % s.colors.length] : s.colors, by = cy + 4 + si * 11;
+      const tip = `${l}|${s.label ? s.label + ': ' : ''}${gxMoney(v)}`;
+      g += `<rect class="gx-bar gx-hb" x="${bx}" y="${by}" width="${bw.toFixed(1)}" height="8" rx="3" style="fill:${c};--o:${s.op ?? 0.9}" data-tip="${gxEsc(tip)}"/>`;
+      if (K === 1 && !ew) g += `<text class="gx-val" x="${(bx + bw + 5).toFixed(1)}" y="${by + 7.5}">${gxShort(v)}</text>`;
+    });
+    if (o.extra) g += `<text class="gx-lbl-m" x="${w - 4}" y="${(cy + rowH / 2 + 3).toFixed(1)}" text-anchor="end">${gxEsc(o.extra(i))}</text>`;
+  });
+  return { html: _gxSvg(w, H, g, o.aria), h: H };
+}
+
+// ── líneas / áreas (curva suave sin sobrepasar los datos) ────────────────────
+function _gxSmooth(pts) {
+  if (pts.length < 3) return 'M' + pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('L');
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const lo = Math.min(p1[1], p2[1]), hi = Math.max(p1[1], p2[1]), cl = v => Math.min(hi, Math.max(lo, v));
+    d += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${cl(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${cl(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+function gxLines(w, h, labels, series, area, o = {}) {
+  const N = labels.length;
+  if (!N) return { html: '' };
+  const vals = series.flatMap(s => s.data);
+  const sc = gxScale(Math.min(0, ...vals), Math.max(0, ...vals), 4);
+  const m = { l: Math.max(30, 10 + 6 * Math.max(...sc.ticks.map(t => gxShort(t).length))), r: 12, t: 12, b: 24 };
+  const pw = w - m.l - m.r, ph = h - m.t - m.b;
+  const y = v => m.t + ph - (v - sc.lo) / (sc.hi - sc.lo) * ph, y0 = y(Math.max(0, sc.lo));
+  const x = i => N === 1 ? m.l + pw / 2 : m.l + pw * i / (N - 1);
+  let g = '', defs = '';
+  sc.ticks.forEach(t => {
+    g += `<line class="${t === 0 && sc.lo < 0 ? 'gx-zero' : 'gx-grid'}" x1="${m.l}" x2="${w - m.r}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/>`
+       + `<text class="gx-ax" x="${m.l - 6}" y="${(y(t) + 3).toFixed(1)}" text-anchor="end">${gxShort(t)}</text>`;
+  });
+  const step = N > 1 ? pw / (N - 1) : pw, skip = Math.max(1, Math.ceil(40 / step));
+  labels.forEach((l, i) => { if (i % skip === 0) g += `<text class="gx-ax" x="${x(i).toFixed(1)}" y="${h - 8}" text-anchor="middle">${gxEsc(gxTrunc(l, step * skip, 5.4))}</text>`; });
+  series.forEach(s => {
+    const c = Array.isArray(s.colors) ? s.colors[0] : s.colors, pts = s.data.map((v, i) => [x(i), y(v)]);
+    const line = _gxSmooth(pts);
+    if (area || s.fill) {
+      const gid = 'gxg' + (++GX.uid);
+      defs += `<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${c};stop-opacity:.28"/><stop offset="1" style="stop-color:${c};stop-opacity:0"/></linearGradient>`;
+      g += `<path d="${line}L${pts[pts.length - 1][0].toFixed(1)},${y0.toFixed(1)}L${pts[0][0].toFixed(1)},${y0.toFixed(1)}Z" fill="url(#${gid})"/>`;
+    }
+    g += `<path d="${line}" fill="none" style="stroke:${c}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (N <= 31) pts.forEach(p => { g += `<circle class="gx-dot" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" style="fill:${c}"/>`; });
+  });
+  const cw = N > 1 ? pw / (N - 1) : pw;   // columnas invisibles: un tooltip por fecha con todas las series
+  labels.forEach((l, i) => {
+    const tip = [l, ...series.map(s => `${s.label ? s.label + ': ' : ''}${gxMoney(s.data[i])}`)].join('|');
+    g += `<rect class="gx-cap" x="${(x(i) - cw / 2).toFixed(1)}" y="${m.t}" width="${cw.toFixed(1)}" height="${ph}" data-tip="${gxEsc(tip)}"/>`;
+  });
+  return { html: _gxSvg(w, h, `<defs>${defs}</defs>` + g, o.aria) };
+}
+
+// ── dona / pastel con porciones separables ───────────────────────────────────
+function gxDonut(w, h, labels, s, pie, o = {}) {
+  const vals = s.data, tot = vals.reduce((a, v) => a + Math.max(0, v), 0);
+  if (!(tot > 0)) return { html: '' };
+  const offs = Array.isArray(s.offset) ? s.offset : [], maxOff = Math.max(0, ...offs) * 0.45;
+  const R = Math.max(30, Math.min(w, h) / 2 - 8 - maxOff), r = pie ? 0 : R * 0.62, cx = w / 2, cy = h / 2;
+  const P = (rad, a) => [cx + Math.cos(a) * rad, cy + Math.sin(a) * rad];
+  let a = -Math.PI / 2, g = '';
+  vals.forEach((v, i) => {
+    if (!(v > 0)) return;
+    const da = v / tot * 2 * Math.PI, a0 = a, a1 = a + da; a = a1;
+    const mid = (a0 + a1) / 2, off = (offs[i] || 0) * 0.45;
+    const c = s.colors[i % s.colors.length];
+    let d;
+    if (da >= 2 * Math.PI - 1e-4) {
+      d = `M${cx + R},${cy}A${R},${R} 0 1 1 ${cx - R},${cy}A${R},${R} 0 1 1 ${cx + R},${cy}Z` + (r ? `M${cx + r},${cy}A${r},${r} 0 1 0 ${cx - r},${cy}A${r},${r} 0 1 0 ${cx + r},${cy}Z` : '');
+    } else {
+      const lg = da > Math.PI ? 1 : 0, [x0, y0] = P(R, a0), [x1, y1] = P(R, a1);
+      if (r) { const [x2, y2] = P(r, a1), [x3, y3] = P(r, a0); d = `M${x0.toFixed(1)},${y0.toFixed(1)}A${R},${R} 0 ${lg} 1 ${x1.toFixed(1)},${y1.toFixed(1)}L${x2.toFixed(1)},${y2.toFixed(1)}A${r},${r} 0 ${lg} 0 ${x3.toFixed(1)},${y3.toFixed(1)}Z`; }
+      else d = `M${cx},${cy}L${x0.toFixed(1)},${y0.toFixed(1)}A${R},${R} 0 ${lg} 1 ${x1.toFixed(1)},${y1.toFixed(1)}Z`;
+    }
+    g += `<path class="gx-slice" fill-rule="evenodd" d="${d}" transform="translate(${(Math.cos(mid) * off).toFixed(1)} ${(Math.sin(mid) * off).toFixed(1)})" style="fill:${c}" data-tip="${gxEsc(`${labels[i]}|${gxMoney(v)} (${(v / tot * 100).toFixed(1)}%)`)}"/>`;
+  });
+  if (!pie) g += `<text class="gx-val" x="${cx}" y="${cy + 1}" text-anchor="middle" style="font-size:${R < 70 ? 11 : 14}px">${gxEsc(gxMoney(tot))}</text><text class="gx-ax" x="${cx}" y="${cy + 15}" text-anchor="middle">Total</text>`;
+  return { html: _gxSvg(w, h, g, o.aria) };
+}
+
+// ── Sankey: de dónde viene el dinero → periodo → a dónde va ─────────────────
+// src/dst: [{ name, value, color }] con la misma suma. Las bandas son curvas Bézier.
+function _gxSpread(ys, gap, lo, hi) {
+  for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + gap);
+  if (ys.length && ys[ys.length - 1] > hi) { ys[ys.length - 1] = hi; for (let i = ys.length - 2; i >= 0; i--) ys[i] = Math.min(ys[i], ys[i + 1] - gap); }
+  if (ys.length && ys[0] < lo) { const d = lo - ys[0]; for (let i = 0; i < ys.length; i++) ys[i] += d; }
+  return ys;
+}
+function gxSankey(w, src, dst, o = {}) {
+  const T = src.reduce((a, n) => a + n.value, 0);
+  if (!(T > 0)) return { html: '' };
+  const rows = Math.max(src.length, dst.length), H = Math.max(250, rows * 36 + 40), pad = 16, gap = 8, nw = 10;
+  const lw = Math.min(116, w * 0.28), rw = Math.min(136, w * 0.34);
+  const xL = lw, xR = w - rw - nw, xH = (xL + xR) / 2, avail = H - 2 * pad;
+  const scale = Math.min(...[src, dst].map(c => (avail - gap * (c.length - 1)) / T));
+  const lay = nodes => {
+    const hh = T * scale + gap * (nodes.length - 1);
+    let y = pad + (avail - hh) / 2;
+    return nodes.map(n => { const o2 = { ...n, y, h: Math.max(2, n.value * scale) }; y += n.value * scale + gap; return o2; });
+  };
+  const L = lay(src), Rn = lay(dst), hubTop = pad + (avail - T * scale) / 2;
+  const band = (x0, ya, yb, x1, yc, yd) => { const mx = (x0 + x1) / 2; return `M${x0},${ya}C${mx},${ya} ${mx},${yc} ${x1},${yc}L${x1},${yd}C${mx},${yd} ${mx},${yb} ${x0},${yb}Z`; };
+  let g = '', cum = 0;
+  L.forEach(n => {
+    const ya = hubTop + cum * scale, th = n.value * scale; cum += n.value;
+    g += `<path class="gx-link" d="${band(xL + nw, n.y.toFixed(1), (n.y + th).toFixed(1), xH, ya.toFixed(1), (ya + th).toFixed(1))}" style="fill:${n.color}" data-tip="${gxEsc(`${n.name} → ${o.hub || 'Periodo'}|${gxMoney(n.value)} (${(n.value / T * 100).toFixed(1)}%)`)}"/>`;
+  });
+  cum = 0;
+  Rn.forEach(n => {
+    const ya = hubTop + cum * scale, th = n.value * scale; cum += n.value;
+    g += `<path class="gx-link" d="${band(xH + nw, ya.toFixed(1), (ya + th).toFixed(1), xR, n.y.toFixed(1), (n.y + th).toFixed(1))}" style="fill:${n.color}" data-tip="${gxEsc(`${o.hub || 'Periodo'} → ${n.name}|${gxMoney(n.value)} (${(n.value / T * 100).toFixed(1)}%)`)}"/>`;
+  });
+  [[L, xL], [Rn, xR]].forEach(([col, x]) => col.forEach(n => {
+    g += `<rect class="gx-node" x="${x}" y="${n.y.toFixed(1)}" width="${nw}" height="${n.h.toFixed(1)}" rx="2" style="fill:${n.color}" data-tip="${gxEsc(`${n.name}|${gxMoney(n.value)} (${(n.value / T * 100).toFixed(1)}%)`)}"/>`;
+  }));
+  g += `<rect class="gx-node" x="${xH}" y="${hubTop.toFixed(1)}" width="${nw}" height="${(T * scale).toFixed(1)}" rx="2" style="fill:var(--gx-ac)" data-tip="${gxEsc(`${o.hub || 'Periodo'}|${gxMoney(T)}`)}"/>`;
+  const lab = (col, side) => {
+    const ys = _gxSpread(col.map(n => n.y + n.h / 2), 25, pad + 6, H - pad - 6);
+    col.forEach((n, i) => {
+      const x = side === 'l' ? xL - 6 : xR + nw + 6, an = side === 'l' ? 'end' : 'start', px = side === 'l' ? lw - 10 : rw - 12;
+      g += `<text class="gx-lbl" x="${x}" y="${(ys[i] - 1).toFixed(1)}" text-anchor="${an}">${gxEsc(gxTrunc(n.name, px))}</text>`
+         + `<text class="gx-lbl-m" x="${x}" y="${(ys[i] + 11).toFixed(1)}" text-anchor="${an}">${gxShort(n.value)} · ${(n.value / T * 100).toFixed(0)}%</text>`;
+    });
+  };
+  lab(L, 'l'); lab(Rn, 'r');
+  g += `<text class="gx-val" x="${xH + nw / 2}" y="${(hubTop - 6).toFixed(1)}" text-anchor="middle">$${gxShort(T)}</text>`;
+  return { html: _gxSvg(w, H, g, o.aria || 'Diagrama de flujo del dinero'), h: H };
+}
+
+// ── adaptador: misma firma que usaban todas las gráficas (antes Chart.js) ────
+function mkC(id, type, labels, datasets) {
+  const el = gxMount(id); if (!el) return;
+  if (S.ch[id]) S.ch[id].destroy();
+  const rt     = type === 'polarArea' ? 'doughnut' : type === 'radar' ? 'bar' : type;
+  const radial = rt === 'doughnut' || rt === 'pie';
+  const isCat  = labels.length > 0 && labels.every(l => l in CAT_CLR);
+  const single = datasets.length === 1;
+  const ser = datasets.map((d, i) => {
+    const bc = d.borderColor;
+    let colors;
+    if (Array.isArray(bc))   colors = bc.map(gxCol);
+    else if (bc)             colors = gxCol(bc);
+    else if (isCat)          colors = labels.map(l => CAT_CLR[l]);
+    else if (radial)         colors = labels.map((_, k) => CLR[k % CLR.length]);
+    else                     colors = single ? 'var(--gx-ac)' : CLR[i % CLR.length];
+    if (radial && !Array.isArray(colors)) colors = labels.map((_, k) => CLR[k % CLR.length]);
+    return { label: d.label || '', data: (d.data || []).map(_gxN), colors, offset: d.offset,
+             op: /l[ií]mite|objetivo|meta|presup/i.test(d.label || '') ? 0.38 : 0.9, fill: !!d.fill };
+  });
+  const draw = (w, h) => radial ? gxDonut(w, h, labels, ser[0], rt === 'pie')
+    : (rt === 'line' || rt === 'area') ? gxLines(w, h, labels, ser, rt === 'area')
+    : rt === 'bar-h' ? gxHBars(w, h, labels, ser) : gxBars(w, h, labels, ser);
+  gxDraw(el, draw);
+  const lg = $('legend-' + id);
+  if (lg) {
+    if (radial) {
+      const s0 = ser[0], tot = s0.data.reduce((a, v) => a + Math.max(0, v), 0);
+      lg.innerHTML = labels.map((l, i) => {
+        const v = s0.data[i], pct = tot > 0 && v ? ` <span class="leg-pct">(${(v / tot * 100).toFixed(1)}%)</span>` : '';
+        return `<span class="leg-item"><span class="leg-dot" style="background:${s0.colors[i % s0.colors.length]}"></span>${gxEsc(l)}${v ? '<span class="leg-val">' + fmt(v) + '</span>' : ''}${pct}</span>`;
+      }).join('');
+    } else {
+      lg.innerHTML = ser.length > 1 ? ser.map(s => `<span class="leg-item"><span class="leg-dot" style="background:${Array.isArray(s.colors) ? 'var(--gx-ac)' : s.colors};opacity:${s.op}"></span>${gxEsc(s.label)}</span>`).join('') : '';
+    }
+  }
+  S.ch[id] = { destroy() {
+    el._ro?.disconnect(); el._ro = null; el.innerHTML = '';
+    if (el.parentElement) el.parentElement.style.height = '';
+    const l = $('legend-' + id); if (l) l.innerHTML = '';
+  } };
+}
+// Estado vacío: mensaje centrado en el mismo contenedor
+function emptyChart(id, msg) {
+  if (S.ch[id]) { S.ch[id].destroy(); delete S.ch[id]; }
+  const el = gxMount(id); if (!el) return;
+  const lg = $('legend-' + id); if (lg) lg.innerHTML = '';
+  el.innerHTML = `<div class="empty-chart-msg"><i class="ti ti-chart-bar-off"></i><span>${gxEsc(msg || 'Sin datos para este período')}</span></div>`;
+}
 function ctBtns(id, types, def) {
   if (!S.ct[id]) S.ct[id] = def || types[0][1];
   return `<div class="ct-btns">${types.map(([l,v]) =>
@@ -2137,7 +2428,7 @@ function ctBtns(id, types, def) {
 }
 function sct(id, t) { S.ct[id]=t; renderTab(S.tab); }
 
-const PIE  = [['Pastel','pie'],['Dona','doughnut'],['Barras','bar'],['Polar','polarArea'],['Radar','radar']];
+const PIE  = [['Pastel','pie'],['Dona','doughnut'],['Barras','bar']];
 const LINE = [['Barras','bar'],['Líneas','line'],['Área','area'],['Horiz.','bar-h']];
 
 // ── MOTOR DE TABLAS: ordenables + filtrables por columna ──────────────────────
@@ -4378,34 +4669,242 @@ async function niSave() {
   } catch (e) { if (st) st.textContent = '⚠️ No se pudo guardar'; }
 }
 
-// Análisis gráfico: mismos 3 charts que traía el Inicio, ahora en la hoja.
-function _analisisHTML() {
-  const r = getPeriodoRange();
-  return `<div class="charts-grid">
-  <div class="cbox"><h3>Gastos por Categoría — ${r.label}</h3>${ctBtns('c-cat',PIE,'doughnut')}<div class="cwrap"><canvas id="c-cat"></canvas></div><div id="legend-c-cat" class="chart-legend"></div></div>
-  <div class="cbox"><h3>Ingresos vs Gastos — últimos 6 meses</h3>${ctBtns('c-men',LINE,'bar')}<div class="cwrap"><canvas id="c-men"></canvas></div><div id="legend-c-men" class="chart-legend"></div></div>
-  <div class="cbox"><h3>Conceptos más recurrentes</h3>${ctBtns('c-pat',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut']],'bar-h')}<div class="cwrap"><canvas id="c-pat"></canvas></div><div id="legend-c-pat" class="chart-legend"></div></div>
-</div>`;
+// ── Análisis gráfico: panel GX con las 6 gráficas ───────────────────────────
+// Sankey · Mes a mes · Día a día · Nuevos (contrapartes) · Concentración · Saldo (permanencia).
+// Todo se calcula en el cliente con S.data.movs; "gasto" excluye las transferencias a Ahorro
+// (ese dinero no se gastó: se muestra aparte, igual que en la dona de Movimientos).
+const GX_TABS = [['sankey', 'El dinero'], ['flujo', 'Mes a mes'], ['dia', 'Día a día'], ['nuevos', 'Nuevos'], ['conc', 'Concentración'], ['saldo', 'Saldo']];
+const gxEsAhorro = m => /\bahorro\b/i.test(m.concepto || '') || /\bahorro\b/i.test(m.comentarios || '');
+const _gxMovs   = () => { const hoy = toISO(new Date()); return (S.data.movs || []).filter(m => !m.deleted_at && m.fecha && m.fecha <= hoy); };
+const _gxSum    = a => a.reduce((s, m) => s + (m.monto || 0), 0);
+const _gxCat    = m => (m.categoria === 'Pasajes' ? 'Transporte' : (m.categoria || 'OTROS'));
+const _gxNorm   = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/^\[ppto\]\s*/, '').replace(/\s+/g, ' ').trim();
+const _gxGrp    = (arr, kf) => { const o = {}; arr.forEach(m => { const k = kf(m); o[k] = (o[k] || 0) + (m.monto || 0); }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
+const _gxFix    = (res, h) => Object.assign(res, { h });
+const _gxStage  = (id = 'gx-main') => `<div class="gx-stage"><div id="${id}" class="gx gx-chart"></div></div>`;
+const _gxEmpty  = msg => `<div class="gx-note" style="text-align:center;padding:34px 8px">${gxEsc(msg)}</div>`;
+const _gxKpi    = (l, v, cls = '', n = '') => `<div class="gx-kpi"><div class="gx-kpi-l">${l}</div><div class="gx-kpi-v ${cls}">${v}</div>${n ? `<div class="gx-kpi-n">${gxEsc(n)}</div>` : ''}</div>`;
+const _gxCard   = (title, sub, kpis, opts, stage, extra = '') => `<div class="gx-card">
+  <div class="gx-head"><h3>${title}</h3><span class="gx-sub">${gxEsc(sub)}</span></div>
+  ${opts ? `<div class="gx-opts">${opts}</div>` : ''}
+  <div class="gx-kpis">${kpis}</div>${stage}${extra}</div>`;
+const _gxOpt    = (k, v, label, cur) => `<button class="gx-btn sm${cur === v ? ' on' : ''}" onclick="gxSet('${k}','${v}')">${label}</button>`;
+function _gxMeses(n) {
+  const out = [], d = new Date();
+  for (let i = n - 1; i >= 0; i--) { const x = new Date(d.getFullYear(), d.getMonth() - i, 1); out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`); }
+  return out;
 }
+const _gxMesLbl = ym => { const [y, m] = ym.split('-'); return MESES_CORTO[+m - 1] + (m === '01' ? ` ${y.slice(2)}` : ''); };
+// Totales por mes: ingresos, gastos (sin ahorro) y ahorro
+function _gxPorMes(meses) {
+  const base = {}; meses.forEach(m => { base[m] = { ing: 0, gas: 0, aho: 0 }; });
+  _gxMovs().forEach(m => {
+    const b = base[m.fecha.slice(0, 7)]; if (!b) return;
+    if (m.tipo === 'INGRESO') b.ing += m.monto || 0;
+    else if (m.tipo === 'GASTO') { if (gxEsAhorro(m)) b.aho += m.monto || 0; else b.gas += m.monto || 0; }
+  });
+  return meses.map(m => ({ ym: m, ...base[m] }));
+}
+
+function _analisisHTML() { return '<div id="grafPanel" class="gx"></div>'; }
 function _analisisDraw() {
-  const movs = S.data.movs || [];
-  const r    = getPeriodoRange();
-  const pMovs = filterMovs(movs, r.from, r.to);
-  const cgRaw = byKey(pMovs.filter(m=>m.tipo==='GASTO'),'categoria');
-  const cg={}; Object.entries(cgRaw).forEach(([k,v])=>{ const nk=k==='Pasajes'?'Transporte':k; cg[nk]=(cg[nk]||0)+v; });
-  const ck=Object.keys(cg).sort((a,b)=>cg[b]-cg[a]);
-  if (ck.length) mkC('c-cat',S.ct['c-cat']||'doughnut',ck,[{data:ck.map(k=>cg[k]),label:'Gastos'}]);
-  else emptyChart('c-cat','Sin gastos en este período');
-  const ms=last6();
-  const menGas=ms.map(m=>movs.filter(x=>x.tipo==='GASTO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0));
-  const menIng=ms.map(m=>movs.filter(x=>x.tipo==='INGRESO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0));
-  mkC('c-men',S.ct['c-men']||'bar',ms,[
-    {label:'Gastos',  data:menGas, backgroundColor:'#f8717155', borderColor:'#f87171'},
-    {label:'Ingresos',data:menIng, backgroundColor:'#34d39955', borderColor:'#34d399'}]);
-  const pats = S.data.patrones||[];
-  const top=pats.slice(0,8);
-  if (top.length) mkC('c-pat',S.ct['c-pat']||'bar-h',top.map(p=>p.concepto_clave),[{label:'Promedio $',data:top.map(p=>p.monto_promedio)}]);
-  else emptyChart('c-pat','Sin patrones registrados aún');
+  if (!S._gx) S._gx = { tab: 'sankey', meses: '6', dia: 'dia', conc: 'concepto', mesNuevos: null };
+  gxPanel();
+}
+function gxTab(t)    { S._gx.tab = t; gxPanel(); }
+function gxSet(k, v) { S._gx[k] = v; gxPanel(); }
+function gxPanel() {
+  const root = $('grafPanel'); if (!root) return;
+  const st = S._gx;
+  const tabs = { sankey: _gxSankeyTab, flujo: _gxFlujoTab, dia: _gxDiaTab, nuevos: _gxNuevosTab, conc: _gxConcTab, saldo: _gxSaldoTab };
+  const body = (tabs[st.tab] || _gxSankeyTab)();
+  root.innerHTML = `<div class="gx-tabs" role="tablist">${GX_TABS.map(([k, l]) =>
+    `<button class="gx-btn${st.tab === k ? ' on' : ''}" role="tab" aria-selected="${st.tab === k}" onclick="gxTab('${k}')">${l}</button>`).join('')}</div>${body.html}`;
+  if (body.draw) body.draw();
+}
+
+// 1) El dinero — Sankey
+function _gxSankeyTab() {
+  const r = getPeriodoRange(), mv = filterMovs(_gxMovs(), r.from, r.to);
+  const ing = mv.filter(m => m.tipo === 'INGRESO');
+  const gasAll = mv.filter(m => m.tipo === 'GASTO');
+  const aho = gasAll.filter(gxEsAhorro), gas = gasAll.filter(m => !gxEsAhorro(m));
+  const tIng = _gxSum(ing), tGas = _gxSum(gas), tAho = _gxSum(aho);
+  const kpis = _gxKpi('Ingresos', gxMoney(tIng), 'in') + _gxKpi('Gastos', gxMoney(tGas), 'out')
+    + _gxKpi('Ahorrado', gxMoney(tAho), 'pay') + _gxKpi(tIng - tGas - tAho >= 0 ? 'Sobra' : 'Falta', gxMoney(Math.abs(tIng - tGas - tAho)), tIng - tGas - tAho >= 0 ? 'in' : 'out');
+  if (!ing.length && !gasAll.length) return { html: _gxCard('El dinero', r.label, kpis, '', _gxEmpty('Sin movimientos en este período')) };
+  const top = (arr, n, kf) => { const e = _gxGrp(arr, kf); const head = e.slice(0, n), rest = e.slice(n).reduce((a, x) => a + x[1], 0); return rest > 0 ? [...head, ['Otros', rest]] : head; };
+  const src = top(ing, 5, m => m.concepto || 'Ingreso').map(([name, value]) => ({ name, value, color: 'var(--gx-in)' }));
+  const dst = top(gas, 6, _gxCat).map(([name, value]) => ({ name, value, color: CAT_CLR[name] || 'var(--gx-neu)' }));
+  if (tAho > 0) dst.push({ name: 'Ahorro', value: tAho, color: 'var(--gx-pay)' });
+  const gastado = tGas + tAho;
+  if (tIng > gastado) dst.push({ name: 'Sobrante', value: tIng - gastado, color: 'var(--gx-ac2)' });
+  if (gastado > tIng) src.push({ name: 'Saldo previo', value: gastado - tIng, color: 'var(--gx-neu)' });
+  const note = gastado > tIng
+    ? 'Gastaste más de lo que ingresó en este período: la diferencia salió de saldo que ya tenías.'
+    : `De cada $100 que ingresaron, ${tIng > 0 ? Math.round(tAho / tIng * 100) : 0} se fueron a ahorro y ${tIng > 0 ? Math.round((tIng - gastado) / tIng * 100) : 0} quedaron sin asignar.`;
+  return {
+    html: _gxCard('El dinero', r.label, kpis, '', _gxStage(), `<div class="gx-note">${gxEsc(note)} Toca una banda para ver el monto.</div>`),
+    draw: () => gxDraw($('gx-main'), w => gxSankey(w, src, dst, { hub: 'Período' })),
+  };
+}
+
+// 2) Mes a mes — flujo
+function _gxFlujoTab() {
+  const n = S._gx.meses === '12' ? 12 : 6, todos = _gxMeses(n);
+  const prim = _gxMovs().reduce((mn, m) => (m.fecha.slice(0, 7) < mn ? m.fecha.slice(0, 7) : mn), '9999-99');
+  const meses = todos.filter(m => m >= prim).length ? todos.filter(m => m >= prim) : todos;   // sin meses vacíos antes de tu primer registro
+  const pm = _gxPorMes(meses);
+  const neto = pm.map(p => p.ing - p.gas - p.aho);
+  const act = pm.filter(p => p.ing || p.gas || p.aho);
+  // Promedios y mejor/peor solo con meses cerrados: el mes en curso va a medias y siempre saldría "peor".
+  const cur = _gxMeses(1)[0], cerr = act.filter(p => p.ym !== cur), base = cerr.length ? cerr : act;
+  const avg = k => base.length ? base.reduce((a, p) => a + p[k], 0) / base.length : 0;
+  const nt = p => p.ing - p.gas - p.aho;
+  const mejor = base.reduce((b, p) => (nt(p) > (b.v ?? -Infinity) ? { v: nt(p), ym: p.ym } : b), {});
+  const peor  = base.reduce((b, p) => (nt(p) < (b.v ?? Infinity) ? { v: nt(p), ym: p.ym } : b), {});
+  const kpis = _gxKpi('Ingreso prom.', gxMoney(avg('ing')), 'in', 'meses cerrados') + _gxKpi('Gasto prom.', gxMoney(avg('gas')), 'out', 'meses cerrados')
+    + _gxKpi('Mejor mes', act.length ? _gxMesLbl(mejor.ym) : '—', '', act.length ? gxMoney(mejor.v) : '')
+    + _gxKpi('Peor mes', act.length ? _gxMesLbl(peor.ym) : '—', '', act.length ? gxMoney(peor.v) : '');
+  const opts = _gxOpt('meses', '6', '6 meses', String(n)) + _gxOpt('meses', '12', '12 meses', String(n));
+  if (!act.length) return { html: _gxCard('Mes a mes', `Últimos ${n} meses`, kpis, opts, _gxEmpty('Sin movimientos en estos meses')) };
+  return {
+    html: _gxCard('Mes a mes', `Últimos ${n} meses`, kpis, opts, _gxStage(),
+      `<div class="gx-leg"><span><i style="background:var(--gx-in)"></i>Ingresos</span><span><i style="background:var(--gx-out)"></i>Gastos</span><span><i style="background:var(--gx-pay)"></i>Ahorro</span><span><i style="background:var(--gx-ac)"></i>Sobrante</span></div>
+       <div class="gx-note">Sobrante = ingresos − gastos − ahorro. El mes en curso aún no termina.</div>`),
+    draw: () => gxDraw($('gx-main'), w => _gxFix(gxBars(w, 250, meses.map(_gxMesLbl), [
+      { label: 'Ingresos', data: pm.map(p => p.ing), colors: 'var(--gx-in)' },
+      { label: 'Gastos',   data: pm.map(p => p.gas), colors: 'var(--gx-out)' },
+      { label: 'Ahorro',   data: pm.map(p => p.aho), colors: 'var(--gx-pay)' },
+    ], { line: { label: 'Sobrante', data: neto, color: 'var(--gx-ac)' }, aria: 'Ingresos, gastos y ahorro por mes' }), 250)),
+  };
+}
+
+// 3) Día a día
+function _gxDiaTab() {
+  const r = getPeriodoRange(), hoyIso = toISO(new Date());
+  const mv = filterMovs(_gxMovs(), r.from, r.to);
+  const dias = []; for (let d = new Date(r.from + 'T12:00:00'); toISO(d) <= r.to; d.setDate(d.getDate() + 1)) dias.push(toISO(d));
+  const gas = {}, ing = {};
+  mv.forEach(m => { if (m.tipo === 'GASTO' && !gxEsAhorro(m)) gas[m.fecha] = (gas[m.fecha] || 0) + (m.monto || 0); else if (m.tipo === 'INGRESO') ing[m.fecha] = (ing[m.fecha] || 0) + (m.monto || 0); });
+  const trans = dias.filter(d => d <= hoyIso), tr = trans.length || 1;
+  const totG = Object.values(gas).reduce((a, v) => a + v, 0);
+  const caro = Object.entries(gas).sort((a, b) => b[1] - a[1])[0];
+  const sinG = trans.filter(d => !gas[d]).length;
+  const kpis = _gxKpi('Gasto por día', gxMoney(totG / tr), 'out', `${trans.length} día${trans.length !== 1 ? 's' : ''} transcurrido${trans.length !== 1 ? 's' : ''}`)
+    + _gxKpi('Día más caro', caro ? gxMoney(caro[1]) : '—', 'out', caro ? `${+caro[0].slice(8)} ${MESES_CORTO[+caro[0].slice(5, 7) - 1]}` : '')
+    + _gxKpi('Días sin gastar', String(sinG), 'in', `de ${trans.length}`) + _gxKpi('Gasto del período', gxMoney(totG), 'out');
+  const modo = S._gx.dia === 'acum' ? 'acum' : 'dia';
+  const opts = _gxOpt('dia', 'dia', 'Diario', modo) + _gxOpt('dia', 'acum', 'Acumulado', modo);
+  if (!mv.length) return { html: _gxCard('Día a día', r.label, kpis, opts, _gxEmpty('Sin movimientos en este período')) };
+  // Cubetas: días (≤45), semanas (≤200) o meses
+  let buckets;
+  if (dias.length <= 45) buckets = dias.map(d => ({ lbl: (+d.slice(8) === 1 || d === dias[0]) ? `${+d.slice(8)} ${MESES_CORTO[+d.slice(5, 7) - 1]}` : String(+d.slice(8)), ds: [d] }));
+  else if (dias.length <= 200) { buckets = []; for (let i = 0; i < dias.length; i += 7) { const ds = dias.slice(i, i + 7); buckets.push({ lbl: `${+ds[0].slice(8)} ${MESES_CORTO[+ds[0].slice(5, 7) - 1]}`, ds }); } }
+  else { const mm = {}; dias.forEach(d => { (mm[d.slice(0, 7)] = mm[d.slice(0, 7)] || { lbl: _gxMesLbl(d.slice(0, 7)), ds: [] }).ds.push(d); }); buckets = Object.values(mm); }
+  const sumB = (b, o) => b.ds.reduce((a, d) => a + (o[d] || 0), 0);
+  const body = modo === 'acum'
+    ? (() => { const bs = buckets.filter(b => b.ds[0] <= hoyIso); let cg = 0, ci = 0; const dg = bs.map(b => (cg += sumB(b, gas))), di = bs.map(b => (ci += sumB(b, ing)));
+        return w => _gxFix(gxLines(w, 240, bs.map(b => b.lbl), [{ label: 'Ingresos', data: di, colors: 'var(--gx-in)' }, { label: 'Gastos', data: dg, colors: 'var(--gx-out)', fill: true }], false, { aria: 'Acumulado de ingresos y gastos' }), 240); })()
+    : w => _gxFix(gxBars(w, 240, buckets.map(b => b.lbl), [{ label: 'Ingresos', data: buckets.map(b => sumB(b, ing)), colors: 'var(--gx-in)' }, { label: 'Gastos', data: buckets.map(b => sumB(b, gas)), colors: 'var(--gx-out)' }], { aria: 'Ingresos y gastos por día' }), 240);
+  return {
+    html: _gxCard('Día a día', r.label, kpis, opts, _gxStage(),
+      `<div class="gx-leg"><span><i style="background:var(--gx-in)"></i>Ingresos</span><span><i style="background:var(--gx-out)"></i>Gastos</span></div>
+       <div class="gx-note">${dias.length > 45 ? 'Períodos largos se agrupan por semana o mes. ' : ''}Sigue el período que elegiste en Inicio.</div>`),
+    draw: () => gxDraw($('gx-main'), body),
+  };
+}
+
+// 4) Nuevos — conceptos que aparecen por primera vez (contrapartes nuevas)
+function _gxNuevosTab() {
+  const gasto = _gxMovs().filter(m => m.tipo === 'GASTO' && !gxEsAhorro(m));
+  const first = {}, nombre = {};
+  gasto.forEach(m => { const k = _gxNorm(m.concepto); if (!k) return; if (!first[k] || m.fecha < first[k]) { first[k] = m.fecha; nombre[k] = m.concepto.replace(/^\[ppto\]\s*/i, '').trim(); } });
+  const todos = _gxMeses(12), prim = gasto.reduce((mn, m) => (m.fecha.slice(0, 7) < mn ? m.fecha.slice(0, 7) : mn), '9999-99');
+  const meses = todos.filter(m => m > prim);   // el primer mes del historial no cuenta: todo era nuevo
+  const nuevosPorMes = {}; Object.entries(first).forEach(([k, f]) => { (nuevosPorMes[f.slice(0, 7)] = nuevosPorMes[f.slice(0, 7)] || []).push(k); });
+  const cnt = meses.map(m => (nuevosPorMes[m] || []).length);
+  const sel = meses.includes(S._gx.mesNuevos) ? S._gx.mesNuevos : ([...meses].reverse().find(m => (nuevosPorMes[m] || []).length) || meses[meses.length - 1]);
+  const opts = meses.length ? `<select class="gx-btn sm" onchange="gxSet('mesNuevos',this.value)" aria-label="Mes">${[...meses].reverse().map(m => `<option value="${m}"${m === sel ? ' selected' : ''}>${_gxMesLbl(m)} · ${(nuevosPorMes[m] || []).length} nuevo${(nuevosPorMes[m] || []).length !== 1 ? 's' : ''}</option>`).join('')}</select>` : '';
+  if (!meses.length) return { html: _gxCard('Conceptos nuevos', 'Por mes', _gxKpi('Nuevos', '—'), '', _gxEmpty('Aún no hay suficiente historial: se necesitan al menos dos meses de gastos.')) };
+  const filas = (nuevosPorMes[sel] || []).map(k => {
+    const ms = gasto.filter(m => _gxNorm(m.concepto) === k && m.fecha.slice(0, 7) === sel);
+    return { n: nombre[k], veces: ms.length, tot: _gxSum(ms) };
+  }).sort((a, b) => b.tot - a.tot);
+  const gastoMes = _gxSum(gasto.filter(m => m.fecha.slice(0, 7) === sel)), totNuevos = filas.reduce((a, f) => a + f.tot, 0);
+  const prom = cnt.length ? cnt.reduce((a, v) => a + v, 0) / cnt.length : 0;
+  const kpis = _gxKpi('Nuevos en ' + _gxMesLbl(sel), String(filas.length), '', 'conceptos distintos') + _gxKpi('Promedio mensual', prom.toFixed(1), '', 'conceptos nuevos')
+    + _gxKpi('Gasto en nuevos', gxMoney(totNuevos), 'out', gastoMes > 0 ? `${Math.round(totNuevos / gastoMes * 100)}% del mes` : '')
+    + _gxKpi('Más caro', filas[0] ? gxMoney(filas[0].tot) : '—', 'out', filas[0] ? gxTrunc(filas[0].n, 100) : '');
+  const tabla = filas.length ? `<table class="gx-tbl"><thead><tr><th>Concepto nuevo</th><th class="r">Veces</th><th class="r">Total</th></tr></thead><tbody>${
+    filas.slice(0, 12).map(f => `<tr><td>${gxEsc(f.n)}</td><td class="r">${f.veces}</td><td class="r">${gxMoney(f.tot)}</td></tr>`).join('')}</tbody></table>${filas.length > 12 ? `<div class="gx-note">y ${filas.length - 12} más…</div>` : ''}`
+    : `<div class="gx-note">Ese mes no estrenaste ningún concepto de gasto.</div>`;
+  return {
+    html: _gxCard('Conceptos nuevos', 'Por mes', kpis, opts, _gxStage(), `<div class="gx-note">Un concepto es “nuevo” el mes en que aparece por primera vez en tus gastos. ${_gxMesLbl(prim)} no se cuenta porque todo era nuevo.</div>${tabla}`),
+    draw: () => gxDraw($('gx-main'), w => _gxFix(gxBars(w, 200, meses.map(_gxMesLbl), [{ label: 'Conceptos nuevos', data: cnt.map(Number), colors: meses.map(m => m === sel ? 'var(--gx-ac)' : 'var(--gx-ac2)') }], { aria: 'Conceptos nuevos por mes' }), 200)),
+  };
+}
+
+// 5) Concentración — a quién/en qué se va el gasto (Pareto)
+function _gxConcTab() {
+  const r = getPeriodoRange(), mv = filterMovs(_gxMovs(), r.from, r.to).filter(m => m.tipo === 'GASTO' && !gxEsAhorro(m));
+  const porCat = S._gx.conc === 'categoria';
+  const opts = _gxOpt('conc', 'concepto', 'Conceptos', porCat ? 'categoria' : 'concepto') + _gxOpt('conc', 'categoria', 'Categorías', porCat ? 'categoria' : 'concepto');
+  const ent = _gxGrp(mv, m => porCat ? _gxCat(m) : (_gxNorm(m.concepto) || 'sin concepto'));
+  const nom = {}; if (!porCat) mv.forEach(m => { const k = _gxNorm(m.concepto) || 'sin concepto'; if (!nom[k]) nom[k] = (m.concepto || 'Sin concepto').replace(/^\[ppto\]\s*/i, '').trim(); });
+  const tot = ent.reduce((a, e) => a + e[1], 0);
+  const pats = (S.data.patrones || []).slice(0, 8);
+  const patCard = pats.length ? `<div class="gx-card"><div class="gx-head"><h3>Conceptos frecuentes</h3><span class="gx-sub">ticket promedio</span></div>${_gxStage('gx-main2')}</div>` : '';
+  if (!(tot > 0)) return { html: _gxCard('Concentración del gasto', r.label, _gxKpi('Mayor concepto', '—'), opts, _gxEmpty('Sin gastos en este período')) + patCard, draw: pats.length ? () => _gxDrawPats(pats) : null };
+  const sh = ent.map(e => e[1] / tot * 100), cumPct = (n) => sh.slice(0, n).reduce((a, v) => a + v, 0);
+  const hhi = sh.reduce((a, v) => a + v * v, 0), nivel = hhi < 1500 ? 'Baja' : hhi < 2500 ? 'Media' : 'Alta';
+  const kpis = _gxKpi('Mayor', `${sh[0].toFixed(0)}%`, '', gxTrunc(porCat ? ent[0][0] : nom[ent[0][0]], 110)) + _gxKpi('Top 3', `${cumPct(3).toFixed(0)}%`, '', 'del gasto') + _gxKpi('Top 5', `${cumPct(5).toFixed(0)}%`, '', 'del gasto')
+    + _gxKpi('Concentración', nivel, nivel === 'Alta' ? 'out' : nivel === 'Media' ? 'pay' : 'in', `índice HHI ${Math.round(hhi)}`);
+  const top = ent.slice(0, 10), rest = ent.slice(10).reduce((a, e) => a + e[1], 0);
+  const labels = top.map(e => porCat ? e[0] : nom[e[0]]).concat(rest > 0 ? [`Otros (${ent.length - 10})`] : []);
+  const data = top.map(e => e[1]).concat(rest > 0 ? [rest] : []);
+  const colors = top.map(e => porCat ? (CAT_CLR[e[0]] || 'var(--gx-neu)') : 'var(--gx-ac)').concat(rest > 0 ? ['var(--gx-neu)'] : []);
+  let acc = 0; const cum = data.map(v => (acc += v) / tot * 100);
+  return {
+    html: _gxCard('Concentración del gasto', r.label, kpis, opts, _gxStage(),
+      `<div class="gx-note">Cada fila: % del gasto y acumulado (Σ). Más del 50% en un solo ${porCat ? 'rubro' : 'concepto'} suele indicar un gasto que conviene revisar. Excluye ahorro.</div>`) + patCard,
+    draw: () => {
+      gxDraw($('gx-main'), w => gxHBars(w, 200, labels, [{ label: 'Gasto', data, colors }], { extraW: 92, extra: i => `${(data[i] / tot * 100).toFixed(0)}% · Σ${cum[i].toFixed(0)}%`, aria: 'Concentración del gasto' }));
+      if (pats.length) _gxDrawPats(pats);
+    },
+  };
+}
+function _gxDrawPats(pats) {
+  gxDraw($('gx-main2'), w => gxHBars(w, 200, pats.map(p => p.concepto_clave), [{ label: 'Promedio', data: pats.map(p => _gxN(p.monto_promedio)), colors: 'var(--gx-ac)' }], { aria: 'Ticket promedio de conceptos frecuentes' }));
+}
+
+// 6) Saldo — evolución acumulada y permanencia
+function _gxSaldoTab() {
+  const movs = _gxMovs(), prim = movs.reduce((mn, m) => (m.fecha.slice(0, 7) < mn ? m.fecha.slice(0, 7) : mn), '9999-99');
+  const todos = _gxMeses(12), meses = todos.filter(m => m >= prim);
+  if (!meses.length) return { html: _gxCard('Saldo mes a mes', 'Permanencia', _gxKpi('Saldo', '—'), '', _gxEmpty('Sin movimientos todavía')) };
+  // El saldo acumulado parte de lo registrado antes de la ventana visible
+  const antes = movs.filter(m => m.fecha.slice(0, 7) < meses[0] && m.fecha.slice(0, 7) <= _gxMeses(1)[0]);
+  const base = _gxSum(antes.filter(m => m.tipo === 'INGRESO')) - _gxSum(antes.filter(m => m.tipo === 'GASTO' && !gxEsAhorro(m)));
+  const pm = _gxPorMes(meses), neto = pm.map(p => p.ing - p.gas);
+  let acc = base; const saldo = neto.map(n => (acc += n));
+  const curM = _gxMeses(1)[0], cerrN = neto.filter((_, i) => meses[i] !== curM), pos = cerrN.filter(n => n > 0).length, ult = neto[neto.length - 1];
+  const cuentas = (((S.data.user || {}).external_refs || {}).cuentas) || {};
+  const dinero = CUENTAS_DEF.reduce((a, d) => a + (Number(cuentas[d.key]) || 0), 0);
+  const recientes = pm.slice(-4, -1).filter(p => p.gas > 0), gProm = recientes.length ? recientes.reduce((a, p) => a + p.gas, 0) / recientes.length : (pm.length && pm[pm.length - 1].gas) || 0;
+  const perm = gProm > 0 ? dinero / gProm : 0;
+  const kpis = _gxKpi('Saldo acumulado', gxMoney(saldo[saldo.length - 1]), saldo[saldo.length - 1] >= 0 ? 'in' : 'out', 'ingresos − gastos desde ' + _gxMesLbl(meses[0]))
+    + _gxKpi('Último mes', gxMoney(ult), ult >= 0 ? 'in' : 'out', _gxMesLbl(meses[meses.length - 1]) + (meses[meses.length - 1] === curM ? ' (en curso)' : ''))
+    + _gxKpi('Meses en positivo', `${pos} de ${cerrN.length}`, pos >= cerrN.length / 2 ? 'in' : 'out', 'meses cerrados')
+    + _gxKpi('Permanencia', perm > 0 ? `${perm.toFixed(1)} meses` : '—', perm >= 3 ? 'in' : perm > 0 ? 'out' : '', 'tu dinero cubre tu gasto');
+  const stage2 = `<div class="gx-head" style="margin:16px 0 4px"><h3 style="font-size:13px">Resultado de cada mes</h3></div>${_gxStage('gx-main2')}`;
+  return {
+    html: _gxCard('Saldo mes a mes', `Desde ${_gxMesLbl(meses[0])}`, kpis, '', _gxStage(), `${stage2}<div class="gx-note">El saldo acumula ingresos − gastos (el ahorro no se resta: sigue siendo tuyo). Permanencia = lo que tienes en Mis cuentas (${gxMoney(dinero)}) ÷ tu gasto mensual promedio de los últimos meses (${gxMoney(gProm)}).</div>`),
+    draw: () => {
+      gxDraw($('gx-main'), w => _gxFix(gxLines(w, 210, meses.map(_gxMesLbl), [{ label: 'Saldo acumulado', data: saldo, colors: 'var(--gx-ac)' }], true, { aria: 'Saldo acumulado por mes' }), 210));
+      gxDraw($('gx-main2'), w => _gxFix(gxBars(w, 130, meses.map(_gxMesLbl), [{ label: 'Resultado', data: neto, colors: neto.map(n => n >= 0 ? 'var(--gx-in)' : 'var(--gx-out)') }], { aria: 'Resultado de cada mes' }), 130));
+    },
+  };
 }
 
 // ── RENDER: DASHBOARD ────────────────────────────────────────────────────────
@@ -5134,7 +5633,7 @@ ${_tdcCardsHTML(tdcs)}
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> <span aria-hidden="true">📊</span> Distribución de Deuda</h2></div><div class="sec-hdr-sub">Saldo y porcentaje pagado por tarjeta — clic para ver</div></div>
 <div class="charts-grid">
   <div class="cbox"><h3>Saldo por Tarjeta</h3>${ctBtns('c-tdc',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Pastel','pie']],'bar-h')}<div class="cwrap"><canvas id="c-tdc"></canvas></div><div id="legend-c-tdc" class="chart-legend"></div></div>
-  <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h'],['Radar','radar']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div><div id="legend-c-tdc2" class="chart-legend"></div></div>
+  <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div><div id="legend-c-tdc2" class="chart-legend"></div></div>
 </div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Detalle de Tarjetas</h2></div></div>
 <div class="tdc-table-view">
