@@ -402,9 +402,9 @@ textarea{min-height:64px;resize:vertical}
 .gx-val{font-size:10px;fill:var(--gx-ink);font-weight:700}
 .gx-bar{fill-opacity:var(--o,.9);transition:fill-opacity .12s}
 .gx-bar:hover,.gx-slice:hover{fill-opacity:1;filter:brightness(1.12)}
-.gx-link{fill-opacity:.32;transition:fill-opacity .12s}
+.gx-link{fill-opacity:.32;stroke:var(--gx-card);stroke-width:.75;transition:fill-opacity .12s}
 .gx-link:hover{fill-opacity:.62}
-.gx-node{fill-opacity:.95}
+.gx-node{fill-opacity:.95;stroke:var(--gx-card);stroke-width:1}
 .gx-dot{stroke:var(--gx-card);stroke-width:1.5}
 .gx-slice{stroke:var(--gx-card);stroke-width:2;transition:filter .12s}
 .gx-cap{fill:transparent}
@@ -709,6 +709,41 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-dash-btn.mini-tile{width:calc((100% - 40px)/5);padding:0;font-size:26px;
   flex-direction:row;gap:0;color:inherit;font-family:inherit}
 .q-dash-btn.on{border-color:var(--accent-primary);background:var(--bg-surface-2)}
+/* ── Botones de solo icono (descargar, filtrar, contraer/expandir) ──────────── */
+.ico-bar{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:8px}
+.ico-btn{width:34px;height:34px;flex:0 0 34px;border-radius:50%;border:1px solid var(--border-default);
+  background:var(--bg-surface);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;
+  font-size:16px;cursor:pointer;padding:0;position:relative;font-family:inherit;transition:background .15s,border-color .15s,color .15s}
+.ico-btn:hover{background:var(--bg-surface-2);color:var(--text-1)}
+.ico-btn.on{background:var(--bg-surface-2);border-color:var(--accent-primary);color:var(--text-1)}
+.ico-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:var(--radius-pill);
+  background:var(--accent-primary);color:var(--on-accent);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.ico-tile{width:56px;height:56px;border-radius:18px;border:1px solid var(--border-default);background:var(--bg-surface);
+  font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;transition:border-color .15s,background .15s}
+.ico-tile:hover{border-color:var(--accent-primary)}
+.ico-tile.on{border-color:var(--accent-primary);background:var(--bg-surface-2)}
+/* ── Panel de desglose bajo los widgets ─────────────────────────────────────── */
+.dsg-grp .dsg-on{outline:2px solid var(--accent-primary);outline-offset:-2px}
+.dsg-panel{display:none;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:6px 16px 12px;margin:0 0 16px}
+.dsg-panel.open{display:block}
+.dsg-panel .dsg-inner{border-top:none;padding-top:4px}
+.dsg-total{border-top:2px solid var(--border-default)!important;margin-top:2px;padding-top:9px!important}
+.dsg-total .dsg-name{font-weight:800}
+.dsg-formula{font-size:11.5px;color:var(--text-3);text-align:right;margin-top:6px;font-variant-numeric:tabular-nums}
+.mini-row,.mini-bal-wrap,.kpi[role=button]{cursor:pointer}
+/* ── Movimientos: Análisis visual plegable ──────────────────────────────────── */
+.mov-cbox-ttl{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mov-cbox-sub{font-weight:500;color:var(--text-3)}
+.mov-cbox.collapsed .mov-cbox-body,.mov-cbox.collapsed .mov-cbox-pills{display:none}
+/* ── Movimientos a dos columnas cuando hay ancho (pantalla o ventana central) ── */
+#tab-movimientos{container-type:inline-size}
+@container (min-width:1000px){
+  .mov-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+}
+/* ── Ventana central para todo lo que se abre desde Inicio ──────────────────── */
+.tab.in-modal{display:block}
+.mf-ico{position:relative}
+.mf-ico.on{background:var(--bg-surface-2);border-color:var(--accent-primary)}
 /* ── WISHLIST ─────────────────────────────────────────────────────────────── */
 .wl-root{display:flex;flex-direction:column;gap:12px;padding-bottom:28px}
 .wl-bal{font-size:12px;color:var(--text-3);text-align:center}
@@ -823,7 +858,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .btn-dup:hover{background:rgba(124,100,247,.2)}
 
 /* ═══════════════════════════════════════════════════════ MODAL */
-.ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center}
+.ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;align-items:center;justify-content:center}
 .ovl.open{display:flex}
 .modal{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:24px;width:420px;max-width:95vw;max-height:88vh;overflow-y:auto}
 .modal h3{font-size:var(--text-base);margin-bottom:18px;font-weight:600;color:var(--text-1)}
@@ -835,9 +870,9 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 /* ═══════════════════════════════════════════════════════ CALENDAR macOS */
 .cal-wrap{display:flex;gap:16px;align-items:flex-start}
 .cal-main{flex:1;min-width:0}
-#cal-grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:14px}
+#cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:14px}
 .ch{text-align:center;padding:8px 2px;font-size:10px;color:var(--text-3);font-weight:600;letter-spacing:.06em;background:var(--bg-surface-2);border-bottom:1px solid var(--border-default)}
-.cd{min-height:76px;background:var(--bg-surface);padding:4px 5px;border-right:1px solid var(--border-default);border-bottom:1px solid var(--border-default);cursor:pointer;transition:background .1s;box-sizing:border-box;font-size:var(--text-xs)}
+.cd{height:80px;min-height:0;overflow:hidden;background:var(--bg-surface);padding:4px 5px;border-right:1px solid var(--border-default);border-bottom:1px solid var(--border-default);cursor:pointer;transition:background .1s;box-sizing:border-box;font-size:var(--text-xs)}
 .cd:nth-child(7n){border-right:none}.cd:hover{background:var(--bg-surface-2)}.cd.oth{opacity:.3;pointer-events:none}
 .cd.today .cdn{background:var(--accent-primary);color:var(--on-accent);border-radius:50%}
 .cd.cal-sel{background:var(--bg-surface-3)}
@@ -973,7 +1008,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .mov-filter{padding:14px}
   .mov-cbox{padding:14px}
   /* ── Calendar */
-  .cd{min-height:44px;padding:3px}
+  .cd{height:58px;min-height:0;padding:3px}
   .ch{padding:4px}
   /* ── Auth */
   .auth-box{width:100%;max-width:100%;padding:36px 28px;border:none;background:transparent;box-shadow:none}
@@ -1402,22 +1437,27 @@ html.light #tab-dashboard.mini{
   transition:transform var(--t-fast) var(--ease-spring)}
 .mini-fab:active{transform:scale(.9)}
 
-/* Hoja inferior genérica para los emojis */
+/* Ventana central para todo lo que se abre desde Inicio (hojas y módulos completos) */
 #dash-sheet{display:none;position:fixed;inset:0;z-index:160;background:rgba(0,0,0,0);
-  align-items:flex-end;transition:background .24s ease}
+  align-items:center;justify-content:center;padding:16px;transition:background .2s ease}
 #dash-sheet.open{display:flex;background:rgba(0,0,0,.62)}
-.ds-panel{background:var(--bg-surface);width:100%;max-width:560px;margin:0 auto;
-  border-radius:24px 24px 0 0;border:1px solid var(--border-default);border-bottom:none;
-  max-height:88svh;display:flex;flex-direction:column;
-  transform:translateY(100%);transition:transform .3s cubic-bezier(.32,1,.56,1);
-  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
-#dash-sheet.open .ds-panel{transform:translateY(0)}
-.ds-handle{width:40px;height:4px;border-radius:99px;background:var(--border-default);margin:9px auto 2px;flex-shrink:0}
-.ds-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 18px 10px;flex-shrink:0}
+.ds-panel{background:var(--bg-surface);width:100%;max-width:600px;border-radius:22px;border:1px solid var(--border-default);
+  max-height:min(88svh,940px);display:flex;flex-direction:column;opacity:0;transform:translateY(14px) scale(.97);
+  transition:transform .26s cubic-bezier(.32,1,.56,1),opacity .2s ease;box-shadow:0 24px 70px rgba(0,0,0,.4)}
+#dash-sheet.open .ds-panel{opacity:1;transform:none}
+.ds-panel.ds-md{max-width:780px}
+.ds-panel.ds-lg{max-width:min(1200px,100%)}
+.ds-handle{display:none}
+.ds-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 20px 10px;flex-shrink:0}
 .ds-title{font-size:16px;font-weight:800;color:var(--text-1)}
 .ds-close{background:var(--bg-surface-2);border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;
   color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
-.ds-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 8px;flex:1}
+.ds-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 20px;flex:1}
+@media(max-width:899px){
+  #dash-sheet{padding:10px 8px calc(10px + env(safe-area-inset-bottom,0px))}
+  .ds-panel{max-height:calc(100svh - 24px - env(safe-area-inset-bottom,0px))}
+  .ds-head{padding:14px 16px 8px}.ds-body{padding:0 14px 16px}
+}
 body.sheet-locked{overflow:hidden}
 
 /* Cabecera de Inicio: mismos 4 elementos (nombre, periodo, píldoras, +Movimiento)
@@ -1471,10 +1511,12 @@ body.sheet-locked{overflow:hidden}
 
   /* Contenido: un único ancho máximo y padding para TODAS las pestañas (no solo
      Inicio) — evita scroll horizontal a 1366×657 y da aire consistente. */
-  main{max-width:1180px;margin:0 auto;padding:40px}
+  main{max-width:none;margin:0;padding:32px 40px}
+  /* Día del calendario: ventana central (no empuja ni encoge el calendario) */
+  .cal-day-panel.open{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(380px,92vw);max-height:80vh;overflow-y:auto;z-index:210;box-shadow:0 24px 60px rgba(0,0,0,.35)}
 
   /* La tarjeta móvil (520px, centrada) se libera: el ancho/padding ya los da `main`. */
-  #tab-dashboard.mini{max-width:none;margin:0;padding:0 0 24px}
+  #tab-dashboard.mini{max-width:1180px;margin:0 auto;padding:0 0 24px}   /* Inicio conserva su ancho de lectura */
 
   /* Modal → diálogo centrado (antes 420px para cualquier ancho ≥701px) */
   .modal{width:520px}
@@ -1502,15 +1544,6 @@ body.sheet-locked{overflow:hidden}
     text-align:center;line-height:1.2}
   .q-dash-btn.mini-tile{width:72px;height:72px;aspect-ratio:auto;font-size:28px}
 
-  /* La hoja pasa de ser un sheet inferior a un panel lateral derecho de 440px */
-  #dash-sheet{justify-content:flex-end;align-items:stretch}
-  .ds-panel{width:440px;max-width:440px;margin:0;height:100dvh;max-height:100dvh;
-    border-radius:0;border-left:1px solid var(--border-default);border-top:none;border-bottom:none;
-    transform:translateX(100%);padding-bottom:0}
-  #dash-sheet.open .ds-panel{transform:translateX(0)}
-  .ds-handle{display:none}
-  .ds-head{padding:18px 20px 12px}
-  .ds-body{padding:0 20px 20px}
 
   /* "Más" deja de ser full-bleed en pantallas anchas */
   .sheet-inner{max-width:420px;margin:0 auto;border-radius:var(--radius-xl)}
@@ -1630,7 +1663,7 @@ body.sheet-locked{overflow:hidden}
          pero se oculta por CSS ≥900px). rl-mas queda oculto en escritorio (CSS)
          y solo se usa si algún día el rail se ve <900px. -->
     <nav class="rail-desktop" id="rail-desktop" aria-label="Navegación principal">
-      <img src="/icon.svg" alt="Us">
+      <img src="/icon.svg" alt="Us" title="Ir a Inicio" role="button" tabindex="0" style="cursor:pointer" onclick="go('dashboard')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <a onclick="go('dashboard')" id="rl-dashboard" data-tip="Inicio" aria-label="Inicio"><i class="ti ti-layout-dashboard"></i></a>
       <a onclick="go('movimientos')" id="rl-movimientos" data-tip="Movimientos" aria-label="Movimientos"><i class="ti ti-arrows-exchange"></i></a>
       <a onclick="go('presupuesto')" id="rl-presupuesto" data-tip="Plan y Metas" aria-label="Presupuesto y Metas"><i class="ti ti-target"></i></a>
@@ -2011,7 +2044,7 @@ function _startLivePoll() {
       const fresh = JSON.stringify(r.data || {});
       if (fresh !== S._liveSig) {
         S._liveSig = fresh;
-        S.data = r.data || {};
+        S.data = { ...(r.data || {}), despensa: S.data?.despensa };   // la despensa llega en otra petición: no perderla
         renderTab(S.tab);
       }
     } catch { /* un poll fallido no debe interrumpir al usuario; se reintenta en 2s */ }
@@ -2067,6 +2100,7 @@ async function genAliciaLink() {
 
 // ── NAVEGACIÓN ────────────────────────────────────────────────────────────────
 function go(t) {
+  if (S._modalTab) cerrarHoja();   // un módulo abierto en la ventana central vuelve primero a su lugar
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.mobile-nav a').forEach(x => x.classList.remove('active'));
@@ -2322,61 +2356,54 @@ function gxDonut(w, h, labels, s, pie, o = {}) {
     }
     g += `<path class="gx-slice" fill-rule="evenodd" d="${d}" transform="translate(${(Math.cos(mid) * off).toFixed(1)} ${(Math.sin(mid) * off).toFixed(1)})" style="fill:${c}" data-tip="${gxEsc(`${labels[i]}|${gxMoney(v)} (${(v / tot * 100).toFixed(1)}%)`)}"/>`;
   });
-  if (!pie) g += `<text class="gx-val" x="${cx}" y="${cy + 1}" text-anchor="middle" style="font-size:${R < 70 ? 11 : 14}px">${gxEsc(gxMoney(tot))}</text><text class="gx-ax" x="${cx}" y="${cy + 15}" text-anchor="middle">Total</text>`;
+  if (!pie) g += `<text class="gx-val" x="${cx}" y="${cy + 1}" text-anchor="middle" style="font-size:${R < 70 ? 11 : 14}px">${gxEsc(gxMoney(tot))}</text><text class="gx-ax" x="${cx}" y="${cy + 15}" text-anchor="middle">${gxEsc(o.center || 'Total')}</text>`;
   return { html: _gxSvg(w, h, g, o.aria) };
 }
 
 // ── Sankey: de dónde viene el dinero → periodo → a dónde va ─────────────────
 // src/dst: [{ name, value, color }] con la misma suma. Las bandas son curvas Bézier.
-function _gxSpread(ys, gap, lo, hi) {
-  for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + gap);
-  if (ys.length && ys[ys.length - 1] > hi) { ys[ys.length - 1] = hi; for (let i = ys.length - 2; i >= 0; i--) ys[i] = Math.min(ys[i], ys[i + 1] - gap); }
-  if (ys.length && ys[0] < lo) { const d = lo - ys[0]; for (let i = 0; i < ys.length; i++) ys[i] += d; }
-  return ys;
-}
+// Cada nodo mide al menos minH: así su etiqueta queda centrada en SU nodo y nunca se desplaza junto
+// al de otra categoría (antes "Transporte" se leía pegado al nodo de "Ahorro"). La banda conserva su
+// grosor real en el centro y se ensancha hacia el nodo cuando el valor es pequeño.
 function gxSankey(w, src, dst, o = {}) {
   const T = src.reduce((a, n) => a + n.value, 0);
   if (!(T > 0)) return { html: '' };
-  const rows = Math.max(src.length, dst.length), H = Math.max(250, rows * 36 + 40), pad = 16, gap = 8, nw = 10;
+  const rows = Math.max(src.length, dst.length), pad = 18, gap = 10, nw = 10, minH = 18;
+  const unit = Math.max(150, rows * 26), s = unit / T;
   const lw = Math.min(116, w * 0.28), rw = Math.min(136, w * 0.34);
-  const xL = lw, xR = w - rw - nw, xH = (xL + xR) / 2, avail = H - 2 * pad;
-  const scale = Math.min(...[src, dst].map(c => (avail - gap * (c.length - 1)) / T));
+  const xL = lw, xR = w - rw - nw, xH = (xL + xR) / 2;
+  const colH = c => c.reduce((a, n) => a + Math.max(minH, n.value * s), 0) + gap * (c.length - 1);
+  const inner = Math.max(unit, colH(src), colH(dst)), top = pad + 8, H = inner + top + pad;
   const lay = nodes => {
-    const hh = T * scale + gap * (nodes.length - 1);
-    let y = pad + (avail - hh) / 2;
-    return nodes.map(n => { const o2 = { ...n, y, h: Math.max(2, n.value * scale) }; y += n.value * scale + gap; return o2; });
+    let y = top + (inner - colH(nodes)) / 2;
+    return nodes.map(n => { const h = Math.max(minH, n.value * s), r = { ...n, y, h }; y += h + gap; return r; });
   };
-  const L = lay(src), Rn = lay(dst), hubTop = pad + (avail - T * scale) / 2;
-  const band = (x0, ya, yb, x1, yc, yd) => { const mx = (x0 + x1) / 2; return `M${x0},${ya}C${mx},${ya} ${mx},${yc} ${x1},${yc}L${x1},${yd}C${mx},${yd} ${mx},${yb} ${x0},${yb}Z`; };
+  const L = lay(src), Rn = lay(dst), hubTop = top + (inner - unit) / 2;
+  const f = v => v.toFixed(1);
+  const band = (x0, ya, yb, x1, yc, yd) => { const mx = (x0 + x1) / 2; return `M${x0},${f(ya)}C${mx},${f(ya)} ${mx},${f(yc)} ${x1},${f(yc)}L${x1},${f(yd)}C${mx},${f(yd)} ${mx},${f(yb)} ${x0},${f(yb)}Z`; };
+  const pct = v => (v / T * 100).toFixed(1);
   let g = '', cum = 0;
   L.forEach(n => {
-    const ya = hubTop + cum * scale, th = n.value * scale; cum += n.value;
-    g += `<path class="gx-link" d="${band(xL + nw, n.y.toFixed(1), (n.y + th).toFixed(1), xH, ya.toFixed(1), (ya + th).toFixed(1))}" style="fill:${n.color}" data-tip="${gxEsc(`${n.name} → ${o.hub || 'Periodo'}|${gxMoney(n.value)} (${(n.value / T * 100).toFixed(1)}%)`)}"/>`;
+    const ya = hubTop + cum * s, th = n.value * s; cum += n.value;
+    g += `<path class="gx-link" d="${band(xL + nw, n.y, n.y + n.h, xH, ya, ya + th)}" style="fill:${n.color}" data-tip="${gxEsc(`${n.name} → ${o.hub || 'Periodo'}|${gxMoney(n.value)} (${pct(n.value)}%)`)}"/>`;
   });
   cum = 0;
   Rn.forEach(n => {
-    const ya = hubTop + cum * scale, th = n.value * scale; cum += n.value;
-    g += `<path class="gx-link" d="${band(xH + nw, ya.toFixed(1), (ya + th).toFixed(1), xR, n.y.toFixed(1), (n.y + th).toFixed(1))}" style="fill:${n.color}" data-tip="${gxEsc(`${o.hub || 'Periodo'} → ${n.name}|${gxMoney(n.value)} (${(n.value / T * 100).toFixed(1)}%)`)}"/>`;
+    const ya = hubTop + cum * s, th = n.value * s; cum += n.value;
+    g += `<path class="gx-link" d="${band(xH + nw, ya, ya + th, xR, n.y, n.y + n.h)}" style="fill:${n.color}" data-tip="${gxEsc(`${o.hub || 'Periodo'} → ${n.name}|${gxMoney(n.value)} (${pct(n.value)}%)`)}"/>`;
   });
-  [[L, xL], [Rn, xR]].forEach(([col, x]) => col.forEach(n => {
-    g += `<rect class="gx-node" x="${x}" y="${n.y.toFixed(1)}" width="${nw}" height="${n.h.toFixed(1)}" rx="2" style="fill:${n.color}" data-tip="${gxEsc(`${n.name}|${gxMoney(n.value)} (${(n.value / T * 100).toFixed(1)}%)`)}"/>`;
+  [[L, xL, 'l'], [Rn, xR, 'r']].forEach(([col, x, side]) => col.forEach(n => {
+    const cy = n.y + n.h / 2, tx = side === 'l' ? xL - 6 : xR + nw + 6, an = side === 'l' ? 'end' : 'start', px = side === 'l' ? lw - 10 : rw - 12;
+    g += `<rect class="gx-node" x="${x}" y="${f(n.y)}" width="${nw}" height="${f(n.h)}" rx="2" style="fill:${n.color}" data-tip="${gxEsc(`${n.name}|${gxMoney(n.value)} (${pct(n.value)}%)`)}"/>`
+       + `<text class="gx-lbl" x="${tx}" y="${f(cy - 1)}" text-anchor="${an}">${gxEsc(gxTrunc(n.name, px))}</text>`
+       + `<text class="gx-lbl-m" x="${tx}" y="${f(cy + 11)}" text-anchor="${an}">${gxShort(n.value)} · ${(n.value / T * 100).toFixed(0)}%</text>`;
   }));
-  g += `<rect class="gx-node" x="${xH}" y="${hubTop.toFixed(1)}" width="${nw}" height="${(T * scale).toFixed(1)}" rx="2" style="fill:var(--gx-ac)" data-tip="${gxEsc(`${o.hub || 'Periodo'}|${gxMoney(T)}`)}"/>`;
-  const lab = (col, side) => {
-    const ys = _gxSpread(col.map(n => n.y + n.h / 2), 25, pad + 6, H - pad - 6);
-    col.forEach((n, i) => {
-      const x = side === 'l' ? xL - 6 : xR + nw + 6, an = side === 'l' ? 'end' : 'start', px = side === 'l' ? lw - 10 : rw - 12;
-      g += `<text class="gx-lbl" x="${x}" y="${(ys[i] - 1).toFixed(1)}" text-anchor="${an}">${gxEsc(gxTrunc(n.name, px))}</text>`
-         + `<text class="gx-lbl-m" x="${x}" y="${(ys[i] + 11).toFixed(1)}" text-anchor="${an}">${gxShort(n.value)} · ${(n.value / T * 100).toFixed(0)}%</text>`;
-    });
-  };
-  lab(L, 'l'); lab(Rn, 'r');
-  g += `<text class="gx-val" x="${xH + nw / 2}" y="${(hubTop - 6).toFixed(1)}" text-anchor="middle">$${gxShort(T)}</text>`;
+  g += `<rect class="gx-node" x="${xH}" y="${f(hubTop)}" width="${nw}" height="${f(unit)}" rx="2" style="fill:var(--gx-ac)" data-tip="${gxEsc(`${o.hub || 'Periodo'}|${gxMoney(T)}`)}"/>`;
+  g += `<text class="gx-val" x="${xH + nw / 2}" y="${f(hubTop - 6)}" text-anchor="middle">$${gxShort(T)}</text>`;
   return { html: _gxSvg(w, H, g, o.aria || 'Diagrama de flujo del dinero'), h: H };
 }
-
 // ── adaptador: misma firma que usaban todas las gráficas (antes Chart.js) ────
-function mkC(id, type, labels, datasets) {
+function mkC(id, type, labels, datasets, extra = {}) {
   const el = gxMount(id); if (!el) return;
   if (S.ch[id]) S.ch[id].destroy();
   const rt     = type === 'polarArea' ? 'doughnut' : type === 'radar' ? 'bar' : type;
@@ -2395,7 +2422,7 @@ function mkC(id, type, labels, datasets) {
     return { label: d.label || '', data: (d.data || []).map(_gxN), colors, offset: d.offset,
              op: /l[ií]mite|objetivo|meta|presup/i.test(d.label || '') ? 0.38 : 0.9, fill: !!d.fill };
   });
-  const draw = (w, h) => radial ? gxDonut(w, h, labels, ser[0], rt === 'pie')
+  const draw = (w, h) => radial ? gxDonut(w, h, labels, ser[0], rt === 'pie', { center: extra.center })
     : (rt === 'line' || rt === 'area') ? gxLines(w, h, labels, ser, rt === 'area')
     : rt === 'bar-h' ? gxHBars(w, h, labels, ser) : gxBars(w, h, labels, ser);
   gxDraw(el, draw);
@@ -2531,8 +2558,8 @@ function mkTable(cfg) {
   const rhCls = meta.rh === 1 ? ' tbl-rh-c' : meta.rh === 2 ? ' tbl-rh-s' : '';
   return `<div class="tbl-box" id="${cfg.id}-box" style="--tbl-fs:${fsAct}px">
     <div class="tbl-toolbar">
-      <button type="button" class="tbl-filter-toggle${st.showFilters?' on':''}" onclick="toggleTblFilters('${cfg.id}')" title="Filtrar por columna"><i class="ti ti-filter"></i> Filtros</button>
-      <button type="button" class="tbl-filter-toggle" onclick="exportTableToExcel('${cfg.id}')" title="Descargar esta tabla como Excel (.xlsx)"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+      <button type="button" class="ico-btn${st.showFilters?' on':''}" data-flt onclick="toggleTblFilters('${cfg.id}')" title="Filtrar por columna" aria-label="Filtrar por columna"><i class="ti ti-filter"></i></button>
+      <button type="button" class="ico-btn" onclick="exportTableToExcel('${cfg.id}')" title="Descargar Excel (.xlsx)" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
       <div class="tbl-search"><i class="ti ti-search"></i><input placeholder="Buscar en la tabla..." value="${(st.search||'').replace(/"/g,'&quot;')}" oninput="setTblSearch('${cfg.id}',this.value)"></div>
       <span class="tbl-count" id="${cfg.id}-count">${n} fila${n!==1?'s':''}</span>
       <div class="tbl-tc">
@@ -2609,7 +2636,7 @@ function setTblFilter(id, key, val) { _tblState(id).filters[key] = val; paintTab
 function toggleTblFilters(id) {
   const st = _tblState(id); st.showFilters = !st.showFilters;
   const fr  = $(id+'-filters'); if (fr) fr.classList.toggle('show', st.showFilters);
-  const btn = document.querySelector(`#${id}-box .tbl-filter-toggle`); if (btn) btn.classList.toggle('on', st.showFilters);
+  const btn = document.querySelector(`#${id}-box [data-flt]`); if (btn) btn.classList.toggle('on', st.showFilters);
 }
 function _tblApplyMeta(id) {
   const meta = _tblMeta(id);
@@ -3045,29 +3072,31 @@ document.addEventListener('click', function(e) {
 }, true);
 
 function _applyTblCollapse(tableId, collapsed) {
-  const tbody = document.getElementById(tableId + '-body');
-  if (!tbody) return;
-  // Soporta tanto <tbody> con <tr> como listas de tarjetas (Gastos de la quincena).
-  const trs   = tbody.querySelectorAll('tr');
-  const items = trs.length ? Array.from(trs) : Array.from(tbody.children);
-  items.forEach((r, i) => { r.style.display = (collapsed && i >= 5) ? 'none' : ''; });
+  const body = document.getElementById(tableId + '-body');
+  if (!body) return;
+  // Contraído = oculto por completo (antes dejaba 5 filas visibles). Para las tablas de mkTable se
+  // oculta también su barra de herramientas; para listas de tarjetas, la lista misma.
+  const target = document.getElementById(tableId + '-box') || body;
+  target.style.display = collapsed ? 'none' : '';
 }
+function _tglLbl(collapsed) { return collapsed ? 'Mostrar tabla' : 'Ocultar tabla'; }
 function toggleTbl(tableId) {
   S._tblCollapsed[tableId] = !S._tblCollapsed[tableId];
   const collapsed = S._tblCollapsed[tableId];
   _applyTblCollapse(tableId, collapsed);
   const btn = document.getElementById('btn-tgl-' + tableId);
-  if (btn) btn.innerHTML = `<i class="ti ti-chevron-${collapsed?'down':'up'}"></i> ${collapsed?'Expandir tabla':'Contraer tabla'}`;
+  if (btn) {
+    btn.innerHTML = `<i class="ti ti-chevron-${collapsed?'down':'up'}"></i>`;
+    btn.title = _tglLbl(collapsed); btn.setAttribute('aria-label', _tglLbl(collapsed)); btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
 }
 function tglBtn(tableId, exportCall) {
   const collapsed = !!(S._tblCollapsed && S._tblCollapsed[tableId]);
   // Restaurar estado colapsado tras re-render del DOM
   setTimeout(() => _applyTblCollapse(tableId, collapsed), 0);
-  return `<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px">
-    ${exportCall ? `<button class="btn" onclick="${exportCall}" style="font-size:12px;padding:5px 14px;gap:6px" title="Descargar como Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>` : ''}
-    <button id="btn-tgl-${tableId}" class="btn" onclick="toggleTbl('${tableId}')" style="font-size:12px;padding:5px 14px;gap:6px">
-      <i class="ti ti-chevron-${collapsed?'down':'up'}"></i> ${collapsed?'Expandir tabla':'Contraer tabla'}
-    </button>
+  return `<div class="ico-bar">
+    ${exportCall ? `<button class="ico-btn" onclick="${exportCall}" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
+    <button id="btn-tgl-${tableId}" class="ico-btn" onclick="toggleTbl('${tableId}')" title="${_tglLbl(collapsed)}" aria-label="${_tglLbl(collapsed)}" aria-expanded="${collapsed?'false':'true'}"><i class="ti ti-chevron-${collapsed?'down':'up'}"></i></button>
   </div>`;
 }
 
@@ -3119,18 +3148,17 @@ function _wlFechaCorta(iso) { const d = new Date(iso); return `${d.getDate()} ${
 
 // Balance de la quincena actual (misma fórmula que el Inicio, incluye remanente).
 function _wlDisponible() {
-  const refs = (S.data.user || {}).external_refs || {};
   const qi   = getQuincenaInfo(0);
   const mv   = filterMovs(S.data.movs || [], qi.from, qi.to);
   const ing  = mv.filter(m => m.tipo === 'INGRESO').reduce((a, m) => a + (m.monto || 0), 0);
   const gas  = mv.filter(m => m.tipo === 'GASTO').reduce((a, m) => a + (m.monto || 0), 0);
-  return (ing || calcIngresosEsperadosPeriodo(refs, qi.from, qi.to)) + getRemanente(0) - gas;
+  return ing + getRemanente(0) - gas;
 }
 
 function wlAbrir() {
   if (!S._wl) S._wl = { items: [], filtro: 'todos', orden: 'prioridad', editando: null, panel: null, error: '' };
   S._wl.editando = null; S._wl.panel = null;
-  abrirHoja('Wishlist', '<div id="wl-root" class="wl-root"><div class="wl-empty">Cargando…</div></div>', wlCargar);
+  abrirHoja('Wishlist', '<div id="wl-root" class="wl-root"><div class="wl-empty">Cargando…</div></div>', wlCargar, { size: 'md' });
 }
 
 async function wlCargar() {
@@ -3272,7 +3300,7 @@ function wlRender() {
         ${[['prioridad','Ordenar: prioridad'],['precio_desc','Precio: mayor a menor'],['precio_asc','Precio: menor a mayor'],['recientes','Más recientes'],['antiguos','Más antiguos'],['nombre','Nombre A–Z']]
           .map(([v, l]) => `<option value="${v}"${st.orden===v?' selected':''}>${l}</option>`).join('')}
       </select>
-      <button class="wl-act" onclick="wlExcel()" title="Descargar como Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+      <button class="ico-btn" onclick="wlExcel()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
     </div>
     <div class="wl-list">${cards || `<div class="wl-empty">${vacio}</div>`}</div>
     <div class="wl-tip">💡 Regla de los 30 días: si después de un mes lo sigues queriendo, probablemente vale la pena.</div>`;
@@ -3430,6 +3458,87 @@ function ndIrADinerito(qKey, destino) {
   cerrarHoja();
   go('nidito');
   setTimeout(() => document.querySelector(destino === 'proyectos' ? '.nd-sec-hdr' : '.nd-din-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+}
+
+// ── MÓDULOS EN POP-UP CENTRAL (desde Inicio) ─────────────────────────────────
+// Una pestaña completa (Nidito, Calendario, Presupuesto, Deudas, Movimientos) se abre dentro de la
+// misma ventana central que usan las hojas: el contenedor #tab-x se mueve a la ventana mientras está
+// abierta y vuelve a <main> al cerrarla. Mientras tanto S.tab apunta al módulo, así cualquier
+// renderTab(S.tab)/load() que dispare el propio módulo lo repinta ahí mismo.
+function abrirModulo(t, titulo) {
+  const el = $('tab-' + t); if (!el) return;
+  abrirHoja(titulo, '', null, { size: 'lg' });
+  $('dash-sheet-body').appendChild(el);
+  el.classList.add('active', 'in-modal');
+  S._modalTab = t; S.tab = t;
+  renderTab(t);
+}
+function _restoreModalTab() {
+  const t = S._modalTab; if (!t) return false;
+  const el = $('tab-' + t), main = document.querySelector('main');
+  if (el && main) { el.classList.remove('in-modal', 'active'); main.appendChild(el); }
+  S._modalTab = null;
+  return true;
+}
+
+// ── DESGLOSE DE INGRESOS / EGRESOS / BALANCE ─────────────────────────────────
+// Un solo panel debajo de los widgets: tocar un widget lo abre con su composición; tocar el mismo
+// otra vez lo cierra. scope 'dash' = periodo de Inicio (+ remanente en quincena), 'mov' = la lista
+// filtrada de Movimientos (mismos números que sus tarjetas).
+if (!S._dsgOpen) S._dsgOpen = {};
+function _dsgAnimar(box) {
+  requestAnimationFrame(() => box.querySelectorAll('.dsg-bar span').forEach(b => { b.style.width = (b.dataset.w || '0') + '%'; }));
+}
+function toggleDsgPanel(key, el, panelId, scope) {
+  const panel = $(panelId); if (!panel) return;
+  const abierto = S._dsgOpen[panelId] === key;
+  el.closest('.dsg-grp')?.querySelectorAll('.dsg-on').forEach(x => { x.classList.remove('dsg-on'); x.setAttribute('aria-expanded', 'false'); });
+  if (abierto) { S._dsgOpen[panelId] = null; panel.classList.remove('open'); panel.innerHTML = ''; return; }
+  S._dsgOpen[panelId] = key;
+  panel.innerHTML = desgloseHTML(key, scope);
+  panel.classList.add('open');
+  el.classList.add('dsg-on'); el.setAttribute('aria-expanded', 'true');
+  _dsgAnimar(panel);
+}
+// HTML del panel ya abierto tras un re-render (sondeo en vivo, cambio de periodo…)
+function dsgPanelHTML(panelId, scope) {
+  const k = S._dsgOpen[panelId];
+  return `<div id="${panelId}" class="dsg-panel${k ? ' open' : ''}">${k ? desgloseHTML(k, scope) : ''}</div>`;
+}
+const dsgOn = (panelId, key) => S._dsgOpen[panelId] === key ? ' dsg-on' : '';
+
+// ── ESC / logo → Inicio ──────────────────────────────────────────────────────
+// ESC cierra lo que esté encima (formulario, día del calendario, ventana central); si no hay nada
+// abierto y no estás en Inicio, te regresa a Inicio. Dentro de un campo de texto solo quita el foco.
+function _escGlobal(e) {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  const t = e.target;
+  if (t && t !== document.body && (t.matches?.('input,textarea,select') || t.isContentEditable)) { t.blur(); return; }
+  if ($('ovl')?.classList.contains('open')) { closeM(); return; }
+  if ($('cal-day-panel')?.classList.contains('open')) { closeCalDay(); return; }
+  if ($('dash-sheet')?.classList.contains('open')) { cerrarHoja(); return; }
+  if ($('mobile-sheet')?.classList.contains('open')) { closeMobileMore(); return; }
+  if (S.tab !== 'dashboard') go('dashboard');
+}
+
+// ── Calendario: Próximos eventos plegable con un icono ───────────────────────
+function toggleCalUp() {
+  S._calUpOpen = !S._calUpOpen;
+  const w = $('cal-upcoming-wrap'), b = $('cal-up-btn');
+  if (w) w.style.display = S._calUpOpen ? '' : 'none';
+  if (b) { b.classList.toggle('on', S._calUpOpen); b.setAttribute('aria-expanded', S._calUpOpen ? 'true' : 'false'); }
+}
+
+// ── Movimientos: Análisis visual plegable ────────────────────────────────────
+function toggleMovChart() {
+  S._movChartCollapsed = !S._movChartCollapsed;
+  const box = $('mov-cbox'); if (!box) return;
+  box.classList.toggle('collapsed', S._movChartCollapsed);
+  const ttl = box.querySelector('.mov-cbox-ttl');
+  if (ttl) ttl.setAttribute('aria-expanded', S._movChartCollapsed ? 'false' : 'true');
+  const ch = box.querySelector('.mov-cbox-chev');
+  if (ch) ch.className = `ti ti-chevron-${S._movChartCollapsed ? 'right' : 'down'} mov-cbox-chev`;
+  if (!S._movChartCollapsed) renderMovChart(getMovFiltradas());
 }
 
 // ── CUENTAS (solo monitoreo) ─────────────────────────────────────────────────
@@ -3749,9 +3858,9 @@ function rQuincenaPanel(ctx) {
   const ingDiff  = totalIngReal - totalIngEsp;
   const gasDiff  = totalGasReal - totalGasEsp;
   const balEsp   = totalIngEsp - totalGasEsp;
-  const ingQ     = totalIngEsp || totalIngReal; // usa esperado si existe, si no el real
   const remanente = getRemanente(qOff);
-  const balReal  = ingQ + remanente - totalGasReal;
+  const ingQ     = totalIngReal + remanente;   // ingresos reales (+ remanente): Balance = Ingresos − Egresos
+  const balReal  = ingQ - totalGasReal;
 
   // Forma de pago por descripción de gasto fijo
   const fpMap = ((S.data.user || {}).external_refs || {}).forma_pago_gastos || {};
@@ -3775,7 +3884,7 @@ function rQuincenaPanel(ctx) {
     const balClr = balReal >= 0 ? '#60a5fa' : '#fbbf24';
     mkC(qChId, S.ct[qChId]||'bar', chartLabels, [{
       label:'Monto',
-      data:[ingQ, totalGasReal||totalGasEsp, balReal],
+      data:[ingQ, totalGasReal, balReal],
       backgroundColor:['#34d39966','#f8717166', balClr+'66'],
       borderColor:    ['#34d399',   '#f87171',   balClr]
     }]);
@@ -3792,7 +3901,7 @@ function rQuincenaPanel(ctx) {
   <div class="q-stats" style="grid-template-columns:repeat(3,1fr)">
     <div class="qstat" style="cursor:pointer" onclick="oMov('INGRESO')" title="Registrar ingreso">
       <div class="qstat-lbl">Ingresos <i class="ti ti-plus" style="font-size:9px;opacity:.4"></i></div>
-      <div class="qstat-val green">${fmt(totalIngReal)}</div>
+      <div class="qstat-val green">${fmt(ingQ)}</div>${remanente>0?`<div class="qstat-sub" style="color:var(--muted)">incl. remanente</div>`:''}
     </div>
     <div class="qstat" style="cursor:pointer" onclick="oMov('GASTO')" title="Registrar gasto">
       <div class="qstat-lbl">Gastos <i class="ti ti-plus" style="font-size:9px;opacity:.4"></i></div>
@@ -3801,7 +3910,7 @@ function rQuincenaPanel(ctx) {
     </div>
     <div class="qstat" style="border:1px solid ${balReal>=0?'rgba(52,211,153,.3)':'rgba(248,113,113,.3)'}">
       <div class="qstat-lbl">Balance</div>
-      <div class="qstat-val ${balReal>=0?'green':'red'}">${fmt(balReal)}</div>
+      <div class="qstat-val ${balReal>=0?'green':'red'}">${balReal<0?'−':''}${fmt(Math.abs(balReal))}</div>
     </div>
   </div>`}
 
@@ -3810,7 +3919,7 @@ function rQuincenaPanel(ctx) {
     <div class="q-section-lbl" style="justify-content:space-between">
       <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esta quincena</span>
       <div style="display:flex;gap:6px">
-        ${ingEspQ.length ? `<button class="btn btn-sm" style="font-size:11px" onclick="exportIngresosQuincena('${ctx}')" title="Descargar como Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>` : ''}
+        ${ingEspQ.length ? `<button class="ico-btn" onclick="exportIngresosQuincena('${ctx}')" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
         <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
       </div>
     </div>
@@ -4388,18 +4497,37 @@ function _dsgRow(nombre, monto, color, pct, meta) {
 
 function _dsgVacio(msg) { return `<div class="dsg-inner"><div class="dsg-empty">${msg}</div></div>`; }
 
-function desgloseHTML(key) {
+function _dsgTotal(lbl, monto, color, signo = '') {
+  return `<div class="dsg-row dsg-total"><div class="dsg-l1"><span class="dsg-name">${lbl}</span>
+    <span class="dsg-amt" style="color:${color}">${signo}${fmt(Math.abs(monto))}</span></div></div>`;
+}
+
+// scope 'mov' → la lista filtrada de Movimientos; cualquier otro → periodo de Inicio (+ remanente).
+function desgloseHTML(key, scope) {
   const r     = getPeriodoRange();
-  const pMovs = filterMovs(S.data.movs || [], r.from, r.to);
+  const pMovs = scope === 'mov' ? getMovFiltradas() : filterMovs(S.data.movs || [], r.from, r.to);
+  const rem   = scope !== 'mov' && S.periodo.tipo === 'quincena' ? getRemanente(S.periodo.offset) : 0;
+  const ingL  = pMovs.filter(m => m.tipo === 'INGRESO'), gasL = pMovs.filter(m => m.tipo === 'GASTO');
+  const ing   = ingL.reduce((a, m) => a + (m.monto || 0), 0), gas = gasL.reduce((a, m) => a + (m.monto || 0), 0);
+
+  if (key === 'balance') {
+    const aho = gasL.filter(gxEsAhorro).reduce((a, m) => a + (m.monto || 0), 0), bal = ing + rem - gas;
+    return `<div class="dsg-inner">
+      ${_dsgRow('Ingresos', ing, 'var(--color-income)', null, `${ingL.length} mov`)}
+      ${rem > 0 ? _dsgRow('Remanente de la quincena anterior', rem, 'var(--color-income)', null, 'se suma a ingresos') : ''}
+      ${_dsgRow('Egresos', gas, 'var(--color-expense)', null, `${gasL.length} mov${aho > 0 ? ` · incluye ${fmt(aho)} a ahorro` : ''}`)}
+      ${_dsgTotal('Balance', bal, bal >= 0 ? 'var(--color-income)' : 'var(--color-expense)', bal < 0 ? '−' : '')}
+      <div class="dsg-formula">${fmt(ing)}${rem > 0 ? ` + ${fmt(rem)}` : ''} − ${fmt(gas)} = ${bal < 0 ? '−' : ''}${fmt(Math.abs(bal))}</div>
+    </div>`;
+  }
 
   if (key === 'gastos' || key === 'ingresos') {
-    const tipo = key === 'gastos' ? 'GASTO' : 'INGRESO';
-    const list = pMovs.filter(m => m.tipo === tipo);
-    if (!list.length) return _dsgVacio(`Sin ${key} registrados en ${r.label}.`);
+    const list = key === 'gastos' ? gasL : ingL;
+    if (!list.length && !(key === 'ingresos' && rem > 0)) return _dsgVacio(`Sin ${key === 'gastos' ? 'egresos' : 'ingresos'} registrados en ${r.label}.`);
     const total = list.reduce((a, m) => a + (m.monto || 0), 0);
 
     if (key === 'gastos') {
-      // Los gastos se agrupan por categoría (suelen ser decenas de movimientos).
+      // Los egresos se agrupan por categoría (suelen ser decenas de movimientos).
       const porCat = {};
       list.forEach(m => {
         const c = m.categoria || 'OTROS';
@@ -4409,22 +4537,23 @@ function desgloseHTML(key) {
       const rows = Object.entries(porCat).sort((a, b) => b[1].monto - a[1].monto)
         .map(([cat, d]) => _dsgRow(cat, d.monto, CAT_CLR[cat] || 'var(--text-2)',
               Math.round(d.monto / total * 100), `${d.n} mov · ${Math.round(d.monto / total * 100)}%`));
-      return `<div class="dsg-inner">${rows.join('')}
-        <div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();cerrarHoja();go('movimientos')"><i class="ti ti-list"></i> Ver movimientos</button></div></div>`;
+      return `<div class="dsg-inner">${rows.join('')}${_dsgTotal('Total egresos', total, 'var(--color-expense)')}
+        ${scope === 'mov' ? '' : `<div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();abrirModulo('movimientos','Movimientos')"><i class="ti ti-list"></i> Ver movimientos</button></div>`}</div>`;
     }
     // Los ingresos son pocos: se listan uno por uno.
     const rows = [...list].sort((a, b) => (b.monto || 0) - (a.monto || 0))
       .map(m => _dsgRow(m.concepto || m.descripcion || 'Ingreso', m.monto,
             'var(--color-income)', null, fmtDate(fd(m.fecha))));
+    if (rem > 0) rows.unshift(_dsgRow('Remanente de la quincena anterior', rem, 'var(--color-income)', null, 'sobrante que pasa a esta quincena'));
     const refs   = (S.data.user || {}).external_refs || {};
-    const esp    = calcIngresosEsperadosPeriodo(refs, r.from, r.to);
+    const esp    = scope === 'mov' ? 0 : calcIngresosEsperadosPeriodo(refs, r.from, r.to);
     const faltan = esp - total;
-    return `<div class="dsg-inner">${rows.join('')}
-      ${esp > 0 ? `<div class="dsg-row" style="border-top:1px solid var(--border-default);margin-top:2px">
-        <span class="dsg-name" style="color:var(--text-2);font-weight:600">Esperado del período</span>
-        <span class="dsg-amt" style="color:var(--text-2)">${fmt(esp)}</span></div>
-      ${faltan > 0 ? `<div class="dsg-row"><span class="dsg-name" style="color:var(--text-3);font-weight:600">Por recibir</span>
-        <span class="dsg-amt" style="color:var(--color-warning)">${fmt(faltan)}</span></div>` : ''}` : ''}</div>`;
+    return `<div class="dsg-inner">${rows.join('')}${_dsgTotal('Total ingresos', total + rem, 'var(--color-income)')}
+      ${esp > 0 ? `<div class="dsg-row">
+        <div class="dsg-l1"><span class="dsg-name" style="color:var(--text-2);font-weight:600">Esperado del período</span>
+        <span class="dsg-amt" style="color:var(--text-2)">${fmt(esp)}</span></div></div>
+      ${faltan > 0 ? `<div class="dsg-row"><div class="dsg-l1"><span class="dsg-name" style="color:var(--text-3);font-weight:600">Por recibir</span>
+        <span class="dsg-amt" style="color:var(--color-warning)">${fmt(faltan)}</span></div></div>` : ''}` : ''}</div>`;
   }
 
   if (key === 'tdc') {
@@ -4470,20 +4599,22 @@ function rMovimientos() {
   <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
 </div>
 ${periodoSelectorHTML()}
-<div id="movs-section"></div>
-<div id="movs-table-section"></div>`;
+<div class="mov-layout"><div id="movs-section"></div><div id="movs-table-section"></div></div>`;
   rMovs();
 }
 
 // ── HOJA INFERIOR GENÉRICA (emojis del Inicio minimal) ───────────────────────
 // Muestra un componente EXISTENTE sin reescribirlo. `post` corre tras inyectar
 // el HTML (para los componentes que se auto-inicializan, p.ej. sus gráficas).
-function abrirHoja(titulo, html, post) {
+function abrirHoja(titulo, html, post, opts = {}) {
   const sheet = $('dash-sheet');
   if (!sheet) return;
+  if (_restoreModalTab()) S.tab = 'dashboard';   // otro módulo ocupaba la ventana: devolverlo antes de reemplazar
   $('dash-sheet-title').textContent = titulo;
   $('dash-sheet-body').innerHTML = html;
   $('dash-sheet-body').scrollTop = 0;
+  const _panel = sheet.querySelector('.ds-panel');
+  if (_panel) _panel.className = 'ds-panel' + (opts.size ? ' ds-' + opts.size : '');
   sheet.style.display = 'flex';
   requestAnimationFrame(() => sheet.classList.add('open'));
   document.body.classList.add('sheet-locked');
@@ -4493,6 +4624,7 @@ function abrirHoja(titulo, html, post) {
 function cerrarHoja() {
   const sheet = $('dash-sheet');
   if (!sheet || !sheet.classList.contains('open')) return;
+  const eraModulo = _restoreModalTab();   // la pestaña vuelve a <main> antes de vaciar la ventana
   // Devuelve la caja de notas a su tab si estaba prestada a la hoja (o descarta el
   // duplicado si el tab ya remontó una durante un re-render).
   const nb = $('dash-sheet-body')?.querySelector('.notas-box');
@@ -4501,6 +4633,7 @@ function cerrarHoja() {
   document.body.classList.remove('sheet-locked');
   setTimeout(() => { sheet.style.display = 'none'; if ($('dash-sheet-body')) $('dash-sheet-body').innerHTML = ''; }, 260);
   _hojaFocusTrapOff();
+  if (eraModulo) { S.tab = 'dashboard'; renderTab('dashboard'); }
 }
 
 // Atrapa el foco (Tab/Shift+Tab) dentro de la hoja mientras está abierta, y lo
@@ -4537,18 +4670,19 @@ function dashEmoji(key) {
   switch (key) {
     case 'cuentas':  abrirHoja('Mis cuentas', rCuentasWidget()); break;
     case 'retiro':   abrirHoja('Retiro de efectivo', rCuentasWidget()); break;   // (a) los botones "Retirar" del widget
-    case 'deuda':    cerrarHoja(); go('deudas'); break;
-    case 'nidito':   cerrarHoja(); go('nidito'); break;
-    case 'presupuesto': cerrarHoja(); go('presupuesto'); break;
+    case 'deuda':    abrirModulo('deudas', 'Deudas TDC'); break;
+    case 'nidito':   abrirModulo('nidito', 'Nidito'); break;
+    case 'presupuesto': abrirModulo('presupuesto', 'Presupuesto y Metas'); break;
     case 'objetivos':   cerrarHoja(); go('presupuesto'); setTimeout(()=>$('objs-section')?.scrollIntoView({behavior:'smooth'}),260); break;
-    case 'calendario':  cerrarHoja(); go('calendario'); break;
+    case 'calendario':  abrirModulo('calendario', 'Calendario'); break;
+    case 'movimientos': abrirModulo('movimientos', 'Movimientos'); break;
     case 'ingQuinc': abrirHoja('Ingresos · esta quincena', '<div id="hoja-q"></div>',
                        () => { $('hoja-q').innerHTML = rQuincenaPanel('sheet'); _hojaScroll('.q-stats'); }); break;
     case 'gastQuinc':abrirHoja('Gastos · esta quincena', '<div id="hoja-q"></div>',
                        () => { $('hoja-q').innerHTML = rQuincenaPanel('sheet'); _hojaScrollTexto('Gastos esta quincena'); }); break;
-    case 'analisis': abrirHoja('Análisis gráfico', _analisisHTML(), _analisisDraw); break;
-    case 'despensa': abrirHoja('Lista de despensa', '<div id="despensa-section"></div>', () => rDespensa()); break;
-    case 'consejos': abrirHoja('Consejos IA', '<div id="insights-section"></div>', () => fetchInsights(true)); break;
+    case 'analisis': abrirHoja('Análisis gráfico', _analisisHTML(), _analisisDraw, { size: 'md' }); break;
+    case 'despensa': abrirHoja('Lista de despensa', '<div id="despensa-section"></div>', () => rDespensa(), { size: 'lg' }); break;
+    case 'consejos': abrirHoja('Consejos IA', '<div id="insights-section"></div>', () => fetchInsights(true), { size: 'md' }); break;
     case 'notas':    _hojaNotas(); break;
     case 'wishlist': wlAbrir(); break;
   }
@@ -4571,7 +4705,7 @@ function _hojaScrollTexto(txt) {
 // usando Presupuesto/Nidito/Negocios/Calendario/Deudas — no comparten código
 // a propósito, para no arriesgar esas 5 pestañas ya probadas.
 function _hojaNotas() {
-  abrirHoja('Notas', '<div id="ni-root">Cargando…</div>', () => niLoad());
+  abrirHoja('Notas', '<div id="ni-root">Cargando…</div>', () => niLoad(), { size: 'md' });
 }
 
 async function niLoad() {
@@ -4811,13 +4945,13 @@ function _gxSankeyTab() {
   const gasAll = mv.filter(m => m.tipo === 'GASTO');
   const aho = gasAll.filter(gxEsAhorro), gas = gasAll.filter(m => !gxEsAhorro(m));
   const tIng = _gxSum(ing), tGas = _gxSum(gas), tAho = _gxSum(aho);
-  const kpis = _gxKpi('Ingresos', gxMoney(tIng), 'in') + _gxKpi('Gastos', gxMoney(tGas), 'out')
+  const kpis = _gxKpi('Ingresos', gxMoney(tIng), 'in') + _gxKpi('Egresos sin ahorro', gxMoney(tGas), 'out')
     + _gxKpi('Ahorrado', gxMoney(tAho), 'pay') + _gxKpi(tIng - tGas - tAho >= 0 ? 'Sobra' : 'Falta', gxMoney(Math.abs(tIng - tGas - tAho)), tIng - tGas - tAho >= 0 ? 'in' : 'out');
   if (!ing.length && !gasAll.length) return { html: _gxCard('El dinero', r.label, kpis, '', _gxEmpty('Sin movimientos en este período')) };
   const top = (arr, n, kf) => { const e = _gxGrp(arr, kf); const head = e.slice(0, n), rest = e.slice(n).reduce((a, x) => a + x[1], 0); return rest > 0 ? [...head, ['Otros', rest]] : head; };
   const src = top(ing, 5, m => m.concepto || 'Ingreso').map(([name, value]) => ({ name, value, color: 'var(--gx-in)' }));
   const dst = top(gas, 6, _gxCat).map(([name, value]) => ({ name, value, color: CAT_CLR[name] || 'var(--gx-neu)' }));
-  if (tAho > 0) dst.push({ name: 'Ahorro', value: tAho, color: 'var(--gx-pay)' });
+  if (tAho > 0) dst.push({ name: 'Ahorro', value: tAho, color: '#d4af37' });   // oro: ninguna categoría lo usa
   const gastado = tGas + tAho;
   if (tIng > gastado) dst.push({ name: 'Sobrante', value: tIng - gastado, color: 'var(--gx-ac2)' });
   if (gastado > tIng) src.push({ name: 'Saldo previo', value: gastado - tIng, color: 'var(--gx-neu)' });
@@ -5009,7 +5143,7 @@ function rDash() {
     .filter(g=>!/^despensa$/i.test((g.descripcion||'').trim()))
     .reduce((a,g)=>a+(g.monto||0),0) + getDinerito(_qKey) + (compromisoNiditoItem(getQuincenaInfo(_qOff))?.monto || 0);
   const remQ = S.periodo.tipo==='quincena' ? getRemanente(S.periodo.offset) : 0;   // solo en vista de quincena
-  const bal = (ingC || ingEsp) + remQ - gasC;   // misma expresión que el indicador de balance de hoy (ingBal - gasC)
+  const bal = ingC + remQ - gasC;   // Balance = Ingresos (+ remanente en quincena) − Egresos, igual en toda la app
   const pats = S.data.patrones||[];
   S._patData = {};
   pats.forEach(p => { S._patData[p.id] = p; });
@@ -5044,27 +5178,29 @@ function rDash() {
     `<button class="mini-pill${S.periodo.tipo===v?' on':''}" onclick="setPeriodo('${v}')">${l}</button>`).join('')}</div>
   <button class="mini-addmov-btn btn btn-accent btn-sm" onclick="oMov()" aria-label="Nuevo movimiento"><i class="ti ti-plus"></i> Movimiento</button>
 </div>
-<div class="mini-top-grid">
-  <div class="mini-bal-wrap">
+<div class="mini-top-grid dsg-grp">
+  <div class="mini-bal-wrap${dsgOn('dash-dsg','balance')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='balance'}" onclick="toggleDsgPanel('balance',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver cómo se calcula">
     <div class="mini-bal-lbl">Balance <i class="ti ti-scale" style="font-size:12px"></i></div>
     <div class="mini-bal${bal<0?' neg':''}">${bal<0?'-':''}${_bMain}<span class="cents">${_bCent}</span></div>
     <div class="mini-sub ${bal>=0?'pos':'neg'}">
       <i class="ti ti-trending-${bal>=0?'up':'down'}"></i>
-      Balance ${bal>=0?'positivo':'negativo'} · ${pMovs.length} movimiento${pMovs.length!==1?'s':''}${remQ>0?` · incluye remanente ${fmt(remQ)}`:''}</div>
+      Balance ${bal>=0?'positivo':'negativo'} · ${pMovs.length} movimiento${pMovs.length!==1?'s':''}</div>
   </div>
   <div class="mini-rows">
-    <div class="mini-row" onclick="dashEmoji('gastQuinc')" title="Ver gastos de la quincena">
-      <div class="mini-row-hdr"><span class="emoji">💸</span><b>Gastos</b></div>
+    <div class="mini-row${dsgOn('dash-dsg','gastos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='gastos'}" onclick="toggleDsgPanel('gastos',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de egresos">
+      <div class="mini-row-hdr"><span class="emoji">💸</span><b>Egresos</b></div>
       <span class="rv gasto">${fmt(gasC)}</span>
       ${gasEspTot>0?`<small>presup. ${fmt(gasEspTot)}</small>`:''}
     </div>
-    <div class="mini-row" onclick="dashEmoji('ingQuinc')" title="Ver ingresos de la quincena">
+    <div class="mini-row${dsgOn('dash-dsg','ingresos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='ingresos'}" onclick="toggleDsgPanel('ingresos',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de ingresos">
       <div class="mini-row-hdr"><span class="emoji">💰</span><b>Ingresos</b></div>
-      <span class="rv ingreso">${fmt(ingC)}</span>
+      <span class="rv ingreso">${fmt(ingC + remQ)}</span>
+      ${remQ>0?`<small>incluye remanente ${fmt(remQ)}</small>`:''}
       ${ingEsp>0?`<small>esperado ${fmt(ingEsp)}</small>`:''}
     </div>
   </div>
 </div>
+${dsgPanelHTML('dash-dsg','dash')}
 <div class="mini-grid-hdr">Todo lo demás</div>
 <div class="mini-grid">${EMOJIS.map(([e,k,lbl])=>
   `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span></button>`).join('')}</div>
@@ -5073,11 +5209,13 @@ function rDash() {
     title="Gastos esta quincena" aria-label="Gastos esta quincena"
     aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">🧮</button>
   <button class="q-dash-btn mini-tile" onclick="dashEmoji('wishlist')" title="Wishlist" aria-label="Wishlist">🎁</button>
+  <button class="q-dash-btn mini-tile" onclick="dashEmoji('movimientos')" title="Movimientos" aria-label="Movimientos">📒</button>
 </div>
 <div id="quincena-dash-section" style="display:${S._qDashOpen?'':'none'}"></div>
 <button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>
 `;
   refreshQuincenaPanel();
+  if (S._dsgOpen['dash-dsg']) _dsgAnimar($('dash-dsg'));
 }
 
 // ── INSIGHTS IA ───────────────────────────────────────────────────────────────
@@ -6052,7 +6190,7 @@ function rObjs() {
 <div class="hdr" style="margin-bottom:14px">
   <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-flag"></i> Metas de ahorro y compras — progreso y capacidad</span>
   <div style="display:flex;gap:8px">
-    ${metas.length ? `<button class="btn btn-sm" onclick="exportObjetivosAhorro()" title="Descargar como Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>` : ''}
+    ${metas.length ? `<button class="ico-btn" onclick="exportObjetivosAhorro()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
     <button class="btn btn-accent btn-sm" onclick="oMeta()"><i class="ti ti-plus"></i> Nueva Meta</button>
   </div>
 </div>
@@ -6204,7 +6342,10 @@ function applyMovSearch() {
 function setMovChart(type) {
   initMovF();
   S.movF.chartType=type;
-  renderMovChart(getMovFiltradas());
+  const _fl = getMovFiltradas(), _sub = document.querySelector('#mov-cbox .mov-cbox-sub');
+  if (_sub) { const n = type==='doughnut' ? _fl.filter(m=>m.tipo==='GASTO').length : _fl.length;
+    _sub.textContent = '— ' + n + (type==='doughnut' ? (n!==1?' egresos':' egreso') : (n!==1?' movimientos':' movimiento')); }
+  renderMovChart(_fl);
 }
 
 function getMovFiltradas() {
@@ -6272,7 +6413,7 @@ function renderMovChart(filtered) {
     });
     if (!keys.length) { if(S.ch['mov-chart']){S.ch['mov-chart'].destroy();delete S.ch['mov-chart'];} return; }
     mkC('mov-chart','doughnut',keys,[{data:vals,label:'$',
-      backgroundColor:bgs, borderColor:bds, borderWidth:2, offset:offs}]);
+      backgroundColor:bgs, borderColor:bds, borderWidth:2, offset:offs}], { center: 'Egresos' });
   } else if (type==='bar') {
     const ms=last6();
     const all=S.data.movs||[];
@@ -6483,11 +6624,10 @@ function rMovs() {
       <input id="movf-search" placeholder="Concepto, comentario..." value="${f.search||''}"
         oninput="clearTimeout(S._ms);S._ms=setTimeout(applyMovSearch,380)">
     </div>
-    <button type="button" class="btn btn-ghost btn-sm mf-toggle${S._movFiltersOpen?' on':''}" style="margin-left:auto"
+    <button type="button" class="mf-ico${S._movFiltersOpen?' on':''}" style="margin-left:auto"
       onclick="toggleMovFiltersPanel()" aria-expanded="${S._movFiltersOpen?'true':'false'}" aria-controls="mf-collapse"
-      title="Filtrar por categoría y medio">
-      <span aria-hidden="true">🎛️</span> Filtros${(f.cats.length+f.medios.length)>0?` <span class="mf-toggle-badge">${f.cats.length+f.medios.length}</span>`:''}
-      <i class="ti ti-chevron-${S._movFiltersOpen?'up':'down'}" style="font-size:13px"></i>
+      title="Filtrar por categoría y medio" aria-label="Filtrar por categoría y medio">
+      <i class="ti ti-filter"></i>${(f.cats.length+f.medios.length)>0?`<span class="ico-badge">${f.cats.length+f.medios.length}</span>`:''}
     </button>
   </div>
   <div class="mf-collapse${S._movFiltersOpen?' open':''}" id="mf-collapse"><div>
@@ -6502,36 +6642,40 @@ function rMovs() {
   </div></div>
 </div>
 
-<div class="kpi-grid">
-  <div class="kpi">
+<div class="kpi-grid dsg-grp">
+  <div class="kpi${dsgOn('mov-dsg','ingresos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['mov-dsg']==='ingresos'}" onclick="toggleDsgPanel('ingresos',this,'mov-dsg','mov')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de ingresos">
     <div class="kpi-lbl"><i class="ti ti-trending-up"></i> Ingresos</div>
     <div class="kpi-val green">${fmt(totIng)}</div>
     <div class="kpi-sub">${ingresos.length} registro${ingresos.length!==1?'s':''}</div>
   </div>
-  <div class="kpi">
+  <div class="kpi${dsgOn('mov-dsg','gastos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['mov-dsg']==='gastos'}" onclick="toggleDsgPanel('gastos',this,'mov-dsg','mov')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de egresos">
     <div class="kpi-lbl"><i class="ti ti-trending-down"></i> Egresos</div>
     <div class="kpi-val red">${fmt(totGas)}</div>
     <div class="kpi-sub">${gastos.length} registro${gastos.length!==1?'s':''}</div>
   </div>
-  <div class="kpi">
-    <div class="kpi-lbl"><i class="ti ti-scale"></i> Neto</div>
-    <div class="kpi-val ${neto>=0?'green':'red'}">${fmt(neto)}</div>
+  <div class="kpi${dsgOn('mov-dsg','balance')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['mov-dsg']==='balance'}" onclick="toggleDsgPanel('balance',this,'mov-dsg','mov')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver cómo se calcula">
+    <div class="kpi-lbl"><i class="ti ti-scale"></i> Balance</div>
+    <div class="kpi-val ${neto>=0?'green':'red'}">${neto<0?'−':''}${fmt(Math.abs(neto))}</div>
     <div class="kpi-sub">${neto>=0?'✓ Ahorro':'⚠ Déficit'}</div>
   </div>
 </div>
+${dsgPanelHTML('mov-dsg','mov')}
 
-<div class="mov-cbox">
+<div class="mov-cbox${S._movChartCollapsed?' collapsed':''}" id="mov-cbox">
   <div class="mov-cbox-hdr">
-    <h3>Análisis visual — ${filtered.length} movimiento${filtered.length!==1?'s':''}</h3>
-    <div style="display:flex;gap:4px">${chartPills}</div>
+    <h3 class="mov-cbox-ttl" onclick="toggleMovChart()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" aria-expanded="${S._movChartCollapsed?'false':'true'}"><i class="ti ti-chevron-${S._movChartCollapsed?'right':'down'} mov-cbox-chev"></i> Análisis visual <span class="mov-cbox-sub">— ${f.chartType==='doughnut' ? `${gastos.length} egreso${gastos.length!==1?'s':''}` : `${filtered.length} movimiento${filtered.length!==1?'s':''}`}</span></h3>
+    <div class="mov-cbox-pills" style="display:flex;gap:4px">${chartPills}</div>
   </div>
-  <div class="cwrap-lg"><canvas id="mov-chart"></canvas></div>
-  <div id="legend-mov-chart" class="chart-legend"></div>
+  <div class="mov-cbox-body">
+    <div class="cwrap-lg"><canvas id="mov-chart"></canvas></div>
+    <div id="legend-mov-chart" class="chart-legend"></div>
+  </div>
 </div>
 `;
 
   _updateMovsTable(filtered);
-  setTimeout(()=>renderMovChart(filtered),60);
+  if (!S._movChartCollapsed) setTimeout(()=>renderMovChart(filtered),60);
+  if (S._dsgOpen['mov-dsg']) _dsgAnimar($('mov-dsg'));
 }
 
 // Lista de Movimientos agrupada por fecha (mockup de Claude Design) — MISMOS
@@ -6614,13 +6758,10 @@ function toggleMovDay(d) {
 function _updateMovsTable(filtered) {
   const _tHost = $('movs-table-section');
 
-  // En modo colapsado: 5 movimientos más recientes por fecha
-  const rows = S._movsCollapsed
-    ? [...filtered].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).slice(0,5)
-    : filtered;
-
+  // Contraído = la lista se oculta por completo (mkTable sigue registrando todas para el Excel)
+  const rows = filtered;
   const icon = S._movsCollapsed ? 'down' : 'up';
-  const lbl  = S._movsCollapsed ? 'Más' : 'Menos';
+  const lbl  = S._movsCollapsed ? 'Mostrar movimientos' : 'Ocultar movimientos';
 
   const footer = () => '';
 
@@ -6642,36 +6783,11 @@ function _updateMovsTable(filtered) {
   });
   const _movList = _movCardsHTML(rows);
 
-  // Widgets de totales — siempre calculados sobre filtered completo
-  const _gastos   = filtered.filter(m=>m.tipo==='GASTO').reduce((a,m)=>a+(m.monto||0),0);
-  const _ingresos = filtered.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0),0);
-  const _balance  = _ingresos - _gastos;
-  const _balClr   = _balance >= 0 ? 'var(--green)' : 'var(--red)';
-  const _totalsWidget = `
-<div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap;justify-content:center">
-  <div style="flex:1;min-width:160px;max-width:260px;background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px 20px;text-align:center">
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:6px"><i class="ti ti-trending-down"></i> Gastos</div>
-    <div style="font-size:clamp(1.3rem,6vw,1.9rem);font-weight:800;font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:var(--red);white-space:nowrap">−${fmt(_gastos)}</div>
-  </div>
-  <div style="flex:1;min-width:160px;max-width:260px;background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px 20px;text-align:center">
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:6px"><i class="ti ti-trending-up"></i> Ingresos</div>
-    <div style="font-size:clamp(1.3rem,6vw,1.9rem);font-weight:800;font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:var(--green);white-space:nowrap">+${fmt(_ingresos)}</div>
-  </div>
-  <div style="flex:1;min-width:160px;max-width:260px;background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px 20px;text-align:center">
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:6px"><i class="ti ti-scale"></i> Balance</div>
-    <div style="font-size:clamp(1.3rem,6vw,1.9rem);font-weight:800;font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:${_balClr};white-space:nowrap">${_balance>=0?'+':''}${fmt(_balance)}</div>
-  </div>
-</div>`;
-
   if (_tHost) {
-    _tHost.innerHTML = `<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px">
-      <button class="btn btn-ghost" onclick="exportTableToExcel('tbl-movs')" style="font-size:12px;padding:5px 14px;gap:6px">
-        <i class="ti ti-file-spreadsheet"></i> Excel
-      </button>
-      <button class="btn" onclick="toggleMovsCollapsed()" style="font-size:12px;padding:5px 14px;gap:6px">
-        <i class="ti ti-chevron-${icon}"></i> ${lbl}
-      </button>
-    </div>${_movList}${_totalsWidget}`;
+    _tHost.innerHTML = `<div class="ico-bar">
+      <button class="ico-btn" onclick="exportTableToExcel('tbl-movs')" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
+      <button class="ico-btn" onclick="toggleMovsCollapsed()" title="${lbl}" aria-label="${lbl}" aria-expanded="${S._movsCollapsed?'false':'true'}"><i class="ti ti-chevron-${icon}"></i></button>
+    </div>${S._movsCollapsed ? '' : _movList}`;
   } else if (!S._movsCollapsed) {
     const host = $('movs-section') || $('tab-movimientos');
     if (host) host.innerHTML += _movList;
@@ -6800,7 +6916,7 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
     const ds=`${y}-${mm}-${String(d).padStart(2,'0')}`;
     const de=evtMap[d]||[];
     const isPay=payDays.has(d);
-    const MAX=3;
+    const MAX=2;   // celdas de alto fijo: 2 eventos + "+N"
     const bars=de.slice(0,MAX).map(e=>{
       const cls=e._type==='nidito'?'cev-nidito':'cev-event';
       const lbl=(e.titulo||'').replace(/"/g,'&quot;');
@@ -6889,8 +7005,8 @@ async function rCal() {
 <div class="cal-wrap">
   <div class="cal-main">
     <div id="cal-month-wrap">${_calGridHTML(evts,S.cy,S.cm,refs,nd)}</div>
-    <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-clock-hour-4"></i> Próximos Eventos</h2></div></div>
-    <div id="cal-upcoming-wrap">${_calUpcomingHTML(evts)}</div>
+    <div style="display:flex;justify-content:center;margin:4px 0 12px"><button class="ico-tile${S._calUpOpen?' on':''}" id="cal-up-btn" onclick="toggleCalUp()" title="Próximos eventos" aria-label="Próximos eventos" aria-expanded="${S._calUpOpen?'true':'false'}">⏰</button></div>
+    <div id="cal-upcoming-wrap" style="display:${S._calUpOpen?'':'none'}">${_calUpcomingHTML(evts)}</div>
   </div>
   <div class="cal-day-panel" id="cal-day-panel"></div>
 </div>`;
@@ -9021,9 +9137,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
   })();
 
   // Hoja del Inicio: cerrar con Escape + arrastrar hacia abajo para descartar.
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && $('dash-sheet')?.classList.contains('open')) cerrarHoja();
-  });
+  document.addEventListener('keydown', _escGlobal);
   (function _dashSheetSwipe(){
     const sheet = $('dash-sheet'); if (!sheet) return;
     const panel = sheet.querySelector('.ds-panel'); if (!panel) return;

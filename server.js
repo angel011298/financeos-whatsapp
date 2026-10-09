@@ -887,47 +887,6 @@ function planearWishlist(refs, items, desdeQuincena) {
   return { plan, sinAcomodar: pendientes };
 }
 
-async function distribuirWishlist(phone, items, origen = 'web', textoOriginal = '') {
-  const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
-  const refs = { ...(cur?.external_refs || {}) };
-  const arranque = siguienteQuincena(getQuincena(hoy()));   // nunca toca la quincena en curso
-  const { plan, sinAcomodar } = planearWishlist(refs, items, arranque);
-
-  if (!refs.budget_q) refs.budget_q = {};
-  const stamp = Date.now();
-  let n = 0;
-  for (const { qKey, items: asignados } of plan) {
-    if (!refs.budget_q[qKey]) refs.budget_q[qKey] = { gastos: [], ingresos: [] };
-    if (!Array.isArray(refs.budget_q[qKey].gastos)) refs.budget_q[qKey].gastos = [];
-    for (const it of asignados) {
-      refs.budget_q[qKey].gastos.push({
-        _id:         `wl-${stamp}-${n++}`,
-        descripcion: it.descripcion,
-        monto:       Number(it.monto) || 0,
-        categoria:   it.categoria || 'Personales',
-        forma_pago:  it.forma_pago || '',
-        comentarios: 'Wishlist',
-      });
-    }
-  }
-  // Lo que no cabe en ninguna quincena no se pierde: queda apartado para revisarlo.
-  if (sinAcomodar.length) {
-    refs.wishlist_pendientes = [
-      ...(Array.isArray(refs.wishlist_pendientes) ? refs.wishlist_pendientes : []),
-      ...sinAcomodar.map((it, i) => ({
-        _id: `wp-${stamp}-${i}`, descripcion: it.descripcion, monto: Number(it.monto) || 0,
-      })),
-    ];
-  }
-
-  const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
-  if (error) return { error: error.message };
-  await writeAuditLog(phone, 'usuarios', 'wishlist_distribuida', phone, null,
-    { plan: plan.map(p => ({ qKey: p.qKey, n: p.items.length })), sinAcomodar: sinAcomodar.length },
-    origen, textoOriginal);
-  return { plan, sinAcomodar };
-}
-
 // Detecta y parsea una wishlist. Devuelve null si el texto no es una wishlist.
 function parseWishlist(text) {
   const t = String(text || '').trim();
@@ -951,27 +910,6 @@ function parseWishlist(text) {
   return items.length ? items : null;
 }
 
-function formatWishlistReply(plan, sinAcomodar) {
-  const nItems = plan.reduce((a, p) => a + p.items.length, 0);
-  const total  = plan.reduce((a, p) => a + p.items.reduce((s, i) => s + (Number(i.monto) || 0), 0), 0);
-  if (!nItems && sinAcomodar.length) {
-    return `⚠️ Ningún artículo cabe en las próximas quincenas sin pasarte del 80% de lo libre.\n` +
-           sinAcomodar.map(i => `  • ${i.descripcion} — ${fmt(i.monto)}`).join('\n') +
-           `\n\nQuedaron apartados en pendientes.`;
-  }
-  let out = `🛍️ *Wishlist repartida* — ${nItems} artículo${nItems !== 1 ? 's' : ''} · ${fmt(total)}`;
-  for (const p of plan) {
-    const sub = p.items.reduce((s, i) => s + (Number(i.monto) || 0), 0);
-    out += `\n\n📅 *${labelQuincena(p.qKey)}* · ${fmt(sub)} _(quedan ${fmt(p.sobrante)} libres)_\n`;
-    out += p.items.map(i => `  • ${i.descripcion} — ${fmt(i.monto)}`).join('\n');
-  }
-  if (sinAcomodar.length) {
-    out += `\n\n⚠️ *Sin acomodar* (más caros que cualquier quincena):\n` +
-           sinAcomodar.map(i => `  • ${i.descripcion} — ${fmt(i.monto)}`).join('\n');
-  }
-  out += `\n\n_Cada quincena se llenó solo hasta el 80% de lo libre; el resto queda de colchón._`;
-  return out;
-}
 
 // Reintenta una operación de Supabase ante fallas transitorias del lado de PostgREST/red.
 // Visto en producción: bajo carga, el pool de conexiones mata el hilo a medio camino y el
@@ -1771,7 +1709,7 @@ async function extractIntentBatch(text, phone = '') {
     return { intent, items };
   } catch (e) {
     console.error('extractIntentBatch error:', e.message);
-    return { intent: 'CONSULTA', items: [] };
+    return { intent: 'CONSULTA', items: [], iaError: e.message };
   }
 }
 
@@ -3715,7 +3653,7 @@ app.post('/webhook', async (req, res) => {
   try {
     const usuario = await identificarUsuario(From);
     const lower   = (Body || '').trim().toLowerCase();
-    const wishWA  = parseWishlist(Body);
+    const wishWA  = /wish\s*list|lista\s+de\s+deseos/i.test(Body || '');   // módulo Wishlist 🎁
 
     if (lower === 'ayuda' || lower === 'help') {
       reply = `🤖 *Hola ${usuario.nombre}, soy tu asistente Us*\n\nTus comandos:\n` +
@@ -3837,9 +3775,7 @@ app.post('/webhook', async (req, res) => {
         `*1* Sí, continuar · *3* Cancelar`;
 
     } else if (wishWA) {
-      const r = await distribuirWishlist(From, wishWA, 'whatsapp', Body);
-      reply = r.error ? `❌ Error al repartir la wishlist: ${r.error}`
-                      : formatWishlistReply(r.plan, r.sinAcomodar);
+      reply = (await asesorLocal(From, Body || '')) || _asAyuda(false);
 
     } else if (lower === 'borrar ultimo') {
       const { data: ultimo } = await sb.from('movimientos')
@@ -3980,7 +3916,11 @@ app.post('/webhook', async (req, res) => {
           } else {
             const sysBlocks = await buildSystemPrompt(usuario, intent);
             await guardarMensaje(From, 'user', Body || '');
-            reply = await callIA(usuario, sysBlocks, Body || '', From);
+            try { reply = await callIA(usuario, sysBlocks, Body || '', From); }
+            catch (e) {
+              console.error('callIA (WhatsApp):', e.message);
+              reply = (await asesorLocal(From, Body || '', { soloConsulta: true, sinIA: true }).catch(() => null)) || _asAyuda(true);
+            }
             await guardarMensaje(From, 'assistant', reply);
             replySaved = true;
           }
@@ -4109,22 +4049,23 @@ No expliques nada, devuelve solo esa línea.`
     else {
       const input = isAudio ? `[🎤 Nota de voz web] ${text}` : text;
 
-      // Wishlist: se detecta y reparte sin pasar por Gemini (determinista y sin límite de artículos).
-      const wishItems = parseWishlist(input);
-      if (wishItems) {
-        const r = await distribuirWishlist(phone, wishItems, 'web', input);
-        reply = r.error ? `❌ Error al repartir la wishlist: ${r.error}`
-                        : formatWishlistReply(r.plan, r.sinAcomodar);
-        await guardarMensaje(phone, 'assistant', reply);
-        _resolveInFlight(reply);
-        return res.json({ reply, transcription: isAudio ? text : undefined });
+      // Wishlist (módulo 🎁): agregar, quitar, ver o repartir — determinista, sin IA.
+      if (/wish\s*list|lista\s+de\s+deseos/i.test(input)) {
+        const wl = await asesorLocal(phone, input);
+        if (wl) {
+          reply = wl;
+          await guardarMensaje(phone, 'assistant', reply);
+          _resolveInFlight(reply);
+          return res.json({ reply, transcription: isAudio ? text : undefined });
+        }
       }
 
-      const { intent, items } = await withTimeout(
+      const ext = await withTimeout(
         extractIntentBatch(input, phone),
         45000, // lotes grandes (10+ gastos en un solo mensaje) pueden tardar más de 12s en Gemini
-        { intent: 'CONSULTA', items: [] }
+        { intent: 'CONSULTA', items: [], iaError: 'timeout' }
       );
+      const { intent, items } = ext;
 
       if (['REGISTRO', 'EDICION', 'ELIMINACION'].includes(intent) && items.length > 0) {
         const execs = [];
@@ -4142,13 +4083,15 @@ No expliques nada, devuelve solo esa línea.`
           execs.push({ item, result });
         }
         reply = buildWebChatReply(execs);
+      } else if (ext.iaError) {
+        // La IA no respondió: el asesor local toma el mensaje (registra, borra, Wishlist, estadísticas, consejos)
+        reply = (await asesorLocal(phone, input, { sinIA: true })) || _asAyuda(true);
       } else {
         const sysBlocks = await buildSystemPrompt(user, intent);
-        reply = await withTimeout(
-          callIA(user, sysBlocks, input, phone, true),
-          22000,
-          '⚠️ Gemini tardó demasiado en responder. Intenta de nuevo, o escribe "gasté [monto] en [concepto]" para registrar directo.'
-        );   // direct=true → registros sin menú
+        let ia = null;
+        try { ia = await withTimeout(callIA(user, sysBlocks, input, phone, true), 22000, null); }   // direct=true → registros sin menú
+        catch (e) { console.error('callIA (chat-web):', e.message); }
+        reply = ia || (await asesorLocal(phone, input, { sinIA: true })) || _asAyuda(true);
       }
     }
 
@@ -4161,7 +4104,8 @@ No expliques nada, devuelve solo esa línea.`
     console.error('chat-web error:', detail);
     const is429 = /429|quota|Too Many Requests/i.test(e.message || '');
     if (is429) {
-      const friendlyMsg = '⚠️ Gemini está al límite de cuota por ahora. Para registrar gastos escribe: *gasté [monto] en [concepto]* (se procesa sin IA).';
+      const local = await asesorLocal(phone, (message || '').trim(), { sinIA: true }).catch(() => null);
+      const friendlyMsg = local || _asAyuda(true);
       try { await guardarMensaje(phone, 'assistant', friendlyMsg); } catch {}
       _resolveInFlight(friendlyMsg);
       return res.json({ reply: friendlyMsg });
@@ -4600,6 +4544,295 @@ app.post('/api/wishlist/:id/comprar', async (req, res) => {
     res.json({ success: true, data, movimiento: mov });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
+
+// ── ASESOR LOCAL (funciona SIN IA) ───────────────────────────────────────────
+// Si Gemini (o cualquier IA) no responde, el chat sigue funcionando como asesor: registra y borra
+// movimientos, maneja la Wishlist, da estadísticas y recomendaciones calculadas directo de la base.
+// Todo es determinista: solo confirma lo que la base devolvió (ver feedback "Chat IA sin mentiras").
+const _anrm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+const _amoney = n => (n < 0 ? '−' : '') + fmt(Math.abs(n));
+const _anum = s => { const n = parseFloat(String(s).replace(/[$\s]/g, '').replace(/,(?=\d{3}\b)/g, '')); return isFinite(n) ? n : null; };
+const _aiso = d => d.toISOString().slice(0, 10);
+
+function _asRango(t) {
+  const hs = hoy(), d = new Date(hs + 'T12:00:00'), y = d.getFullYear(), mm = String(d.getMonth() + 1).padStart(2, '0');
+  if (/\bhoy\b/.test(t)) return { from: hs, to: hs, label: 'hoy' };
+  if (/\bayer\b/.test(t)) { const x = new Date(d); x.setDate(x.getDate() - 1); return { from: _aiso(x), to: _aiso(x), label: 'ayer' }; }
+  if (/semana pasada|semana anterior/.test(t)) {
+    const l = new Date(d); l.setDate(l.getDate() - ((l.getDay() + 6) % 7) - 7); const dm = new Date(l); dm.setDate(dm.getDate() + 6);
+    return { from: _aiso(l), to: _aiso(dm), label: 'la semana pasada' };
+  }
+  if (/\bsemana\b/.test(t)) { const l = new Date(d); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); return { from: _aiso(l), to: hs, label: 'esta semana' }; }
+  if (/quincena pasada|quincena anterior/.test(t)) {
+    const q = getQuincena(hs), x = new Date(q.inicio + 'T12:00:00'); x.setDate(x.getDate() - 1);
+    const p = getQuincena(_aiso(x)); return { from: p.inicio, to: p.fin, label: labelQuincena(p.key) };
+  }
+  if (/mes pasado|mes anterior/.test(t)) {
+    const p = new Date(y, d.getMonth() - 1, 1), u = new Date(y, d.getMonth(), 0);
+    return { from: `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}-01`, to: `${u.getFullYear()}-${String(u.getMonth() + 1).padStart(2, '0')}-${String(u.getDate()).padStart(2, '0')}`, label: 'el mes pasado' };
+  }
+  if (/\b(mes|mensual)\b/.test(t)) return { from: `${y}-${mm}-01`, to: hs, label: 'este mes' };
+  if (/\b(ano|anual)\b/.test(t)) return { from: `${y}-01-01`, to: hs, label: 'este año' };
+  const q = getQuincena(hs);
+  return { from: q.inicio, to: q.fin, label: 'esta quincena' };
+}
+
+async function _asDatos(phone) {
+  const d = new Date(hoy() + 'T12:00:00'); d.setMonth(d.getMonth() - 13);
+  const [{ data: movs }, { data: u }] = await Promise.all([
+    sb.from('movimientos').select('id,tipo,monto,categoria,concepto,comentarios,medio_pago,fecha,created_at')
+      .eq('user_phone', phone).is('deleted_at', null).gte('fecha', _aiso(d)).lte('fecha', hoy()).limit(5000),
+    sb.from('usuarios').select('external_refs, nombre').eq('telefono', phone).maybeSingle(),
+  ]);
+  return { movs: (movs || []).map(m => ({ ...m, monto: Number(m.monto) || 0 })), refs: u?.external_refs || {}, nombre: u?.nombre || '' };
+}
+const _asEsAhorro = m => /\bahorro\b/i.test(m.concepto || '') || /\bahorro\b/i.test(m.comentarios || '');
+const _asSum = a => a.reduce((s, m) => s + (m.monto || 0), 0);
+const _asEn = (movs, r) => movs.filter(m => m.fecha >= r.from && m.fecha <= r.to);
+
+// Sobrante real acumulado de quincenas cerradas desde refs.remanente_desde (mismo criterio que la app).
+function _asRemanente(D) {
+  const actual = getQuincena(hoy());
+  let q = getQuincena(D.refs.remanente_desde || actual.inicio), rem = 0;
+  for (let i = 0; i < 48 && q.key !== actual.key && q.inicio < actual.inicio; i++) {
+    const m = _asEn(D.movs, { from: q.inicio, to: q.fin });
+    rem = Math.max(0, rem + _asSum(m.filter(x => x.tipo === 'INGRESO')) - _asSum(m.filter(x => x.tipo === 'GASTO')));
+    q = siguienteQuincena(q);
+  }
+  return Math.round(rem * 100) / 100;
+}
+
+function _asAyuda(sinIA) {
+  return `${sinIA ? '⚠️ La IA no está disponible ahorita, pero sigo funcionando como tu asesor. ' : ''}Puedo ayudarte con:
+• *Registrar*: "gasté 120 en tacos con débito", "me pagaron 14200 de sueldo", varias líneas a la vez
+• *Borrar*: "borra el último gasto", "elimina el gasto de tacos", "deshacer"
+• *Wishlist*: "agrega a mi wishlist audífonos 1500", "quita audífonos de la wishlist", "mi wishlist"
+• *Estadísticas*: "¿cuánto gasté en comida este mes?", "¿cómo voy?", "¿en qué gasto más?", "mis saldos"
+• *Consejos*: "dame recomendaciones"`;
+}
+
+// Gastos/ingresos que se pueden registrar sin IA. Devuelve items de executeDbAction o null.
+function _asItemsRegistro(text) {
+  const hs = hoy();
+  const batch = tryParseBatch(text, hs);
+  if (batch?.items?.length) return batch.items;
+  const t = text.trim();
+  let m;
+  const SPEND = /^(?:hoy\s+)?(?:gast[eé]|pagu[eé]|compr[eé])\s+\$?\s*([\d.,]+)\s+(?:en|de|por)\s+(.+?)(?:\s+con\s+(.+))?$/i;
+  if ((m = t.match(SPEND))) {
+    const monto = _anum(m[1]); if (!monto) return null;
+    const medio = m[3] ? (/(pluxee|vales)/i.test(m[3]) ? 'Pluxee' : /banamex/i.test(m[3]) ? 'Débito Banamex' : /revolut/i.test(m[3]) ? 'Débito Revolut' : /d[eé]bito|tarjeta/i.test(m[3]) ? 'débito' : /transfer/i.test(m[3]) ? 'transferencia' : 'efectivo') : 'efectivo';
+    return [{ tabla: 'movimientos', accion: 'crear', datos: { tipo: 'GASTO', categoria: 'OTROS', concepto: m[2].trim(), monto, medio_pago: medio, fecha: hs } }];
+  }
+  const INC = /^(?:me\s+(?:pagaron|depositaron|transfirieron|dieron|lleg[oó]|llegaron)|recib[ií]|cobr[eé]|ingres[eé]|ingreso\s+de|entr[oó]|llegaron)\s+(?:(?:el|la|los|las|mi)\s+)?(?:\w+\s+)?\$?\s*([\d.,]+)(?:\s+(?:de|del|por|en)\s+(.+))?$/i;
+  if ((m = t.match(INC))) {
+    const monto = _anum(m[1]); if (!monto) return null;
+    const desc = (m[2] || (/\bvales\b/i.test(t) ? 'Vales' : /sueldo|quincena|n[oó]mina/i.test(t) ? 'Sueldo' : 'Ingreso')).trim();
+    const medio = /(pluxee|vales)/i.test(t) ? 'Pluxee' : /efectivo/i.test(t) ? 'efectivo' : 'transferencia';
+    return [{ tabla: 'movimientos', accion: 'crear', datos: { tipo: 'INGRESO', categoria: 'Ingresos', concepto: desc.charAt(0).toUpperCase() + desc.slice(1), monto, medio_pago: medio, fecha: hs } }];
+  }
+  return null;
+}
+
+async function _asBorrar(phone, text, t) {
+  if (/^(deshacer|deshaz|undo)\b/.test(t)) return await undoLastAction(phone);
+  const tipo = /\bingreso/.test(t) ? 'INGRESO' : /\bgasto/.test(t) ? 'GASTO' : null;
+  let q = sb.from('movimientos').select('id,tipo,monto,concepto,fecha,created_at').eq('user_phone', phone).is('deleted_at', null).order('created_at', { ascending: false }).limit(200);
+  if (tipo) q = q.eq('tipo', tipo);
+  const { data: rows } = await q;
+  if (!rows?.length) return '❌ No encontré movimientos para borrar.';
+  let obj = null;
+  if (/\b(ultimo|ultima)\b/.test(t)) obj = rows[0];
+  else {
+    const monto = (t.match(/\b(\d+(?:\.\d+)?)\b/) || [])[1];
+    const term = t.replace(/\b(borra|borrar|elimina|eliminar|quita|quitar|el|la|los|las|un|una|de|del|gasto|ingreso|movimiento|registro|por|\d+(?:\.\d+)?)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!term && !monto) return '¿Cuál borro? Dime "borra el último gasto" o "elimina el gasto de tacos".';
+    const cand = rows.filter(r => (!term || _anrm(r.concepto).includes(term)) && (!monto || Number(r.monto) === Number(monto)));
+    if (!cand.length) return `❌ No encontré un movimiento que coincida con "${term || monto}". No borré nada.`;
+    obj = cand[0];
+  }
+  const res = await executeDbAction(phone, { tabla: 'movimientos', accion: 'eliminar', id: obj.id, texto_original: text }, 'web');
+  if (String(res).startsWith('❌')) return res;
+  return `🗑️ Borré: ${obj.tipo === 'INGRESO' ? 'ingreso' : 'gasto'} "${obj.concepto || '—'}" de ${fmt(obj.monto)} (${obj.fecha}). Escribe *deshacer* si fue un error.`;
+}
+
+async function _asWishlist(phone, text, t) {
+  const quitar = /\b(quita|quitar|elimina|eliminar|borra|borrar|saca|sacar)\b/.test(t);
+  const listar = /\b(muestra|mostrar|ver|mira|cual|cuales|que hay|lista|mi|mis)\b/.test(t) && !/\d/.test(t) && !quitar;
+  const repartir = /\b(reparte|repartir|distribuye|distribuir|agenda|agendar|acomoda)\b/.test(t);
+  const { data: rows } = await sb.from('wishlist').select('*').eq('user_phone', phone).is('deleted_at', null).order('created_at', { ascending: false });
+  const vivos = (rows || []).filter(r => r.estado !== 'comprado');
+
+  if (quitar) {
+    const term = t.replace(/\b(quita|quitar|elimina|eliminar|borra|borrar|saca|sacar|de|del|la|el|mi|wish\s*list|lista de deseos)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    const cand = vivos.filter(r => term && _anrm(r.nombre).includes(term));
+    if (!cand.length) return `❌ No encontré "${term}" en tu Wishlist. No borré nada.`;
+    if (cand.length > 1) return `Encontré ${cand.length}: ${cand.map(c => `"${c.nombre}"`).join(', ')}. ¿Cuál quito? Escribe el nombre completo.`;
+    const row = cand[0];
+    if (row.quincena_key) { const refs = await wlGetRefs(phone); if (wlQuitarDePresupuesto(refs, row.quincena_key, row.id)) await wlSaveRefs(phone, refs); }
+    const { error } = await sb.from('wishlist').update({ deleted_at: new Date().toISOString() }).eq('id', row.id).eq('user_phone', phone);
+    if (error) return `❌ No pude quitarlo: ${error.message}`;
+    return `🗑️ Quité "${row.nombre}" de tu Wishlist${row.quincena_key ? ` (y de ${labelQuincena(row.quincena_key)} en Presupuesto)` : ''}.`;
+  }
+
+  const items = parseWishlist(text) || (() => {
+    const m = text.match(/(?:agrega|agregar|anota|anotar|añade|añadir|pon|mete)\s+(?:a|en)\s+(?:mi\s+)?(?:wish\s*list|lista de deseos)\s*:?\s*(.+)$/i)
+          || text.match(/(?:agrega|agregar|anota|añade|pon|mete)\s+(.+?)\s+(?:a|en)\s+(?:mi\s+)?(?:wish\s*list|lista de deseos)$/i);
+    if (!m) return null;
+    return m[1].replace(/(\d),(?=\d{3}\b)/g, '$1').split(/,|;|\n| y (?=[^\d]*\d)/).map(s => s.trim()).filter(Boolean).map(l => {
+      const mm = l.match(/^(.*?)[\s:–-]*\$?\s*(\d[\d.]*)\s*(?:pesos|mxn)?$/i);
+      return mm ? { descripcion: mm[1].trim(), monto: parseFloat(mm[2]) } : { descripcion: l, monto: 0 };
+    }).filter(x => x.descripcion);
+  })();
+
+  if (items && items.length) {
+    const nuevos = [];
+    for (const it of items) {
+      const d = wlLimpiar({ nombre: it.descripcion, precio: it.monto, categoria: it.categoria || 'Personales' });
+      if (!d.nombre) continue;
+      const { data, error } = await sb.from('wishlist').insert({ user_phone: phone, ...d }).select().single();
+      if (error || !data?.id) return `❌ No pude agregar "${d.nombre}" a tu Wishlist${nuevos.length ? ` (sí agregué: ${nuevos.map(n => n.nombre).join(', ')})` : ''}. ${error?.message || ''}`;
+      nuevos.push(data);
+    }
+    let out = `🎁 Agregué ${nuevos.length} a tu Wishlist:\n${nuevos.map(n => `  • ${n.nombre}${Number(n.precio) ? ` — ${fmt(n.precio)}` : ' — sin precio'}`).join('\n')}`;
+    if (repartir) out += '\n\n' + await _asRepartirWishlist(phone, nuevos);
+    else out += '\n_Ábrela con el 🎁 de Inicio para agendarlos en una quincena._';
+    return out;
+  }
+  if (repartir) return await _asRepartirWishlist(phone, vivos.filter(r => r.estado === 'pendiente'));
+  if (listar || /wish\s*list|lista de deseos/.test(t)) {
+    if (!rows?.length) return '🎁 Tu Wishlist está vacía. Agrega algo: "agrega a mi wishlist audífonos 1500".';
+    const tot = e => (rows || []).filter(r => r.estado === e).reduce((a, r) => a + Number(r.precio || 0), 0);
+    return `🎁 *Tu Wishlist*\n${vivos.map(r => `  • ${r.nombre}${Number(r.precio) ? ` — ${fmt(r.precio)}` : ''}${r.estado === 'agendado' ? ` (📅 ${labelQuincena(r.quincena_key)})` : ''}`).join('\n') || '  (todo comprado)'}\nPendiente ${fmt(tot('pendiente'))} · Agendado ${fmt(tot('agendado'))} · Comprado ${fmt(tot('comprado'))}`;
+  }
+  return null;
+}
+
+// Reparte deseos pendientes en las próximas quincenas sin pasar del 80% de lo libre (mismo
+// criterio de siempre) y los deja AGENDADOS en el módulo Wishlist + Presupuesto.
+async function _asRepartirWishlist(phone, pendientes) {
+  const conPrecio = pendientes.filter(r => Number(r.precio) > 0);
+  if (!conPrecio.length) return 'No hay deseos pendientes con precio para repartir.';
+  const refs = await wlGetRefs(phone);
+  const { plan, sinAcomodar } = planearWishlist(refs, conPrecio.map(r => ({ ...r, monto: Number(r.precio), descripcion: r.nombre })), siguienteQuincena(getQuincena(hoy())));
+  for (const p of plan) for (const it of p.items) wlPonerEnPresupuesto(refs, p.qKey, it);
+  const { error } = await wlSaveRefs(phone, refs);
+  if (error) return `❌ No pude agendarlos: ${error.message}`;
+  for (const p of plan) for (const it of p.items)
+    await sb.from('wishlist').update({ estado: 'agendado', quincena_key: p.qKey, updated_at: new Date().toISOString() }).eq('id', it.id).eq('user_phone', phone);
+  let out = plan.length ? `📅 Los agendé así:\n${plan.map(p => `  • ${labelQuincena(p.qKey)}: ${p.items.map(i => i.nombre).join(', ')}`).join('\n')}` : '';
+  if (sinAcomodar.length) out += `${out ? '\n' : ''}⚠️ Sin espacio en las próximas quincenas: ${sinAcomodar.map(i => i.nombre).join(', ')} (siguen pendientes).`;
+  return out;
+}
+
+async function _asEstadistica(phone, t) {
+  const D = await _asDatos(phone);
+  const r = _asRango(t);
+  const en = _asEn(D.movs, r);
+  const gas = en.filter(m => m.tipo === 'GASTO'), ing = en.filter(m => m.tipo === 'INGRESO');
+
+  // Saldos de cuentas
+  if (/\b(saldo|saldos|cuentas|cuanto tengo|efectivo|banamex|revolut|vales|pluxee)\b/.test(t) && !/\bgast/.test(t)) {
+    const c = D.refs.cuentas || {};
+    const filtro = Object.entries(CUENTAS_LABEL).filter(([k, l]) => _anrm(l).split(/[ ·]+/).some(w => w.length > 3 && t.includes(w)) || (k === 'revolut' && /ahorro/.test(t)));
+    const lista = (filtro.length ? filtro : Object.entries(CUENTAS_LABEL)).map(([k, l]) => `  • ${l}: ${_amoney(Number(c[k]) || 0)}`);
+    const total = Object.keys(CUENTAS_LABEL).reduce((a, k) => a + (Number(c[k]) || 0), 0);
+    return `💳 *Tus saldos*\n${lista.join('\n')}${filtro.length ? '' : `\n  Total: ${fmt(total)}`}`;
+  }
+  // ¿En qué gasto más?
+  if (/(en que gasto mas|en que se me va|top|mas gasto|gasto mas|mayores gastos)/.test(t)) {
+    const real = gas.filter(m => !_asEsAhorro(m)), ahoT = _asSum(gas.filter(_asEsAhorro));
+    if (!real.length) return `Sin egresos registrados ${r.label}.`;
+    const tot = _asSum(real);
+    const cats = {}; real.forEach(m => { cats[m.categoria || 'OTROS'] = (cats[m.categoria || 'OTROS'] || 0) + m.monto; });
+    const conc = {}; real.forEach(m => { const k = (m.concepto || '—').replace(/^\[ppto\]\s*/i, ''); conc[k] = (conc[k] || 0) + m.monto; });
+    const top = (o, n) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n);
+    return `📊 *¿En qué se va tu dinero?* (${r.label}, ${fmt(tot)})\nPor categoría:\n${top(cats, 5).map(([k, v]) => `  • ${k}: ${fmt(v)} (${Math.round(v / tot * 100)}%)`).join('\n')}\nConceptos más caros:\n${top(conc, 5).map(([k, v]) => `  • ${k}: ${fmt(v)}`).join('\n')}${ahoT > 0 ? `\nAdemás apartaste ${fmt(ahoT)} a ahorro (no cuenta como gasto).` : ''}`;
+  }
+  // ¿Cuánto gasté (en X)?
+  if (/\bgast|\begres|\bpague|\bcompre/.test(t)) {
+    const cat = CATEGORIAS.find(c => t.includes(_anrm(c)));
+    const mEn = t.match(/\ben\s+(?:el\s+|la\s+|los\s+|las\s+)?([a-z0-9ñ ]+?)(?:\s+(?:hoy|ayer|esta|este|el|la|en|del|de)\b|[?¿.!]|$)/);
+    const term = !cat && mEn ? mEn[1].trim() : '';
+    const f = cat ? gas.filter(m => (m.categoria || '') === cat) : term && !/^(total|general)$/.test(term) ? gas.filter(m => _anrm(`${m.concepto} ${m.comentarios}`).includes(term)) : gas;
+    const etiqueta = cat ? `en ${cat}` : term ? `en "${term}"` : 'en total';
+    if (!f.length) return `No encontré egresos ${etiqueta} ${r.label}.`;
+    const tot = _asSum(f), dias = Math.max(1, Math.round((Math.min(new Date(r.to + 'T12:00:00'), new Date(hoy() + 'T12:00:00')) - new Date(r.from + 'T12:00:00')) / 86400000) + 1);
+    const aho = _asSum(f.filter(_asEsAhorro));
+    return `💸 Gastaste ${fmt(tot)} ${etiqueta} ${r.label} (${f.length} movimiento${f.length !== 1 ? 's' : ''}, ≈ ${fmt(tot / dias)} por día).${aho > 0 ? `\nDe eso, ${fmt(aho)} fue transferencia a ahorro.` : ''}`;
+  }
+  // ¿Cuánto me entró?
+  if (/\bingres|\bgane|\bentro|\bme pagaron|\bcobre/.test(t)) {
+    if (!ing.length) return `Sin ingresos registrados ${r.label}.`;
+    const tot = _asSum(ing);
+    return `💰 Ingresaron ${fmt(tot)} ${r.label}:\n${ing.sort((a, b) => b.monto - a.monto).slice(0, 8).map(m => `  • ${m.concepto || 'Ingreso'}: ${fmt(m.monto)} (${m.fecha})`).join('\n')}`;
+  }
+  // ¿Cómo voy? / balance / resumen (quincena actual)
+  if (/(como voy|balance|resumen|cuanto me queda|me alcanza|como estoy|estado)/.test(t)) {
+    const q = getQuincena(hoy()), qm = _asEn(D.movs, { from: q.inicio, to: q.fin });
+    const i = _asSum(qm.filter(m => m.tipo === 'INGRESO')), g = _asSum(qm.filter(m => m.tipo === 'GASTO')), rem = _asRemanente(D), bal = i + rem - g;
+    const esp = gastosEsperadosQuincena(D.refs, q.key).reduce((a, x) => a + (Number(x.monto) || 0), 0);
+    const diasRest = Math.max(1, Math.round((new Date(q.fin + 'T12:00:00') - new Date(hoy() + 'T12:00:00')) / 86400000) + 1);
+    return `📌 *${labelQuincena(q.key)}*\n  Ingresos: ${fmt(i)}${rem > 0 ? ` + remanente ${fmt(rem)}` : ''}\n  Egresos: ${fmt(g)}${esp > 0 ? ` (presupuesto ${fmt(esp)})` : ''}\n  *Balance: ${_amoney(bal)}*\n${bal > 0 ? `Te quedan ${diasRest} día${diasRest !== 1 ? 's' : ''}: puedes gastar ≈ ${fmt(bal / diasRest)} por día sin quedar en negativo.` : `Vas en negativo: evita gastos no esenciales los ${diasRest} días que faltan.`}`;
+  }
+  return null;
+}
+
+async function _asConsejos(phone) {
+  const D = await _asDatos(phone);
+  const q = getQuincena(hoy()), qm = _asEn(D.movs, { from: q.inicio, to: q.fin });
+  const ing = _asSum(qm.filter(m => m.tipo === 'INGRESO')), gAll = qm.filter(m => m.tipo === 'GASTO');
+  const aho = _asSum(gAll.filter(_asEsAhorro)), gas = _asSum(gAll) - aho, rem = _asRemanente(D), bal = ing + rem - gas - aho;
+  const diasRest = Math.max(1, Math.round((new Date(q.fin + 'T12:00:00') - new Date(hoy() + 'T12:00:00')) / 86400000) + 1);
+  const tips = [];
+  if (bal < 0) tips.push(`🔴 Vas ${fmt(-bal)} en negativo esta quincena. Prioriza solo lo esencial los ${diasRest} días que faltan.`);
+  else tips.push(`🟢 Te quedan ${fmt(bal)}: ≈ ${fmt(bal / diasRest)} por día hasta el ${q.fin.slice(8)} sin quedar en negativo.`);
+  const cats = {}; gAll.filter(m => !_asEsAhorro(m)).forEach(m => { cats[m.categoria || 'OTROS'] = (cats[m.categoria || 'OTROS'] || 0) + m.monto; });
+  const top = Object.entries(cats).sort((a, b) => b[1] - a[1])[0];
+  if (top && gas > 0 && top[1] / gas > 0.35) tips.push(`📌 ${top[0]} se lleva el ${Math.round(top[1] / gas * 100)}% de tus egresos (${fmt(top[1])}). Ponle un tope esta quincena.`);
+  const mesIni = hoy().slice(0, 8) + '01', mesM = _asEn(D.movs, { from: mesIni, to: hoy() });
+  const hormiga = mesM.filter(m => m.tipo === 'GASTO' && m.monto < 100 && !_asEsAhorro(m));
+  if (hormiga.length >= 8) tips.push(`🐜 ${hormiga.length} compras chicas suman ${fmt(_asSum(hormiga))} este mes. Juntas pesan más de lo que parece.`);
+  if (ing > 0) {
+    const tasa = Math.min(100, aho / ing * 100);
+    tips.push(tasa >= 20 ? `💚 Esta quincena apartaste el ${tasa.toFixed(0)}% de tus ingresos a ahorro. ¡Excelente ritmo!`
+                         : `💡 Esta quincena apartaste el ${tasa.toFixed(0)}% de tus ingresos a ahorro. Apunta al 10–20% apenas cobres.`);
+  }
+  const c = D.refs.cuentas || {}, dinero = Object.keys(CUENTAS_LABEL).reduce((a, k) => a + (Number(c[k]) || 0), 0);
+  const tres = [1, 2, 3].map(k => { const x = new Date(hoy() + 'T12:00:00'); x.setMonth(x.getMonth() - k, 1); const ini = _aiso(x).slice(0, 8) + '01'; const fin = _aiso(new Date(x.getFullYear(), x.getMonth() + 1, 0)); return _asSum(_asEn(D.movs, { from: ini, to: fin }).filter(m => m.tipo === 'GASTO' && !_asEsAhorro(m))); }).filter(v => v > 0);
+  if (tres.length && dinero > 0) {
+    const meses = dinero / (tres.reduce((a, v) => a + v, 0) / tres.length);
+    if (meses < 3) tips.push(`🛟 Tu dinero en cuentas cubre ${meses.toFixed(1)} meses de gasto. La meta sana es un colchón de 3 a 6 meses.`);
+  }
+  const { data: wl } = await sb.from('wishlist').select('precio,estado,created_at').eq('user_phone', phone).is('deleted_at', null).eq('estado', 'pendiente');
+  if (wl?.length) tips.push(`🎁 Tienes ${wl.length} deseo${wl.length !== 1 ? 's' : ''} pendiente${wl.length !== 1 ? 's' : ''} (${fmt(wl.reduce((a, w) => a + Number(w.precio || 0), 0))}). Regla de 30 días: compra solo lo que sigas queriendo después de un mes.`);
+  return `🧭 *Recomendaciones de tu asesor*\n${tips.slice(0, 6).map(x => `• ${x}`).join('\n')}`;
+}
+
+// Punto de entrada. opts.soloConsulta: no escribe nada (WhatsApp sin IA). Devuelve texto o null.
+async function asesorLocal(phone, text, opts = {}) {
+  const t = _anrm(text);
+  if (!t) return null;
+  if (/^(ayuda|help|menu|\?|que puedes hacer|comandos|como te uso)\b/.test(t)) return _asAyuda(opts.sinIA);
+  if (/wish\s*list|lista de deseos/.test(t) && !opts.soloConsulta) {
+    const r = await _asWishlist(phone, text, t); if (r) return r;
+  }
+  if (/^(deshacer|deshaz|undo)\b/.test(t) || (/\b(borra|borrar|elimina|eliminar)\b/.test(t) && /\b(gasto|ingreso|movimiento|ultimo|ultima)\b/.test(t))) {
+    return opts.soloConsulta ? null : await _asBorrar(phone, text, t);
+  }
+  if (/\b(consejo|consejos|recomienda|recomendacion|recomendaciones|tips?|como ahorro|ayudame a ahorrar|que me recomiendas)\b/.test(t)) return await _asConsejos(phone);
+  if (!opts.soloConsulta) {
+    const items = _asItemsRegistro(text);
+    if (items) {
+      const execs = [];
+      for (const it of items) { const item = { ...it, texto_original: text }; execs.push({ item, result: await executeDbAction(phone, item, 'web') }); }
+      return buildWebChatReply(execs);
+    }
+  }
+  const est = await _asEstadistica(phone, t);
+  if (est) return est;
+  return null;
+}
 
 app.get('/api/health', (_req, res) => res.json({ status: 'Us v6 ✅', build: 'quincenal-panel-full' }));
 
