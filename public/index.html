@@ -718,18 +718,28 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-pay-icons{display:flex;justify-content:center;gap:14px}
 .retiro-ico.on{background:var(--bg-surface-2);border-color:var(--color-warning)}
 .tarj-ico.on{background:var(--bg-surface-2);border-color:var(--accent-primary)}
-/* 💳 Pluxee | Débito: dos mitades iguales, centradas */
-.tarj-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%;max-width:440px}
-.tarj-col{min-width:0;text-align:center;padding:12px 10px;border-radius:var(--radius-lg);
+/* 🏦 Efectivo | 🎫 Pluxee | 💳 Débito: tarjetas idénticas que reparten el ancho por igual
+   (las que están contraídas no ocupan lugar, así las visibles siempre quedan centradas) */
+.tarj-card{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;width:100%;max-width:640px}
+.tarj-col{container-type:inline-size;flex:1 1 150px;max-width:210px;min-width:0;text-align:center;padding:12px 10px;border-radius:var(--radius-lg);
   background:var(--bg-surface);border:1px solid var(--border-default)}
+/* Total de la quincena: misma familia visual, en una sola línea */
+.q-pay-wrap .q-total-widget{margin-top:0;width:100%;max-width:640px;padding:10px 16px;border-width:1px;gap:10px;flex-wrap:nowrap}
+.q-pay-wrap .q-total-widget .qt-lbl{font-size:11px;font-weight:700;letter-spacing:.05em}
+.q-pay-wrap .q-total-widget .qt-val{font-size:20px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tarj-lbl{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em}
-.tarj-val{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-1);white-space:nowrap;margin:2px 0}
+.tarj-val{font-size:clamp(11px,15cqi,20px);font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-1);white-space:nowrap;margin:2px 0}
 .tarj-sub{font-size:11px;color:var(--text-3);line-height:1.35}
 .tarj-sub.neg{color:var(--color-expense);font-weight:700}
 .tarj-sub.pos{color:var(--color-income);font-weight:700}
-.retiro-card{display:inline-flex;align-items:center;padding:8px 16px;border-radius:var(--radius-pill);
-  background:var(--bg-surface);border:1px solid var(--color-warning)}
-.retiro-val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--color-warning)}
+@media(max-width:899px){
+  /* Móvil: las tres tarjetas caben en una fila (cada una ≈ un tercio) */
+  .tarj-card{gap:6px}
+  .tarj-col{flex:1 1 84px;padding:10px 4px}
+  .tarj-lbl{font-size:10px;letter-spacing:.02em}
+  .tarj-n{display:none}
+  .tarj-sub{font-size:10px}
+}
 /* Gastos esta quincena: solo icono, mismo estilo (.mini-tile) que los emojis de arriba */
 .q-dash-btn.mini-tile{width:calc((100% - 40px)/5);padding:0;font-size:26px;
   flex-direction:row;gap:0;color:inherit;font-family:inherit}
@@ -3906,13 +3916,9 @@ function rQuincenaPanel(ctx) {
   S._gastosQRows[ctx]   = gasEsp;
   S._ingresosQRows[ctx] = ingEspQ;
 
-  // Retiro de efectivo = gastos fijos presupuestados marcados como efectivo
-  const retiroEfectivo = gasEsp
-    .filter(g => (fpMap[g.descripcion] || g.forma_pago || '') === 'efectivo')
-    .reduce((a, g) => a + (g.monto || 0), 0);
-
-  // Pagos con tarjeta (Pluxee y débito): total presupuestado, lo que falta por pagar y, en la
-  // quincena actual, si el saldo de esa cuenta alcanza para lo pendiente. El efectivo va aparte (🏦).
+  // Resumen por forma de pago (🏦 efectivo / 💳 Pluxee y débito): total presupuestado, lo que falta
+  // por pagar y, en la quincena actual, si el saldo de esa cuenta alcanza para lo pendiente.
+  // Las tres tarjetas comparten estilo; el efectivo es el "retiro" que hay que sacar del cajero.
   const _pagadoQ = g => qMovs.some(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + g.descripcion);
   const _porMedio = medio => {
     const items = gasEsp.filter(g => !g._isDinerito && !g._isNiditoComp && (fpMap[g.descripcion] || g.forma_pago || '') === medio);
@@ -3923,16 +3929,17 @@ function rQuincenaPanel(ctx) {
     };
   };
   const _cts = refs.cuentas || {};
-  const tarjCol = (emoji, lbl, p, saldo) => `<div class="tarj-col" title="${p.n} gasto${p.n !== 1 ? 's' : ''} con ${lbl}">
-      <div class="tarj-lbl">${emoji} ${lbl}${p.n ? ' · ' + p.n : ''}</div>
+  const tarjCol = (emoji, lbl, p, saldo, id, open) => `<div class="tarj-col" id="${id}" style="display:${open ? '' : 'none'}" title="${p.n} gasto${p.n !== 1 ? 's' : ''} con ${lbl}">
+      <div class="tarj-lbl">${emoji} ${lbl}${p.n ? '<span class="tarj-n"> · ' + p.n + '</span>' : ''}</div>
       <div class="tarj-val">${p.n ? fmt(p.total) : '—'}</div>
       <div class="tarj-sub">${!p.n ? 'sin gastos' : p.pend > 0 ? 'por pagar ' + fmt(p.pend) : 'todo pagado ✓'}</div>
       ${qOff === 0 && p.pend > 0 ? `<div class="tarj-sub">saldo ${fmt(saldo)}</div>${p.pend > saldo
         ? `<div class="tarj-sub neg">faltan ${fmt(p.pend - saldo)}</div>`
         : `<div class="tarj-sub pos">alcanza ✓</div>`}` : ''}
     </div>`;
-  const tarjHTML = tarjCol('🎫', 'Pluxee', _porMedio('pluxee'), Number(_cts.pluxee) || 0)
-                 + tarjCol('💳', 'Débito', _porMedio('tarjeta_debito'), (Number(_cts.banamex) || 0) + (Number(_cts.revolut_debito) || 0));
+  const tarjHTML = tarjCol('🏦', 'Efectivo', _porMedio('efectivo'), Number(_cts.efectivo) || 0, `retiro-card-${ctx}`, S._retiroOpen)
+                 + tarjCol('🎫', 'Pluxee', _porMedio('pluxee'), Number(_cts.pluxee) || 0, `tarj-card-px-${ctx}`, S._tarjOpen)
+                 + tarjCol('💳', 'Débito', _porMedio('tarjeta_debito'), (Number(_cts.banamex) || 0) + (Number(_cts.revolut_debito) || 0), `tarj-card-db-${ctx}`, S._tarjOpen);
 
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
@@ -4012,10 +4019,11 @@ function rQuincenaPanel(ctx) {
         <button type="button" class="mf-ico tarj-ico${S._tarjOpen?' on':''}" id="tarj-btn-${ctx}" onclick="toggleQPay('tarj')"
           title="Pagos con Pluxee y débito" aria-label="Pagos con Pluxee y débito" aria-expanded="${S._tarjOpen?'true':'false'}">💳</button>
       </div>
-      <div class="retiro-card" id="retiro-card-${ctx}" style="display:${S._retiroOpen?'':'none'}" title="Gastos marcados como efectivo">
-        <span class="retiro-val">${fmt(retiroEfectivo)}</span>
+      <div class="tarj-card">${tarjHTML}</div>
+      <div class="q-total-widget">
+        <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
+        <span class="qt-val red">${fmt(totalGasEsp)}</span>
       </div>
-      <div class="tarj-card" id="tarj-card-${ctx}" style="display:${S._tarjOpen?'':'none'}">${tarjHTML}</div>
     </div>` : ''}
     <div style="display:flex;justify-content:center;margin-bottom:14px">
       <button class="btn btn-accent" style="padding:11px 22px;font-size:15px;font-weight:700;gap:8px" onclick="oAddProxGasto()"><i class="ti ti-plus" style="font-size:17px"></i> Registrar Próximo Gasto</button>
@@ -4112,10 +4120,6 @@ function rQuincenaPanel(ctx) {
           </div>
         </div>`;
       }).join('')}
-    </div>
-    <div class="q-total-widget">
-      <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
-      <span class="qt-val red">${fmt(totalGasEsp)}</span>
     </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Aún no hay gastos registrados esta quincena. Usa el botón <strong>Registrar Próximo Gasto</strong> de arriba.</div>`}
     <div style="margin-top:10px;background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;border:1px solid var(--border-default)">
       <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:6px">Balance — ${qi.label}${ctBtns(qChId,LINE,'bar')}</div>
