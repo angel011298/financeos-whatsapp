@@ -617,7 +617,18 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 }
 .ptab:hover{color:var(--text-1);background:var(--bg-surface-3)}
 .ptab.act{background:var(--text-1);color:var(--bg-app);font-weight:500}
-.p-range{flex:1;text-align:center;font-size:var(--text-sm);font-weight:600;color:var(--text-1);min-width:120px;white-space:nowrap;text-transform:uppercase;letter-spacing:.03em}
+.p-range{flex:1;text-align:center;font-size:var(--text-sm);font-weight:600;color:var(--text-1);min-width:0;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:.03em}
+/* ‹ fecha › : las dos flechas son círculos iguales a ambos lados, así la fecha queda centrada */
+.p-nav{display:flex;align-items:center;gap:8px;flex:1 1 280px;min-width:0}
+.p-arrow{width:34px;height:34px;flex:0 0 34px;border-radius:50%;border:1px solid var(--border-default);
+  background:transparent;color:var(--text-2);display:flex;align-items:center;justify-content:center;
+  font-size:16px;cursor:pointer;padding:0;transition:background .15s}
+.p-arrow:hover{background:var(--bg-surface-2);color:var(--text-1)}
+.p-arrow:active{transform:scale(.92)}
+.p-range-btn{background:none;border:none;cursor:pointer;font-family:inherit;display:inline-flex;
+  align-items:center;justify-content:center;gap:5px;padding:0}
+.p-range-btn i{font-size:13px;color:var(--accent-primary);flex-shrink:0}
 
 /* ═══════════════════════════════════════════════════════ QUINCENAL PANEL */
 .q-panel{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px}
@@ -679,7 +690,8 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .f-pill.preset{font-weight:500}
 /* Barra de acciones de Movimientos: dos flechas (ingreso/gasto) + lupa + filtros.
    Todos los controles son círculos del mismo tamaño para que la fila quede simétrica. */
-.mf-bar{display:flex;align-items:center;gap:8px}
+.mf-bar{display:flex;align-items:center;justify-content:center;gap:14px}
+.mov-filter>.mf-bar{margin-bottom:0}   /* el espacio lo pone el panel de filtros solo cuando se abre */
 .mf-ico{width:38px;height:38px;flex:0 0 38px;padding:0;border-radius:50%;
   border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-2);
   display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;
@@ -702,8 +714,19 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 /* Botón minimalista de "Gastos esta quincena" en Inicio (centrado bajo los emojis) */
 .q-dash-wrap{display:flex;justify-content:center;gap:10px;margin:20px 0 10px}
 /* Retiro de efectivo: icono 🏦 que despliega el monto al lado (mismo círculo que .mf-ico) */
-.retiro-wrap{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.q-pay-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:14px}
+.q-pay-icons{display:flex;justify-content:center;gap:14px}
 .retiro-ico.on{background:var(--bg-surface-2);border-color:var(--color-warning)}
+.tarj-ico.on{background:var(--bg-surface-2);border-color:var(--accent-primary)}
+/* 💳 Pluxee | Débito: dos mitades iguales, centradas */
+.tarj-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%;max-width:440px}
+.tarj-col{min-width:0;text-align:center;padding:12px 10px;border-radius:var(--radius-lg);
+  background:var(--bg-surface);border:1px solid var(--border-default)}
+.tarj-lbl{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em}
+.tarj-val{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-1);white-space:nowrap;margin:2px 0}
+.tarj-sub{font-size:11px;color:var(--text-3);line-height:1.35}
+.tarj-sub.neg{color:var(--color-expense);font-weight:700}
+.tarj-sub.pos{color:var(--color-income);font-weight:700}
 .retiro-card{display:inline-flex;align-items:center;padding:8px 16px;border-radius:var(--radius-pill);
   background:var(--bg-surface);border:1px solid var(--color-warning)}
 .retiro-val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--color-warning)}
@@ -735,7 +758,6 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .mini-row,.mini-bal-wrap,.kpi[role=button]{cursor:pointer}
 /* ── Movimientos: Análisis visual plegable ──────────────────────────────────── */
 .mov-cbox-ttl{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.mov-cbox-sub{font-weight:500;color:var(--text-3)}
 .mov-cbox.collapsed .mov-cbox-body,.mov-cbox.collapsed .mov-cbox-pills{display:none}
 .mov-cbox-hdr{flex-wrap:wrap;gap:8px 12px}
 .mov-cbox-pills{flex-wrap:wrap}
@@ -750,6 +772,7 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 /* El título ya lo pone la ventana: no se repite el del módulo (queda su botón de acción a la derecha) */
 .tab.in-modal>.hdr{justify-content:flex-end}
 .tab.in-modal>.hdr>h2{display:none}
+.tab.in-modal>.hdr:not(:has(>:not(h2))){display:none}   /* solo traía el título: no deja hueco */
 .mf-ico{position:relative}
 .mf-ico.on{background:var(--bg-surface-2);border-color:var(--accent-primary)}
 /* ── WISHLIST ─────────────────────────────────────────────────────────────── */
@@ -761,7 +784,8 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
   padding:9px 6px;text-align:center;cursor:pointer;font-family:inherit;color:var(--text-1);transition:border-color .15s,background .15s}
 .wl-stat.on{border-color:var(--accent-primary);background:var(--bg-surface-2)}
 .wl-stat-l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
-.wl-stat-v{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
+.wl-stat{min-width:0;container-type:inline-size}
+.wl-stat-v{font-size:clamp(11px,13cqi,15px);font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap}
 .wl-stat-n{font-size:10.5px;color:var(--text-3)}
 .wl-add{display:flex;gap:8px}
 .wl-add input{min-width:0;padding:10px 12px;font-size:14px}
@@ -995,8 +1019,10 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .kpi-val{font-size:clamp(11px,8.2cqi,var(--text-lg))}
   .kpi{padding:10px 12px}
   /* ── Period selector */
-  .periodo-wrap{padding:6px 8px;gap:6px}
-  .periodo-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* Dos renglones centrados: píldoras arriba, ‹ fecha › abajo */
+  .periodo-wrap{padding:8px;gap:8px;flex-direction:column;align-items:stretch}
+  .periodo-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;align-self:center;max-width:100%}
+  .p-nav{flex:0 0 auto}
   .ptab{padding:5px 10px;font-size:12px}
   .p-range{font-size:12px}
   /* ── Quincena panel */
@@ -1028,6 +1054,8 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .nd-din-row{flex-wrap:wrap}
   /* ── Section header decoration */
   .sec-hdr-row::before,.sec-hdr-row::after{max-width:40px}
+  /* Títulos largos ("Proyectos y Metas del Nidito") parten renglón en vez de salirse */
+  .sec-hdr .sec-hdr-row h2{white-space:normal;text-align:center;justify-content:center}
   /* ── Chat mode: documento BLOQUEADO + chat anclado al visual viewport (recipe iOS Safari) */
   .chat-mode{position:fixed;inset:0;width:100%;overflow:hidden}
   .chat-mode #mobile-nav{display:none!important}
@@ -1437,14 +1465,6 @@ html.light #tab-dashboard.mini{
   transition:transform var(--t-fast) var(--ease-spring),border-color var(--t-fast),background var(--t-fast)}
 .mini-tile:active{transform:scale(.9)}
 .mini-tile:hover{border-color:var(--m-tile-hover)}
-.mini-fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));
-  bottom:calc(78px + env(safe-area-inset-bottom,0px));z-index:90;
-  width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
-  background:var(--accent-primary);color:var(--on-accent);font-size:30px;line-height:1;
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 8px 24px rgba(0,0,0,.28);
-  transition:transform var(--t-fast) var(--ease-spring)}
-.mini-fab:active{transform:scale(.9)}
 
 /* Ventana central para todo lo que se abre desde Inicio (hojas y módulos completos) */
 #dash-sheet{display:none;position:fixed;inset:0;z-index:160;background:rgba(0,0,0,0);
@@ -1463,8 +1483,12 @@ html.light #tab-dashboard.mini{
   color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 .ds-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 20px;flex:1}
 @media(max-width:899px){
-  #dash-sheet{padding:10px 8px calc(10px + env(safe-area-inset-bottom,0px))}
-  .ds-panel{max-height:calc(100svh - 24px - env(safe-area-inset-bottom,0px))}
+  /* Márgenes iguales arriba y abajo, libres de la barra de estado (hora/batería) y del indicador
+     de inicio: la ventana queda centrada respecto a la pantalla. El alto sale del propio
+     contenedor (100%), no de svh, que en la PWA de iOS no coincide con la pantalla real. */
+  #dash-sheet{--ds-gap:calc(max(env(safe-area-inset-top,0px),env(safe-area-inset-bottom,0px)) + 12px);
+    padding:var(--ds-gap) 10px}
+  .ds-panel{max-height:100%}
   .ds-head{padding:14px 16px 8px}.ds-body{padding:0 14px 16px}
 }
 body.sheet-locked{overflow:hidden}
@@ -1535,7 +1559,6 @@ body.sheet-locked{overflow:hidden}
     align-items:center;column-gap:22px;padding:22px 0}
   .mini-per{justify-content:flex-start;padding:0}
   .mini-addmov-btn{display:inline-flex}
-  .mini-fab{display:none}   /* el botón del header cubre su función en escritorio */
 
   /* Balance + Gastos + Ingresos en 3 columnas */
   .mini-top-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:stretch;margin:0 0 22px}
@@ -1547,7 +1570,7 @@ body.sheet-locked{overflow:hidden}
 
   /* Emojis en una sola fila, con etiqueta visible debajo (11 desde que Notas
      se integró al grid — antes eran 10). */
-  .mini-grid{grid-template-columns:repeat(9,minmax(0,1fr));gap:10px;margin:0 0 8px}
+  .mini-grid{grid-template-columns:repeat(10,minmax(0,1fr));gap:10px;margin:0 0 8px}
   .mini-tile{aspect-ratio:auto;flex-direction:column;gap:7px;padding:16px 6px 14px;font-size:24px}
   .mini-tile-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--text-2);
     text-align:center;line-height:1.2}
@@ -2906,10 +2929,13 @@ function periodoSelectorHTML() {
   return `<div class="periodo-wrap">
   <div class="periodo-tabs">${tipos.map(([l,v]) =>
     `<button class="ptab${S.periodo.tipo===v?' act':''}" onclick="setPeriodo('${v}')">${l}</button>`).join('')}</div>
-  <button class="btn btn-ghost btn-sm" onclick="navPeriodo(-1)"><i class="ti ti-chevron-left"></i></button>
-  <span class="p-range">${r.label}</span>
-  <button class="btn btn-ghost btn-sm" onclick="navPeriodo(1)"><i class="ti ti-chevron-right"></i></button>
-  ${S.periodo.offset !== 0 ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="navPeriodo(0,'reset')"><i class="ti ti-home-2"></i> Actual</button>` : ''}
+  <div class="p-nav">
+    <button class="p-arrow" onclick="navPeriodo(-1)" title="Periodo anterior" aria-label="Periodo anterior"><i class="ti ti-chevron-left"></i></button>
+    ${S.periodo.offset !== 0
+      ? `<button class="p-range p-range-btn" onclick="navPeriodo(0,'reset')" title="Volver al periodo actual"><i class="ti ti-home-2"></i> ${r.label}</button>`
+      : `<span class="p-range">${r.label}</span>`}
+    <button class="p-arrow" onclick="navPeriodo(1)" title="Periodo siguiente" aria-label="Periodo siguiente"><i class="ti ti-chevron-right"></i></button>
+  </div>
 </div>`;
 }
 function setPeriodo(tipo) { S.periodo = { tipo, offset: 0 }; renderTab(S.tab); }
@@ -3885,6 +3911,29 @@ function rQuincenaPanel(ctx) {
     .filter(g => (fpMap[g.descripcion] || g.forma_pago || '') === 'efectivo')
     .reduce((a, g) => a + (g.monto || 0), 0);
 
+  // Pagos con tarjeta (Pluxee y débito): total presupuestado, lo que falta por pagar y, en la
+  // quincena actual, si el saldo de esa cuenta alcanza para lo pendiente. El efectivo va aparte (🏦).
+  const _pagadoQ = g => qMovs.some(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + g.descripcion);
+  const _porMedio = medio => {
+    const items = gasEsp.filter(g => !g._isDinerito && !g._isNiditoComp && (fpMap[g.descripcion] || g.forma_pago || '') === medio);
+    return {
+      n:     items.length,
+      total: items.reduce((a, g) => a + (g.monto || 0), 0),
+      pend:  items.filter(g => !_pagadoQ(g)).reduce((a, g) => a + (g.monto || 0), 0),
+    };
+  };
+  const _cts = refs.cuentas || {};
+  const tarjCol = (emoji, lbl, p, saldo) => `<div class="tarj-col" title="${p.n} gasto${p.n !== 1 ? 's' : ''} con ${lbl}">
+      <div class="tarj-lbl">${emoji} ${lbl}${p.n ? ' · ' + p.n : ''}</div>
+      <div class="tarj-val">${p.n ? fmt(p.total) : '—'}</div>
+      <div class="tarj-sub">${!p.n ? 'sin gastos' : p.pend > 0 ? 'por pagar ' + fmt(p.pend) : 'todo pagado ✓'}</div>
+      ${qOff === 0 && p.pend > 0 ? `<div class="tarj-sub">saldo ${fmt(saldo)}</div>${p.pend > saldo
+        ? `<div class="tarj-sub neg">faltan ${fmt(p.pend - saldo)}</div>`
+        : `<div class="tarj-sub pos">alcanza ✓</div>`}` : ''}
+    </div>`;
+  const tarjHTML = tarjCol('🎫', 'Pluxee', _porMedio('pluxee'), Number(_cts.pluxee) || 0)
+                 + tarjCol('💳', 'Débito', _porMedio('tarjeta_debito'), (Number(_cts.banamex) || 0) + (Number(_cts.revolut_debito) || 0));
+
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
   // Chart (deferred after render)
@@ -3956,12 +4005,17 @@ function rQuincenaPanel(ctx) {
       <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta quincena</h2></div>
     </div>`}
     ${gasEsp.length ? `
-    <div class="retiro-wrap">
-      <button type="button" class="mf-ico retiro-ico${S._retiroOpen?' on':''}" id="retiro-btn-${ctx}" onclick="toggleRetiro()"
-        title="Retiro de efectivo" aria-label="Retiro de efectivo" aria-expanded="${S._retiroOpen?'true':'false'}">🏦</button>
+    <div class="q-pay-wrap">
+      <div class="q-pay-icons">
+        <button type="button" class="mf-ico retiro-ico${S._retiroOpen?' on':''}" id="retiro-btn-${ctx}" onclick="toggleQPay('retiro')"
+          title="Retiro de efectivo" aria-label="Retiro de efectivo" aria-expanded="${S._retiroOpen?'true':'false'}">🏦</button>
+        <button type="button" class="mf-ico tarj-ico${S._tarjOpen?' on':''}" id="tarj-btn-${ctx}" onclick="toggleQPay('tarj')"
+          title="Pagos con Pluxee y débito" aria-label="Pagos con Pluxee y débito" aria-expanded="${S._tarjOpen?'true':'false'}">💳</button>
+      </div>
       <div class="retiro-card" id="retiro-card-${ctx}" style="display:${S._retiroOpen?'':'none'}" title="Gastos marcados como efectivo">
         <span class="retiro-val">${fmt(retiroEfectivo)}</span>
       </div>
+      <div class="tarj-card" id="tarj-card-${ctx}" style="display:${S._tarjOpen?'':'none'}">${tarjHTML}</div>
     </div>` : ''}
     <div style="display:flex;justify-content:center;margin-bottom:14px">
       <button class="btn btn-accent" style="padding:11px 22px;font-size:15px;font-weight:700;gap:8px" onclick="oAddProxGasto()"><i class="ti ti-plus" style="font-size:17px"></i> Registrar Próximo Gasto</button>
@@ -4605,7 +4659,6 @@ function rMovimientos() {
   el.innerHTML = `
 <div class="hdr">
   <h2><i class="ti ti-arrows-exchange"></i> Movimientos</h2>
-  <button class="btn btn-accent btn-sm" onclick="oMov()"><i class="ti ti-plus"></i> Movimiento</button>
 </div>
 ${periodoSelectorHTML()}
 <div class="mov-layout"><div id="movs-section"></div><div id="movs-table-section"></div></div>`;
@@ -5173,6 +5226,7 @@ function rDash() {
     ['💗','nidito','Nidito'],                 ['📅','calendario','Calendario'],
     ['📈','analisis','Análisis'],             ['🛒','despensa','Despensa'],
     ['✨','consejos','Consejos IA'],          ['📝','notas','Notas'],
+    ['🎁','wishlist','Wishlist'],
   ];
 
   dash.innerHTML = `
@@ -5217,11 +5271,9 @@ ${dsgPanelHTML('dash-dsg','dash')}
   <button class="q-dash-btn mini-tile${S._qDashOpen?' on':''}" id="q-dash-btn" onclick="toggleQuincenaDash()"
     title="Gastos esta quincena" aria-label="Gastos esta quincena"
     aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">🧮</button>
-  <button class="q-dash-btn mini-tile" onclick="dashEmoji('wishlist')" title="Wishlist" aria-label="Wishlist">🎁</button>
   <button class="q-dash-btn mini-tile" onclick="dashEmoji('movimientos')" title="Movimientos" aria-label="Movimientos">📒</button>
 </div>
 <div id="quincena-dash-section" style="display:${S._qDashOpen?'':'none'}"></div>
-<button class="mini-fab" aria-label="Nuevo movimiento" title="Nuevo movimiento" onclick="oMov()">+</button>
 `;
   refreshQuincenaPanel();
   if (S._dsgOpen['dash-dsg']) _dsgAnimar($('dash-dsg'));
@@ -6351,10 +6403,7 @@ function applyMovSearch() {
 function setMovChart(type) {
   initMovF();
   S.movF.chartType=type;
-  const _fl = getMovFiltradas(), _sub = document.querySelector('#mov-cbox .mov-cbox-sub');
-  if (_sub) { const n = type==='doughnut' ? _fl.filter(m=>m.tipo==='GASTO').length : _fl.length;
-    _sub.textContent = '— ' + n + (type==='doughnut' ? (n!==1?' egresos':' egreso') : (n!==1?' movimientos':' movimiento')); }
-  renderMovChart(_fl);
+  renderMovChart(getMovFiltradas());
 }
 
 function getMovFiltradas() {
@@ -6612,18 +6661,10 @@ function rMovs() {
     return `<button class="f-pill${f.chartType===v?' on':''}" onclick="setMovChart('${v}')">${l}</button>`;
   }).join('');
 
-  const allMovs=S.data.movs||[];
-  const unreviewedCount=allMovs.filter(m=>!m.revisado&&!m.deleted_at).length;
-  const unrevBadge=unreviewedCount>0?`<button class="unrev-badge${S.movF.onlyUnread?' active-filter':''}" onclick="toggleUnreadFilter()">${unreviewedCount} sin revisar</button>`:'';
-
   const host = $('movs-section') || $('tab-movimientos');
   if (!host) return;
 
   host.innerHTML=`
-<div class="hdr" style="margin-bottom:14px">
-  <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-list-details"></i> Registros del período filtrado ${unrevBadge}</span>
-</div>
-
 <div class="mov-filter">
   <div class="mf-row mf-bar">
     <button type="button" class="mf-ico mf-ico-in" onclick="oMov('INGRESO')" title="Registrar ingreso" aria-label="Registrar ingreso"><i class="ti ti-arrow-up-right"></i></button>
@@ -6633,7 +6674,7 @@ function rMovs() {
       <input id="movf-search" placeholder="Concepto, comentario..." value="${f.search||''}"
         oninput="clearTimeout(S._ms);S._ms=setTimeout(applyMovSearch,380)">
     </div>
-    <button type="button" class="mf-ico${S._movFiltersOpen?' on':''}" style="margin-left:auto"
+    <button type="button" class="mf-ico${S._movFiltersOpen?' on':''}"
       onclick="toggleMovFiltersPanel()" aria-expanded="${S._movFiltersOpen?'true':'false'}" aria-controls="mf-collapse"
       title="Filtrar por categoría y medio" aria-label="Filtrar por categoría y medio">
       <i class="ti ti-filter"></i>${(f.cats.length+f.medios.length)>0?`<span class="ico-badge">${f.cats.length+f.medios.length}</span>`:''}
@@ -6672,7 +6713,7 @@ ${dsgPanelHTML('mov-dsg','mov')}
 
 <div class="mov-cbox${S._movChartCollapsed?' collapsed':''}" id="mov-cbox">
   <div class="mov-cbox-hdr">
-    <h3 class="mov-cbox-ttl" onclick="toggleMovChart()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" aria-expanded="${S._movChartCollapsed?'false':'true'}"><i class="ti ti-chevron-${S._movChartCollapsed?'right':'down'} mov-cbox-chev"></i> Análisis visual <span class="mov-cbox-sub">— ${f.chartType==='doughnut' ? `${gastos.length} egreso${gastos.length!==1?'s':''}` : `${filtered.length} movimiento${filtered.length!==1?'s':''}`}</span></h3>
+    <h3 class="mov-cbox-ttl" onclick="toggleMovChart()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" aria-expanded="${S._movChartCollapsed?'false':'true'}"><i class="ti ti-chevron-${S._movChartCollapsed?'right':'down'} mov-cbox-chev"></i> Análisis visual</h3>
     <div class="mov-cbox-pills" style="display:flex;gap:4px">${chartPills}</div>
   </div>
   <div class="mov-cbox-body">
@@ -7677,14 +7718,16 @@ function refreshQuincenaPanel() {
   if (el && S._qDashOpen) el.innerHTML = rQuincenaPanel('dash');
 }
 
-// Muestra/oculta el monto del retiro de efectivo. El estado es global para que el icono
-// quede igual en Inicio y en la hoja, aunque estén los dos en el DOM.
-function toggleRetiro() {
-  S._retiroOpen = !S._retiroOpen;
-  document.querySelectorAll('[id^="retiro-card-"]').forEach(c => { c.style.display = S._retiroOpen ? '' : 'none'; });
-  document.querySelectorAll('[id^="retiro-btn-"]').forEach(b => {
-    b.classList.toggle('on', S._retiroOpen);
-    b.setAttribute('aria-expanded', S._retiroOpen ? 'true' : 'false');
+// Muestra/oculta los resúmenes de pago de la quincena: 'retiro' (🏦 efectivo) y 'tarj'
+// (💳 Pluxee + débito). El estado es global para que el icono quede igual en Inicio y en la
+// hoja, aunque estén los dos en el DOM.
+function toggleQPay(kind) {
+  const prop = kind === 'tarj' ? '_tarjOpen' : '_retiroOpen';
+  S[prop] = !S[prop];
+  document.querySelectorAll(`[id^="${kind}-card-"]`).forEach(c => { c.style.display = S[prop] ? '' : 'none'; });
+  document.querySelectorAll(`[id^="${kind}-btn-"]`).forEach(b => {
+    b.classList.toggle('on', S[prop]);
+    b.setAttribute('aria-expanded', S[prop] ? 'true' : 'false');
   });
 }
 
