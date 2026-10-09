@@ -716,7 +716,6 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 /* Retiro de efectivo: icono 🏦 que despliega el monto al lado (mismo círculo que .mf-ico) */
 .q-pay-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:14px}
 .q-pay-icons{display:flex;justify-content:center;gap:14px}
-.retiro-ico.on{background:var(--bg-surface-2);border-color:var(--color-warning)}
 .tarj-ico.on{background:var(--bg-surface-2);border-color:var(--accent-primary)}
 /* 🏦 Efectivo | 🎫 Pluxee | 💳 Débito: tarjetas idénticas que reparten el ancho por igual
    (las que están contraídas no ocupan lugar, así las visibles siempre quedan centradas) */
@@ -727,6 +726,8 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-pay-wrap .q-total-widget{margin-top:0;width:100%;max-width:640px;padding:10px 16px;border-width:1px;gap:10px;flex-wrap:nowrap}
 .q-pay-wrap .q-total-widget .qt-lbl{font-size:11px;font-weight:700;letter-spacing:.05em}
 .q-pay-wrap .q-total-widget .qt-val{font-size:20px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.q-pay-wrap .q-bal-widget{flex-wrap:wrap;row-gap:2px}
+.q-bal-widget .qt-sub{flex:0 0 100%;text-align:center;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
 .tarj-lbl{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em}
 .tarj-val{font-size:clamp(11px,15cqi,20px);font-weight:800;font-variant-numeric:tabular-nums;color:var(--text-1);white-space:nowrap;margin:2px 0}
 .tarj-sub{font-size:11px;color:var(--text-3);line-height:1.35}
@@ -739,6 +740,8 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
   .tarj-lbl{font-size:10px;letter-spacing:.02em}
   .tarj-n{display:none}
   .tarj-sub{font-size:10px}
+  .q-pay-wrap .q-total-widget{padding:10px 10px}
+  .q-pay-wrap .q-total-widget .qt-lbl{font-size:10px;letter-spacing:.02em;white-space:nowrap}
 }
 /* Gastos esta quincena: solo icono, mismo estilo (.mini-tile) que los emojis de arriba */
 .q-dash-btn.mini-tile{width:calc((100% - 40px)/5);padding:0;font-size:26px;
@@ -3904,6 +3907,10 @@ function rQuincenaPanel(ctx) {
   const gasDiff  = totalGasReal - totalGasEsp;
   const balEsp   = totalIngEsp - totalGasEsp;
   const remanente = getRemanente(qOff);
+  // Balance planeado de la quincena: ingresos (lo recibido o, si falta, lo esperado, + remanente)
+  // menos el TOTAL de gastos de la sección, que ya incluye Dinerito de novios y compromiso al Nidito.
+  const balIng   = Math.max(totalIngEsp, totalIngReal) + remanente;
+  const balPlan  = balIng - totalGasEsp;
   const ingQ     = totalIngReal + remanente;   // ingresos reales (+ remanente): Balance = Ingresos − Egresos
   const balReal  = ingQ - totalGasReal;
 
@@ -3937,7 +3944,7 @@ function rQuincenaPanel(ctx) {
         ? `<div class="tarj-sub neg">faltan ${fmt(p.pend - saldo)}</div>`
         : `<div class="tarj-sub pos">alcanza ✓</div>`}` : ''}
     </div>`;
-  const tarjHTML = tarjCol('🏦', 'Efectivo', _porMedio('efectivo'), Number(_cts.efectivo) || 0, `retiro-card-${ctx}`, S._retiroOpen)
+  const tarjHTML = tarjCol('🏦', 'Efectivo', _porMedio('efectivo'), Number(_cts.efectivo) || 0, `tarj-card-ef-${ctx}`, S._tarjOpen)
                  + tarjCol('🎫', 'Pluxee', _porMedio('pluxee'), Number(_cts.pluxee) || 0, `tarj-card-px-${ctx}`, S._tarjOpen)
                  + tarjCol('💳', 'Débito', _porMedio('tarjeta_debito'), (Number(_cts.banamex) || 0) + (Number(_cts.revolut_debito) || 0), `tarj-card-db-${ctx}`, S._tarjOpen);
 
@@ -4014,15 +4021,18 @@ function rQuincenaPanel(ctx) {
     ${gasEsp.length ? `
     <div class="q-pay-wrap">
       <div class="q-pay-icons">
-        <button type="button" class="mf-ico retiro-ico${S._retiroOpen?' on':''}" id="retiro-btn-${ctx}" onclick="toggleQPay('retiro')"
-          title="Retiro de efectivo" aria-label="Retiro de efectivo" aria-expanded="${S._retiroOpen?'true':'false'}">🏦</button>
         <button type="button" class="mf-ico tarj-ico${S._tarjOpen?' on':''}" id="tarj-btn-${ctx}" onclick="toggleQPay('tarj')"
-          title="Pagos con Pluxee y débito" aria-label="Pagos con Pluxee y débito" aria-expanded="${S._tarjOpen?'true':'false'}">💳</button>
+          title="Efectivo, Pluxee y débito" aria-label="Efectivo, Pluxee y débito" aria-expanded="${S._tarjOpen?'true':'false'}">💳</button>
       </div>
       <div class="tarj-card">${tarjHTML}</div>
       <div class="q-total-widget">
         <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
         <span class="qt-val red">${fmt(totalGasEsp)}</span>
+      </div>
+      <div class="q-total-widget q-bal-widget" title="Ingresos de la quincena menos el total de gastos (incluye Dinerito de novios)">
+        <span class="qt-lbl"><i class="ti ti-scale"></i> Balance quincena</span>
+        <span class="qt-val ${balPlan >= 0 ? 'green' : 'red'}">${balPlan < 0 ? '−' : ''}${fmt(Math.abs(balPlan))}</span>
+        <span class="qt-sub">Ingresos ${fmt(balIng)} − Gastos ${fmt(totalGasEsp)}</span>
       </div>
     </div>` : ''}
     <div style="display:flex;justify-content:center;margin-bottom:14px">
