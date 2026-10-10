@@ -175,7 +175,7 @@ app.get('/', (_req, res) => {
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModified: false }));
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
-const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
+const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Alicia','Ocio','Personales','Platina','Transporte','OTROS'];
 const MEDIOS_PAGO = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut','Pluxee'];
 
 // Corre `promise` pero si tarda más de `ms` devuelve `fallback` en lugar de colgar.
@@ -735,7 +735,7 @@ function esGastoProgramado(datos, today) {
 
 // Reglas DETERMINISTAS de categorización por palabra clave (chat IA web + WhatsApp).
 // Se aplican a GASTOS sin importar lo que devuelva Gemini, para garantizar consistencia.
-// Mutan `datos` en sitio. Precedencia: transporte (concreto) > Platina > Alicia/golosinas.
+// Mutan `datos` en sitio. Precedencia: Alicia (siempre) > transporte (concreto) > Platina > golosinas.
 function aplicarReglasCategoria(datos, textoOriginal = '') {
   if (!datos) return datos;
   const norm = s => String(s || '').toLowerCase()
@@ -766,13 +766,20 @@ function aplicarReglasCategoria(datos, textoOriginal = '') {
     datos.medio_pago = 'débito';
   }
 
-  // 2) Alicia / golosinas → Ocio (salvo gasto de la Platina o ya marcado Transporte)
-  if (has(/\b(alicia|golosina|golosinas)\b/) &&
+  // 2) Golosinas → Ocio (salvo gasto de la Platina o ya marcado Transporte)
+  if (has(/\b(golosina|golosinas)\b/) &&
       datos.categoria !== 'Platina' && datos.categoria !== 'Transporte') {
     datos.categoria = 'Ocio';
   }
+  // 2b) Alicia → categoría propia "Alicia", gane a cualquier otra (el medio de pago de las
+  //     reglas de transporte se conserva: "camión con Alicia" sigue siendo en efectivo).
+  //     Igual que Pluxee: el mensaje completo solo cuenta si trae un único monto, para que
+  //     en una lista de gastos la línea "… con Alicia" no arrastre a las demás.
+  const RE_ALICIA = /\balicia\b/;
+  const esAlicia = RE_ALICIA.test(propio) || (unSoloMonto && RE_ALICIA.test(norm(textoOriginal)));
+  if (esAlicia) datos.categoria = 'Alicia';
   // "alicia" siempre deja rastro en comentarios (contexto pareja)
-  if (has(/\balicia\b/) && !datos.comentarios) datos.comentarios = 'Alicia';
+  if (esAlicia && !datos.comentarios) datos.comentarios = 'Alicia';
 
   // 3) "transferencia" → siempre se guarda como pagado con tarjeta de débito
   if (has(/\btransfer(?:encia|i)\b/)) datos.medio_pago = 'débito';
@@ -1237,13 +1244,14 @@ VOCABULARIO COLOQUIAL MX:
 - Tolerar errores ortográficos: "gaste/pague" sin acento = equivalente
 
 CONTEXTO DE PAREJA:
-- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Ocio" automático
+- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Alicia" automático
 - NUNCA infieras a Alicia de "nosotros/fuimos/fueron/ella": son palabras ambiguas (p.ej. "fueron 80 pesos" = costaron 80 pesos, no implica a Alicia)
 - "Platina" → coche de la pareja → categoria:"Platina" (tiene prioridad sobre Ocio)
 - Alicia/Ángel/Angel como (paréntesis) → NO son medios de pago
 
 REGLAS FIJAS POR PALABRA (obligatorias):
-- "alicia" o "golosinas" → categoria:"Ocio"
+- "alicia" → categoria:"Alicia" (siempre, aunque sea comida, pasaje o Platina)
+- "golosinas" → categoria:"Ocio"
 - "camión/camion", "micro" o "combi" → categoria:"Transporte" + medio_pago:"efectivo"
 - "metro" o "metrobús" → categoria:"Transporte" + medio_pago:"débito"
 - "transferencia" (en un gasto) → medio_pago:"débito"
@@ -1257,7 +1265,8 @@ Hogar:      renta, luz, agua, gas hogar, internet, cable, predial, mueble, elect
 Ocio:       Netflix, Spotify, Disney+, HBO, cine, teatro, concierto, bar, antro, videojuego, Steam
 Personales: doctor, farmacia, medicina, gym, spa, peluquería, barbería, cosméticos, ropa, zapatos
 TDC:        pago mínimo tarjeta, abono TDC
-Hormiga:    Amazon, Mercado Libre, Shein, suscripción, app, compra online pequeña
+Alicia:     cualquier gasto que mencione EXPLÍCITAMENTE a Alicia (salidas, regalos, comidas o pasajes con ella)
+OTROS:      Amazon, Mercado Libre, Shein, suscripción, app, compra online pequeña
 
 INTENTS disponibles:
 - REGISTRO   → el usuario reporta un gasto, ingreso u operación con monto explícito
@@ -1272,7 +1281,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
-CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
+CATEGORÍAS: Hogar, Comida, TDC, Despensa, Alicia, Ocio, Personales, Platina, Transporte, OTROS
 MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut, Pluxee ("Pluxee" es la tarjeta de VALES DE DESPENSA: úsalo SIEMPRE que el usuario mencione Pluxee, vales o vales de despensa — en gastos Y en ingresos, p.ej. "llegaron los vales" es un INGRESO con medio "Pluxee"; usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
 Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
@@ -1290,7 +1299,7 @@ EJEMPLOS:
 "voy a pagar 2500 de afinación de la platina el 25 de junio en efectivo" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"Afinacion platina","monto":2500,"medio_pago":"efectivo","programado":true,"fecha":"FECHA_YEAR-06-25"}}
 "gasté 350 uber con débito" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Transporte","concepto":"uber","monto":350,"medio_pago":"débito","fecha":"FECHA_HOY"}}
 "350 de gasolina" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Platina","concepto":"gasolina","monto":350,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
-"fuimos al cine con alicia 280" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"Alicia","fecha":"FECHA_HOY"}}
+"fuimos al cine con alicia 280" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Alicia","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"Alicia","fecha":"FECHA_HOY"}}
 "recibí mi sueldo $14,000" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"INGRESO","categoria":"OTROS","concepto":"Sueldo","monto":14000,"fecha":"FECHA_HOY"}}
 "cuánto gasté este mes" → {"intent":"CONSULTA"}
 "hola cómo estás" → {"intent":"CHARLA"}`;
@@ -1369,14 +1378,15 @@ VOCABULARIO COLOQUIAL MX:
 - Tolerar errores ortográficos: "gaste/pague/compre" sin acento = equivalente con acento
 
 CONTEXTO DE PAREJA:
-- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Ocio" automático
-- "le presté/le di a Alicia" → comentarios:"Alicia", categoria "Ocio" (o la más apropiada si es obvia)
+- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Alicia" automático
+- "le presté/le di a Alicia" → comentarios:"Alicia", categoria "Alicia"
 - NUNCA infieras a Alicia de "nosotros/fuimos/fueron/ella/mi novia": son palabras ambiguas (p.ej. "fueron 80 pesos" = costaron 80 pesos, no implica a Alicia)
 - "Platina" → coche de la pareja → categoria:"Platina" siempre (tiene prioridad sobre Ocio)
 - Nombres propios (Alicia, Ángel, Angel) como (paréntesis) → NO son medios de pago, ignorarlos
 
 REGLAS FIJAS POR PALABRA (obligatorias, anulan otra categorización salvo Platina):
-- "alicia" o "golosinas" → categoria:"Ocio"
+- "alicia" → categoria:"Alicia" (siempre, aunque sea comida, pasaje o Platina)
+- "golosinas" → categoria:"Ocio"
 - "camión/camion", "micro" o "combi" → categoria:"Transporte" + medio_pago:"efectivo"
 - "metro" o "metrobús" → categoria:"Transporte" + medio_pago:"débito"
 - "transferencia" (en un gasto) → medio_pago:"débito"
@@ -1390,7 +1400,8 @@ Hogar:       renta, luz, agua, gas (hogar), internet, cable, teléfono fijo, pre
 Ocio:        Netflix, Spotify, Disney+, HBO, Prime Video, Apple TV, YouTube Premium, Paramount+, cine, teatro, concierto, bar, antro, botanero, cover, videojuego, Steam, PlayStation, Xbox, viaje, hotel, Airbnb, parque, excursión, regalo, flores
 Personales:  doctor, dentista, psicólogo/psico, farmacia, medicina, pastilla, gym, gimnasio, spa, peluquería, barbería, cosméticos, ropa, zapatos, lentes, Farmacias del Ahorro, Simi, Benavides
 TDC:         pago mínimo tarjeta, abono TDC, pago [banco] tarjeta, corte
-Hormiga:     Amazon, Mercado Libre, Shein, AliExpress, suscripción, app, dominio, compra online pequeña
+Alicia:      cualquier gasto que mencione EXPLÍCITAMENTE a Alicia (salidas, regalos, comidas o pasajes con ella)
+OTROS:       Amazon, Mercado Libre, Shein, AliExpress, suscripción, app, dominio, compra online pequeña
 
 INTENTS:
 - REGISTRO    → el usuario reporta uno o MÁS gastos/ingresos con monto explícito
@@ -1405,7 +1416,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
-CATEGORÍAS: Hogar, Comida, TDC, Despensa, Hormiga, Ocio, Personales, Platina, Transporte, OTROS
+CATEGORÍAS: Hogar, Comida, TDC, Despensa, Alicia, Ocio, Personales, Platina, Transporte, OTROS
 MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut, Pluxee ("Pluxee" es la tarjeta de VALES DE DESPENSA: úsalo SIEMPRE que el usuario mencione Pluxee, vales o vales de despensa — en gastos Y en ingresos, p.ej. "llegaron los vales" es un INGRESO con medio "Pluxee"; usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
 Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
@@ -1439,7 +1450,7 @@ EJEMPLOS:
 ]}
 "fuimos al cine con alicia 280 pesos" →
 {"intent":"REGISTRO","items":[
-  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"Alicia","fecha":"FECHA_HOY"}}
+  {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Alicia","concepto":"cine","monto":280,"medio_pago":"efectivo","comentarios":"Alicia","fecha":"FECHA_HOY"}}
 ]}
 "50 tacos" →
 {"intent":"REGISTRO","items":[
@@ -1452,7 +1463,7 @@ EJEMPLOS:
 function tryParseBatch(text, today) {
   const MESES_NUM = { enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
     julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12 };
-  const CATS_KNOWN = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte'];
+  const CATS_KNOWN = ['Hogar','Comida','TDC','Despensa','Alicia','Ocio','Personales','Platina','Transporte'];
 
   function normMedio(s) {
     const r = s.toLowerCase().trim();
@@ -1485,7 +1496,7 @@ function tryParseBatch(text, today) {
     if (/\b(netflix|spotify|disney|hbo|prime.?video|apple.?tv|youtube.?premium|cine\b|teatro\b|concierto|bar\b|antro\b|botanero|cover\b|videojuego|steam\b|playstation|xbox|viaje\b|hotel\b|airbnb|regalo\b|flores\b)\b/.test(t)) return 'Ocio';
     if (/\b(doctor|dentista|psico|farmacia|medicina|pastilla|gym\b|gimnasio|spa\b|peluquer|barber|cosm[eé]tico|ropa\b|zapato|lentes\b|farmacias.?del.?ahorro|simi\b)\b/.test(t)) return 'Personales';
     if (/\b(renta\b|luz\b|agua\b|gas\b|internet\b|cable\b|predial|mantenimiento|home.?depot|ikea\b)\b/.test(t)) return 'Hogar';
-    if (/\b(amazon\b|mercado.?libre|shein\b|aliexpress|suscripci[oó]n|app\b|dominio)\b/.test(t)) return 'Hormiga';
+    if (/\b(amazon\b|mercado.?libre|shein\b|aliexpress|suscripci[oó]n|app\b|dominio)\b/.test(t)) return 'OTROS';
     if (/\b(m[ií]nimo|abono.?tdc|pago.?tarjeta|corte\b|adeudo)\b/.test(t)) return 'TDC';
     return 'OTROS';
   }
@@ -1544,7 +1555,7 @@ function tryParseBatch(text, today) {
           if (/\balicia\b/i.test(concepto)) conAlicia = true;
           concepto = concepto.replace(/\bcon\s+(alicia|angel|ángel)\b/i, '').trim();
           if (categoria === 'OTROS') categoria = inferCatFromText(concepto);
-          if (conAlicia && categoria !== 'Platina') categoria = 'Ocio';
+          if (conAlicia) categoria = 'Alicia';
           const datos = { tipo:'GASTO', categoria, concepto: concepto || 'Gasto', monto, medio_pago, fecha: inlFecha };
           if (conAlicia) datos.comentarios = 'Alicia';
           inlItems.push({ tabla:'movimientos', accion:'crear', datos });
@@ -1638,8 +1649,8 @@ function tryParseBatch(text, today) {
     if (/\balicia\b/i.test(rest)) conAlicia = true;
     const concepto = rest.replace(/\s+con\s+(alicia|angel|ángel)\s*$/i, '').trim() || 'Gasto';
 
-    // Alicia → Ocio (Platina keeps priority if already set)
-    if (conAlicia && categoria !== 'Platina') categoria = 'Ocio';
+    // Alicia → categoría propia "Alicia" (gana a cualquier otra)
+    if (conAlicia) categoria = 'Alicia';
 
     const datos = { tipo:'GASTO', categoria, concepto, monto, medio_pago, fecha: itemDate };
     if (conAlicia) datos.comentarios = 'Alicia';
@@ -1990,7 +2001,7 @@ async function buildSystemPrompt(user, intent = 'CONSULTA') {
 CONTEXTO DE PAREJA:
 - Usuario: Ángel. Novia: Alicia. Comparten vida y gastos cotidianos.
 - "Platina" = su coche (Nissan). Gasolina, aceite, afinación, refacciones, verificación → categoria:"Platina".
-- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Ocio" automático.
+- Solo si el usuario menciona EXPLÍCITAMENTE el nombre "Alicia" → comentarios:"Alicia" + categoria:"Alicia" automático.
 - NUNCA infieras a Alicia de "nosotros/fuimos/fueron/ella/mi novia": son palabras ambiguas (p.ej. "fueron 80 pesos" = costaron 80 pesos, no implica a Alicia).
 - "Platina" tiene prioridad sobre la regla de Ocio (un gasto de coche no es Ocio).
 - Nunca trates a Alicia o Ángel como medio de pago; son personas mencionadas en el contexto.
@@ -2012,7 +2023,8 @@ Hogar:       renta, luz, agua, gas (hogar), internet, cable, teléfono, predial,
 Ocio:        Netflix, Spotify, Disney+, HBO, Prime, Apple TV, YouTube Premium, cine, teatro, concierto, bar, antro, botanero, cover, videojuego, Steam, PlayStation, Xbox, viaje, hotel, Airbnb, regalo, flores
 Personales:  doctor, dentista, psicólogo, farmacia, medicina, pastilla, gym, spa, peluquería, barbería, cosméticos, ropa, zapatos, lentes, Farmacias del Ahorro, Simi
 TDC:         pago mínimo tarjeta, abono TDC, corte [banco]
-Hormiga:     Amazon, Mercado Libre, Shein, AliExpress, suscripción, app, dominio, compra online pequeña
+Alicia:      cualquier gasto que mencione EXPLÍCITAMENTE a Alicia (salidas, regalos, comidas o pasajes con ella)
+OTROS:       Amazon, Mercado Libre, Shein, AliExpress, suscripción, app, dominio, compra online pequeña
 
 TONO Y ESTILO:
 - Respuestas cortas y directas. Sin relleno. Sin cascadas de emojis.
@@ -4322,6 +4334,12 @@ app.post('/api/notas-inicio/upload-confirm', async (req, res) => {
 // que los gastos programados del chat: el gasto aparece en "Gastos esta quincena" de esa
 // quincena y, al marcarse como pagado ahí, el deseo pasa a comprado (ver wlConciliar).
 const WL_RE_QKEY = /^\d{4}-(0[1-9]|1[0-2])-[AB]$/;
+// Formas de pago de un deseo = las de "Gastos esta quincena"; WL_MEDIO las traduce al medio_pago
+// de un movimiento (así el saldo de la cuenta correcta se ajusta al registrarlo).
+const WL_FORMAS = ['', 'efectivo', 'tarjeta_debito', 'pluxee'];
+const WL_MEDIO  = { efectivo: 'efectivo', tarjeta_debito: 'débito', pluxee: 'Pluxee' };
+// La forma de pago puesta en la tarjeta de la quincena (forma_pago_gastos, por nombre) manda sobre la del deseo.
+const wlMedio = (refs, row) => WL_MEDIO[(refs.forma_pago_gastos || {})[row.nombre] || row.forma_pago] || 'efectivo';
 
 // 'YYYY-MM-A' = días 10–24; 'YYYY-MM-B' = día 25 a 9 del mes siguiente (igual que getQuincena).
 function wlRangoQuincena(qKey) {
@@ -4339,6 +4357,7 @@ function wlLimpiar(b = {}) {
   if (b.prioridad !== undefined) d.prioridad = ['alta', 'media', 'baja'].includes(b.prioridad) ? b.prioridad : 'media';
   if (b.categoria !== undefined) d.categoria = CATEGORIAS.includes(b.categoria) ? b.categoria : 'OTROS';
   if (b.notas     !== undefined) d.notas     = String(b.notas).slice(0, 2000);
+  if (b.forma_pago !== undefined) d.forma_pago = WL_FORMAS.includes(b.forma_pago) ? b.forma_pago : '';
   if (b.enlace    !== undefined) {
     let e = String(b.enlace).trim().slice(0, 500);
     if (/^(javascript|data|vbscript):/i.test(e)) e = '';
@@ -4369,27 +4388,37 @@ function wlPonerEnPresupuesto(refs, qKey, row) {
   if (!refs.budget_q) refs.budget_q = {};
   const q = refs.budget_q[qKey] || (refs.budget_q[qKey] = { gastos: [], ingresos: [] });
   if (!Array.isArray(q.gastos)) q.gastos = [];
-  const item = { _id: 'wl-' + row.id, descripcion: row.nombre, monto: Number(row.precio) || 0, categoria: row.categoria, comentarios: 'Wishlist' };
+  const item = { _id: 'wl-' + row.id, descripcion: row.nombre, monto: Number(row.precio) || 0, categoria: row.categoria, forma_pago: row.forma_pago || '', comentarios: 'Wishlist' };
   const i = q.gastos.findIndex(x => x._id === item._id);
   if (i >= 0) q.gastos[i] = { ...q.gastos[i], ...item }; else q.gastos.push(item);
 }
 
-// Pone al día los deseos agendados: si el gasto ya no está en Presupuesto vuelve a pendiente;
-// si ya se marcó como pagado en esa quincena ("[Ppto] nombre") pasa a comprado.
+// Movimientos "[Ppto] nombre" de la quincena: así queda marcado un gasto agendado en "Gastos esta quincena".
+async function wlPagosQ(phone, r) {
+  const { from, to } = wlRangoQuincena(r.quincena_key);
+  const { data } = await sb.from('movimientos').select('*')
+    .eq('user_phone', phone).eq('tipo', 'GASTO').eq('concepto', '[Ppto] ' + r.nombre)
+    .is('deleted_at', null).gte('fecha', from).lte('fecha', to);
+  return data || [];
+}
+
+// Pone al día los deseos ligados a una quincena, en ambos sentidos:
+//  · agendado y el gasto ya no está en Presupuesto → pendiente
+//  · agendado y ya se marcó pagado en esa quincena ("[Ppto] nombre") → comprado (tachado)
+//  · comprado desde la quincena y luego se desmarcó ahí → vuelve a agendado
 async function wlConciliar(phone, rows) {
-  const ag = rows.filter(r => r.estado === 'agendado' && r.quincena_key);
+  const ag = rows.filter(r => (r.estado === 'agendado' || r.estado === 'comprado') && r.quincena_key);
   if (!ag.length) return rows;
   const refs = await wlGetRefs(phone);
   for (const r of ag) {
     let cambio = null;
-    if (!wlEnPresupuesto(refs, r.quincena_key, r.id)) {
+    const enPpto = wlEnPresupuesto(refs, r.quincena_key, r.id);
+    if (r.estado === 'agendado' && !enPpto) {
       cambio = { estado: 'pendiente', quincena_key: null };
-    } else {
-      const { from, to } = wlRangoQuincena(r.quincena_key);
-      const { data: pagado } = await sb.from('movimientos').select('id')
-        .eq('user_phone', phone).eq('tipo', 'GASTO').eq('concepto', '[Ppto] ' + r.nombre)
-        .is('deleted_at', null).gte('fecha', from).lte('fecha', to).limit(1);
-      if (pagado?.length) cambio = { estado: 'comprado', comprado_at: new Date().toISOString() };
+    } else if (enPpto) {
+      const pagado = (await wlPagosQ(phone, r)).length > 0;
+      if (r.estado === 'agendado' && pagado)  cambio = { estado: 'comprado', comprado_at: new Date().toISOString() };
+      if (r.estado === 'comprado' && !pagado) cambio = { estado: 'agendado', comprado_at: null };
     }
     if (cambio) {
       await sb.from('wishlist').update({ ...cambio, updated_at: new Date().toISOString() }).eq('id', r.id);
@@ -4444,7 +4473,7 @@ app.put('/api/wishlist/:id', async (req, res) => {
         refsCambiaron = wlQuitarDePresupuesto(refs, row.quincena_key, row.id);
       }
       d.quincena_key = null;
-    } else if (row.estado === 'agendado' && row.quincena_key && (d.nombre !== undefined || d.precio !== undefined || d.categoria !== undefined)) {
+    } else if (row.estado === 'agendado' && row.quincena_key && (d.nombre !== undefined || d.precio !== undefined || d.categoria !== undefined || d.forma_pago !== undefined)) {
       // Lo agendado vive en Presupuesto: mantenerlo igual al deseo editado.
       refs = await wlGetRefs(user_phone);
       if (wlEnPresupuesto(refs, row.quincena_key, row.id)) { wlPonerEnPresupuesto(refs, row.quincena_key, { ...row, ...d }); refsCambiaron = true; }
@@ -4509,6 +4538,62 @@ app.post('/api/wishlist/:id/desagendar', async (req, res) => {
       .eq('id', row.id).eq('user_phone', user_phone).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Casilla de la tarjeta: tachar / destachar. Si el deseo está agendado en una quincena que ya
+// empezó, marcarlo equivale a palomearlo en "Gastos esta quincena" (registra el "[Ppto] nombre"
+// con su forma de pago) y desmarcarlo borra ese registro: los dos lados quedan siempre iguales.
+// Sin quincena (o una quincena futura) solo cambia el estado, no mueve dinero.
+app.post('/api/wishlist/:id/check', async (req, res) => {
+  try {
+    const { user_phone, hecho } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const { data: row } = await wlFila(req.params.id, user_phone);
+    if (!row) return res.status(404).json({ success: false, error: 'Deseo no encontrado' });
+    const refs  = row.quincena_key ? await wlGetRefs(user_phone) : null;
+    const ligado = !!(row.quincena_key && wlEnPresupuesto(refs, row.quincena_key, row.id));
+    const ahora = new Date().toISOString();
+    let d, movimiento = null;
+    if (hecho) {
+      if (row.estado === 'comprado') return res.json({ success: true, data: row });
+      d = { estado: 'comprado', comprado_at: ahora };
+      const { from, to } = ligado ? wlRangoQuincena(row.quincena_key) : {};
+      if (ligado && hoy() >= from) {
+        if (!(Number(row.precio) > 0)) return res.status(400).json({ success: false, error: 'Ponle un precio para marcarlo como pagado' });
+        if (!(await wlPagosQ(user_phone, row)).length) {
+          const { data, error } = await conReintentos(() => sb.from('movimientos').insert({
+            user_phone, tipo: 'GASTO', categoria: row.categoria || 'OTROS', concepto: '[Ppto] ' + row.nombre, descripcion: '',
+            monto: Number(row.precio), medio_pago: wlMedio(refs, row), fecha: hoy() <= to ? hoy() : to, comentarios: 'Wishlist',
+          }).select().single());
+          if (error || !data?.id) return res.status(400).json({ success: false, error: error?.message || 'No se pudo registrar el gasto' });
+          movimiento = data;
+          await aplicarImpactoCuentas(user_phone, null, data);
+          await writeAuditLog(user_phone, 'movimientos', 'crear', data.id, null, data, 'web', `wishlist: ${row.nombre}`);
+        }
+      } else if (ligado) {
+        // Quincena futura: ya se consiguió, deja de ser un gasto pendiente de esa quincena.
+        wlQuitarDePresupuesto(refs, row.quincena_key, row.id);
+        const r = await wlSaveRefs(user_phone, refs);
+        if (r.error) return res.status(400).json({ success: false, error: r.error.message });
+        d.quincena_key = null;
+      }
+    } else {
+      if (row.estado !== 'comprado') return res.json({ success: true, data: row });
+      d = { estado: ligado ? 'agendado' : 'pendiente', comprado_at: null };
+      if (ligado) {
+        for (const m of await wlPagosQ(user_phone, row)) {
+          const { error } = await sb.from('movimientos').delete().eq('id', m.id).eq('user_phone', user_phone);
+          if (error) return res.status(400).json({ success: false, error: error.message });
+          await aplicarImpactoCuentas(user_phone, m, null);
+          await writeAuditLog(user_phone, 'movimientos', 'eliminar', m.id, m, null, 'web', `wishlist: ${row.nombre}`);
+        }
+      } else d.quincena_key = null;
+    }
+    const { data, error } = await sb.from('wishlist').update({ ...d, updated_at: ahora })
+      .eq('id', row.id).eq('user_phone', user_phone).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data, movimiento });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

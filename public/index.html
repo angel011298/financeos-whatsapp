@@ -41,7 +41,7 @@
   --color-income:#9be07a; --color-expense:#ff7a6b; --color-warning:#FCCC8E;
   /* Category colors — invariant (same in both modes) */
   --cat-hogar:#60A5FA; --cat-comida:#fb923c; --cat-tdc:#f87171;
-  --cat-despensa:#4ade80; --cat-hormiga:#FBBF24; --cat-ocio:#a78bfa;
+  --cat-despensa:#4ade80; --cat-alicia:#f59e0b; --cat-ocio:#a78bfa;
   --cat-personales:#f472b6; --cat-platina:#22d3ee; --cat-transporte:#818cf8;
   --cat-otros:#94a3b8;
   /* TDC card colors */
@@ -1423,9 +1423,15 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   --m-gasto:#ff7a6b; --m-ingreso:#9be07a; --m-deuda:#ffc978;
   --m-text:#f5f5f5; --m-text-2:#8a8a8a; --m-strong:#cfcfcf; --m-cents:#5f5f5f;
   --m-pill-on-bg:#f5f5f5; --m-pill-on-tx:#0a0a0a; --m-tile-hover:#3a3a3a;
-  background:var(--ink); min-height:100dvh;
-  max-width:520px; margin:0 auto; padding:0 16px 120px;
+  background:var(--ink);
+  max-width:520px; margin:0 auto; padding:0 16px 16px;
+  /* Todo el Inicio queda centrado en la pantalla (vertical): los separadores ::before/::after crecen
+     igual arriba y abajo y se encogen a 0 cuando el contenido (p. ej. Gastos esta quincena) no cabe. */
+  display:flex; flex-direction:column;
+  min-height:calc(100dvh - 98px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
 }
+#tab-dashboard.mini::before,#tab-dashboard.mini::after{content:"";flex:1 1 0}
+#tab-dashboard.mini:not(.active){display:none}
 /* Modo claro: el Inicio minimal mapea a los tokens claros de la app — misma
    estructura, contraste legible sobre fondo blanco (tarjetas blancas, texto
    oscuro, verde/coral atenuados para leerse sobre claro). */
@@ -1513,7 +1519,7 @@ body.sheet-locked{overflow:hidden}
 .mini-topbar .mini-name{grid-area:name}
 .mini-topbar .mini-pills{grid-area:pills}
 .mini-topbar .mini-per{grid-area:per}
-.mini-addmov-btn{display:none;grid-area:addmov;white-space:nowrap}
+
 .mini-tile-lbl{display:none}
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1562,16 +1568,14 @@ body.sheet-locked{overflow:hidden}
   .cal-day-panel.open{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(380px,92vw);max-height:80vh;overflow-y:auto;z-index:210;box-shadow:0 24px 60px rgba(0,0,0,.35)}
 
   /* La tarjeta móvil (520px, centrada) se libera: el ancho/padding ya los da `main`. */
-  #tab-dashboard.mini{max-width:1180px;margin:0 auto;padding:0 0 24px}   /* Inicio conserva su ancho de lectura */
+  #tab-dashboard.mini{max-width:1180px;margin:0 auto;padding:0;min-height:calc(100dvh - 64px)}   /* Inicio conserva su ancho de lectura */
 
   /* Modal → diálogo centrado (antes 420px para cualquier ancho ≥701px) */
   .modal{width:520px}
 
-  /* Encabezado: saludo+periodo a la izquierda; píldoras+"+Movimiento" a la derecha */
-  .mini-topbar{grid-template-areas:"name per pills addmov";grid-template-columns:auto auto minmax(0,1fr) auto;
-    align-items:center;column-gap:22px;padding:22px 0}
-  .mini-per{justify-content:flex-start;padding:0}
-  .mini-addmov-btn{display:inline-flex}
+  /* Encabezado centrado: nombre · periodo · píldoras en una sola línea al centro */
+  .mini-topbar{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px 26px;padding:0 0 22px}
+  .mini-per{padding:0}
 
   /* Balance + Gastos + Ingresos en 3 columnas */
   .mini-top-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:stretch;margin:0 0 22px}
@@ -1593,6 +1597,200 @@ body.sheet-locked{overflow:hidden}
   /* "Más" deja de ser full-bleed en pantallas anchas */
   .sheet-inner{max-width:420px;margin:0 auto;border-radius:var(--radius-xl)}
 }
+
+/* ═══════════════════════════════════════════════════════ v13 — tarjetas, pop-ups y Nidito */
+/* Icono de categoría con emoji (Movimientos, Gastos esta quincena, Despensa, Nidito) */
+.mov-card-ic.emo{font-size:19px;line-height:1}
+/* Barra de botones de solo icono, centrada y más visible (Gastos esta quincena, Despensa, Deudas) */
+.ico-bar.ico-bar-c{justify-content:center;gap:12px;margin:2px 0 14px}
+.ico-bar-c .ico-btn{width:44px;height:44px;flex-basis:44px;font-size:20px;color:var(--text-1);
+  background:var(--bg-surface-2);border-color:var(--border-strong,var(--border-default))}
+.ico-bar-c .ico-btn:hover{border-color:var(--accent-primary)}
+.ico-btn.on{border-color:var(--accent-primary);color:var(--accent-primary)}
+.ico-btn.acc{background:var(--accent-primary);border-color:var(--accent-primary);color:var(--on-accent)}
+/* Búsqueda que aparece al tocar la lupa */
+.ico-search{display:flex;align-items:center;gap:8px;max-width:440px;margin:-4px auto 14px;padding:0 12px;
+  border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--bg-surface)}
+.ico-search i{color:var(--text-3)}
+.ico-search input{flex:1;min-width:0;border:none;background:transparent;padding:10px 0;font-size:var(--text-sm);color:var(--text-1);outline:none}
+/* Pop-up central ligero (sobre las ventanas de módulos, debajo de los formularios) */
+.pop{display:none;position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.62);align-items:center;justify-content:center;
+  padding:calc(max(env(safe-area-inset-top,0px),env(safe-area-inset-bottom,0px)) + 12px) 10px}
+.pop.open{display:flex}
+.pop-panel{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:22px;width:100%;max-width:560px;
+  max-height:100%;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.45);animation:pop-in .22s cubic-bezier(.32,1,.56,1)}
+.pop-panel.pop-md{max-width:640px}
+@keyframes pop-in{from{opacity:0;transform:translateY(12px) scale(.97)}}
+.pop-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px 8px;flex-shrink:0}
+.pop-head span{font-size:16px;font-weight:800;color:var(--text-1)}
+.pop-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 18px 18px}
+.tarj-col[role="button"]{cursor:pointer;transition:border-color .15s,transform .15s}
+.tarj-col[role="button"]:hover{border-color:var(--accent-primary)}
+.tarj-col[role="button"]:active{transform:scale(.97)}
+/* Despensa */
+.desp-mod .q-pay-wrap{margin-bottom:12px}
+.desp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:8px}
+.desp-card.off{opacity:.62}
+.desp-card .mov-card-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.desp-card .mov-card-val{text-align:right}
+.desp-best{font-size:10px;font-weight:600;color:var(--text-3);white-space:nowrap}
+.desp-tiendas{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.desp-tienda{font-size:11px;padding:3px 9px;border-radius:var(--radius-pill);background:var(--bg-surface-2);color:var(--text-2);
+  text-decoration:none;white-space:nowrap}
+.desp-tienda.w{color:#3b9be8}.desp-tienda.a{color:#ff9900}
+.desp-edit{flex:1 0 100%;display:grid;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-default)}
+.desp-edit label{font-size:11px;color:var(--text-3);display:block;margin-bottom:3px}
+.desp-edit input{width:100%}
+.desp-edit-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.desp-upd{font-size:11px;color:var(--text-3);text-align:center;margin:-6px 0 10px}
+.desp-empty{text-align:center;color:var(--text-3);font-size:13px;padding:22px 10px}
+.desp-done-hdr{font-size:12px;font-weight:700;color:var(--text-2);margin:16px 2px 8px;text-transform:uppercase;letter-spacing:.05em}
+.edit-pill-btn.on{color:var(--accent-primary)}
+/* Despliegue de la tarjeta Despensa en Gastos esta quincena */
+.q-desp-exp{flex:1 0 100%;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-default);cursor:default}
+.q-desp-exp .mov-card{background:var(--bg-surface-2)}
+.q-desp-note{font-size:11px;color:var(--text-3);margin-bottom:8px}
+.q-desp-lbl{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:10px 2px 6px}
+.q-desp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.q-desp-chip{background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);color:var(--text-1);
+  font-family:inherit;font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer;transition:border-color .15s,transform .15s}
+.q-desp-chip:hover{border-color:var(--accent-primary)}
+.q-desp-chip:active{transform:scale(.95)}
+.q-desp-chip.on{background:var(--text-1);color:var(--bg-app);border-color:var(--text-1)}
+.q-desp-acts{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.q-card-tap{cursor:pointer}
+.q-card-tap .mov-card-title i{font-size:12px;color:var(--text-3);margin-left:4px}
+/* Deudas: tarjetas en cualquier ancho, barra de avance animada */
+#tab-deudas .tdc-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px;margin-bottom:8px}
+#tab-deudas .tdc-table-view{display:none}
+.tdc-card{animation:tdc-in .45s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 60ms)}
+@keyframes tdc-in{from{opacity:0;transform:translateY(10px)}}
+.tdc-card.liquidada{border-color:var(--color-income)}
+.tdc-card-name{display:flex;align-items:center;gap:8px;min-width:0}
+.tdc-card-name strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdc-emo{font-size:18px}
+.tdc-bar{position:relative;flex:1;height:10px;border-radius:99px;background:var(--bg-surface-2);overflow:hidden}
+.tdc-bar.sm{height:6px;margin-top:8px}
+.tdc-bar span{position:absolute;inset:0 auto 0 0;width:var(--p);border-radius:inherit;
+  background:linear-gradient(90deg,var(--accent-primary),var(--color-income));animation:tdc-grow 1.1s cubic-bezier(.2,.8,.2,1) both}
+.tdc-bar span::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);
+  transform:translateX(-100%);animation:tdc-shine 2.6s ease-in-out 1.1s infinite}
+.tdc-bar.over span{background:linear-gradient(90deg,var(--color-warning),var(--color-expense))}
+@keyframes tdc-grow{from{width:0}}
+@keyframes tdc-shine{to{transform:translateX(100%)}}
+@media (prefers-reduced-motion:reduce){.tdc-bar span,.tdc-bar span::after,.tdc-card{animation:none}}
+.tdc-card-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--text-2);margin-bottom:6px}
+.tdc-card-meta em,.tdc-card-note em{color:var(--text-3);font-style:normal}
+.tdc-card-note{font-size:12px;color:var(--text-2);margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdc-card-acts{display:flex;justify-content:flex-end;gap:2px}
+.tdc-card .editable{cursor:pointer}
+/* Nidito */
+.nd-hero{text-align:center;margin:4px 0 14px}
+.nd-hero-ttl{font-size:22px;font-weight:900;color:var(--accent-couple);letter-spacing:-.4px}
+.nd-per{display:inline-flex;align-items:center;gap:10px;margin-top:6px}
+.nd-per span{font-size:13px;font-weight:700;color:var(--text-2);text-transform:capitalize}
+.nd-per button{background:transparent;border:none;color:var(--text-2);cursor:pointer;font-size:17px;padding:4px 8px;border-radius:99px}
+.nd-per button:hover{color:var(--text-1);background:var(--bg-surface-2)}
+.nd-din2{max-width:520px;margin:0 auto 18px;padding:16px 18px;border-radius:20px;background:var(--bg-surface);
+  border:1px solid var(--border-default);text-align:center}
+.nd-din2-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.nd-din2-lbl{font-size:12px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em}
+.nd-din2-val{font-size:36px;font-weight:900;letter-spacing:-1.2px;font-variant-numeric:tabular-nums;margin-top:4px}
+.nd-din2-val.pos{color:var(--color-income)}.nd-din2-val.neg{color:var(--color-expense)}
+.nd-din2-sub{font-size:12px;color:var(--text-3);margin-bottom:10px}
+.nd-din2-edit{display:flex;align-items:center;justify-content:center;gap:8px;margin:12px 0}
+.nd-din2-edit span{font-size:22px;font-weight:800;color:var(--text-2)}
+.nd-din2-edit input{width:150px;font-size:20px;font-weight:800;text-align:center}
+.nd-din2-meta{margin-top:10px;background:none;border:none;color:var(--text-2);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.nd-din2-list{margin-top:8px;text-align:left}
+.nd-din2-comp{margin-top:10px;font-size:12px;color:var(--text-2)}
+.nd-bar{height:8px}
+.nd-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;max-width:620px;margin:0 auto 14px}
+.nd-tab{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:16px;
+  background:var(--bg-surface);border:1px solid var(--border-default);color:var(--text-2);font-family:inherit;cursor:pointer;
+  transition:border-color .15s,transform .15s}
+.nd-tab:active{transform:scale(.95)}
+.nd-tab.on{border-color:var(--accent-couple);color:var(--text-1);background:var(--bg-surface-2)}
+.nd-tab-emo{font-size:22px;line-height:1}
+.nd-tab-lbl{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.nd-tab-n{position:absolute;top:6px;right:8px;min-width:18px;height:18px;border-radius:9px;padding:0 5px;font-size:10px;font-weight:800;
+  background:var(--accent-couple);color:#fff;display:flex;align-items:center;justify-content:center}
+.nd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:12px;align-items:start}
+.nd-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:18px;padding:14px 16px;min-width:0;
+  animation:tdc-in .4s cubic-bezier(.2,.8,.2,1) both}
+.nd-card.paused{opacity:.7}
+.nd-card.nd-open{grid-column:1/-1;border-color:var(--accent-couple)}
+.nd-card-top{display:flex;align-items:center;gap:12px;cursor:pointer}
+.nd-emo{width:44px;height:44px;flex-shrink:0;border-radius:14px;background:var(--bg-surface-2);display:flex;align-items:center;
+  justify-content:center;font-size:24px}
+.nd-emo.big{width:64px;height:64px;font-size:36px;border-radius:20px;margin:0 auto 6px}
+.nd-card-mid{flex:1;min-width:0}
+.nd-card-ttl{font-size:15px;font-weight:800;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nd-card-sub{font-size:11px;color:var(--text-3);margin-top:2px}
+.nd-ring{--p:0;width:48px;height:48px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:conic-gradient(var(--accent-couple) calc(var(--p) * 1%),var(--bg-surface-2) 0)}
+.nd-ring.full{background:conic-gradient(var(--color-income) 100%,transparent 0)}
+.nd-ring span{width:38px;height:38px;border-radius:50%;background:var(--bg-surface);display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;color:var(--text-1)}
+.nd-card .nd-bar{margin:12px 0 10px}
+.nd-card-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;text-align:center}
+.nd-card-nums span{display:block;font-size:10px;color:var(--text-3);font-weight:700;white-space:nowrap}
+.nd-card-nums b{font-size:13px;font-variant-numeric:tabular-nums;color:var(--text-1);white-space:nowrap}
+.nd-card-body{margin-top:14px;padding-top:12px;border-top:1px dashed var(--border-default)}
+.nd-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:14px}
+.nd-desc{font-size:12px;color:var(--text-2);line-height:1.5;margin-bottom:12px;text-align:center}
+.nd-new{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:132px;border-radius:18px;
+  border:1.5px dashed var(--border-default);background:transparent;color:var(--text-2);font-family:inherit;font-size:13px;font-weight:700;
+  cursor:pointer;transition:border-color .15s,color .15s}
+.nd-new:hover{border-color:var(--accent-couple);color:var(--text-1)}
+.nd-new-plus{font-size:28px;line-height:1;color:var(--accent-couple)}
+.nd-done{margin-top:18px}
+.nd-done-hdr{font-size:12px;font-weight:700;color:var(--text-3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
+/* Asistente del Nidito */
+.nd-wiz-dots{display:flex;justify-content:center;gap:6px;margin-bottom:14px}
+.nd-wiz-dot{width:8px;height:8px;border-radius:50%;background:var(--bg-surface-3,var(--border-default));transition:width .2s}
+.nd-wiz-dot.on{width:22px;border-radius:4px;background:var(--accent-couple)}
+.nd-wiz-dot.ok{background:var(--accent-couple);opacity:.5}
+.nd-wiz-q{font-size:17px;font-weight:800;color:var(--text-1);text-align:center;margin-bottom:12px}
+.nd-wiz-lbl{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 2px 6px}
+.nd-wiz-tipos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.nd-wiz-tipo{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 4px;border-radius:16px;background:var(--bg-surface-2);
+  border:1.5px solid transparent;color:var(--text-2);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.nd-wiz-tipo span{font-size:24px}
+.nd-wiz-tipo.on{border-color:var(--accent-couple);color:var(--text-1)}
+.nd-wiz-name{display:flex;align-items:center;gap:8px;margin-top:14px}
+.nd-wiz-name input{flex:1;min-width:0;font-size:15px}
+.nd-wiz-emo{width:46px;height:46px;flex-shrink:0;border-radius:14px;border:1px solid var(--border-default);background:var(--bg-surface-2);
+  font-size:24px;cursor:pointer}
+.nd-wiz-emojis{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;margin-top:8px}
+.nd-wiz-emojis button{aspect-ratio:1;border-radius:10px;border:1px solid transparent;background:var(--bg-surface-2);font-size:20px;cursor:pointer}
+.nd-wiz-emojis button.on{border-color:var(--accent-couple)}
+.nd-wiz-desc{width:100%;margin-top:10px;min-height:56px}
+.nd-wiz-monto{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:12px}
+.nd-wiz-monto span{font-size:30px;font-weight:900;color:var(--text-2)}
+.nd-wiz-monto input{width:min(220px,70%);font-size:30px;font-weight:900;text-align:center;font-variant-numeric:tabular-nums}
+.nd-wiz-center{justify-content:center}
+.nd-wiz-fecha{display:block;margin:12px auto 0}
+.nd-wiz-prev{text-align:center;padding:16px;border-radius:18px;background:var(--bg-surface-2)}
+.nd-wiz-prev-t{font-size:18px;font-weight:900;color:var(--text-1)}
+.nd-wiz-prev-s{font-size:12px;color:var(--text-3);margin-bottom:12px}
+.nd-wiz-calc{margin-top:12px;font-size:13px;color:var(--text-1)}
+.nd-wiz-calc.muted{color:var(--text-3)}
+.nd-wiz-split{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:12px;border-radius:14px;border:1px solid var(--border-default);
+  font-size:12px;color:var(--text-2);cursor:pointer;text-align:left}
+.nd-wiz-split input{margin-top:2px;flex-shrink:0;width:18px;height:18px;accent-color:var(--accent-couple)}
+.nd-wiz-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:18px}
+/* Wishlist: casilla de comprado, prioridad al agregar y forma de pago por tarjeta */
+.wl-chk{background:none;border:none;cursor:pointer;padding:0;font-size:22px;color:var(--text-3);flex-shrink:0;line-height:1}
+.wl-chk.on{color:var(--color-income)}
+.wl-card.done .wl-name{text-decoration:line-through;color:var(--text-3)}
+.wl-add-prio{display:flex;gap:4px;align-items:center}
+.wl-pp-dot{width:34px;height:34px;border-radius:50%;border:1.5px solid transparent;background:var(--bg-surface-2);font-size:14px;cursor:pointer;padding:0}
+.wl-pp-dot.on{border-color:var(--text-1)}
+.wl-fp{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 2px}
+.wl-add{flex-wrap:wrap}
+.wl-add-prio{flex:1 0 100%;justify-content:center}
+.wl-add-prio-l{font-size:11px;font-weight:600;color:var(--text-3);margin-left:4px}
 </style>
 </head>
 <body>
@@ -1819,12 +2017,44 @@ body.sheet-locked{overflow:hidden}
   </div>
 </div>
 
+<div class="pop" id="pop" onclick="if(event.target===this)cerrarPop()">
+  <div class="pop-panel" role="dialog" aria-modal="true" aria-labelledby="pop-title">
+    <div class="pop-head"><span id="pop-title"></span><button class="ds-close" onclick="cerrarPop()" aria-label="Cerrar"><i class="ti ti-x"></i></button></div>
+    <div class="pop-body" id="pop-body"></div>
+  </div>
+</div>
+
 <script>
 // ── CONSTANTES ──────────────────────────────────────────────────────────────
-const CATS   = ['Hogar','Comida','TDC','Despensa','Hormiga','Ocio','Personales','Platina','Transporte','OTROS'];
+const CATS   = ['Hogar','Comida','TDC','Despensa','Alicia','Ocio','Personales','Platina','Transporte','OTROS'];
 const MEDIOS = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut','Pluxee'];
 const CLR    = ['#818cf8','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
-const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Hormiga':'#fbbf24','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
+const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Alicia':'#f59e0b','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
+// Emoji por categoría: lo usan las tarjetas de Movimientos, Gastos esta quincena, Despensa y Nidito.
+const CAT_EMOJI = { Hogar:'🏠', Comida:'🍽️', TDC:'💳', Despensa:'🛒', Alicia:'🩵', Ocio:'🎉', Personales:'💆',
+  Platina:'🚗', Transporte:'🚌', OTROS:'📦', Otros:'📦' };
+// 🩵 (corazón celeste) es de 2022: Windows 10 y sistemas viejos lo pintan como un cuadro vacío. Si el
+// sistema no lo dibuja en color, se usa 💙 en su lugar.
+(function () {
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 24;
+    const x = c.getContext('2d'); x.textBaseline = 'top'; x.font = '20px sans-serif'; x.fillText('🩵', 0, 0);
+    const d = x.getImageData(0, 0, 24, 24).data;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128 && d[i + 2] > 150 && d[i + 2] - d[i] > 40) return;
+    CAT_EMOJI.Alicia = '💙';
+  } catch (e) { /* sin canvas: se queda 🩵 */ }
+})();
+const _esAhorroTxt = t => /\bahorro\b/i.test(t || '');
+// Emoji de un movimiento o gasto: ingreso 💰, ahorro 🐷, si no el de su categoría.
+function catEmoji(cat, x) {
+  if (x && x.tipo === 'INGRESO') return '💰';
+  if (x && (_esAhorroTxt(x.concepto) || _esAhorroTxt(x.descripcion))) return '🐷';
+  return CAT_EMOJI[cat] || '📦';
+}
+function catIcHTML(cat, x, emoji) {
+  const c = (x && x.tipo === 'INGRESO') ? '#34d399' : (CAT_CLR[cat] || '#94a3b8');
+  return `<div class="mov-card-ic emo" style="background:${c}22" aria-hidden="true">${emoji || catEmoji(cat, x)}</div>`;
+}
 
 // ── ESTADO GLOBAL ────────────────────────────────────────────────────────────
 const S = {
@@ -2958,6 +3188,7 @@ function navPeriodo(dir, mode) { if (mode==='reset') S.periodo.offset=0; else S.
 function catGasto(desc) {
   if (!desc) return 'Otros';
   const d = desc;
+  if (/alicia/i.test(d))                                   return 'Alicia';
   if (/platina|gasolina|verificac|afinac|mecán/i.test(d)) return 'Platina';
   if (/psico|terapia|playera|ropa|lentes/i.test(d))       return 'Personales';
   if (/comida/i.test(d))                                   return 'Comida';
@@ -2965,13 +3196,14 @@ function catGasto(desc) {
   if (/transporte|pasajes/i.test(d))                       return 'Transporte';
   if (/despensa/i.test(d))                                 return 'Despensa';
   if (/hogar|renta|luz|agua|gas\b|internet|teléfono|celular/i.test(d)) return 'Hogar';
-  if (/hormiga|café|snack|golosina|antojo/i.test(d))       return 'Hormiga';
+  if (/golosina/i.test(d))                                 return 'Ocio';
+  if (/café|snack|antojo/i.test(d))                        return 'Comida';
   if (/ocio|entretenimiento|netflix|spotify|cine|suscri/i.test(d)) return 'Ocio';
   return 'Otros';
 }
 const _CAT_COLORS = {
   Hogar:'#60A5FA', Comida:'#fb923c', TDC:'#f87171', Despensa:'#4ade80',
-  Hormiga:'#FBBF24', Ocio:'#a78bfa', Personales:'#f472b6', Platina:'#22d3ee',
+  Alicia:'#f59e0b', Ocio:'#a78bfa', Personales:'#f472b6', Platina:'#22d3ee',
   Transporte:'#818cf8', Otros:'#94a3b8'
 };
 function catBadge(cat) {
@@ -3138,11 +3370,13 @@ function toggleTbl(tableId) {
     btn.title = _tglLbl(collapsed); btn.setAttribute('aria-label', _tglLbl(collapsed)); btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   }
 }
-function tglBtn(tableId, exportCall) {
+// opts.centrado → barra centrada con botones grandes; opts.antes → botones extra a la izquierda.
+function tglBtn(tableId, exportCall, opts = {}) {
   const collapsed = !!(S._tblCollapsed && S._tblCollapsed[tableId]);
   // Restaurar estado colapsado tras re-render del DOM
   setTimeout(() => _applyTblCollapse(tableId, collapsed), 0);
-  return `<div class="ico-bar">
+  return `<div class="ico-bar${opts.centrado ? ' ico-bar-c' : ''}">
+    ${opts.antes || ''}
     ${exportCall ? `<button class="ico-btn" onclick="${exportCall}" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
     <button id="btn-tgl-${tableId}" class="ico-btn" onclick="toggleTbl('${tableId}')" title="${_tglLbl(collapsed)}" aria-label="${_tglLbl(collapsed)}" aria-expanded="${collapsed?'false':'true'}"><i class="ti ti-chevron-${collapsed?'down':'up'}"></i></button>
   </div>`;
@@ -3183,6 +3417,8 @@ function exportIngresosQuincena(ctx) {
 // quincena, o se quita de Presupuesto, el estado del deseo se actualiza al volver a abrir.
 const WL_PRIO = { alta:{ lbl:'Alta', ic:'🔴', o:0 }, media:{ lbl:'Media', ic:'🟡', o:1 }, baja:{ lbl:'Baja', ic:'🟢', o:2 } };
 const WL_REFLEXION_DIAS = 30;
+const WL_FP = [['efectivo', '🏦', 'Efectivo', 'ef'], ['pluxee', '🎫', 'Pluxee', 'px'], ['tarjeta_debito', '💳', 'Débito', 'db']];
+const WL_FP_MEDIO = { efectivo: 'efectivo', pluxee: 'Pluxee', tarjeta_debito: 'débito' };
 const _wlEsc  = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const _wlItem = id => (S._wl?.items || []).find(x => x.id === id);
 const _wlNorm = r => ({ ...r, precio: Number(r.precio) || 0 });
@@ -3235,11 +3471,14 @@ function _wlHead(it) {
   const sub = [it.categoria, it.notas ? it.notas.split('\n')[0].slice(0, 40) : ''].filter(Boolean).map(_wlEsc).join(' · ');
   const hecho = it.estado === 'comprado';
   return `<div class="wl-top">
+    <button class="wl-chk${hecho ? ' on' : ''}" onclick="wlCheck('${it.id}',${!hecho})" title="${hecho ? 'Desmarcar' : 'Marcar como comprado / conseguido'}" aria-pressed="${hecho}" aria-label="Comprado"><i class="ti ti-${hecho ? 'square-check' : 'square'}"></i></button>
     <button class="wl-prio" onclick="wlCiclarPrio('${it.id}')" title="Prioridad ${p.lbl} — toca para cambiarla" aria-label="Prioridad ${p.lbl}">${p.ic}</button>
     <div class="wl-mid" onclick="wlEditar('${it.id}')"><div class="wl-name">${_wlEsc(it.nombre)}</div><div class="wl-sub">${sub}</div></div>
     <div class="wl-price">${fmt(it.precio)}</div>
   </div>
   <div class="wl-chips">${chips}</div>
+  ${hecho ? '' : `<div class="wl-fp" role="group" aria-label="Forma de pago">${WL_FP.map(([k, e, l, c]) =>
+    `<button class="q-fp-pill${it.forma_pago === k ? ' on on-' + c : ''}" onclick="wlFP('${it.id}','${k}')" title="Pagar con ${l}">${e} ${l}</button>`).join('')}</div>`}
   <div class="wl-acts">
     ${hecho
       ? `<button class="wl-act" onclick="wlReabrir('${it.id}')"><i class="ti ti-rotate"></i> Reabrir</button>`
@@ -3291,7 +3530,7 @@ function _wlPanel(it) {
   }
   return `<div class="wl-panel">
     <div class="wl-panel-t">Marcar como comprado</div>
-    <div><label>Medio de pago</label><select id="wl-mp">${MEDIOS.map(x => `<option${x==='efectivo'?' selected':''}>${x}</option>`).join('')}</select></div>
+    <div><label>Medio de pago</label><select id="wl-mp">${MEDIOS.map(x => `<option${x===(WL_FP_MEDIO[it.forma_pago]||'efectivo')?' selected':''}>${x}</option>`).join('')}</select></div>
     <div class="wl-hint">“Registrar gasto” lo suma a tus movimientos de hoy y descuenta el saldo de la cuenta de ese medio de pago. “Solo marcar” no mueve dinero (úsalo si ya lo registraste por otro lado).</div>
     <div class="wl-acts" style="margin:0">
       <button class="wl-act pri" onclick="wlConfirmarCompra('${it.id}',true)"><i class="ti ti-receipt"></i> Registrar gasto ${fmt(it.precio)}</button>
@@ -3342,6 +3581,9 @@ function wlRender() {
       <input id="wl-new-n" placeholder="¿Qué deseas?" maxlength="200" autocomplete="off" aria-label="Nuevo deseo">
       <input id="wl-new-p" type="number" min="0" step="any" inputmode="decimal" placeholder="Precio" aria-label="Precio aproximado">
       <button class="wl-add-btn" type="submit" aria-label="Agregar deseo"><i class="ti ti-plus"></i></button>
+      <div class="wl-add-prio" role="radiogroup" aria-label="Prioridad">${Object.entries(WL_PRIO).map(([k, v]) =>
+        `<button type="button" class="wl-pp-dot${(st.newPrio || 'media') === k ? ' on' : ''}" onclick="wlNuevaPrio('${k}')" role="radio" aria-checked="${(st.newPrio || 'media') === k}" title="Prioridad ${v.lbl}">${v.ic}</button>`).join('')}
+        <span class="wl-add-prio-l">Prioridad ${WL_PRIO[st.newPrio || 'media'].lbl.toLowerCase()}</span></div>
     </form>
     <div class="wl-bar">
       <select onchange="wlOrden(this.value)" aria-label="Ordenar">
@@ -3371,7 +3613,7 @@ async function wlAgregar(e) {
   const nombre = $('wl-new-n').value.trim(), precio = parseFloat($('wl-new-p').value) || 0;
   if (!nombre) { $('wl-new-n').focus(); return false; }
   try {
-    const r = await api('POST', '/api/wishlist', { user_phone: S.phone, nombre, precio });
+    const r = await api('POST', '/api/wishlist', { user_phone: S.phone, nombre, precio, prioridad: S._wl.newPrio || 'media' });
     S._wl.items.unshift(_wlNorm(r.data));
     $('wl-new-n').value = ''; $('wl-new-p').value = '';
     wlRender(); $('wl-new-n')?.focus();
@@ -3411,6 +3653,19 @@ async function wlGuardar(id) {
 }
 
 function wlPrio(id, p) { wlCampo(id, 'prioridad', p); wlRender(); }
+function wlNuevaPrio(p) { S._wl.newPrio = p; wlRender(); }
+// Forma de pago del deseo (la misma terna que "Gastos esta quincena"); tocar la activa la quita.
+function wlFP(id, k) { const it = _wlItem(id); if (it) wlCampo(id, 'forma_pago', it.forma_pago === k ? '' : k); }
+// Casilla de comprado. Si el deseo está agendado, el servidor lo palomea también en Gastos esta quincena.
+async function wlCheck(id, hecho) {
+  const it = _wlItem(id); if (!it) return;
+  const ligado = !!it.quincena_key;
+  const r = await _wlAccion(id, () => api('POST', `/api/wishlist/${id}/check`, { user_phone: S.phone, hecho }));
+  if (!r) return;
+  toast(hecho ? (r.movimiento ? 'Comprado ✓ — también palomeado en Gastos esta quincena' : 'Comprado ✓')
+              : (ligado ? 'Desmarcado — vuelve a estar pendiente en Gastos esta quincena' : 'Desmarcado'));
+  if (ligado) load();   // el palomeo de Gastos esta quincena cambió
+}
 function wlCiclarPrio(id) {
   const it = _wlItem(id); if (!it) return;
   wlPrio(id, { alta: 'media', media: 'baja', baja: 'alta' }[it.prioridad] || 'media');
@@ -3478,7 +3733,7 @@ const DINERITO_ID = '_dinerito_';
 const getDinerito = qKey => Number((((S.data || {}).nidito_dinerito_all) || {})[qKey]) || 0;
 function dineritoItem(qKey) {
   const m = getDinerito(qKey);
-  return m > 0 ? { _id: DINERITO_ID, descripcion: 'Dinerito de novios', monto: m, categoria: 'Ocio', _isDinerito: true } : null;
+  return m > 0 ? { _id: DINERITO_ID, descripcion: 'Dinerito de novios', monto: m, categoria: 'Alicia', _isDinerito: true } : null;
 }
 // ── Compromiso al Nidito → "Gastos esta quincena" ────────────────────────────
 // Aportación quincenal (monto_quincenal) de esta persona a proyectos/metas del Nidito. Aplica a una
@@ -3558,11 +3813,45 @@ const dsgOn = (panelId, key) => S._dsgOpen[panelId] === key ? ' dsg-on' : '';
 // ── ESC / logo → Inicio ──────────────────────────────────────────────────────
 // ESC cierra lo que esté encima (formulario, día del calendario, ventana central); si no hay nada
 // abierto y no estás en Inicio, te regresa a Inicio. Dentro de un campo de texto solo quita el foco.
+// ── POP-UP LIGERO ────────────────────────────────────────────────────────────
+// Encima de las ventanas de módulos (z 250) y debajo de los formularios (#ovl, z 300): así un ✎
+// tocado dentro del pop-up abre su formulario por encima. Se cierra con ✕, tocando fuera o con Esc.
+function abrirPop(titulo, html, size) {
+  const p = $('pop'); if (!p) return;
+  $('pop-title').textContent = titulo;
+  $('pop-body').innerHTML = html;
+  p.querySelector('.pop-panel').className = 'pop-panel' + (size ? ' pop-' + size : '');
+  p.classList.add('open');
+}
+function cerrarPop() { $('pop')?.classList.remove('open'); S._qPop = null; S._ndWiz = null; }
+
+// Gastos esta quincena → toque en Efectivo / Pluxee / Débito: pop-up con las tarjetas de esa forma de
+// pago (las mismas de la lista, con sus casillas y botones). rQuincenaPanel deja listas la función que
+// pinta una tarjeta y los gastos de cada forma de pago; al repintarse, el pop-up abierto se actualiza.
+const QPAY_LBL = { efectivo: '🏦 Efectivo', pluxee: '🎫 Pluxee', tarjeta_debito: '💳 Débito' };
+function abrirQPay(ctx, medio) {
+  S._qPop = { ctx, medio };
+  abrirPop(QPAY_LBL[medio] || 'Gastos', '<div id="qpay-body"></div>', 'md');
+  _qPayPaint();
+}
+function _qPayPaint() {
+  const p = S._qPop, box = $('qpay-body'); if (!p || !box) return;
+  const fn = (S._qCardFn || {})[p.ctx], list = ((S._qPayList || {})[p.ctx] || {})[p.medio] || [];
+  if (!fn) return;
+  const tot = list.reduce((a, g) => a + (g.monto || 0), 0);
+  box.innerHTML = list.length
+    ? `<div class="q-total-widget" style="margin:0 0 12px"><span class="qt-lbl">${list.length} gasto${list.length !== 1 ? 's' : ''}</span><span class="qt-val red">${fmt(tot)}</span></div>
+       <div class="mov-cards">${list.map(fn).join('')}</div>`
+    : `<div class="desp-empty">Ningún gasto de esta quincena está marcado con ${QPAY_LBL[p.medio] || 'esta forma de pago'}.</div>`;
+}
+function ciclarOrdenQ() { S._qSort = { '': 'desc', desc: 'asc', asc: '' }[S._qSort || '']; refreshQuincenaPanel(); }
+
 function _escGlobal(e) {
   if (e.key !== 'Escape' || e.defaultPrevented) return;
   const t = e.target;
   if (t && t !== document.body && (t.matches?.('input,textarea,select') || t.isContentEditable)) { t.blur(); return; }
   if ($('ovl')?.classList.contains('open')) { closeM(); return; }
+  if ($('pop')?.classList.contains('open')) { cerrarPop(); return; }
   if ($('cal-day-panel')?.classList.contains('open')) { closeCalDay(); return; }
   if ($('dash-sheet')?.classList.contains('open')) { cerrarHoja(); return; }
   if ($('mobile-sheet')?.classList.contains('open')) { closeMobileMore(); return; }
@@ -3936,31 +4225,141 @@ function rQuincenaPanel(ctx) {
     };
   };
   const _cts = refs.cuentas || {};
-  const tarjCol = (emoji, lbl, p, saldo, id, open) => `<div class="tarj-col" id="${id}" style="display:${open ? '' : 'none'}" title="${p.n} gasto${p.n !== 1 ? 's' : ''} con ${lbl}">
+  // Cada tarjeta abre un pop-up con los gastos de esa forma de pago.
+  const tarjCol = (emoji, lbl, p, saldo, id, open, medio) => `<div class="tarj-col" id="${id}" style="display:${open ? '' : 'none'}" role="button" tabindex="0"
+      onclick="abrirQPay('${ctx}','${medio}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+      title="Ver ${p.n ? 'los ' + p.n + ' gasto' + (p.n !== 1 ? 's' : '') : 'gastos'} con ${lbl}">
       <div class="tarj-lbl">${emoji} ${lbl}${p.n ? '<span class="tarj-n"> · ' + p.n + '</span>' : ''}</div>
       <div class="tarj-val">${p.n ? fmt(p.total) : '—'}</div>
-      <div class="tarj-sub">${!p.n ? 'sin gastos' : p.pend > 0 ? 'por pagar ' + fmt(p.pend) : 'todo pagado ✓'}</div>
+      ${!p.n ? '<div class="tarj-sub">sin gastos</div>' : p.pend === 0 ? '<div class="tarj-sub pos">todo pagado ✓</div>' : ''}
       ${qOff === 0 && p.pend > 0 ? `<div class="tarj-sub">saldo ${fmt(saldo)}</div>${p.pend > saldo
         ? `<div class="tarj-sub neg">faltan ${fmt(p.pend - saldo)}</div>`
         : `<div class="tarj-sub pos">alcanza ✓</div>`}` : ''}
     </div>`;
-  const tarjHTML = tarjCol('🏦', 'Efectivo', _porMedio('efectivo'), Number(_cts.efectivo) || 0, `tarj-card-ef-${ctx}`, S._tarjOpen)
-                 + tarjCol('🎫', 'Pluxee', _porMedio('pluxee'), Number(_cts.pluxee) || 0, `tarj-card-px-${ctx}`, S._tarjOpen)
-                 + tarjCol('💳', 'Débito', _porMedio('tarjeta_debito'), (Number(_cts.banamex) || 0) + (Number(_cts.revolut_debito) || 0), `tarj-card-db-${ctx}`, S._tarjOpen);
+  const tarjHTML = tarjCol('🏦', 'Efectivo', _porMedio('efectivo'), Number(_cts.efectivo) || 0, `tarj-card-ef-${ctx}`, S._tarjOpen, 'efectivo')
+                 + tarjCol('🎫', 'Pluxee', _porMedio('pluxee'), Number(_cts.pluxee) || 0, `tarj-card-px-${ctx}`, S._tarjOpen, 'pluxee')
+                 + tarjCol('💳', 'Débito', _porMedio('tarjeta_debito'), (Number(_cts.banamex) || 0) + (Number(_cts.revolut_debito) || 0), `tarj-card-db-${ctx}`, S._tarjOpen, 'tarjeta_debito');
 
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
-  // Chart (deferred after render)
-  const chartLabels = ['Ingresos','Gastos','Balance'];
+  // Gráfica: distribución por categoría de los gastos planeados de la quincena.
+  const _porCat = {};
+  gasEsp.forEach(g => { const c = g._isDespensa ? 'Despensa' : (g.categoria || 'OTROS'); _porCat[c] = (_porCat[c] || 0) + (Number(g.monto) || 0); });
+  const _cats = Object.keys(_porCat).filter(c => _porCat[c] > 0).sort((a, b) => _porCat[b] - _porCat[a]);
   setTimeout(() => {
-    const balClr = balReal >= 0 ? '#60a5fa' : '#fbbf24';
-    mkC(qChId, S.ct[qChId]||'bar', chartLabels, [{
-      label:'Monto',
-      data:[ingQ, totalGasReal, balReal],
-      backgroundColor:['#34d39966','#f8717166', balClr+'66'],
-      borderColor:    ['#34d399',   '#f87171',   balClr]
-    }]);
+    if (!_cats.length) { emptyChart(qChId, 'Sin gastos planeados'); return; }
+    mkC(qChId, S.ct[qChId] || 'doughnut', _cats.map(c => `${CAT_EMOJI[c] || '📦'} ${c}`), [{
+      label: 'Planeado', data: _cats.map(c => _porCat[c]),
+      backgroundColor: _cats.map(c => (CAT_CLR[c] || '#94a3b8') + 'bb'),
+      borderColor:     _cats.map(c => CAT_CLR[c] || '#94a3b8')
+    }], { center: 'Planeado' });
   }, 20);
+
+  // Orden por monto: solo cambia la vista (lo guardado conserva su orden).
+  const gasVista = S._qSort ? [...gasEsp].sort((a, b) => S._qSort === 'asc' ? (a.monto || 0) - (b.monto || 0) : (b.monto || 0) - (a.monto || 0)) : gasEsp;
+  const _sortIco = { '': 'arrows-sort', desc: 'sort-descending-numbers', asc: 'sort-ascending-numbers' }[S._qSort || ''];
+  const _sortLbl = { '': 'Ordenar por monto', desc: 'Mayor a menor · toca para menor a mayor', asc: 'Menor a mayor · toca para quitar el orden' }[S._qSort || ''];
+  const sortBtn  = `<button class="ico-btn${S._qSort ? ' on' : ''}" onclick="ciclarOrdenQ()" title="${_sortLbl}" aria-label="${_sortLbl}"><i class="ti ti-${_sortIco}"></i></button>`;
+
+  // Una tarjeta de gasto planeado. Se reutiliza en los pop-ups de Efectivo / Pluxee / Débito.
+  const cardHTML = g => {
+        const pagadoMov = qMovs.find(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + g.descripcion);
+        const pagadoId  = pagadoMov?.id || null;
+        const pagadoArg = pagadoId ? ("'" + pagadoId + "'") : 'null';
+        const chkKey    = (g._id || g.id || g.descripcion || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const chkTitle  = pagadoId ? 'Quitar de movimientos' : 'Registrar como gasto realizado';
+        const chk = `<button class="q-card-chk" onclick="marcarGastoQ('${chkKey}',${pagadoArg})" title="${chkTitle}" style="color:${pagadoId?'var(--color-income)':'var(--text-3)'}"><i class="ti ti-${pagadoId?'checkbox':'square'}"></i></button>`;
+        if (g._isNiditoComp) {
+          // Solo lectura: se edita en Nidito (Proyectos y metas → Aportación por persona).
+          return `<div class="mov-card q-card">
+          ${catIcHTML('Ocio', null, '🤝')}
+          <div class="mov-card-mid">
+            <div class="mov-card-title">Compromiso al Nidito</div>
+            ${g._items.map(c => `<div class="mov-card-sub">${gxEsc(c.titulo)} · ${fmt(c.monto)}</div>`).join('')}
+          </div>
+          <div class="mov-card-val red">${fmt(g.monto)}</div>
+          <div class="q-card-foot"><div class="mov-card-acts">
+            <button class="edit-pill-btn" title="Editar en Nidito" onclick="ndIrADinerito('${qKey}','proyectos')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+          </div></div>
+        </div>`;
+        }
+        if (g._isDinerito) {
+          // Solo lectura: se edita en Nidito. Sin casilla de "pagado" (el gasto real son los movimientos
+          // con Alicia; marcarlo crearía un movimiento duplicado por el monto completo).
+          const gastado = getDineritoGastado(qi.from, qi.to), rest = g.monto - gastado;
+          const pct = g.monto > 0 ? Math.min(100, Math.round(gastado / g.monto * 100)) : 0;
+          return `<div class="mov-card q-card">
+          ${catIcHTML('Alicia', null, '💕')}
+          <div class="mov-card-mid">
+            <div class="mov-card-title">Dinerito de novios</div>
+            <div class="mov-card-sub">Nidito · ${rest >= 0 ? 'restan ' + fmt(rest) : 'excedido ' + fmt(-rest)}</div>
+            <div class="mov-card-sub">Gastado con Alicia: ${fmt(gastado)}</div>
+            <div class="q-din-bar${rest < 0 ? ' over' : ''}"><span style="width:${pct}%"></span></div>
+          </div>
+          <div class="mov-card-val red">${fmt(g.monto)}</div>
+          <div class="q-card-foot"><div class="mov-card-acts">
+            <button class="edit-pill-btn" title="Editar en Nidito" onclick="ndIrADinerito('${qKey}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+          </div></div>
+        </div>`;
+        }
+        if (g._isDespensa) {
+          const nArt = (S.data.despensa || []).filter(x => !x.comprado && x.compra_quincena !== false).length;
+          return `<div class="mov-card q-card${pagadoId?' pagado':''}">
+            ${chk}
+            ${catIcHTML('Despensa', null, '🛒')}
+            <div class="mov-card-mid q-card-tap" onclick="toggleQDesp()" role="button" tabindex="0" aria-expanded="${!!S._qDespOpen}" title="${S._qDespOpen ? 'Ocultar artículos' : 'Ver artículos'}"
+              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+              <div class="mov-card-title">Despensa<i class="ti ti-chevron-${S._qDespOpen ? 'up' : 'down'}"></i></div>
+              <div class="mov-card-sub">${nArt} artículo${nArt !== 1 ? 's' : ''} de tu lista</div>
+            </div>
+            <div class="mov-card-val red">${fmt(g.monto)}</div>
+            <div class="q-card-foot">
+              <div class="mov-card-acts">
+                <button class="edit-pill-btn" title="Ver despensa" onclick="dashEmoji('despensa')"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
+                <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
+              </div>
+            </div>
+            ${S._qDespOpen ? _qDespExpHTML(false) : ''}
+          </div>`;
+        }
+        const fp      = fpMap[g.descripcion] || g.forma_pago || '';
+        const _id     = g._id || g.id || g.descripcion;
+        const nomSafe = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const fpEfect = fp === 'efectivo';
+        const fpDebit = fp === 'tarjeta_debito';
+        const fpPlux  = fp === 'pluxee';
+        const catG    = g.categoria || '';
+        const cClrG   = CAT_CLR[catG] || '#94a3b8';
+        const sub     = [catG, g.comentarios].filter(Boolean).join(' · ') || '—';
+        const esDesp  = /^despensa$/i.test((g.descripcion || '').trim());   // Despensa guardada en el presupuesto
+        return `<div class="mov-card q-card${pagadoId?' pagado':''}">
+          ${chk}
+          ${catIcHTML(catG || 'OTROS', g)}
+          <div class="mov-card-mid${esDesp ? ' q-card-tap' : ''}"${esDesp ? ` onclick="toggleQDesp()" role="button" tabindex="0" title="${S._qDespOpen ? 'Ocultar artículos' : 'Ver artículos'}"` : ''}>
+            <div class="mov-card-title">${g.descripcion}${esDesp ? `<i class="ti ti-chevron-${S._qDespOpen ? 'up' : 'down'}"></i>` : ''}</div>
+            <div class="mov-card-sub">${sub}</div>
+          </div>
+          <div class="mov-card-val red">${fmt(g.monto)}</div>
+          <div class="q-card-foot">
+            <div class="q-card-fp">
+              <button class="q-fp-pill${fpEfect?' on on-ef':''}" onclick="setFormaPago('${nomSafe}','efectivo')" title="Marcar como efectivo"><i class="ti ti-cash"></i> Efectivo</button>
+              <button class="q-fp-pill${fpDebit?' on on-db':''}" onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="Marcar como tarjeta de débito"><i class="ti ti-credit-card"></i> T. Débito</button>
+              <button class="q-fp-pill${fpPlux?' on on-px':''}" onclick="setFormaPago('${nomSafe}','pluxee')" title="Marcar como vales Pluxee"><i class="ti ti-basket"></i> Pluxee</button>
+            </div>
+            <div class="mov-card-acts">
+              <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+              <button class="edit-pill-btn" title="Posponer a la siguiente quincena" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
+              <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
+            </div>
+          </div>
+          ${esDesp && S._qDespOpen ? _qDespExpHTML(true) : ''}
+        </div>`;
+  };
+  const _fpDe    = g => fpMap[g.descripcion] || g.forma_pago || '';
+  const _deMedio = m => gasEsp.filter(g => !g._isDinerito && !g._isNiditoComp && _fpDe(g) === m);
+  (S._qCardFn  || (S._qCardFn  = {}))[ctx] = cardHTML;
+  (S._qPayList || (S._qPayList = {}))[ctx] = { efectivo: _deMedio('efectivo'), pluxee: _deMedio('pluxee'), tarjeta_debito: _deMedio('tarjeta_debito') };
+  if (S._qPop?.ctx === ctx) setTimeout(_qPayPaint, 0);
 
   return `<div class="q-panel">
   <div class="q-hdr">
@@ -4039,100 +4438,12 @@ function rQuincenaPanel(ctx) {
       <button class="btn btn-accent" style="padding:11px 22px;font-size:15px;font-weight:700;gap:8px" onclick="oAddProxGasto()"><i class="ti ti-plus" style="font-size:17px"></i> Registrar Próximo Gasto</button>
     </div>
     ${gasEsp.length ? `
-    ${tglBtn('tbl-gastos-q-'+ctx, "exportGastosQuincena('"+ctx+"')")}
+    ${tglBtn('tbl-gastos-q-'+ctx, "exportGastosQuincena('"+ctx+"')", { centrado: true, antes: sortBtn })}
     <div class="mov-cards" id="tbl-gastos-q-${ctx}-body">
-      ${gasEsp.map(g => {
-        const pagadoMov = qMovs.find(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + g.descripcion);
-        const pagadoId  = pagadoMov?.id || null;
-        const pagadoArg = pagadoId ? ("'" + pagadoId + "'") : 'null';
-        const chkKey    = (g._id || g.id || g.descripcion || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        const chkTitle  = pagadoId ? 'Quitar de movimientos' : 'Registrar como gasto realizado';
-        const chk = `<button class="q-card-chk" onclick="marcarGastoQ('${chkKey}',${pagadoArg})" title="${chkTitle}" style="color:${pagadoId?'var(--color-income)':'var(--text-3)'}"><i class="ti ti-${pagadoId?'checkbox':'square'}"></i></button>`;
-        if (g._isNiditoComp) {
-          // Solo lectura: se edita en Nidito (Proyectos y metas → Aportación por persona).
-          return `<div class="mov-card q-card">
-          <div class="mov-card-ic" style="background:var(--bg-surface-2);color:var(--accent-couple)"><i class="ti ti-heart-handshake"></i></div>
-          <div class="mov-card-mid">
-            <div class="mov-card-title">Compromiso al Nidito</div>
-            ${g._items.map(c => `<div class="mov-card-sub">${gxEsc(c.titulo)} · ${fmt(c.monto)}</div>`).join('')}
-          </div>
-          <div class="mov-card-val red">${fmt(g.monto)}</div>
-          <div class="q-card-foot"><div class="mov-card-acts">
-            <button class="edit-pill-btn" title="Editar en Nidito" onclick="ndIrADinerito('${qKey}','proyectos')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-          </div></div>
-        </div>`;
-        }
-        if (g._isDinerito) {
-          // Solo lectura: se edita en Nidito. Sin casilla de "pagado" (el gasto real son los movimientos
-          // con Alicia; marcarlo crearía un movimiento duplicado por el monto completo).
-          const gastado = getDineritoGastado(qi.from, qi.to), rest = g.monto - gastado;
-          const pct = g.monto > 0 ? Math.min(100, Math.round(gastado / g.monto * 100)) : 0;
-          return `<div class="mov-card q-card">
-          <div class="mov-card-ic" style="background:var(--bg-surface-2);color:var(--accent-couple)"><i class="ti ti-heart"></i></div>
-          <div class="mov-card-mid">
-            <div class="mov-card-title">Dinerito de novios</div>
-            <div class="mov-card-sub">Nidito · ${rest >= 0 ? 'restan ' + fmt(rest) : 'excedido ' + fmt(-rest)}</div>
-            <div class="mov-card-sub">Gastado con Alicia: ${fmt(gastado)}</div>
-            <div class="q-din-bar${rest < 0 ? ' over' : ''}"><span style="width:${pct}%"></span></div>
-          </div>
-          <div class="mov-card-val red">${fmt(g.monto)}</div>
-          <div class="q-card-foot"><div class="mov-card-acts">
-            <button class="edit-pill-btn" title="Editar en Nidito" onclick="ndIrADinerito('${qKey}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-          </div></div>
-        </div>`;
-        }
-        if (g._isDespensa) {
-          const dClr = CAT_CLR['Despensa'] || '#94a3b8';
-          return `<div class="mov-card q-card${pagadoId?' pagado':''}">
-            ${chk}
-            <div class="mov-card-ic" style="background:${dClr}22;color:${dClr}"><i class="ti ti-shopping-cart"></i></div>
-            <div class="mov-card-mid">
-              <div class="mov-card-title">Despensa</div>
-              <div class="mov-card-sub">Despensa · lista de compras</div>
-            </div>
-            <div class="mov-card-val red">${fmt(g.monto)}</div>
-            <div class="q-card-foot">
-              <div class="mov-card-acts">
-                <button class="edit-pill-btn" title="Ver despensa" onclick="dashEmoji('despensa')"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
-                <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
-              </div>
-            </div>
-          </div>`;
-        }
-        const fp      = fpMap[g.descripcion] || g.forma_pago || '';
-        const _id     = g._id || g.id || g.descripcion;
-        const nomSafe = g.descripcion.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        const fpEfect = fp === 'efectivo';
-        const fpDebit = fp === 'tarjeta_debito';
-        const fpPlux  = fp === 'pluxee';
-        const catG    = g.categoria || '';
-        const cClrG   = CAT_CLR[catG] || '#94a3b8';
-        const sub     = [catG, g.comentarios].filter(Boolean).join(' · ') || '—';
-        return `<div class="mov-card q-card${pagadoId?' pagado':''}">
-          ${chk}
-          <div class="mov-card-ic" style="background:${cClrG}22;color:${cClrG}"><i class="ti ti-arrow-down-right"></i></div>
-          <div class="mov-card-mid">
-            <div class="mov-card-title">${g.descripcion}</div>
-            <div class="mov-card-sub">${sub}</div>
-          </div>
-          <div class="mov-card-val red">${fmt(g.monto)}</div>
-          <div class="q-card-foot">
-            <div class="q-card-fp">
-              <button class="q-fp-pill${fpEfect?' on on-ef':''}" onclick="setFormaPago('${nomSafe}','efectivo')" title="Marcar como efectivo"><i class="ti ti-cash"></i> Efectivo</button>
-              <button class="q-fp-pill${fpDebit?' on on-db':''}" onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="Marcar como tarjeta de débito"><i class="ti ti-credit-card"></i> T. Débito</button>
-              <button class="q-fp-pill${fpPlux?' on on-px':''}" onclick="setFormaPago('${nomSafe}','pluxee')" title="Marcar como vales Pluxee"><i class="ti ti-basket"></i> Pluxee</button>
-            </div>
-            <div class="mov-card-acts">
-              <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-              <button class="edit-pill-btn" title="Posponer a la siguiente quincena" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
-              <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
-            </div>
-          </div>
-        </div>`;
-      }).join('')}
+      ${gasVista.map(cardHTML).join('')}
     </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Aún no hay gastos registrados esta quincena. Usa el botón <strong>Registrar Próximo Gasto</strong> de arriba.</div>`}
     <div style="margin-top:10px;background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;border:1px solid var(--border-default)">
-      <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:6px">Balance — ${qi.label}${ctBtns(qChId,LINE,'bar')}</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">🧩 Gastos planeados por categoría${ctBtns(qChId,[['Dona','doughnut'],['Barras','bar-h']],'doughnut')}</div>
       <div class="cwrap"><canvas id="${qChId}"></canvas></div>
       <div id="legend-${qChId}" class="chart-legend"></div>
     </div>
@@ -5253,7 +5564,7 @@ function rDash() {
   </div>
   <div class="mini-pills">${tipos.map(([l,v])=>
     `<button class="mini-pill${S.periodo.tipo===v?' on':''}" onclick="setPeriodo('${v}')">${l}</button>`).join('')}</div>
-  <button class="mini-addmov-btn btn btn-accent btn-sm" onclick="oMov()" aria-label="Nuevo movimiento"><i class="ti ti-plus"></i> Movimiento</button>
+
 </div>
 <div class="mini-top-grid dsg-grp">
   <div class="mini-bal-wrap${dsgOn('dash-dsg','balance')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='balance'}" onclick="toggleDsgPanel('balance',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver cómo se calcula">
@@ -5369,9 +5680,7 @@ async function fetchInsights(force=false) {
 // NIDITO v8 — items, asignaciones, comentarios, dinerito
 // ═══════════════════════════════════════════════════════
 
-const ND_ICON  = { PROYECTO:'ti-briefcase', META_CORTO:'ti-bolt', META_MEDIANO:'ti-clock', META_LARGO:'ti-stars' };
 const ND_LABEL = { PROYECTO:'Proyectos', META_CORTO:'Metas a corto plazo', META_MEDIANO:'Metas a mediano plazo', META_LARGO:'Metas a largo plazo' };
-const ND_CLS   = { META_CORTO:'corto', META_MEDIANO:'mediano', META_LARGO:'largo' };
 
 function _ndQ(d) {
   d = d || new Date();
@@ -5437,129 +5746,266 @@ async function _ndFetch() {
   } catch(e) { S._niditoItems=[]; S._ndDin=0; }
 }
 
+// ── NIDITO: vista ────────────────────────────────────────────────────────────
+// Mismo lenguaje que Inicio: portada centrada, emojis en lugar de títulos largos, una tarjeta por
+// proyecto/meta con su avance a simple vista y el detalle (fechas, aportaciones, comentarios) solo al
+// tocarla. Crear o editar es un asistente de 3 pasos en lugar de un formulario.
+const ND_EMO   = { PROYECTO:'🗂️', META_CORTO:'⚡', META_MEDIANO:'⏳', META_LARGO:'🌟' };
+const ND_CORTO = { PROYECTO:'Proyectos', META_CORTO:'Corto plazo', META_MEDIANO:'Mediano plazo', META_LARGO:'Largo plazo' };
+const ND_TIPOS = ['PROYECTO', 'META_CORTO', 'META_MEDIANO', 'META_LARGO'];
+const ND_SUG   = [['✈️','Viaje'],['🏖️','Vacaciones'],['🏠','Casa'],['🛋️','Muebles'],['💍','Boda'],['🚗','Auto'],
+                  ['🐶','Mascota'],['🎓','Estudios'],['💻','Tecnología'],['🎁','Regalo'],['🛟','Fondo de emergencia'],['🎉','Celebración']];
+const ND_EMOJIS = ['💞','🗂️','⚡','⏳','🌟','✈️','🏖️','🏠','🛋️','💍','🚗','🐶','🎓','💻','🎁','🛟','🎉','🍽️','📸','🎸','🌱','🧳','👶','💰'];
+const _ndEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function _ndEmo(it) { return it.emoji || ND_EMO[it.tipo] || '💞'; }
+function _ndPhones() {
+  const angelPh  = S.adminPhone || localStorage.getItem('fos_phone_A') || S.phone;
+  const aliciaPh = localStorage.getItem('fos_phone_B') || (S.phone !== angelPh ? S.phone : null);
+  return { angelPh, aliciaPh };
+}
+
 function _ndPaint() {
-  const el=$('tab-nidito'); if(!el) return;
-  const items=S._niditoItems||[];
-  const q=S._niditoQ||_ndQ();
-  const prevQ=_ndPrev(q), nextQ=_ndNext(q);
-  const din=S._ndDin||0;
-  const comprQ=getCompromisosNidito(q.inicio,q.fin).reduce((a,c)=>a+c.monto,0);
-  const angelPh=S.adminPhone||localStorage.getItem('fos_phone_A')||S.phone;
-  const aliciaPh=localStorage.getItem('fos_phone_B')||(S.phone!==angelPh?S.phone:null);
-  const proyectos=items.filter(x=>x.tipo==='PROYECTO'&&x.estado!=='COMPLETADO');
-  const doneProy=items.filter(x=>x.tipo==='PROYECTO'&&x.estado==='COMPLETADO');
+  const el = $('tab-nidito'); if (!el) return;
+  const items = S._niditoItems || [];
+  const q = S._niditoQ || _ndQ();
+  const prevQ = _ndPrev(q), nextQ = _ndNext(q);
+  const din = S._ndDin || 0;
+  const comprQ = getCompromisosNidito(q.inicio, q.fin).reduce((a, c) => a + c.monto, 0);
+  const { angelPh, aliciaPh } = _ndPhones();
+  // Gastos de esta quincena que mencionan a Alicia (mismo criterio que Gastos esta quincena)
+  const qMovsAlicia = (S.data?.movs || []).filter(m => !m.deleted_at && m.tipo === 'GASTO'
+    && (m.fecha || '') >= q.inicio && (m.fecha || '') <= q.fin
+    && /alicia/i.test(`${m.concepto || ''} ${m.comentarios || ''} ${m.descripcion || ''}`));
+  const gastado  = qMovsAlicia.reduce((a, m) => a + (m.monto || 0), 0);
+  const restante = din - gastado;
+  const pctDin   = din > 0 ? Math.min(100, Math.round(gastado / din * 100)) : (gastado > 0 ? 100 : 0);
+  if (!ND_TIPOS.includes(S._ndTab)) S._ndTab = 'PROYECTO';
+  const activos = t => items.filter(x => x.tipo === t && x.estado !== 'COMPLETADO');
+  const hechos  = items.filter(x => x.estado === 'COMPLETADO');
+  const lista   = activos(S._ndTab);
 
-  // Movimientos de esta quincena que mencionen "alicia" en concepto o comentarios
-  const qMovsAlicia=(S.data?.movs||[]).filter(m=>{
-    if (m.deleted_at) return false;
-    if (m.tipo!=='GASTO') return false;
-    const f=m.fecha||'';
-    if (f<q.inicio||f>q.fin) return false;
-    const hay=s=>/alicia/i.test(s||'');
-    return hay(m.concepto)||hay(m.comentarios)||hay(m.descripcion);
-  });
-  const gastado=qMovsAlicia.reduce((a,m)=>a+(m.monto||0),0);
-  const restante=din-gastado;
-
-  el.innerHTML=`
-<div class="hdr"><h2 style="color:var(--accent-couple)"><i class="ti ti-heart-handshake" style="color:var(--accent-couple)"></i> Nidito</h2></div>
-
-<div class="nd-din-card">
-  <div class="nd-din-ttl"><i class="ti ti-coins"></i> Dinerito de novios</div>
-  <div class="nd-q-pills">
-    <button class="nd-q-pill" onclick='ndPickQ(${JSON.stringify(prevQ)})'>← ${prevQ.label}</button>
-    <button class="nd-q-pill act">${q.label}</button>
-    <button class="nd-q-pill" onclick='ndPickQ(${JSON.stringify(nextQ)})'>${nextQ.label} →</button>
+  el.innerHTML = `
+<div class="nd-hero">
+  <div class="nd-hero-ttl"><span aria-hidden="true">💞</span> Nidito</div>
+  <div class="nd-per">
+    <button onclick='ndPickQ(${JSON.stringify(prevQ)})' aria-label="Quincena anterior"><i class="ti ti-chevron-left"></i></button>
+    <span>${q.label}</span>
+    <button onclick='ndPickQ(${JSON.stringify(nextQ)})' aria-label="Quincena siguiente"><i class="ti ti-chevron-right"></i></button>
   </div>
-
-  <div class="nd-din-fields">
-    <div class="nd-din-field-row">
-      <div class="nd-din-field-lbl"><i class="ti ti-wallet" style="color:var(--accent-couple)"></i> Monto asignado</div>
-      <div class="nd-din-row" style="margin-bottom:0">
-        <span class="nd-din-sign">$</span>
-        <input type="number" class="nd-din-inp" id="nd-din-val" value="${din}" min="0" step="100" placeholder="0">
-        <button class="btn btn-sm nd-din-btn" onclick="ndSaveDin()"><i class="ti ti-device-floppy"></i> Guardar</button>
-      </div>
-    </div>
-    <div class="nd-din-field-row" style="padding-top:14px;border-top:1px solid var(--border-default)">
-      <div class="nd-din-field-lbl"><i class="ti ti-receipt" style="color:${restante>=0?'var(--green)':'var(--red)'}"></i> Monto restante</div>
-      <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px">
-        <span style="font-size:28px;font-weight:700;font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:${restante>=0?'var(--color-income)':'var(--color-expense)'}">${fmt(Math.abs(restante))}</span>
-        ${restante<0?`<span style="font-size:12px;color:var(--red);font-weight:600">excedido</span>`:''}
-      </div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:3px">${fmt(din)} asignado − ${fmt(gastado)} gastado con Alicia</div>
-      ${qMovsAlicia.length ? `<div style="margin-top:10px">${tglBtn('tbl-nd-movs')}${mkTable({
-        id:'tbl-nd-movs', exportName:'gastos_alicia', numbered:true, empty:'Sin gastos',
-        columns:[
-          {key:'concepto', label:'Concepto',  filter:'text',   value:m=>m.concepto||m.descripcion||'—'},
-          {key:'monto',    label:'Monto',     num:true,        value:m=>m.monto||0},
-          {key:'fecha',    label:'Fecha',     filter:'text',   value:m=>fd(m.fecha)||m.fecha||'—'},
-          {key:'medio',    label:'Medio',     filter:'select', value:m=>m.medio_pago||'—'}
-        ],
-        rows: qMovsAlicia,
-        renderRow: m => `<tr>
-          <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.concepto||m.descripcion||'—'}</td>
-          <td style="color:var(--red);font-weight:600">−${fmt(m.monto)}</td>
-          <td style="color:var(--text-2)">${fd(m.fecha)||m.fecha||'—'}</td>
-          <td style="color:var(--text-3)">${m.medio_pago||'—'}</td>
-        </tr>`,
-        footer: rows => {
-          const total = rows.reduce((a,m)=>a+(m.monto||0),0);
-          return total ? `<tr style="border-top:2px solid var(--border-default);font-weight:700">
-            <td colspan="2" style="text-align:right;color:var(--red)">Total: −${fmt(total)}</td>
-            <td colspan="2"></td>
-          </tr>` : '';
-        }
-      })}</div>`
-      : '<div style="font-size:11px;color:var(--text-3);margin-top:6px;opacity:.7">Sin gastos con Alicia esta quincena</div>'}
-    </div>
-  </div>
-  ${comprQ>0?`<div class="nd-din-note" style="margin-top:14px"><i class="ti ti-target" style="color:var(--accent-primary)"></i> Compromiso quincenal total al Nidito: <strong style="color:var(--accent-primary)">${fmt(comprQ)}</strong></div>`:''}
 </div>
 
-<div class="nd-sec-hdr">
-  <h3><i class="ti ti-briefcase"></i> Proyectos</h3>
-  <button class="btn btn-sm btn-ghost" onclick="ndNewItem('PROYECTO')"><i class="ti ti-plus"></i> Nuevo</button>
-</div>
-${proyectos.length?proyectos.map(it=>_ndAcc(it,angelPh,aliciaPh)).join(''):`<div class="nd-empty">Sin proyectos — <a style="color:var(--accent-primary);cursor:pointer" onclick="ndNewItem('PROYECTO')">agregar uno</a></div>`}
-${doneProy.length?`<div style="margin:8px 0 4px;opacity:.6"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:6px;display:flex;align-items:center;gap:5px"><i class="ti ti-circle-check"></i> Completados (${doneProy.length})</div><div style="display:flex;flex-wrap:wrap;gap:6px">${doneProy.map(it=>`<span style="background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);padding:4px 12px;font-size:12px;display:flex;align-items:center;gap:6px"><i class="ti ti-briefcase" style="color:var(--text-3)"></i>${it.titulo}</span>`).join('')}</div></div>`:''}
-
-${['META_CORTO','META_MEDIANO','META_LARGO'].map(tipo=>{
-  const ms=items.filter(x=>x.tipo===tipo);
-  return `<div class="nd-sec-hdr" style="margin-top:28px">
-    <h3><i class="ti ${ND_ICON[tipo]}"></i> ${ND_LABEL[tipo]}</h3>
-    <button class="btn btn-sm btn-ghost" onclick="ndNewItem('${tipo}')"><i class="ti ti-plus"></i> Nueva</button>
+<div class="nd-din2">
+  <div class="nd-din2-top">
+    <span class="nd-din2-lbl">💸 Dinerito de novios</span>
+    <button class="ico-btn${S._ndDinEdit ? ' on' : ''}" onclick="ndDinEditar()" title="${S._ndDinEdit ? 'Cancelar' : 'Cambiar monto asignado'}" aria-label="Cambiar monto asignado"><i class="ti ti-${S._ndDinEdit ? 'x' : 'pencil'}"></i></button>
   </div>
-  ${ms.length?ms.map(it=>_ndMetaCard(it,angelPh,aliciaPh)).join(''):`<div class="nd-empty">Sin ${ND_LABEL[tipo].toLowerCase()}</div>`}`;
-}).join('')}`;
+  ${S._ndDinEdit
+    ? `<div class="nd-din2-edit"><span>$</span><input type="number" id="nd-din-val" value="${din}" min="0" step="100" inputmode="decimal" aria-label="Monto asignado" onkeydown="if(event.key==='Enter')ndSaveDin()"><button class="btn btn-accent btn-sm" onclick="ndSaveDin()"><i class="ti ti-check"></i> Guardar</button></div>`
+    : `<div class="nd-din2-val ${restante >= 0 ? 'pos' : 'neg'}">${restante < 0 ? '−' : ''}${fmt(Math.abs(restante))}</div>
+       <div class="nd-din2-sub">${restante >= 0 ? 'disponibles' : 'de más'} · ${fmt(din)} asignado</div>`}
+  <div class="tdc-bar nd-bar${restante < 0 ? ' over' : ''}"><span style="--p:${pctDin}%"></span></div>
+  <button class="nd-din2-meta" onclick="ndDinLista()" aria-expanded="${!!S._ndDinList}">
+    ${CAT_EMOJI.Alicia} ${fmt(gastado)} con Alicia · ${qMovsAlicia.length} gasto${qMovsAlicia.length !== 1 ? 's' : ''}
+    ${qMovsAlicia.length ? `<i class="ti ti-chevron-${S._ndDinList ? 'up' : 'down'}"></i>` : ''}
+  </button>
+  ${S._ndDinList && qMovsAlicia.length ? `<div class="mov-cards nd-din2-list">${qMovsAlicia.map(m => `<div class="mov-card">
+      ${catIcHTML(m.categoria, m)}
+      <div class="mov-card-mid"><div class="mov-card-title">${_ndEsc(m.concepto || m.descripcion || '—')}</div><div class="mov-card-sub">${fmtDate(m.fecha)}${m.medio_pago ? ' · ' + _ndEsc(m.medio_pago) : ''}</div></div>
+      <div class="mov-card-val red">−${fmt(m.monto)}</div>
+    </div>`).join('')}</div>` : ''}
+  ${comprQ > 0 ? `<div class="nd-din2-comp">🤝 Compromiso quincenal al Nidito <b>${fmt(comprQ)}</b></div>` : ''}
+</div>
 
-  S._ndOpen.forEach(id=>{
-    const h=$('ndh-'+id),b=$('ndb-'+id),w=$('nditem-'+id);
-    if(h){h.classList.add('nd-open');b?.classList.add('nd-open');w?.classList.add('nd-open');}
-  });
+<div class="nd-tabs" role="tablist">
+  ${ND_TIPOS.map(t => { const n = activos(t).length; return `<button class="nd-tab${S._ndTab === t ? ' on' : ''}" role="tab" aria-selected="${S._ndTab === t}" onclick="ndTab('${t}')" title="${ND_CORTO[t]}">
+    <span class="nd-tab-emo" aria-hidden="true">${ND_EMO[t]}</span><span class="nd-tab-lbl">${ND_CORTO[t]}</span>${n ? `<span class="nd-tab-n">${n}</span>` : ''}</button>`; }).join('')}
+</div>
+<div class="nd-grid">
+  ${lista.map(it => _ndCard(it, angelPh, aliciaPh)).join('')}
+  <button class="nd-new" onclick="ndWizard('${S._ndTab}')"><span class="nd-new-plus">＋</span>${S._ndTab === 'PROYECTO' ? 'Nuevo proyecto' : 'Nueva meta'}</button>
+</div>
+${hechos.length ? `<div class="nd-done">
+  <div class="nd-done-hdr">✅ Completados (${hechos.length})</div>
+  <div class="q-desp-chips">${hechos.map(it => `<button class="q-desp-chip" onclick="ndEstado('${it.id}','ACTIVO')" title="Tocar para reactivar">${_ndEmo(it)} ${_ndEsc(it.titulo)}</button>`).join('')}</div>
+</div>` : ''}`;
   setTimeout(_initCollapsibles, 80);
 }
 
-function _ndAcc(item, angelPh, aliciaPh) {
-  const asig=item.asignaciones||[];
-  const {total,pct,cls}=_ndPct(asig,item.presupuesto_total||0);
-  return `<div class="nd-acc-item" id="nditem-${item.id}">
-    <div class="nd-acc-head" id="ndh-${item.id}" onclick="ndToggle('${item.id}')">
-      <i class="ti ti-chevron-right nd-acc-chev"></i>
-      <div style="flex:1;min-width:0">
-        <div class="nd-acc-title">${item.titulo}</div>
-        <div class="nd-pbar"><div class="nd-pfill ${cls}" style="width:${pct}%"></div></div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:1px">
-          <span>${fmt(total)} asignado</span><span>${fmt(item.presupuesto_total||0)} total · ${pct}%</span>
-        </div>
+function _ndCard(it, angelPh, aliciaPh) {
+  const asig  = it.asignaciones || [];
+  const { total, pct } = _ndPct(asig, it.presupuesto_total || 0);
+  const quinc = asig.reduce((a, x) => a + (Number(x.monto_quincenal) || 0), 0);
+  const dias  = it.fecha_fin ? diasRestantes(it.fecha_fin) : null;
+  const qr    = _ndQR(it.fecha_fin);
+  const abierto = S._ndOpen.has(it.id);
+  const cuando = !it.fecha_fin ? '📅 Sin fecha'
+    : `📅 ${fmtDate(it.fecha_fin)}${dias < 0 ? ' · vencida' : dias === 0 ? ' · hoy' : qr ? ` · ${qr} quinc.` : ''}`;
+  return `<div class="nd-card${abierto ? ' nd-open' : ''}${it.estado === 'PAUSADO' ? ' paused' : ''}" id="nditem-${it.id}">
+    <div class="nd-card-top" id="ndh-${it.id}" onclick="ndToggle('${it.id}')" role="button" tabindex="0" aria-expanded="${abierto}"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div class="nd-emo" aria-hidden="true">${_ndEmo(it)}</div>
+      <div class="nd-card-mid">
+        <div class="nd-card-ttl">${_ndEsc(it.titulo)}</div>
+        <div class="nd-card-sub">${cuando}${it.estado === 'PAUSADO' ? ' · ⏸️ Pausado' : ''}</div>
       </div>
-      <div class="acts" style="flex-shrink:0" onclick="event.stopPropagation()">
-        <button class="edit-pill-btn" onclick="ndEditItem('${item.id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-        <button class="edit-pill-btn" style="color:var(--red)" onclick="ndDelItem('${item.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-      </div>
+      <div class="nd-ring${pct >= 100 ? ' full' : ''}" style="--p:${pct}"><span>${pct}%</span></div>
     </div>
-    <div class="nd-acc-body" id="ndb-${item.id}">${_ndAccBody(item,angelPh,aliciaPh)}</div>
+    <div class="tdc-bar nd-bar"><span style="--p:${pct}%"></span></div>
+    <div class="nd-card-nums">
+      <div><span>🎯 Meta</span><b>${it.presupuesto_total > 0 ? fmt(it.presupuesto_total) : '—'}</b></div>
+      <div><span>💰 Asignado</span><b>${fmt(total)}</b></div>
+      <div><span>🗓️ Quincenal</span><b>${quinc > 0 ? fmt(quinc) : '—'}</b></div>
+    </div>
+    ${abierto ? `<div class="nd-card-body" id="ndb-${it.id}">${_ndAccBody(it, angelPh, aliciaPh)}</div>` : ''}
   </div>`;
+}
+
+function ndTab(t)      { S._ndTab = t; _ndPaint(); }
+function ndDinLista()  { S._ndDinList = !S._ndDinList; _ndPaint(); }
+function ndDinEditar() { S._ndDinEdit = !S._ndDinEdit; _ndPaint(); if (S._ndDinEdit) setTimeout(() => $('nd-din-val')?.select(), 0); }
+function ndToggle(id) {
+  const abrir = !S._ndOpen.has(id);
+  if (abrir) S._ndOpen.add(id); else S._ndOpen.delete(id);
+  _ndPaint();
+  if (abrir && S._ndCmts[id] === undefined) ndLoadCmts(id);
+}
+async function ndEstado(id, estado) {
+  try {
+    await api('PATCH', `/api/nidito/items/${id}`, { user_phone: S.phone, estado });
+    const it = S._niditoItems?.find(x => x.id === id); if (it) it.estado = estado;
+    _ndPaint();
+    toast({ ACTIVO: '▶️ Activo de nuevo', PAUSADO: '⏸️ Pausado', COMPLETADO: '🎉 ¡Completado!' }[estado] || 'Listo');
+    load();   // los compromisos activos cambian lo que aparece en Gastos esta quincena
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── NIDITO: asistente para crear / editar ────────────────────────────────────
+// Paso 1: qué es (tipo, emoji y nombre, con sugerencias de un toque) · Paso 2: cuánto y para cuándo
+// (atajos de monto y de plazo) · Paso 3: resumen con lo que toca ahorrar por quincena y, al crear,
+// la opción de repartirlo 50/50 (queda como Compromiso al Nidito en Gastos esta quincena).
+function ndNewItem(tipo) { ndWizard(tipo); }
+function ndEditItem(id)  { ndWizard(null, id); }
+function ndWizard(tipo, editId) {
+  const it = editId ? (S._niditoItems || []).find(x => x.id === editId) : null;
+  const t  = it?.tipo || tipo || S._ndTab || 'PROYECTO';
+  S._ndWiz = it
+    ? { step: 1, editId, tipo: t, emoji: _ndEmo(it), titulo: it.titulo || '', desc: it.descripcion || '',
+        monto: Number(it.presupuesto_total) || 0, fin: it.fecha_fin ? String(it.fecha_fin).slice(0, 10) : '', split: false }
+    : { step: 1, tipo: t, emoji: ND_EMO[t], titulo: '', desc: '', monto: 0, fin: '', split: true };
+  abrirPop(it ? 'Editar en el Nidito' : 'Nuevo en el Nidito', '<div id="nd-wiz" class="nd-wiz"></div>', 'md');
+  _ndWizPaint();
+  setTimeout(() => $('ndw-titulo')?.focus(), 60);
+}
+const _ndMasMeses = n => { const d = new Date(); d.setMonth(d.getMonth() + n); return toISO(d); };
+function _ndWizCalc(w) {
+  const { angelPh, aliciaPh } = _ndPhones();
+  const personas = [angelPh, aliciaPh].filter(Boolean).length || 1;
+  const qr = _ndQR(w.fin);
+  const porQ = qr > 0 && w.monto > 0 ? Math.ceil(w.monto / qr) : 0;
+  return { qr, porQ, porPersona: porQ ? Math.ceil(w.monto / personas / qr) : 0, personas };
+}
+function _ndWizPaint() {
+  const w = S._ndWiz, box = $('nd-wiz'); if (!w || !box) return;
+  const dots = [1, 2, 3].map(n => `<span class="nd-wiz-dot${w.step === n ? ' on' : w.step > n ? ' ok' : ''}"></span>`).join('');
+  let cuerpo = '';
+  if (w.step === 1) {
+    cuerpo = `<div class="nd-wiz-q">¿Qué quieren lograr juntos?</div>
+      <div class="nd-wiz-tipos">${ND_TIPOS.map(t => `<button class="nd-wiz-tipo${w.tipo === t ? ' on' : ''}" onclick="ndWizSet('tipo','${t}')"><span>${ND_EMO[t]}</span>${ND_CORTO[t]}</button>`).join('')}</div>
+      <div class="nd-wiz-lbl">Ideas de un toque</div>
+      <div class="q-desp-chips">${ND_SUG.map(([e, n]) => `<button class="q-desp-chip${w.titulo === n ? ' on' : ''}" onclick="ndWizSug('${e}','${n}')">${e} ${n}</button>`).join('')}</div>
+      <div class="nd-wiz-name">
+        <button class="nd-wiz-emo" onclick="ndWizSet('picker',!S._ndWiz.picker)" title="Cambiar emoji" aria-label="Cambiar emoji">${w.emoji}</button>
+        <input id="ndw-titulo" value="${_ndEsc(w.titulo)}" maxlength="80" placeholder="Nombre (ej. Viaje a Oaxaca)" oninput="S._ndWiz.titulo=this.value" onkeydown="if(event.key==='Enter')ndWizNext()">
+      </div>
+      ${w.picker ? `<div class="nd-wiz-emojis">${ND_EMOJIS.map(e => `<button class="${w.emoji === e ? 'on' : ''}" onclick="ndWizSet('emoji','${e}')">${e}</button>`).join('')}</div>` : ''}
+      <textarea class="nd-wiz-desc" placeholder="Detalles (opcional)" maxlength="600" oninput="S._ndWiz.desc=this.value">${_ndEsc(w.desc)}</textarea>`;
+  } else if (w.step === 2) {
+    const plazos = [['3 meses', 3], ['6 meses', 6], ['1 año', 12], ['2 años', 24]];
+    cuerpo = `<div class="nd-wiz-q">${w.emoji} ¿Cuánto necesitan?</div>
+      <div class="nd-wiz-monto"><span>$</span><input id="ndw-monto" type="number" min="0" step="100" inputmode="decimal" value="${w.monto || ''}" placeholder="0" oninput="S._ndWiz.monto=parseFloat(this.value)||0" onkeydown="if(event.key==='Enter')ndWizNext()"></div>
+      <div class="q-desp-chips nd-wiz-center">${[1000, 5000, 10000, 20000].map(v => `<button class="q-desp-chip" onclick="ndWizSumar(${v})">+ ${fmt(v).replace('.00', '')}</button>`).join('')}
+        ${w.monto ? `<button class="q-desp-chip" onclick="ndWizSet('monto',0)"><i class="ti ti-eraser"></i></button>` : ''}</div>
+      <div class="nd-wiz-q" style="margin-top:18px">📅 ¿Para cuándo?</div>
+      <div class="q-desp-chips nd-wiz-center">${plazos.map(([l, m]) => { const f = _ndMasMeses(m); return `<button class="q-desp-chip${w.fin === f ? ' on' : ''}" onclick="ndWizSet('fin','${f}')">${l}</button>`; }).join('')}
+        <button class="q-desp-chip${!w.fin ? ' on' : ''}" onclick="ndWizSet('fin','')">Sin fecha</button></div>
+      <input type="date" class="nd-wiz-fecha" value="${w.fin}" onchange="ndWizSet('fin',this.value)" aria-label="Fecha objetivo">`;
+  } else {
+    const c = _ndWizCalc(w);
+    cuerpo = `<div class="nd-wiz-q">Así queda</div>
+      <div class="nd-wiz-prev">
+        <div class="nd-emo big">${w.emoji}</div>
+        <div class="nd-wiz-prev-t">${_ndEsc(w.titulo) || '—'}</div>
+        <div class="nd-wiz-prev-s">${ND_EMO[w.tipo]} ${ND_CORTO[w.tipo]}</div>
+        <div class="nd-card-nums">
+          <div><span>🎯 Meta</span><b>${w.monto > 0 ? fmt(w.monto) : '—'}</b></div>
+          <div><span>📅 Fecha</span><b>${w.fin ? fmtDate(w.fin) : '—'}</b></div>
+          <div><span>🗓️ Quincenas</span><b>${c.qr || '—'}</b></div>
+        </div>
+        ${c.porQ ? `<div class="nd-wiz-calc">Para lograrlo necesitan <b>${fmt(c.porQ)}</b> por quincena${c.personas > 1 ? ` · <b>${fmt(c.porPersona)}</b> cada quien` : ''}.</div>`
+                 : `<div class="nd-wiz-calc muted">Ponle monto y fecha para calcular cuánto ahorrar por quincena.</div>`}
+      </div>
+      ${!w.editId && c.porQ ? `<label class="nd-wiz-split"><input type="checkbox" ${w.split ? 'checked' : ''} onchange="S._ndWiz.split=this.checked">
+        <span>💞 Repartirlo ${c.personas > 1 ? '50/50' : ''} y agregar <b>${fmt(c.porPersona)}</b> a “Gastos esta quincena” de ${c.personas > 1 ? 'cada quien' : 'tu quincena'} como Compromiso al Nidito</span></label>` : ''}`;
+  }
+  box.innerHTML = `<div class="nd-wiz-dots">${dots}</div>${cuerpo}
+    <div class="nd-wiz-nav">
+      ${w.step > 1 ? `<button class="btn btn-ghost" onclick="ndWizSet('step',${w.step - 1})"><i class="ti ti-arrow-left"></i> Atrás</button>` : '<span></span>'}
+      ${w.step < 3 ? `<button class="btn btn-accent" onclick="ndWizNext()">Siguiente <i class="ti ti-arrow-right"></i></button>`
+                   : `<button class="btn btn-accent" onclick="ndWizGuardar()"${w._busy ? ' disabled' : ''}>${w._busy ? '<i class="ti ti-loader-2"></i> Guardando…' : w.editId ? '<i class="ti ti-check"></i> Guardar cambios' : '🎉 Crear'}</button>`}
+    </div>`;
+}
+function ndWizSet(k, v) {
+  const w = S._ndWiz; if (!w) return;
+  w[k] = v;
+  if (k === 'tipo' && Object.values(ND_EMO).includes(w.emoji)) w.emoji = ND_EMO[v];   // emoji por defecto sigue al tipo
+  if (k === 'emoji') w.picker = false;
+  _ndWizPaint();
+}
+function ndWizSug(e, n) { const w = S._ndWiz; if (!w) return; w.emoji = e; w.titulo = n; _ndWizPaint(); $('ndw-titulo')?.focus(); }
+function ndWizSumar(v)  { const w = S._ndWiz; if (!w) return; w.monto = (Number(w.monto) || 0) + v; _ndWizPaint(); }
+function ndWizNext() {
+  const w = S._ndWiz; if (!w) return;
+  if (w.step === 1 && !w.titulo.trim()) { toast('Ponle un nombre', 'error'); $('ndw-titulo')?.focus(); return; }
+  w.step = Math.min(3, w.step + 1);
+  _ndWizPaint();
+  if (w.step === 2) setTimeout(() => $('ndw-monto')?.focus(), 30);
+}
+async function ndWizGuardar() {
+  const w = S._ndWiz; if (!w || w._busy) return;
+  if (!w.titulo.trim()) { w.step = 1; _ndWizPaint(); toast('Ponle un nombre', 'error'); return; }
+  w._busy = true; _ndWizPaint();
+  const body = { user_phone: S.phone, titulo: w.titulo.trim(), descripcion: w.desc.trim() || null, tipo: w.tipo,
+                 presupuesto_total: Number(w.monto) || 0, fecha_fin: w.fin || null, emoji: w.emoji };
+  try {
+    let id = w.editId;
+    if (id) await api('PATCH', `/api/nidito/items/${id}`, body);
+    else {
+      const r = await api('POST', '/api/nidito/items', { ...body, estado: 'ACTIVO', fecha_inicio: toISO(new Date()) });
+      id = r?.data?.id;
+      if (!id) throw new Error(r?.error || 'No se pudo crear');
+    }
+    const c = _ndWizCalc(w);
+    let repartido = false;
+    if (!w.editId && w.split && c.porQ) {
+      const { angelPh, aliciaPh } = _ndPhones();
+      const porPersona = Math.round(body.presupuesto_total / c.personas * 100) / 100;
+      for (const ph of [angelPh, aliciaPh].filter(Boolean))
+        await api('PUT', `/api/nidito/items/${id}/asignaciones`, { user_phone: ph, monto_total_asignado: porPersona, monto_quincenal: c.porPersona });
+      repartido = true;
+    }
+    const nuevo = !w.editId;
+    S._ndTab = w.tipo;
+    cerrarPop();
+    S._niditoItems = null;
+    await _ndFetch();
+    if (nuevo) S._ndOpen.add(id);
+    _ndPaint();
+    toast(nuevo ? `${w.emoji} ${body.titulo} creado${repartido ? ' y repartido' : ''} ✓` : 'Cambios guardados ✓');
+    if (repartido) load();
+  } catch (e) {
+    w._busy = false; _ndWizPaint();
+    toast('Error: ' + e.message, 'error');
+  }
 }
 
 function _ndAccBody(item, angelPh, aliciaPh) {
@@ -5572,7 +6018,15 @@ function _ndAccBody(item, angelPh, aliciaPh) {
   const suggA=qr>0?Math.ceil((angelA.monto_total_asignado||0)/qr):null;
   const suggB=aliciaA&&qr>0?Math.ceil((aliciaA.monto_total_asignado||0)/qr):null;
   const cmts=S._ndCmts[item.id];
+  const pausado=item.estado==='PAUSADO';
   return `
+<div class="nd-acts">
+  <button class="btn btn-sm btn-ghost" onclick="ndWizard(null,'${item.id}')"><i class="ti ti-pencil"></i> Editar</button>
+  <button class="btn btn-sm btn-ghost" onclick="ndEstado('${item.id}','${pausado?'ACTIVO':'PAUSADO'}')">${pausado?'▶️ Reanudar':'⏸️ Pausar'}</button>
+  <button class="btn btn-sm btn-ghost" onclick="ndEstado('${item.id}','COMPLETADO')">✅ Completar</button>
+  <button class="btn btn-sm btn-ghost" style="color:var(--color-expense)" onclick="ndDelItem('${item.id}')"><i class="ti ti-trash"></i></button>
+</div>
+${item.descripcion?`<div class="nd-desc">${_ndEsc(item.descripcion)}</div>`:''}
 <div class="nd-date-pair">
   <div><div class="nd-field-lbl">Inicio</div><input type="date" class="nd-date-inp" value="${fd(item.fecha_inicio)}" onchange="ndPatchF('${item.id}','fecha_inicio',this.value)"></div>
   <div><div class="nd-field-lbl">Fin</div><input type="date" class="nd-date-inp" value="${fd(item.fecha_fin)}" onchange="ndPatchF('${item.id}','fecha_fin',this.value)"></div>
@@ -5687,61 +6141,7 @@ function _ndCmtsHtml(cmts, itemId) {
   </div>`;
 }
 
-function _ndMetaCard(item, angelPh, aliciaPh) {
-  const asig=item.asignaciones||[];
-  const {total,pct,cls}=_ndPct(asig,item.presupuesto_total||0);
-  const dias=item.fecha_fin?diasRestantes(item.fecha_fin):null;
-  const qr=_ndQR(item.fecha_fin);
-  const tipoCls=ND_CLS[item.tipo]||'';
-  const angelA=asig.find(x=>x.user_phone===angelPh)||{monto_total_asignado:0,monto_quincenal:0};
-  const aliciaA=aliciaPh?asig.find(x=>x.user_phone===aliciaPh)||{monto_total_asignado:0,monto_quincenal:0}:null;
-  const totalAsig=(angelA.monto_total_asignado||0)+(aliciaA?.monto_total_asignado||0);
-  const ovr=totalAsig>(item.presupuesto_total||0)&&(item.presupuesto_total||0)>0;
-  return `<div class="nd-meta-card ${tipoCls}">
-    <div class="nd-meta-hdr">
-      <div style="flex:1;min-width:0">
-        <div class="nd-meta-title">${item.titulo}</div>
-        ${item.descripcion?`<div style="font-size:12px;color:var(--text-2);margin-top:3px;line-height:1.5">${item.descripcion}</div>`:''}
-      </div>
-      <div class="acts" style="flex-shrink:0">
-        <button class="edit-pill-btn" onclick="ndEditItem('${item.id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-        <button class="edit-pill-btn" style="color:var(--red)" onclick="ndDelItem('${item.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-      </div>
-    </div>
-    <div class="nd-meta-chips">
-      ${item.presupuesto_total>0?`<span class="nd-meta-chip">Presupuesto: <span class="val">${fmt(item.presupuesto_total)}</span></span>`:''}
-      ${total>0?`<span class="nd-meta-chip">Asignado: <span class="val">${fmt(total)}</span></span>`:''}
-      ${item.fecha_fin?`<span class="nd-meta-chip ${dias!==null&&dias<=30?'hi':''}"><i class="ti ti-calendar-due"></i> ${fd(item.fecha_fin)}${dias!==null?` · ${dias<0?'VENCIDA':dias===0?'hoy':dias+'d'}`:''}${qr!==null&&qr>0?` (${qr} quinc.)`:''}</span>`:''}
-      ${item.fecha_inicio?`<span class="nd-meta-chip"><i class="ti ti-calendar-event"></i> Inicio: ${fd(item.fecha_inicio)}</span>`:''}
-    </div>
-    ${item.presupuesto_total>0?`<div class="nd-pbar"><div class="nd-pfill ${cls}" style="width:${pct}%"></div></div>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:3px;margin-bottom:12px"><span>${fmt(total)} de ${fmt(item.presupuesto_total)}</span><span>${pct}%</span></div>`:''}
-    ${ovr?`<div class="nd-warn" style="margin-bottom:10px"><i class="ti ti-alert-triangle"></i> Total asignado supera el presupuesto</div>`:''}
-    <table class="nd-asig-tbl">
-      <thead><tr><th>Persona</th><th>Total</th><th>Quincenal</th><th></th></tr></thead>
-      <tbody>
-        ${_ndAsigRow('Ángel',item.id,angelPh,angelA,null)}
-        ${aliciaA!==null?_ndAsigRow('Alicia',item.id,aliciaPh,aliciaA,null):''}
-      </tbody>
-    </table>
-    ${item.comentarios_count>0?`<div style="font-size:11px;color:var(--text-2);margin-top:4px;display:flex;align-items:center;gap:4px"><i class="ti ti-message-2"></i> ${item.comentarios_count} comentario${item.comentarios_count!==1?'s':''}</div>`:''}
-  </div>`;
-}
-
 // ── Acciones Nidito ───────────────────────────────────
-function ndToggle(id) {
-  const h=$('ndh-'+id), b=$('ndb-'+id), w=$('nditem-'+id);
-  if (!h||!b) return;
-  const opening=!h.classList.contains('nd-open');
-  [h,b,w].forEach(el=>el?.classList.toggle('nd-open'));
-  if (opening) {
-    S._ndOpen.add(id);
-    if (S._ndCmts[id]===undefined) ndLoadCmts(id);
-  } else {
-    S._ndOpen.delete(id);
-  }
-}
-
 async function ndPickQ(q) {
   S._niditoQ=q;
   try {
@@ -5757,6 +6157,8 @@ async function ndSaveDin() {
     await api('PUT','/api/nidito/dinerito',{user_phone:S.phone,monto:val,quincena:S._niditoQ?.key});
     S._ndDin=val;
     if (S.data && S._niditoQ?.key) { if (!S.data.nidito_dinerito_all) S.data.nidito_dinerito_all = {}; S.data.nidito_dinerito_all[S._niditoQ.key] = val; }
+    S._ndDinEdit=false;
+    _ndPaint();
     toast(`Dinerito guardado: ${fmt(val)}`);
   } catch(e) { toast('Error: '+e.message,'error'); }
 }
@@ -5792,10 +6194,7 @@ async function ndPatchPres(itemId) {
     await api('PATCH',`/api/nidito/items/${itemId}`,{user_phone:S.phone,presupuesto_total:val});
     const it=S._niditoItems?.find(x=>x.id===itemId);
     if (it) it.presupuesto_total=val;
-    const ap=S.adminPhone||localStorage.getItem('fos_phone_A')||S.phone;
-    const alic=localStorage.getItem('fos_phone_B')||(S.phone!==ap?S.phone:null);
-    const b=$('ndb-'+itemId);
-    if (b&&it) b.innerHTML=_ndAccBody(it,ap,alic);
+    _ndPaint();   // también cambian el anillo y la barra de la tarjeta
     toast('Presupuesto actualizado');
   } catch(e) { toast('Error: '+e.message,'error'); }
 }
@@ -5833,45 +6232,6 @@ async function ndPostCmt(itemId) {
   inp.disabled = false;
 }
 
-function ndNewItem(tipo) {
-  S.mctx={mode:'nd-item-new',tipo};
-  $('m-title').textContent=tipo==='PROYECTO'?'Nuevo Proyecto':`Nueva Meta — ${ND_LABEL[tipo]||tipo}`;
-  $('m-body').innerHTML=`
-<div class="fr"><label>Título *</label><input id="ndi-titulo" placeholder="Ej: Viaje a París, Sala nueva…"></div>
-<div class="fr"><label>Descripción</label><textarea id="ndi-desc" placeholder="Detalles, notas…"></textarea></div>
-<div class="f2">
-  <div class="fr"><label>Presupuesto total</label><input id="ndi-pres" type="number" min="0" placeholder="0"></div>
-  <div class="fr"><label>Estado</label><select id="ndi-est"><option value="ACTIVO">Activo</option><option value="PAUSADO">Pausado</option></select></div>
-</div>
-<div class="f2">
-  <div class="fr"><label>Fecha inicio</label><input id="ndi-ini" type="date"></div>
-  <div class="fr"><label>Fecha fin</label><input id="ndi-fin" type="date"></div>
-</div>`;
-  $('ovl').classList.add('open');
-}
-
-function ndEditItem(id) {
-  const it=S._niditoItems?.find(x=>x.id===id); if(!it) return;
-  S.mctx={mode:'nd-item-edit',id,tipo:it.tipo};
-  $('m-title').textContent=it.tipo==='PROYECTO'?'Editar Proyecto':`Editar Meta`;
-  $('m-body').innerHTML=`
-<div class="fr"><label>Título *</label><input id="ndi-titulo" value="${(it.titulo||'').replace(/"/g,'&quot;')}"></div>
-<div class="fr"><label>Descripción</label><textarea id="ndi-desc">${it.descripcion||''}</textarea></div>
-<div class="f2">
-  <div class="fr"><label>Presupuesto total</label><input id="ndi-pres" type="number" min="0" value="${it.presupuesto_total||0}"></div>
-  <div class="fr"><label>Estado</label><select id="ndi-est">
-    <option value="ACTIVO"${it.estado==='ACTIVO'?' selected':''}>Activo</option>
-    <option value="PAUSADO"${it.estado==='PAUSADO'?' selected':''}>Pausado</option>
-    <option value="COMPLETADO"${it.estado==='COMPLETADO'?' selected':''}>Completado</option>
-  </select></div>
-</div>
-<div class="f2">
-  <div class="fr"><label>Fecha inicio</label><input id="ndi-ini" type="date" value="${fd(it.fecha_inicio)}"></div>
-  <div class="fr"><label>Fecha fin</label><input id="ndi-fin" type="date" value="${fd(it.fecha_fin)}"></div>
-</div>`;
-  $('ovl').classList.add('open');
-}
-
 async function ndDelItem(id) {
   if (!confirm('¿Eliminar este ítem del Nidito?')) return;
   try {
@@ -5884,92 +6244,104 @@ async function ndDelItem(id) {
 }
 
 // ── RENDER: DEUDAS TDC ───────────────────────────────────────────────────────
-// Tarjetas por TDC (<900px, ver CSS) — MISMOS datos/handlers que la tabla de
-// escritorio (eTDC/dTDC), solo presentación distinta. Un único botón ✎ abre el
-// formulario completo (eTDC ya lo hace todo); no hay edición inline por campo
-// en la tarjeta, ese patrón es de escritorio (doble clic en la tabla).
+// Una tarjeta por TDC, en cualquier ancho (antes en escritorio era tabla): toda la información de la
+// tabla cabe en la tarjeta. Los montos se editan con un toque (ieTDC acepta cualquier elemento) y el ✎
+// abre el formulario completo. La barra de avance crece animada al pintarse.
+const _tdcEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function _tdcPct(t) { return t.a_pagar > 0 ? Math.min(100, Math.round((t.pagado || 0) / t.a_pagar * 100)) : 0; }
 function _tdcCardsHTML(tdcs) {
-  if (!tdcs.length) return `<div class="tdc-cards-empty">Sin tarjetas configuradas</div>`;
-  return `<div class="tdc-cards">${tdcs.map(t => {
-    const s = Math.max(0,(t.a_pagar||0)-(t.pagado||0));
-    const p = t.a_pagar>0 ? Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)) : 0;
-    return `<div class="tdc-card">
+  if (!tdcs.length) return `<div class="desp-empty"><div style="font-size:30px">💳</div>${S._tdcQ ? 'Sin resultados' : 'Sin tarjetas configuradas'}</div>`;
+  return `<div class="tdc-cards">${tdcs.map((t, i) => {
+    const s = Math.max(0, (t.a_pagar || 0) - (t.pagado || 0)), p = _tdcPct(t);
+    const est = t.estado || 'activo';
+    return `<div class="tdc-card${p >= 100 ? ' liquidada' : ''}" style="--i:${i}">
       <div class="tdc-card-hdr">
-        <strong>${t.nombre}</strong>
-        <span class="badge b-${t.estado||'activo'}">${t.estado||'—'}</span>
+        <div class="tdc-card-name"><span class="tdc-emo" aria-hidden="true">${p >= 100 ? '🎉' : '💳'}</span><strong class="editable" onclick="ieTDC(this,${t.id},'nombre')" title="Editar nombre">${_tdcEsc(t.nombre)}</strong></div>
+        <span class="badge b-${est} editable" onclick="ieTDC(this,${t.id},'estado')" title="Cambiar estado">${est}</span>
       </div>
       <div class="tdc-card-pbar">
-        <div class="pbar" style="width:100%"><div class="pfill${p>=100?' dng':p>=75?' warn':''}" style="width:${p}%"></div></div>
+        <div class="tdc-bar"><span style="--p:${p}%"></span></div>
         <span class="tdc-card-pct">${p}%</span>
       </div>
       <div class="tdc-card-nums">
-        <div><span class="tdc-card-lbl">A pagar</span><span>${fmt(t.a_pagar)}</span></div>
-        <div><span class="tdc-card-lbl">Pagado</span><span class="green">${fmt(t.pagado||0)}</span></div>
+        <div><span class="tdc-card-lbl">A pagar</span><span class="editable" onclick="ieTDC(this,${t.id},'a_pagar')">${fmt(t.a_pagar)}</span></div>
+        <div><span class="tdc-card-lbl">Pagado</span><span class="green editable" onclick="ieTDC(this,${t.id},'pagado')">${fmt(t.pagado || 0)}</span></div>
         <div><span class="tdc-card-lbl">Saldo</span><span class="red">${fmt(s)}</span></div>
       </div>
-      ${t.mes_objetivo ? `<div class="tdc-card-obj"><i class="ti ti-flag-3"></i> Objetivo: ${t.mes_objetivo}</div>` : ''}
+      <div class="tdc-card-meta">
+        <span class="editable" onclick="ieTDC(this,${t.id},'mes_objetivo')" title="Mes objetivo"><i class="ti ti-flag-3"></i> ${t.mes_objetivo ? _tdcEsc(t.mes_objetivo) : '<em>Sin objetivo</em>'}</span>
+        ${t.deuda_original > 0 ? `<span><i class="ti ti-history"></i> Original ${fmt(t.deuda_original)}</span>` : ''}
+      </div>
+      <div class="tdc-card-note editable" onclick="ieTDC(this,${t.id},'notas')" title="Comentarios"><i class="ti ti-message-2"></i> ${t.notas ? _tdcEsc(t.notas) : '<em>Agregar comentario</em>'}</div>
       <div class="tdc-card-acts">
-        <button class="btn btn-ghost btn-sm" onclick="eTDC(S._tdcData[${t.id}])"><i class="ti ti-pencil"></i> Editar</button>
-        <button class="btn btn-ghost btn-sm" style="color:var(--color-expense)" onclick="dTDC(${t.id})"><i class="ti ti-trash"></i> Eliminar</button>
+        <button class="edit-pill-btn" title="Editar" onclick="eTDC(S._tdcData[${t.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+        <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dTDC(${t.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
       </div>
     </div>`;
   }).join('')}</div>`;
 }
 
+function toggleTdcSearch() {
+  S._tdcSearchOpen = !S._tdcSearchOpen;
+  if (!S._tdcSearchOpen) S._tdcQ = '';
+  rDeudas();
+  if (S._tdcSearchOpen) $('tdc-q')?.focus();
+}
+function tdcBuscar(v) {
+  S._tdcQ = v;
+  const tdcs = (S.data.tdc || []).filter(_tdcMatch);
+  const box = $('tdc-list'); if (box) box.innerHTML = _tdcCardsHTML(tdcs);
+}
+function _tdcMatch(t) {
+  const q = (S._tdcQ || '').trim().toLowerCase();
+  return !q || `${t.nombre || ''} ${t.estado || ''} ${t.notas || ''} ${t.mes_objetivo || ''}`.toLowerCase().includes(q);
+}
+function tdcExcel() {
+  exportRowsToExcel(S.data.tdc || [], [
+    { label: 'Tarjeta',     get: t => t.nombre || '' },
+    { label: 'Estado',      get: t => t.estado || 'activo' },
+    { label: 'A pagar',     get: t => t.a_pagar || 0, num: true },
+    { label: 'Pagado',      get: t => t.pagado || 0, num: true },
+    { label: 'Saldo',       get: t => Math.max(0, (t.a_pagar || 0) - (t.pagado || 0)), num: true },
+    { label: '% pagado',    get: t => _tdcPct(t), num: true },
+    { label: 'Objetivo',    get: t => t.mes_objetivo || '' },
+    { label: 'Comentarios', get: t => t.notas || '' },
+  ], 'deudas_tdc');
+}
+
 function rDeudas() {
-  const tdcs=S.data.tdc||[];
-  const total=tdcs.reduce((a,t)=>a+Math.max(0,(t.a_pagar||0)-(t.pagado||0)),0);
+  const tdcs = S.data.tdc || [];
+  const total  = tdcs.reduce((a, t) => a + Math.max(0, (t.a_pagar || 0) - (t.pagado || 0)), 0);
+  const pagado = tdcs.reduce((a, t) => a + (t.pagado || 0), 0);
+  const aPagar = tdcs.reduce((a, t) => a + (t.a_pagar || 0), 0);
+  const pctG   = aPagar > 0 ? Math.min(100, Math.round(pagado / aPagar * 100)) : 0;
+  const buscando = S._tdcSearchOpen || !!S._tdcQ;
   S._tdcData = {};
   tdcs.forEach(t => { S._tdcData[t.id] = t; });
-  $('tab-deudas').innerHTML=`
-<div class="hdr">
-  <h2><i class="ti ti-credit-card"></i> Deudas TDC</h2>
-  <button class="btn btn-accent btn-sm" onclick="eTDC(null)"><i class="ti ti-plus"></i> Nueva TDC</button>
+  $('tab-deudas').innerHTML = `
+<div class="hdr"><h2><i class="ti ti-credit-card"></i> Deudas TDC</h2></div>
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-lbl">🧾 Deuda</div><div class="kpi-val red">${fmt(total)}</div><div class="kpi-sub">${tdcs.length} tarjeta${tdcs.length !== 1 ? 's' : ''}</div></div>
+  <div class="kpi"><div class="kpi-lbl">✅ Pagado</div><div class="kpi-val green">${fmt(pagado)}</div><div class="kpi-sub">de ${fmt(aPagar)}</div></div>
+  <div class="kpi"><div class="kpi-lbl">📈 Avance</div><div class="kpi-val">${pctG}%</div><div class="tdc-bar sm"><span style="--p:${pctG}%"></span></div></div>
 </div>
-<div class="cards">
-  <div class="card"><div class="card-lbl">Deuda Total</div><div class="card-val red">${fmt(total)}</div></div>
-  <div class="card"><div class="card-lbl">Tarjetas</div><div class="card-val accent">${tdcs.length}</div></div>
+<div class="ico-bar ico-bar-c">
+  <button class="ico-btn acc" onclick="eTDC(null)" title="Nueva TDC" aria-label="Nueva TDC"><i class="ti ti-plus"></i></button>
+  ${tdcs.length ? `<button class="ico-btn${buscando ? ' on' : ''}" onclick="toggleTdcSearch()" title="Buscar" aria-label="Buscar" aria-expanded="${buscando}"><i class="ti ti-search"></i></button>
+  <button class="ico-btn" onclick="tdcExcel()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
 </div>
-${_tdcCardsHTML(tdcs)}
+${buscando ? `<div class="ico-search"><i class="ti ti-search"></i><input id="tdc-q" value="${_tdcEsc(S._tdcQ || '')}" placeholder="Buscar tarjeta, estado o comentario…" oninput="tdcBuscar(this.value)" aria-label="Buscar tarjeta"></div>` : ''}
+<div id="tdc-list">${_tdcCardsHTML(tdcs.filter(_tdcMatch))}</div>
 <div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> <span aria-hidden="true">📊</span> Distribución de Deuda</h2></div><div class="sec-hdr-sub">Saldo y porcentaje pagado por tarjeta — clic para ver</div></div>
 <div class="charts-grid">
   <div class="cbox"><h3>Saldo por Tarjeta</h3>${ctBtns('c-tdc',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Pastel','pie']],'bar-h')}<div class="cwrap"><canvas id="c-tdc"></canvas></div><div id="legend-c-tdc" class="chart-legend"></div></div>
   <div class="cbox"><h3>% Pagado por Tarjeta</h3>${ctBtns('c-tdc2',[['Barras','bar'],['Horiz.','bar-h']],'bar')}<div class="cwrap"><canvas id="c-tdc2"></canvas></div><div id="legend-c-tdc2" class="chart-legend"></div></div>
-</div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Detalle de Tarjetas</h2></div></div>
-<div class="tdc-table-view">
-${tglBtn('tbl-tdc')}${mkTable({ id:'tbl-tdc', exportName:'deudas_tdc', numbered:true, empty:'Sin tarjetas configuradas',
-  columns:[
-    {key:'nombre',label:'Tarjeta',filter:'text',value:t=>t.nombre||''},
-    {key:'estado',label:'Estado',filter:'select',value:t=>t.estado||'activo'},
-    {key:'a_pagar',label:'A pagar',num:true,value:t=>t.a_pagar||0},
-    {key:'pagado',label:'Pagado',num:true,value:t=>t.pagado||0},
-    {key:'saldo',label:'Saldo',num:true,value:t=>Math.max(0,(t.a_pagar||0)-(t.pagado||0))},
-    {key:'mes_objetivo',label:'Objetivo',filter:'text',value:t=>t.mes_objetivo||'—'},
-    {key:'pct',label:'%',num:true,value:t=>t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0},
-    {key:'notas',label:'Comentarios',filter:'text',value:t=>t.notas||''},
-    {key:'_acts',label:'',sortable:false}],
-  rows:tdcs,
-  renderRow:t=>{const s=Math.max(0,(t.a_pagar||0)-(t.pagado||0));const p=t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0;return`<tr>
-  <td class="editable" onclick="ieTDC(this,${t.id},'nombre')"><strong>${t.nombre}</strong></td>
-  <td class="editable" onclick="ieTDC(this,${t.id},'estado')"><span class="badge b-${t.estado||'activo'}">${t.estado||'—'}</span></td>
-  <td class="editable" onclick="ieTDC(this,${t.id},'a_pagar')">${fmt(t.a_pagar)}</td>
-  <td class="editable green" onclick="ieTDC(this,${t.id},'pagado')">${fmt(t.pagado||0)}</td>
-  <td class="red">${fmt(s)}</td>
-  <td class="editable" onclick="ieTDC(this,${t.id},'mes_objetivo')" style="color:var(--muted)">${t.mes_objetivo||'—'}</td>
-  <td><div class="pbar" style="width:80px"><div class="pfill${p>=100?' dng':p>=75?' warn':''}" style="width:${p}%"></div></div> ${p}%</td>
-  <td class="editable" onclick="ieTDC(this,${t.id},'notas')" style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px">${t.notas||'<em style="color:var(--text-3);font-style:normal">—</em>'}</td>
-  <td style="white-space:nowrap">
-    <button class="edit-pill-btn" title="Editar" onclick="eTDC(S._tdcData[${t.id}])"><i class="ti ti-pencil" style="font-size:13px"></i></button>
-    <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dTDC(${t.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
-  </td>
-</tr>`} })}
 </div>`;
   const TDC_CLR_MAP = {'BBVA':'#1D6FA4','HEY':'#FF5733','Liverpool':'#C0392B','AMEX':'#2E86AB','NU':'#820AD1','Rappi':'#FF441F','Palacio':'#B8860B','Débito':'#8A8A8A','Efectivo':'#4A4A4A'};
   const tdcColors = tdcs.map((t,i) => { const k=Object.keys(TDC_CLR_MAP).find(n=>t.nombre.toUpperCase().includes(n.toUpperCase())); return TDC_CLR_MAP[k]||CLR[i%CLR.length]; });
   if (tdcs.length) {
     mkC('c-tdc',S.ct['c-tdc']||'bar-h',tdcs.map(t=>t.nombre),[{label:'Saldo',data:tdcs.map(t=>Math.max(0,(t.a_pagar||0)-(t.pagado||0))),backgroundColor:tdcColors.map(c=>c+'88'),borderColor:tdcColors}]);
-    mkC('c-tdc2',S.ct['c-tdc2']||'bar',tdcs.map(t=>t.nombre),[{label:'% Pagado',data:tdcs.map(t=>t.a_pagar>0?Math.min(100,Math.round((t.pagado||0)/t.a_pagar*100)):0),backgroundColor:tdcColors.map(c=>c+'66'),borderColor:tdcColors}]);
+    mkC('c-tdc2',S.ct['c-tdc2']||'bar',tdcs.map(t=>t.nombre),[{label:'% Pagado',data:tdcs.map(_tdcPct),backgroundColor:tdcColors.map(c=>c+'66'),borderColor:tdcColors}]);
   } else { emptyChart('c-tdc','Sin tarjetas configuradas'); emptyChart('c-tdc2',''); }
 }
 
@@ -6448,12 +6820,6 @@ function renderMovChart(filtered) {
     const bC=byKey(gastos,'categoria');
     // Separar Ocio en "resto" y "con Alicia" (mismo criterio determinista que el resto de la app:
     // \balicia\b en comentarios) para resaltar dentro del propio segmento de Ocio cuánto es con ella.
-    const ALICIA_CLR = '#f59e0b';
-    const ocioTotal  = bC['Ocio'] || 0;
-    const ocioAlicia = ocioTotal > 0
-      ? gastos.filter(m => m.categoria==='Ocio' && /\balicia\b/i.test(m.comentarios||'')).reduce((a,m)=>a+(m.monto||0),0)
-      : 0;
-    const ocioResto  = Math.max(0, ocioTotal - ocioAlicia);
 
     // Separar Personales en "resto" y "Ahorro" (transferencias a cuentas de ahorro, ej. "ahorro
     // revolut" en concepto o comentarios) para verlo aparte con un color propio — no es un gasto
@@ -6466,17 +6832,14 @@ function renderMovChart(filtered) {
       : 0;
     const personalesResto  = Math.max(0, personalesTot - personalesAhorro);
 
-    const order = Object.keys(bC).filter(k=>k!=='Ocio'&&k!=='Personales')
-      .concat(ocioTotal>0?['Ocio']:[])
+    // Alicia ya es una categoría propia (antes era una rebanada dentro de Ocio).
+    const order = Object.keys(bC).filter(k=>k!=='Personales')
       .concat(personalesTot>0?['Personales']:[])
-      .sort((a,b)=>(b==='Ocio'?ocioTotal:b==='Personales'?personalesTot:bC[b])-(a==='Ocio'?ocioTotal:a==='Personales'?personalesTot:bC[a]));
+      .sort((a,b)=>(b==='Personales'?personalesTot:bC[b])-(a==='Personales'?personalesTot:bC[a]));
 
     const keys=[], vals=[], bgs=[], bds=[], offs=[];
     order.forEach(k => {
-      if (k==='Ocio') {
-        if (ocioResto>0)  { keys.push('Ocio');          vals.push(ocioResto);  bgs.push((CAT_CLR.Ocio)+'bb'); bds.push(CAT_CLR.Ocio); offs.push(0); }
-        if (ocioAlicia>0) { keys.push('Ocio · Alicia');  vals.push(ocioAlicia); bgs.push(ALICIA_CLR+'ee');     bds.push(ALICIA_CLR);   offs.push(14); }
-      } else if (k==='Personales') {
+      if (k==='Personales') {
         if (personalesResto>0)  { keys.push('Personales');          vals.push(personalesResto);  bgs.push((CAT_CLR.Personales)+'bb'); bds.push(CAT_CLR.Personales); offs.push(0); }
         if (personalesAhorro>0) { keys.push('Personales · Ahorro'); vals.push(personalesAhorro); bgs.push(AHORRO_CLR+'ee');           bds.push(AHORRO_CLR);         offs.push(14); }
       } else {
@@ -6776,7 +7139,7 @@ function _movCardsHTML(rows) {
       const sub = [m.categoria, m.medio_pago].filter(Boolean).join(' · ');
       const coment = (m.comentarios||'').trim().replace(/&/g,'&amp;').replace(/</g,'&lt;');
       return `<div class="mov-card">
-        <div class="mov-card-ic" style="background:${cClr}22;color:${cClr}"><i class="ti ti-${isGasto?'arrow-down-right':'arrow-up-right'}"></i></div>
+        ${catIcHTML(m.categoria, m)}
         <div class="mov-card-mid">
           <div class="mov-card-title">${dot}${m.concepto||'<em style="color:var(--text-3);font-style:normal">—</em>'}</div>
           <div class="mov-card-sub">${sub||'—'}</div>
@@ -7377,32 +7740,12 @@ async function saveM() {
       const r = await api('POST', '/api/despensa', { user_phone: S.phone, nombre, nombre_oficial: nombre_oficial || null, cantidad, precio_est });
       if (r?.success === false) { alert('Error: ' + (r.error || '')); return; }
       if (r.data) { if (!S.data.despensa) S.data.despensa = []; S.data.despensa.unshift(r.data); }
-      closeM(); rDespensa(); toast(`"${nombre}" agregado a la despensa`);
+      closeM(); _despRefresh(); toast(`"${nombre}" agregado a la despensa`);
     } catch(e) { alert('Error: ' + e.message); }
     return;
   }
 
-  if (ctx.mode==='nd-item-new' || ctx.mode==='nd-item-edit') {
-    const titulo=($('ndi-titulo')?.value||'').trim();
-    if (!titulo) { alert('Ingresa un título'); return; }
-    const body={user_phone:S.phone,titulo,
-      descripcion:($('ndi-desc')?.value||'').trim()||null,
-      presupuesto_total:parseFloat($('ndi-pres')?.value)||0,
-      estado:$('ndi-est')?.value||'ACTIVO',
-      fecha_inicio:$('ndi-ini')?.value||null,
-      fecha_fin:$('ndi-fin')?.value||null,
-      tipo:ctx.tipo||null};
-    if (ctx.mode==='nd-item-edit')
-      r=await api('PATCH',`/api/nidito/items/${ctx.id}`,body);
-    else
-      r=await api('POST','/api/nidito/items',body);
-    if (r?.success===false) { alert('Error: '+(r.error||'')); return; }
-    S._niditoItems=null;
-    closeM();
-    await _ndFetch();
-    _ndPaint();
-    return;
-  }
+
 
   if (ctx.mode==='new-nidito' || ctx.mode==='edit-nidito') {
     const titulo = $('nd-titulo').value.trim();
@@ -7541,162 +7884,151 @@ function oAgregarLimitePpto(mes) {
 }
 
 // ── DESPENSA ──────────────────────────────────────────────────────────────────
+// ── DESPENSA ─────────────────────────────────────────────────────────────────
+// Tarjetas con el mismo lenguaje visual que Movimientos y Gastos esta quincena. La MISMA tarjeta se
+// usa en el módulo 🛒 y al desplegar la tarjeta "Despensa" de Gastos esta quincena: editar, quitar o
+// incluir un artículo se ve y se guarda igual desde los dos lados.
+function _despMejor(x) {
+  const w = typeof x.precio_walmart === 'number' ? x.precio_walmart : null;
+  const a = typeof x.precio_amazon  === 'number' ? x.precio_amazon  : null;
+  if (w != null && (a == null || w <= a)) return { precio: w, tienda: 'Walmart' };
+  if (a != null) return { precio: a, tienda: 'Amazon' };
+  return x.precio_est > 0 ? { precio: Number(x.precio_est), tienda: 'estimado' } : null;
+}
+const _despEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function _despEditorHTML(x) {
+  const v = c => _despEsc(x[c] ?? '');
+  return `<div class="desp-edit" onclick="event.stopPropagation()">
+    <div><label>Artículo</label><input value="${v('nombre')}" maxlength="120" onchange="if(this.value.trim())updateDespensaField(${x.id},'nombre',this.value.trim())"></div>
+    <div><label>Nombre oficial <small>(para buscar precios)</small></label><input value="${v('nombre_oficial')}" placeholder="Ej: Leche Lala Entera 1L" onchange="updateDespensaField(${x.id},'nombre_oficial',this.value.trim()||null)"></div>
+    <div class="desp-edit-2">
+      <div><label>Cantidad</label><input value="${v('cantidad')}" placeholder="2 L, 1 kg…" onchange="updateDespensaField(${x.id},'cantidad',this.value.trim())"></div>
+      <div><label>Precio estimado</label><input type="number" min="0" step="0.01" inputmode="decimal" value="${x.precio_est > 0 ? x.precio_est : ''}" placeholder="0" onchange="updateDespensaField(${x.id},'precio_est',parseFloat(this.value)||0)"></div>
+    </div>
+  </div>`;
+}
+
+function _despCardHTML(x) {
+  const cq = x.compra_quincena !== false, best = _despMejor(x), abierto = S._despEdit === x.id;
+  const tienda = (cls, lbl, precio, url) => typeof precio !== 'number' ? '' : url
+    ? `<a class="desp-tienda ${cls}" href="${_despEsc(url)}" target="_blank" rel="noopener noreferrer" title="Abrir en ${lbl}">${lbl} ${fmt(precio)} <i class="ti ti-external-link"></i></a>`
+    : `<span class="desp-tienda ${cls}">${lbl} ${fmt(precio)}</span>`;
+  const tiendas = tienda('w', 'Walmart', x.precio_walmart, x.url_walmart) + tienda('a', 'Amazon', x.precio_amazon, x.url_amazon)
+    + (x.precio_est > 0 ? `<span class="desp-tienda">Estimado ${fmt(x.precio_est)}</span>` : '');
+  const sub = [x.cantidad, x.nombre_oficial].filter(Boolean).map(_despEsc).join(' · ')
+    || (x.comprado ? 'Comprado' : cq ? 'En la compra de esta quincena' : 'Fuera de esta quincena');
+  const chk = x.comprado
+    ? `<button class="q-card-chk" style="color:var(--color-income)" onclick="toggleComprado(${x.id},false)" title="Desmarcar comprado"><i class="ti ti-circle-check"></i></button>`
+    : `<button class="q-card-chk" style="color:${cq ? 'var(--color-income)' : 'var(--text-3)'}" onclick="toggleCompraQ(${x.id},${!cq})" title="${cq ? 'Quitar de esta quincena' : 'Incluir en esta quincena'}"><i class="ti ti-${cq ? 'checkbox' : 'square'}"></i></button>`;
+  return `<div class="mov-card q-card desp-card${x.comprado ? ' pagado' : ''}${!cq && !x.comprado ? ' off' : ''}">
+    ${chk}
+    ${catIcHTML('Despensa', null, '🛒')}
+    <div class="mov-card-mid" onclick="despEditar(${x.id})" style="cursor:pointer" title="Editar">
+      <div class="mov-card-title">${_despEsc(x.nombre)}</div>
+      <div class="mov-card-sub">${sub}</div>
+    </div>
+    <div class="mov-card-val">${best ? fmt(best.precio) : '—'}${best ? `<div class="desp-best">${best.tienda === 'estimado' ? 'estimado' : 'mejor: ' + best.tienda}</div>` : ''}</div>
+    <div class="q-card-foot">
+      <div class="desp-tiendas">${tiendas}</div>
+      <div class="mov-card-acts">
+        ${x.comprado ? '' : `<button class="edit-pill-btn" title="Marcar comprado" onclick="toggleComprado(${x.id},true)"><i class="ti ti-circle-check" style="font-size:12px"></i></button>`}
+        <button class="edit-pill-btn${abierto ? ' on' : ''}" title="${abierto ? 'Cerrar edición' : 'Editar'}" onclick="despEditar(${x.id})"><i class="ti ti-${abierto ? 'x' : 'pencil'}" style="font-size:12px"></i></button>
+        <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dDespensa(${x.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
+      </div>
+    </div>
+    ${abierto ? _despEditorHTML(x) : ''}
+  </div>`;
+}
+
+// Repinta todo lo que muestra artículos de la despensa (módulo 🛒 y Gastos esta quincena).
+function _despRefresh() { rDespensa(); refreshQuincenaPanel(); }
+function despEditar(id) { S._despEdit = S._despEdit === id ? null : id; _despRefresh(); }
+function toggleDespSearch() {
+  S._despSearchOpen = !S._despSearchOpen;
+  if (!S._despSearchOpen) S._despQ = '';
+  rDespensa();
+  if (S._despSearchOpen) $('desp-q')?.focus();
+}
+function despBuscar(v) {
+  S._despQ = v; rDespensa();
+  const i = $('desp-q'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); }
+}
+function despExcel() {
+  const best = x => _despMejor(x);
+  exportRowsToExcel(S.data.despensa || [], [
+    { label: 'Artículo',          get: x => x.nombre || '' },
+    { label: 'Nombre oficial',    get: x => x.nombre_oficial || '' },
+    { label: 'Cantidad',          get: x => x.cantidad || '' },
+    { label: 'Esta quincena',     get: x => x.compra_quincena !== false ? 'Sí' : 'No' },
+    { label: 'Precio estimado',   get: x => x.precio_est || 0, num: true },
+    { label: 'Walmart',           get: x => x.precio_walmart ?? '', num: true },
+    { label: 'Amazon',            get: x => x.precio_amazon ?? '', num: true },
+    { label: 'Mejor precio',      get: x => best(x)?.precio ?? '', num: true },
+    { label: 'Dónde',             get: x => best(x)?.tienda || '' },
+    { label: 'Comprado',          get: x => x.comprado ? 'Sí' : 'No' },
+  ], 'lista_despensa');
+}
+
 function rDespensa() {
   const el = $('despensa-section');
   if (!el) return;
   const items   = S.data.despensa || [];
+  const q       = (S._despQ || '').trim().toLowerCase();
+  const match   = x => !q || `${x.nombre || ''} ${x.nombre_oficial || ''} ${x.cantidad || ''}`.toLowerCase().includes(q);
   const pending = items.filter(x => !x.comprado);
   const done    = items.filter(x =>  x.comprado);
-
-  // Compute totals
-  const wTotal = pending.reduce((a, x) => typeof x.precio_walmart === 'number' ? a + x.precio_walmart : a, 0);
-  const aTotal = pending.reduce((a, x) => typeof x.precio_amazon  === 'number' ? a + x.precio_amazon  : a, 0);
-  const bestTotal = pending.reduce((a, x) => {
-    const bW = typeof x.precio_walmart === 'number' ? x.precio_walmart : Infinity;
-    const bA = typeof x.precio_amazon  === 'number' ? x.precio_amazon  : Infinity;
-    const b  = Math.min(bW, bA);
-    return a + (isFinite(b) ? b : (x.precio_est || 0));
-  }, 0);
-
-  const lastCheck = pending.reduce((d, x) => {
-    if (!x.ultima_consulta) return d;
-    return (!d || x.ultima_consulta > d) ? x.ultima_consulta : d;
-  }, null);
-
-  const hasAnyPrices = pending.some(x => x.precio_walmart != null || x.precio_amazon != null);
-  const tblBtn = pending.length ? tglBtn('tbl-despensa') : '';
-
-  const tblHtml = pending.length ? mkTable({
-    id: 'tbl-despensa',
-    exportName: 'lista_despensa',
-    rows: pending,
-    numbered: true,
-    empty: 'Sin artículos pendientes',
-    columns: [
-      { key:'compra_q',     label:'¿Compra esta quincena?', sortable:false, value: r => r.compra_quincena !== false ? 'Sí' : 'No', width:'120px' },
-      { key:'nombre',       label:'Producto',               filter:'text',   value: r => r.nombre || '',         width:'130px' },
-      { key:'nombre_of',    label:'Nombre Oficial',         filter:'text',   value: r => r.nombre_oficial || '', width:'130px' },
-      { key:'precio_est',   label:'Precio estimado',        num:true,        value: r => r.precio_est ?? '',     width:'100px' },
-      { key:'p_walmart',    label:'Walmart',                num:true,        value: r => r.precio_walmart ?? '', width:'88px' },
-      { key:'l_walmart',    label:'Link Walmart',            sortable:false,  value: r => r.url_walmart ? '🔗' : '', width:'80px' },
-      { key:'p_amazon',     label:'Amazon',                 num:true,        value: r => r.precio_amazon ?? '',  width:'88px' },
-      { key:'l_amazon',     label:'Link Amazon',             sortable:false,  value: r => r.url_amazon ? '🔗' : '', width:'80px' },
-      { key:'mejor',        label:'Mejor precio',           filter:'select', value: r => {
-          const hasW = typeof r.precio_walmart === 'number';
-          const hasA = typeof r.precio_amazon  === 'number';
-          if (hasW && hasA) return r.precio_walmart <= r.precio_amazon ? 'Walmart' : 'Amazon';
-          if (hasW) return 'Walmart'; if (hasA) return 'Amazon'; return '—';
-        }, width:'96px' },
-      { key:'_acts',        label:'',                       sortable:false,  value: r => '', width:'64px' }
-    ],
-    renderRow: r => {
-      const hasW   = typeof r.precio_walmart === 'number';
-      const hasA   = typeof r.precio_amazon  === 'number';
-      const wPrice = hasW ? fmt(r.precio_walmart) : '—';
-      const aPrice = hasA ? fmt(r.precio_amazon)  : '—';
-      const wLink  = r.url_walmart ? `<a href="${r.url_walmart}" target="_blank" rel="noopener" style="color:#0071ce;font-size:13px" title="Ver en Walmart"><i class="ti ti-external-link"></i></a>` : '<span style="color:var(--text-3)">—</span>';
-      const aLink  = r.url_amazon  ? `<a href="${r.url_amazon}"  target="_blank" rel="noopener" style="color:#ff9900;font-size:13px" title="Ver en Amazon"><i class="ti ti-external-link"></i></a>`  : '<span style="color:var(--text-3)">—</span>';
-      let mejor = '—', mejorColor = 'var(--text-3)';
-      if (hasW && hasA) { mejor = r.precio_walmart <= r.precio_amazon ? 'Walmart' : 'Amazon'; mejorColor = r.precio_walmart <= r.precio_amazon ? '#0071ce' : '#ff9900'; }
-      else if (hasW) { mejor = 'Walmart'; mejorColor = '#0071ce'; }
-      else if (hasA) { mejor = 'Amazon';  mejorColor = '#ff9900'; }
-      const cq = r.compra_quincena !== false;
-      const peVal = r.precio_est > 0 ? r.precio_est : '';
-      return `<tr style="${r.comprado?'opacity:.5':''}">
-        <td style="text-align:center">
-          <button onclick="toggleCompraQ(${r.id},${!cq})" title="${cq?'Quitar de esta quincena':'Incluir en esta quincena'}"
-            style="background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;color:${cq?'var(--color-income)':'var(--text-3)'}">
-            <i class="ti ti-${cq?'checkbox':'square'}"></i>
-          </button>
-        </td>
-        <td><input class="td-edit" value="${(r.nombre||'').replace(/"/g,'&quot;')}" placeholder="Producto"
-          onblur="if(this.value.trim()!==\`${(r.nombre||'').replace(/`/g,'\\`')}\`)updateDespensaField(${r.id},'nombre',this.value.trim()||'${(r.nombre||'').replace(/'/g,"\\'")}')"
-          onkeydown="if(event.key==='Enter')this.blur()"></td>
-        <td><input class="td-edit" value="${(r.nombre_oficial||'').replace(/"/g,'&quot;')}" placeholder="Nombre oficial…"
-          style="color:var(--text-3);font-size:12px"
-          onblur="updateDespensaField(${r.id},'nombre_oficial',this.value.trim()||null)"
-          onkeydown="if(event.key==='Enter')this.blur()"></td>
-        <td><input class="td-edit td-edit-num" type="number" min="0" step="0.01" value="${peVal}" placeholder="0.00"
-          style="color:var(--text-2)"
-          onblur="updateDespensaField(${r.id},'precio_est',this.value===''?0:parseFloat(this.value)||0)"
-          onkeydown="if(event.key==='Enter')this.blur()"></td>
-        <td style="color:#0071ce;font-weight:600">${wPrice}</td>
-        <td style="text-align:center">${wLink}</td>
-        <td style="color:#ff9900;font-weight:600">${aPrice}</td>
-        <td style="text-align:center">${aLink}</td>
-        <td style="color:${mejorColor};font-weight:700;text-align:center">${mejor}</td>
-        <td style="text-align:center;white-space:nowrap">
-          <button onclick="toggleComprado(${r.id},${!r.comprado})" style="background:none;border:none;cursor:pointer;color:${r.comprado?'var(--color-income)':'var(--text-3)'};font-size:15px;padding:2px 4px" title="${r.comprado?'Desmarcar':'Marcar comprado'}"><i class="ti ti-${r.comprado?'check-circle':'circle'}"></i></button>
-          <button onclick="dDespensa(${r.id})" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:15px;padding:2px 4px" title="Eliminar"><i class="ti ti-trash"></i></button>
-        </td>
-      </tr>`;
-    },
-    footer: rows => {
-      // Totals only for items selected for this quincena (compra_quincena !== false)
-      const sel  = rows.filter(r => !r.comprado && r.compra_quincena !== false);
-      const cntQ = sel.length;
-      const vPE  = sel.reduce((a, r) => a + (r.precio_est || 0), 0);
-      const vW   = sel.reduce((a, r) => typeof r.precio_walmart === 'number' ? a + r.precio_walmart : a, 0);
-      const vA   = sel.reduce((a, r) => typeof r.precio_amazon  === 'number' ? a + r.precio_amazon  : a, 0);
-      const vB   = sel.reduce((a, r) => {
-        const bW = typeof r.precio_walmart === 'number' ? r.precio_walmart : Infinity;
-        const bA = typeof r.precio_amazon  === 'number' ? r.precio_amazon  : Infinity;
-        const b  = Math.min(bW, bA);
-        return a + (isFinite(b) ? b : (r.precio_est || 0));
-      }, 0);
-      if (!cntQ && !vW && !vA && !vB && !vPE) return '';
-      // TDs: # | compra_q | nombre | nombre_of | precio_est | p_walmart | l_walmart | p_amazon | l_amazon | mejor | _acts
-      return `<tr style="border-top:2px solid var(--border-default);font-weight:700">
-        <td></td>
-        <td style="text-align:center;color:var(--color-income)">${cntQ > 0 ? cntQ : '—'}</td>
-        <td style="color:var(--text-3);font-size:11px">Totales</td>
-        <td></td>
-        <td style="color:var(--text-2)">${vPE > 0 ? fmt(vPE) : '—'}</td>
-        <td style="color:#0071ce">${vW > 0 ? fmt(vW) : '—'}</td>
-        <td></td>
-        <td style="color:#ff9900">${vA > 0 ? fmt(vA) : '—'}</td>
-        <td></td>
-        <td style="color:var(--color-income)">${vB > 0 ? fmt(vB) : '—'}</td>
-        <td></td>
-      </tr>`;
-    }
-  }) : '';
-
+  const sel     = pending.filter(x => x.compra_quincena !== false);
+  const total   = sel.reduce((a, x) => a + (_despMejor(x)?.precio || 0), 0);
+  const sinPrecio = sel.filter(x => !_despMejor(x)).length;
+  const lastCheck = pending.reduce((d, x) => (x.ultima_consulta && (!d || x.ultima_consulta > d)) ? x.ultima_consulta : d, null);
+  // Primero lo que entra en la compra de esta quincena
+  const ver = pending.filter(match).sort((a, b) => (b.compra_quincena !== false) - (a.compra_quincena !== false)), verDone = done.filter(match);
+  const buscando = S._despSearchOpen || !!q;
   el.innerHTML = `
-<div class="cbox">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-    <h3 style="font-size:var(--text-sm);color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;margin:0">
-      <i class="ti ti-shopping-cart" style="color:var(--cat-despensa)"></i> Lista de Despensa
-      ${pending.length ? `<span style="font-size:10px;background:var(--cat-despensa)22;color:var(--cat-despensa);padding:2px 8px;border-radius:var(--radius-pill)">${pending.length} pendiente${pending.length!==1?'s':''}</span>` : ''}
-    </h3>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      ${pending.length ? `<button id="btn-buscar-precios" class="btn btn-sm" style="background:#7c3aed22;color:#7c3aed;border:1px solid #7c3aed44;font-size:11px" onclick="buscarPreciosDespensa()">
-        <i class="ti ti-robot"></i> Buscar precios IA
-      </button>` : ''}
-      ${pending.length ? `<button class="btn btn-sm" style="background:var(--cat-despensa)22;color:var(--cat-despensa);border:1px solid var(--cat-despensa)44;font-size:11px" onclick="agregarDespensaAGastos()">
-        <i class="ti ti-clipboard-list"></i> Agregar a Gastos esta quincena
-      </button>` : ''}
-      ${done.length ? `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="limpiarCompradosDespensa()"><i class="ti ti-trash-x"></i> Limpiar comprados</button>` : ''}
-      <button class="btn btn-sm" style="background:var(--cat-despensa)22;color:var(--cat-despensa);border:1px solid var(--cat-despensa)44;font-size:12px" onclick="oDespensa()">
-        <i class="ti ti-plus"></i> Agregar
-      </button>
+<div class="desp-mod">
+  <div class="q-pay-wrap">
+    <div class="q-total-widget q-bal-widget">
+      <span class="qt-lbl">🛒 Compra de esta quincena</span>
+      <span class="qt-val">${fmt(total)}</span>
+      <span class="qt-sub">${sel.length} de ${pending.length} artículo${pending.length !== 1 ? 's' : ''} seleccionado${sel.length !== 1 ? 's' : ''}${sinPrecio ? ` · ${sinPrecio} sin precio` : ''}</span>
     </div>
   </div>
-  ${lastCheck && hasAnyPrices ? `<div style="font-size:10px;color:var(--text-3);margin-bottom:8px"><i class="ti ti-clock"></i> Precios actualizados: ${new Date(lastCheck).toLocaleDateString('es-MX',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+  <div class="ico-bar ico-bar-c">
+    <button class="ico-btn acc" onclick="oDespensa()" title="Agregar artículo" aria-label="Agregar artículo"><i class="ti ti-plus"></i></button>
+    ${items.length ? `<button class="ico-btn${buscando ? ' on' : ''}" onclick="toggleDespSearch()" title="Buscar" aria-label="Buscar" aria-expanded="${buscando}"><i class="ti ti-search"></i></button>` : ''}
+    ${pending.length ? `<button class="ico-btn" id="btn-buscar-precios" onclick="buscarPreciosDespensa()" title="Buscar precios con IA" aria-label="Buscar precios con IA"><i class="ti ti-robot"></i></button>` : ''}
+    ${sel.length ? `<button class="ico-btn" onclick="agregarDespensaAGastos()" title="Agregar a Gastos esta quincena" aria-label="Agregar a Gastos esta quincena"><i class="ti ti-clipboard-plus"></i></button>` : ''}
+    ${done.length ? `<button class="ico-btn" onclick="limpiarCompradosDespensa()" title="Limpiar comprados" aria-label="Limpiar comprados"><i class="ti ti-trash-x"></i></button>` : ''}
+    ${items.length ? `<button class="ico-btn" onclick="despExcel()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
+  </div>
+  ${buscando ? `<div class="ico-search"><i class="ti ti-search"></i><input id="desp-q" value="${_despEsc(S._despQ || '')}" placeholder="Buscar artículo…" oninput="despBuscar(this.value)" aria-label="Buscar artículo"></div>` : ''}
+  ${lastCheck ? `<div class="desp-upd"><i class="ti ti-clock"></i> Precios actualizados: ${new Date(lastCheck).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>` : ''}
   ${!items.length
-    ? `<p style="color:var(--text-3);text-align:center;padding:24px;font-size:12px"><i class="ti ti-shopping-bag" style="font-size:28px;display:block;margin-bottom:8px;color:var(--text-3)"></i>Lista vacía — agrega lo que necesitas comprar</p>`
-    : tblBtn + tblHtml + (done.length ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-default)">
-        <div style="font-size:10px;color:var(--text-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Comprados</div>
-        <div style="display:flex;flex-direction:column;gap:3px">${done.map(x => `
-          <div style="display:flex;align-items:center;gap:8px;opacity:.5;padding:4px 8px;border-radius:var(--radius-md);background:var(--bg-surface-2)">
-            <button onclick="toggleComprado(${x.id},false)" style="background:none;border:none;cursor:pointer;color:var(--color-income);font-size:14px;padding:0"><i class="ti ti-check-circle"></i></button>
-            <span style="font-size:12px;text-decoration:line-through;flex:1">${x.nombre}</span>
-            <button onclick="dDespensa(${x.id})" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:13px;padding:0"><i class="ti ti-x"></i></button>
-          </div>`).join('')}</div>
-      </div>` : '')
-  }
+    ? `<div class="desp-empty"><div style="font-size:30px">🛍️</div>Lista vacía — agrega lo que necesitas comprar</div>`
+    : `<div class="mov-cards desp-cards">${ver.map(_despCardHTML).join('') || `<div class="desp-empty">${q ? 'Sin resultados' : 'Todo comprado ✓'}</div>`}</div>
+       ${verDone.length ? `<div class="desp-done-hdr">✅ Comprados (${verDone.length})</div><div class="mov-cards desp-cards">${verDone.map(_despCardHTML).join('')}</div>` : ''}`}
 </div>`;
 }
+
+// Despliegue de la tarjeta "Despensa" en Gastos esta quincena: los artículos que la forman, con las
+// mismas tarjetas del módulo (editar, quitar de la quincena, comprado) y atajos para agregar más.
+function _qDespExpHTML(guardado) {
+  const pend  = (S.data.despensa || []).filter(x => !x.comprado);
+  const sel   = pend.filter(x => x.compra_quincena !== false);
+  const resto = pend.filter(x => x.compra_quincena === false);
+  return `<div class="q-desp-exp" onclick="event.stopPropagation()">
+    ${guardado ? `<div class="q-desp-note"><i class="ti ti-info-circle"></i> Este monto quedó guardado: usa <i class="ti ti-clipboard-plus"></i> en la Despensa para actualizarlo con los artículos de abajo.</div>` : ''}
+    <div class="mov-cards">${sel.map(_despCardHTML).join('') || '<div class="desp-empty">No hay artículos seleccionados para esta quincena.</div>'}</div>
+    ${resto.length ? `<div class="q-desp-lbl">Agregar de tu lista</div>
+      <div class="q-desp-chips">${resto.map(x => `<button class="q-desp-chip" onclick="toggleCompraQ(${x.id},true)"><i class="ti ti-plus"></i> ${_despEsc(x.nombre)}</button>`).join('')}</div>` : ''}
+    <div class="q-desp-acts">
+      <button class="btn btn-sm" onclick="oDespensa()"><i class="ti ti-plus"></i> Nuevo artículo</button>
+      <button class="btn btn-ghost btn-sm" onclick="dashEmoji('despensa')"><i class="ti ti-shopping-cart"></i> Lista completa</button>
+    </div>
+  </div>`;
+}
+function toggleQDesp() { S._qDespOpen = !S._qDespOpen; refreshQuincenaPanel(); }
 
 function oDespensa() {
   S.mctx = { mode: 'add-despensa' };
@@ -7730,6 +8062,8 @@ async function updateDespensaField(id, field, value) {
 function refreshQuincenaPanel() {
   const el = $('quincena-dash-section');
   if (el && S._qDashOpen) el.innerHTML = rQuincenaPanel('dash');
+  const h = $('hoja-q');   // la misma sección abierta en ventana central
+  if (h) h.innerHTML = rQuincenaPanel('sheet');
 }
 
 // Muestra/oculta los resúmenes de pago de la quincena: 'retiro' (🏦 efectivo) y 'tarj'
@@ -7779,7 +8113,7 @@ async function toggleComprado(id, comprado) {
     await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, comprado });
     const item = (S.data.despensa || []).find(x => x.id === id);
     if (item) item.comprado = comprado;
-    rDespensa();
+    _despRefresh();
     if (comprado) toast('¡Artículo comprado! ✓');
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
@@ -7788,7 +8122,7 @@ async function dDespensa(id) {
   try {
     await api('DELETE', `/api/despensa/${id}`, { user_phone: S.phone });
     S.data.despensa = (S.data.despensa || []).filter(x => x.id !== id);
-    rDespensa();
+    _despRefresh();
     toast('Artículo eliminado');
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
@@ -7800,7 +8134,7 @@ async function limpiarCompradosDespensa() {
   try {
     await Promise.all(done.map(x => api('DELETE', `/api/despensa/${x.id}`, { user_phone: S.phone })));
     S.data.despensa = (S.data.despensa || []).filter(x => !x.comprado);
-    rDespensa();
+    _despRefresh();
     toast(`${done.length} artículo${done.length!==1?'s':''} eliminado${done.length!==1?'s':''}`);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
@@ -7843,7 +8177,7 @@ async function buscarPreciosDespensa() {
   if (!selected.length) { toast('No hay productos seleccionados para esta quincena', 'error'); return; }
   const ids = selected.slice(0, 8).map(r => r.id);
   const btn = $('btn-buscar-precios');
-  if (btn) { btn.disabled = true; btn.innerHTML = `<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Buscando ${ids.length}...`; }
+  if (btn) { btn.disabled = true; btn.title = `Buscando ${ids.length}…`; btn.innerHTML = `<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>`; }
   try {
     const res = await api('POST', '/api/despensa/buscar-precios', { phone: S.phone, ids }, { timeout: 90000 });
     if (res.data?.length) {
