@@ -1970,6 +1970,30 @@ body.sheet-locked{overflow:hidden}
   box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:none;opacity:0;transform:translateY(-3px);transition:opacity .15s,transform .15s}
 .tipd.on{opacity:1;transform:none}
 [data-tipd]{cursor:default}
+/* ═══════════════════════════════════════════════════════ v19 — Negocios y Proyectos (fase 3) */
+.ico-btn{position:relative}
+.ng-back{display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:var(--text-2);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;padding:4px 2px;margin-bottom:4px}
+.ng-back:hover{color:var(--text-1)}
+.ng-quick{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;max-width:720px;margin:0 auto 14px}
+.ng-quick button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 2px;border-radius:16px;border:1px solid var(--border-default);background:var(--bg-surface);
+  color:var(--text-1);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;min-width:0;white-space:nowrap}
+.ng-quick button span{font-size:20px;line-height:1}
+.ng-quick button:hover{border-color:var(--text-3)}
+.ng-sec{margin-bottom:10px}
+.ng-sec-hdr b{font-weight:800;color:var(--text-1)}
+.ng-sub{font-weight:600;color:var(--text-3);font-size:12px}
+.ng-body{display:flex;flex-direction:column;gap:10px;padding:10px 12px 14px;border-top:1px solid var(--border-default)}
+.ng-more{align-self:center}
+.ng-row{box-shadow:none;background:var(--bg-surface-2)}
+.ng-panel{max-width:720px;margin:0 auto 14px;display:flex;flex-direction:column;gap:8px}
+.ng-date{width:auto;font-size:13px}
+.ng-add{margin-top:8px;font-size:13px}
+.ng-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+.ng-tipos{grid-template-columns:repeat(auto-fit,minmax(92px,1fr))}
+.ng-bq-tipos,.ng-cat5{grid-template-columns:repeat(auto-fit,minmax(62px,1fr));gap:6px}
+.ng-tipos .nd-wiz-tipo,.ng-bq-tipos .nd-wiz-tipo,.ng-cat5 .nd-wiz-tipo{font-size:11px;padding:10px 2px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ng-tipos3 button{max-width:none;font-size:12px}
+@media(max-width:480px){.ng-quick{grid-template-columns:repeat(3,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -8939,777 +8963,458 @@ async function marcarGastoQ(itemId, pagadoId) {
 async function dEvt(id)  { if(!confirm('¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
 async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/metas/${id}`,{user_phone:S.phone}); await load(); }
 
-// ── NEGOCIOS Y PROYECTOS ──────────────────────────────────────────────────────
-
+// ── NEGOCIOS Y PROYECTOS (fase 3) ─────────────────────────────────────────────
+// Portada con tarjetas y detalle por proyecto con acciones rápidas (un toque abre UN pop-up). El cliente
+// habla con el servidor tal cual: /resumen devuelve {financiero, cartera}, /grafica devuelve {labels, datasets}
+// sin envoltorio, y las tablas usan metodo_pago/comentarios/notas/monto_estimado (ver migraciones neg_*).
 const NEG_TIPO_CLR = { NEGOCIO:'#6366f1', EMPRENDIMIENTO:'#f97316', PROYECTO:'#0ea5e9', INVERSION:'#10b981', FREELANCE:'#8b5cf6' };
-const NEG_TIPO_ICO = { NEGOCIO:'ti-building-store', EMPRENDIMIENTO:'ti-rocket', PROYECTO:'ti-clipboard-list', INVERSION:'ti-trending-up', FREELANCE:'ti-device-laptop' };
+const NG_TIPOS = { NEGOCIO:['🏪','Negocio'], EMPRENDIMIENTO:['🚀','Emprendimiento'], PROYECTO:['📋','Proyecto'], INVERSION:['📈','Inversión'], FREELANCE:['💻','Freelance'] };
+const NG_SUG = { NEGOCIO:['Mi tienda','Venta de comida','Taller'], EMPRENDIMIENTO:['Mi startup','Tienda en línea','App'],
+                 PROYECTO:['Remodelación','Evento','Tesis'], INVERSION:['Fondo de inversión','CETES','Cripto'], FREELANCE:['Diseño','Desarrollo web','Consultoría'] };
+const NG_EST = { ACTIVO:['Activo',''], PAUSADO:['Pausado','warn'], CERRADO:['Cerrado','neu'] };
+const _ngEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const _ngEmo = p => (NG_TIPOS[p.tipo] || ['💼'])[0];
+const _ngClr = p => p.color || NEG_TIPO_CLR[p.tipo] || '#818cf8';
+const _ngIcHTML = p => `<div class="mov-card-ic emo" style="background:${_ngClr(p)}26" aria-hidden="true">${_ngEmo(p)}</div>`;
 
 async function rNegocios() {
   const el = $('tab-negocios'); if (!el) return;
-  if (!S._negProyId) {
-    _negRenderLista(el);
-  } else {
-    await _negRenderDetalle(el, S._negProyId);
-  }
-  setTimeout(_initCollapsibles, 120);
+  if (!S._negProyId) _negRenderLista(el);
+  else await _negRenderDetalle(el, S._negProyId, true);
 }
-
 function _negLista() { return S.data?.negocios?.proyectos || []; }
-function _negColor(p) { return p.color || NEG_TIPO_CLR[p.tipo] || 'var(--accent-primary)'; }
-function _negIco(p)   { return p.icono || NEG_TIPO_ICO[p.tipo] || 'ti-briefcase'; }
+function _ngRefrescar(proyId) { if (proyId) S._negProyId = proyId; S._ngCache = null; return load(); }
+function ngToggle(k) { S[k] = !S[k]; rNegocios(); }
 
+// ── Portada ──────────────────────────────────────────────────────────────────
 function _negRenderLista(el) {
-  const proys = _negLista();
-  const neg   = S.data?.negocios || {};
-  const neto  = neg.neto_personal || 0;
-  const eventos = (neg.eventos || []).filter(e => {
-    const hoy = toISO(new Date());
-    return e.fecha && e.fecha >= hoy && e.fecha <= toISO(new Date(Date.now()+30*864e5));
-  }).slice(0,5);
-
-  const evHtml = eventos.length ? `
-<div class="sec-hdr" style="margin-top:8px"><div class="sec-hdr-row"><h2><i class="ti ti-bell"></i> Próximos eventos</h2></div><div class="sec-hdr-sub">30 días</div></div>
-<div style="background:var(--bg-surface);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:8px">
-${eventos.map(e=>{
-  const colorMap={VENCIMIENTO_COBRO:'#4ade80',VENCIMIENTO_PAGO:'#f87171',INVERSION_OBJETIVO:'#0ea5e9',RECORDATORIO:'#fbbf24'};
-  const icoMap={VENCIMIENTO_COBRO:'ti-cash',VENCIMIENTO_PAGO:'ti-alert-triangle',INVERSION_OBJETIVO:'ti-trending-up',RECORDATORIO:'ti-bell'};
-  const c=colorMap[e.tipo]||'var(--accent-primary)';
-  return `<div class="neg-evento-row">
-    <div class="neg-evento-icon" style="background:${c}22;color:${c}"><i class="ti ${icoMap[e.tipo]||'ti-bell'}"></i></div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.titulo||e.nombre||'—'}</div>
-      <div style="font-size:11px;color:var(--text-3)">${fmtDate(e.fecha)} · ${e.tipo?.replace(/_/g,' ')}</div>
-    </div>
-  </div>`;
-}).join('')}
-</div>` : '';
-
-  const cardsHtml = proys.length ? `<div class="neg-grid">${proys.map(p=>{
-    const c = _negColor(p);
-    return `<div class="neg-card" onclick="negAbrirDetalle('${p.id}')">
-  <div class="neg-card-hdr">
-    <div class="neg-card-icon" style="background:${c}22;color:${c}"><i class="ti ${_negIco(p)}"></i></div>
-    <div style="flex:1;min-width:0">
-      <div class="neg-card-title">${p.nombre}</div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">
-        <span class="neg-badge neg-badge-tipo">${p.tipo}</span>
-        <span class="neg-badge neg-st-${p.estado||'ACTIVO'}">${p.estado||'ACTIVO'}</span>
-      </div>
-    </div>
-  </div>
-  <div class="neg-kpi-grid" id="neg-kpis-${p.id}">
-    <div class="neg-kpi"><div class="neg-kpi-lbl">Meta</div><div class="neg-kpi-val" style="color:${c}">${fmt(p.monto_meta||0)}</div></div>
-    <div class="neg-kpi"><div class="neg-kpi-lbl">Capital</div><div class="neg-kpi-val">${fmt(p.capital_inicial||0)}</div></div>
-    ${p.fecha_vencimiento?`<div class="neg-kpi" style="grid-column:1/-1"><div class="neg-kpi-lbl">Vence</div><div class="neg-kpi-val" style="font-size:12px">${fmtDate(p.fecha_vencimiento)}</div></div>`:''}
-  </div>
-</div>`;
-  }).join('')}</div>` :
-  `<div class="neg-empty"><i class="ti ti-building-off" style="font-size:36px;display:block;margin-bottom:10px"></i>Sin proyectos aún.<br><button class="btn btn-accent btn-sm" style="margin-top:14px" onclick="negNuevoProyecto()"><i class="ti ti-plus"></i> Crear primer proyecto</button></div>`;
-
+  const proys = _negLista(), neg = S.data?.negocios || {}, neto = neg.neto_personal || 0;
+  const hoy = toISO(new Date()), lim = toISO(new Date(Date.now() + 30 * 864e5));
+  const eventos = (neg.eventos || []).filter(e => e.fecha && e.fecha >= hoy && e.fecha <= lim).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const activos = proys.filter(p => p.estado === 'ACTIVO').length;
+  const evEmo = { VENCIMIENTO_COBRO:'📥', VENCIMIENTO_PAGO:'📤', INVERSION_OBJETIVO:'🛠️', RECORDATORIO:'🔔' };
+  const evHTML = S._ngEv ? `<div class="ng-panel">${eventos.length ? eventos.map(e => `<div class="mov-card"><div class="mov-card-ic emo" style="background:rgba(129,140,248,.16)">${evEmo[e.tipo] || '📌'}</div>
+      <div class="mov-card-mid"><div class="mov-card-title">${_ngEsc(e.titulo || e.nombre || '—')}</div><div class="mov-card-sub">${fmtDate(e.fecha)}${e.proyecto ? ' · ' + _ngEsc(e.proyecto) : ''}</div></div></div>`).join('')
+      : '<div class="pr-hint" style="padding:10px">Sin vencimientos en los próximos 30 días 🎉</div>'}</div>` : '';
   el.innerHTML = `
-<div class="hdr">
-  <h2><i class="ti ti-building-store"></i> Negocios y Proyectos</h2>
-  <button class="btn btn-accent btn-sm" onclick="negNuevoProyecto()"><i class="ti ti-plus"></i> Nuevo</button>
+<div class="cal-hero">
+  <div class="cal-hero-ttl"><span aria-hidden="true">💼</span> Negocios y Proyectos</div>
+  ${proys.length ? `<div class="cal-hero-sub">${activos} activo${activos !== 1 ? 's' : ''} de ${proys.length}</div>` : ''}
 </div>
-<div class="cards">
-  <div class="card"><div class="card-lbl">Proyectos</div><div class="card-val accent">${proys.length}</div></div>
-  <div class="card"><div class="card-lbl">Activos</div><div class="card-val green">${proys.filter(p=>p.estado==='ACTIVO').length}</div></div>
-  <div class="card"><div class="card-lbl">Neto personal Q</div><div class="card-val ${neto>=0?'green':'red'}">${fmt(Math.abs(neto))}</div></div>
+<div class="ico-bar ico-bar-c">
+  <button class="ico-btn acc" onclick="negNuevoProyecto()" title="Nuevo proyecto" aria-label="Nuevo proyecto"><i class="ti ti-plus"></i></button>
+  ${proys.length ? `<button class="ico-btn${S._ngEv ? ' on' : ''}" onclick="ngToggle('_ngEv')" title="Próximos vencimientos" aria-label="Próximos vencimientos" aria-expanded="${!!S._ngEv}">⏰${eventos.length ? `<span class="tile-dot">${eventos.length}</span>` : ''}</button>` : ''}
 </div>
-${evHtml}
-${cardsHtml}`;
+${evHTML}
+${proys.length ? `<div class="pr-cover pr-cover-sm"><div class="pr-cover-nums">
+    <div><span>Proyectos</span><b>${proys.length}</b></div>
+    <div><span>Activos</span><b class="green">${activos}</b></div>
+    <div><span>Neto personal (quincena)</span><b class="${neto >= 0 ? 'green' : 'red'}">${neto < 0 ? '−' : ''}${fmt(Math.abs(neto))}</b></div></div></div>
+<div class="pr-grid">${proys.map(p => {
+    const [eEst, cEst] = NG_EST[p.estado] || NG_EST.ACTIVO;
+    return `<button class="pr-card" onclick="negAbrirDetalle('${p.id}')">
+      <div class="pr-card-top">${_ngIcHTML(p)}<div class="pr-card-name"><b>${_ngEsc(p.nombre)}</b><small>${(NG_TIPOS[p.tipo] || ['', p.tipo])[1]}</small></div><span class="pr-pill ${cEst}">${eEst}</span></div>
+      <div class="pr-nums two"><div><span>Meta</span><b>${p.monto_meta > 0 ? fmt(p.monto_meta) : '—'}</b></div><div><span>Capital</span><b>${p.capital_inicial > 0 ? fmt(p.capital_inicial) : '—'}</b></div></div>
+      ${p.fecha_vencimiento ? `<div class="pr-hint">📅 Vence ${fmtDate(p.fecha_vencimiento)}</div>` : ''}</button>`;
+  }).join('')}</div>`
+  : `<div class="pr-empty"><div>💼</div><b>Aún no tienes proyectos</b><p>Un negocio, un freelance, una inversión… Registra lo que entra y lo que sale, lo que te deben y lo que debes.</p>
+      <button class="btn btn-accent" onclick="negNuevoProyecto()"><i class="ti ti-plus"></i> Crear mi primer proyecto</button></div>`}`;
 }
 
 async function negAbrirDetalle(id) {
-  S._negProyId = id;
+  S._negProyId = id; S._ngCache = null;
   const el = $('tab-negocios'); if (!el) return;
-  el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-3)"><i class="ti ti-loader-2" style="font-size:28px;animation:spin 1s linear infinite"></i><div style="margin-top:10px">Cargando proyecto…</div></div>`;
-  await _negRenderDetalle(el, id);
-  setTimeout(_initCollapsibles, 120);
+  el.innerHTML = `<div class="pr-empty"><div>⏳</div><b>Cargando proyecto…</b></div>`;
+  await _negRenderDetalle(el, id, false);
+}
+function negVolverLista() { S._negProyId = null; S._ngCache = null; rNegocios(); }
+
+// ── Detalle ──────────────────────────────────────────────────────────────────
+async function _negCargar(id) {
+  const c = S._ngCache;
+  if (c && c.id === id && Date.now() - c.t < 20000) return c;
+  const un = r => (r && r.data !== undefined && r.success !== undefined) ? r.data : r;
+  const pedir = async u => { try { return await api('GET', u); } catch (e) { return null; } };
+  const [rs, tr, de, ac, iv, gf, gc, gcar, bl] = await Promise.all([
+    pedir(`/api/negocios/proyecto/${id}/resumen`), pedir(`/api/negocios/proyecto/${id}/transacciones`),
+    pedir(`/api/negocios/proyecto/${id}/deudores`), pedir(`/api/negocios/proyecto/${id}/acreedores`),
+    pedir(`/api/negocios/proyecto/${id}/inversiones`), pedir(`/api/negocios/proyecto/${id}/grafica?fuente=flujo`),
+    pedir(`/api/negocios/proyecto/${id}/grafica?fuente=categorias`), pedir(`/api/negocios/proyecto/${id}/grafica?fuente=cartera`),
+    pedir(`/api/negocios/proyecto/${id}/bloques`)]);
+  S._ngCache = { id, t: Date.now(), res: rs || {}, trans: (tr && tr.data) || [], deu: (de && de.data) || [], acr: (ac && ac.data) || [],
+    inv: (iv && iv.data) || [], bloques: (bl && bl.data) || [], gf: { flujo: un(gf) || {}, cat: un(gc) || {}, cartera: un(gcar) || {} } };
+  return S._ngCache;
+}
+const _ngSecOpen = k => (S._ngSec || (S._ngSec = { tx: true, cob: true, pag: true, inv: false, blq: true, gf: false }))[k];
+function ngSec(k) { S._ngSec[k] = !_ngSecOpen(k); _negRenderDetalle($('tab-negocios'), S._negProyId, true); }
+const _ngSecHdr = (k, emo, titulo, sub) => `<button class="pr-sin-hdr ng-sec-hdr" onclick="ngSec('${k}')" aria-expanded="${_ngSecOpen(k)}"><span>${emo} <b>${titulo}</b>${sub ? ` · <span class="ng-sub">${sub}</span>` : ''}</span><i class="ti ti-chevron-${_ngSecOpen(k) ? 'up' : 'down'}"></i></button>`;
+
+function _ngPendiente(x) { return Math.max(0, Number(x.monto_original || 0) - Number(x.monto_pagado || 0)); }
+function _ngCartera(x, tipo) {
+  const orig = Number(x.monto_original || 0), pag = Number(x.monto_pagado || 0), pend = _ngPendiente(x), pct = orig > 0 ? Math.min(100, Math.round(pag / orig * 100)) : 0;
+  const venc = x.fecha_vencimiento ? String(x.fecha_vencimiento).slice(0, 10) : '', vencido = venc && venc < toISO(new Date()) && pend > 0;
+  const est = x.estado || 'PENDIENTE', cob = tipo === 'deudor';
+  return `<div class="pr-goal ng-row${est === 'PAGADO' ? ' done' : ''}">
+    <div class="pr-goal-top"><div class="mov-card-ic emo" style="background:${cob ? 'rgba(74,222,128,.16)' : 'rgba(248,113,113,.16)'}">${cob ? '📥' : '📤'}</div>
+      <div class="pr-card-name"><b>${_ngEsc(x.nombre)}</b><small>${_ngEsc(x.notas || '')}${x.notas && venc ? ' · ' : ''}${venc ? (vencido ? '⚠️ venció ' : 'vence ') + fmtDate(venc) : ''}</small></div>
+      <span class="pr-pill ${est === 'PAGADO' ? '' : vencido ? 'dng' : est === 'PARCIAL' ? 'warn' : 'neu'}">${est === 'PAGADO' ? '✓ Saldado' : est === 'PARCIAL' ? pct + '%' : vencido ? 'Vencido' : 'Pendiente'}</span></div>
+    <div class="bpbar"><div class="bpfill" style="width:${pct}%;${est === 'PAGADO' ? 'background:var(--color-income)' : ''}"></div></div>
+    <div class="pr-goal-amts"><b class="${cob ? 'green' : 'red'}">${fmt(pend)} <small style="font-weight:600;color:var(--text-3)">pendiente</small></b><span>de ${fmt(orig)}</span></div>
+    <div class="pr-goal-foot">${pend > 0 ? `<button class="btn btn-accent btn-sm" onclick="negRegistrarPago('${tipo}','${x.id}','${x.proyecto_id}')"><i class="ti ti-coins"></i> ${cob ? 'Registrar cobro' : 'Registrar pago'}</button>` : '<span></span>'}
+      <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="${cob ? 'negDelDeudor' : 'negDelAcreedor'}('${x.proyecto_id}','${x.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button></div></div>`;
+}
+const NG_CAT_EMO = { MATERIAL:'🧱', PRODUCTO:'📦', EQUIPO:'🛠️', MARKETING:'📣', OTRO:'🧩' };
+function _ngInv(v) {
+  const hecho = v.estado === 'COMPLETADA', pr = { ALTA:'dng', MEDIA:'warn', BAJA:'neu' }[v.prioridad] || 'neu';
+  return `<div class="pr-goal ng-row${hecho ? ' done' : ''}">
+    <div class="pr-goal-top"><div class="mov-card-ic emo" style="background:rgba(129,140,248,.16)">${NG_CAT_EMO[v.categoria] || '🛠️'}</div>
+      <div class="pr-card-name"><b>${_ngEsc(v.nombre)}</b><small>${(v.categoria || 'OTRO').toLowerCase()}${v.fecha_objetivo ? ' · para ' + fmtDate(String(v.fecha_objetivo).slice(0, 10)) : ''}${v.estado && v.estado !== 'PLANEADA' ? ' · ' + v.estado.toLowerCase().replace('_', ' ') : ''}</small></div>
+      <span class="pr-pill ${pr}">${v.prioridad || 'MEDIA'}</span></div>
+    <div class="pr-goal-amts"><b>${v.monto_estimado > 0 ? fmt(v.monto_estimado) : '—'}</b><span>estimado</span></div>
+    <div class="pr-goal-foot">${hecho ? '<span></span>' : `<button class="btn btn-accent btn-sm" onclick="negInvHecha('${v.proyecto_id}','${v.id}')"><i class="ti ti-check"></i> Ya la hice</button>`}
+      <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="negDelInversion('${v.proyecto_id}','${v.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button></div></div>`;
+}
+function _ngTx(t) {
+  const ing = t.tipo === 'INGRESO', inv = t.tipo === 'INVERSION';
+  return `<div class="mov-card q-card"><div class="mov-card-ic emo" style="background:${ing ? 'rgba(74,222,128,.16)' : inv ? 'rgba(129,140,248,.16)' : 'rgba(248,113,113,.16)'}">${ing ? '💰' : inv ? '📈' : '💸'}</div>
+    <div class="mov-card-mid"><div class="mov-card-title">${_ngEsc(t.concepto || (ing ? 'Ingreso' : inv ? 'Inversión' : 'Gasto'))}</div>
+      <div class="mov-card-sub">${fmtDate(String(t.fecha).slice(0, 10))}${t.categoria ? ' · ' + _ngEsc(t.categoria) : ''}${t.metodo_pago ? ' · ' + _ngEsc(t.metodo_pago) : ''}${t.reflejo_personal ? ' · ' + (t.reflejo_personal === 'RETIRO' ? '👤 retiro' : '💼 aporte') : ''}</div></div>
+    <div class="mov-card-val ${ing ? 'green' : 'red'}">${ing ? '+' : '−'}${fmt(t.monto)}</div>
+    <div class="q-card-foot"><div class="mov-card-acts"><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="negDelTrans('${t.proyecto_id}','${t.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button></div></div></div>`;
 }
 
-async function _negRenderDetalle(el, id) {
-  const proys = _negLista();
-  const p = proys.find(x=>x.id===id) || {};
-  const c = _negColor(p);
-
-  let res={}, trans=[], deudores=[], acreedores=[], inv=[], bloques=[];
-  let gfFlujo={labels:[],datasets:[]}, gfCat={labels:[],datasets:[]}, gfCartera={labels:[],datasets:[]};
-  try {
-    const [rRes,rT,rD,rA,rI,rGfF,rGfC,rGfCar,rBloq] = await Promise.all([
-      api('GET',`/api/negocios/proyecto/${id}/resumen`),
-      api('GET',`/api/negocios/proyecto/${id}/transacciones`),
-      api('GET',`/api/negocios/proyecto/${id}/deudores`),
-      api('GET',`/api/negocios/proyecto/${id}/acreedores`),
-      api('GET',`/api/negocios/proyecto/${id}/inversiones`),
-      api('GET',`/api/negocios/proyecto/${id}/grafica?fuente=flujo`),
-      api('GET',`/api/negocios/proyecto/${id}/grafica?fuente=categorias`),
-      api('GET',`/api/negocios/proyecto/${id}/grafica?fuente=cartera`),
-      api('GET',`/api/negocios/proyecto/${id}/bloques`)
-    ]);
-    res        = rRes.data   || {};
-    trans      = rT.data     || [];
-    deudores   = rD.data     || [];
-    acreedores = rA.data     || [];
-    inv        = rI.data     || [];
-    gfFlujo    = rGfF.data   || {};
-    gfCat      = rGfC.data   || {};
-    gfCartera  = rGfCar.data || {};
-    bloques    = rBloq.data  || [];
-  } catch(e) { toast('Error cargando proyecto: '+e.message,'error'); }
-  S._negBloques = bloques;
-
-  const kpis = [
-    {lbl:'Ingresos',val:fmt(res.total_ingresos||0),col:'var(--color-income)'},
-    {lbl:'Gastos',val:fmt(res.total_gastos||0),col:'var(--color-expense)'},
-    {lbl:'Saldo neto',val:fmt(res.saldo_neto||0),col:(res.saldo_neto||0)>=0?'var(--green)':'var(--red)'},
-    {lbl:'Por cobrar',val:fmt(res.total_por_cobrar||0),col:'var(--green)'},
-    {lbl:'Por pagar',val:fmt(res.total_por_pagar||0),col:'var(--red)'},
-    {lbl:'Inversiones',val:fmt(res.total_inversiones||0),col:'var(--accent-primary)'},
-  ];
-
-  const mkEstPago = e => `<span class="neg-pago-${e||'PENDIENTE'}" style="font-size:11px;font-weight:600">${e||'PENDIENTE'}</span>`;
-
+async function _negRenderDetalle(el, id, usarCache) {
+  if (!el) return;
+  const p = _negLista().find(x => x.id === id);
+  if (!p) { S._negProyId = null; _negRenderLista(el); return; }
+  if (!usarCache) S._ngCache = null;
+  const d = await _negCargar(id);
+  if (S._negProyId !== id) return;
+  const f = d.res.financiero || d.res.data?.financiero || {}, ca = d.res.cartera || d.res.data?.cartera || {};
+  const ing = f.ingresos || 0, gas = f.gastos || 0, inv = f.inversiones || 0, util = f.utilidad_bruta ?? (ing - gas);
+  const cob = ca.por_cobrar_total || 0, pag = ca.por_pagar_total || 0, margen = ing > 0 ? Math.round(util / ing * 100) : null;
+  const [eEst, cEst] = NG_EST[p.estado] || NG_EST.ACTIVO, metaPct = p.monto_meta > 0 ? Math.min(100, Math.round(ing / p.monto_meta * 100)) : null;
+  S._negBloques = d.bloques;
+  const txs = S._ngTxAll ? d.trans : d.trans.slice(0, 8);
+  const quick = [['💰', 'Ingreso', `negTransPop('${id}','INGRESO')`], ['💸', 'Gasto', `negTransPop('${id}','GASTO')`], ['📥', 'Por cobrar', `negNuevoDeudor('${id}')`],
+    ['📤', 'Por pagar', `negNuevoAcreedor('${id}')`], ['🛠️', 'Inversión', `negNuevaInversion('${id}')`], ['🧩', 'Bloque', `negNuevoBloque('${id}')`]];
   el.innerHTML = `
-<div class="neg-back" onclick="negVolverLista()"><i class="ti ti-arrow-left"></i> Todos los proyectos</div>
-
-<div class="neg-det-hdr">
-  <div class="neg-det-icon" style="background:${c}22;color:${c}"><i class="ti ${_negIco(p)}"></i></div>
-  <div>
-    <div style="font-size:19px;font-weight:800;color:var(--text)">${p.nombre||'Proyecto'}</div>
-    <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
-      <span class="neg-badge neg-badge-tipo">${p.tipo||''}</span>
-      <span class="neg-badge neg-st-${p.estado||'ACTIVO'}">${p.estado||'ACTIVO'}</span>
-      ${p.fecha_vencimiento?`<span class="neg-badge" style="background:var(--bg-surface-2);color:var(--text-3)"><i class="ti ti-calendar" style="font-size:9px"></i> ${fmtDate(p.fecha_vencimiento)}</span>`:''}
-    </div>
-  </div>
-  <div style="margin-left:auto;display:flex;gap:6px">
-    <button class="edit-pill-btn" title="Editar" onclick="negEditarProyecto('${id}')"><i class="ti ti-pencil" style="font-size:13px"></i></button>
-    <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="negEliminarProyecto('${id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-  </div>
+<button class="ng-back" onclick="negVolverLista()"><i class="ti ti-arrow-left"></i> Todos los proyectos</button>
+<div class="cal-hero">
+  <div class="cal-hero-ttl"><span aria-hidden="true">${_ngEmo(p)}</span> ${_ngEsc(p.nombre)}</div>
+  <div class="cal-hero-sub">${(NG_TIPOS[p.tipo] || ['', p.tipo])[1]} · <span class="pr-pill ${cEst}">${eEst}</span>${p.fecha_vencimiento ? ` · 📅 ${fmtDate(String(p.fecha_vencimiento).slice(0, 10))}` : ''}</div>
 </div>
-
-<div class="neg-resumen-kpis">${kpis.map(k=>`<div class="neg-kpi"><div class="neg-kpi-lbl">${k.lbl}</div><div class="neg-kpi-val" style="color:${k.col}">${k.val}</div></div>`).join('')}</div>
-
-<!-- GRÁFICAS (canvas; mkC se llama tras el innerHTML) -->
-<div class="neg-sec">
-  <div style="padding:4px 0 8px;border-bottom:1px solid var(--border-default);margin-bottom:12px">
-    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)"><i class="ti ti-chart-bar"></i> Gráficas</span>
-  </div>
-  <div class="neg-chart-grid">
-    <div class="neg-chart-item">
-      <div class="neg-chart-ttl">Flujo de caja</div>
-      <div class="neg-ch-wrap"><canvas id="neg-ch-flujo-${id}"></canvas></div>
-    </div>
-    <div class="neg-chart-item">
-      <div class="neg-chart-ttl">Gastos por categoría</div>
-      <div class="neg-ch-wrap"><canvas id="neg-ch-cat-${id}"></canvas></div>
-    </div>
-    <div class="neg-chart-item">
-      <div class="neg-chart-ttl">Cartera</div>
-      <div class="neg-ch-wrap"><canvas id="neg-ch-cartera-${id}"></canvas></div>
-    </div>
-  </div>
+<div class="ico-bar ico-bar-c">
+  <button class="ico-btn" onclick="negEditarProyecto('${id}')" title="Editar proyecto" aria-label="Editar proyecto"><i class="ti ti-pencil"></i></button>
+  <button class="ico-btn" onclick="negEliminarProyecto('${id}')" title="Eliminar proyecto" aria-label="Eliminar proyecto" style="color:var(--red)"><i class="ti ti-trash"></i></button>
 </div>
-
-<!-- TRANSACCIONES -->
-<div class="neg-sec">
-  <div class="sec-hdr collapsible-hdr" data-target="neg-trans-body">
-    <div class="sec-hdr-row"><h2><i class="ti ti-arrows-exchange"></i> Transacciones</h2></div>
-    <div class="sec-hdr-sub">${trans.length} registros</div>
-  </div>
-  <div id="neg-trans-body" class="collapsible-body">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-      <button class="btn btn-accent btn-sm" onclick="negNuevaTrans('${id}')"><i class="ti ti-plus"></i> Registrar</button>
-    </div>
-    ${tglBtn('tbl-neg-trans')}${mkTable({id:'tbl-neg-trans',exportName:'negocio_transacciones',numbered:true,empty:'Sin transacciones',
-      columns:[
-        {key:'concepto',label:'Concepto',filter:'text',value:t=>t.concepto||''},
-        {key:'tipo',label:'Tipo',filter:'select',value:t=>t.tipo||''},
-        {key:'monto',label:'Monto',num:true,value:t=>t.monto||0},
-        {key:'fecha',label:'Fecha',filter:'text',value:t=>fd(t.fecha)||''},
-        {key:'categoria',label:'Categoría',filter:'select',value:t=>t.categoria||''},
-        {key:'_acts',label:'',sortable:false}],
-      rows:trans,
-      renderRow:t=>`<tr>
-        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${t.concepto||'—'}</td>
-        <td><span class="badge b-${t.tipo==='INGRESO'?'ingreso':'gasto'}">${t.tipo||'—'}</span></td>
-        <td style="color:${t.tipo==='INGRESO'?'var(--color-income)':'var(--color-expense)'};font-weight:600;font-variant-numeric:tabular-nums">${t.tipo==='INGRESO'?'+'+'':'-'}${fmt(t.monto)}</td>
-        <td style="color:var(--text-3)">${fd(t.fecha)||'—'}</td>
-        <td style="color:var(--text-3)">${t.categoria||'—'}</td>
-        <td style="white-space:nowrap">
-          <button class="edit-pill-btn" style="color:var(--red)" onclick="negDelTrans('${id}','${t.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-        </td>
-      </tr>`})}
-  </div>
+<div class="pr-cover ${util < 0 ? 'dng' : ''}">
+  <div class="pr-cover-main"><span>Utilidad</span><b class="${util >= 0 ? 'green' : 'red'}">${util < 0 ? '−' : ''}${fmt(Math.abs(util))}</b></div>
+  ${margen !== null ? `<div class="pr-hint">Margen ${margen}%</div>` : ''}
+  ${metaPct !== null ? `<div class="bpbar" style="margin-top:8px"><div class="bpfill" style="width:${metaPct}%"></div></div><div class="pr-hint" style="margin-top:4px">Ingresos vs meta ${fmt(p.monto_meta)} · ${metaPct}%</div>` : ''}
+  <div class="pr-cover-nums"><div><span>Ingresos</span><b class="green">${fmt(ing)}</b></div><div><span>Gastos</span><b class="red">${fmt(gas)}</b></div><div><span>Invertido</span><b>${fmt(inv)}</b></div></div>
+  <div class="pr-cover-nums"><div><span>Por cobrar</span><b class="green">${fmt(cob)}</b></div><div><span>Por pagar</span><b class="red">${fmt(pag)}</b></div><div><span>Posición</span><b class="${cob - pag >= 0 ? 'green' : 'red'}">${cob - pag < 0 ? '−' : ''}${fmt(Math.abs(cob - pag))}</b></div></div>
 </div>
+<div class="ng-quick">${quick.map(([e, l, fn]) => `<button onclick="${fn}"><span>${e}</span>${l}</button>`).join('')}</div>
 
-<!-- DEUDORES -->
-<div class="neg-sec">
-  <div class="sec-hdr collapsible-hdr" data-target="neg-deu-body">
-    <div class="sec-hdr-row"><h2><i class="ti ti-cash"></i> Por cobrar (Deudores)</h2></div>
-    <div class="sec-hdr-sub">${deudores.filter(d=>d.estado!=='PAGADO').length} pendientes · ${fmt(res.total_por_cobrar||0)}</div>
-  </div>
-  <div id="neg-deu-body" class="collapsible-body">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-      <button class="btn btn-accent btn-sm" onclick="negNuevoDeudor('${id}')"><i class="ti ti-plus"></i> Agregar</button>
-    </div>
-    ${deudores.length ? deudores.map(d=>`
-<div class="neg-inv-card" style="margin-bottom:8px">
-  <div class="neg-inv-main">
-    <div class="neg-inv-nombre">${d.nombre||'—'}</div>
-    <div class="neg-inv-meta">${d.concepto||''}</div>
-    <div class="neg-pago-row">
-      <span style="font-family:'Space Grotesk',system-ui;font-variant-numeric:tabular-nums;font-weight:700;color:var(--color-income)">${fmt(d.monto_original||0)}</span>
-      <span style="color:var(--text-3);font-size:11px">cobrado ${fmt(d.monto_pagado||0)}</span>
-      ${mkEstPago(d.estado)}
-      ${d.fecha_vencimiento?`<span style="font-size:10px;color:var(--text-3)"><i class="ti ti-calendar" style="font-size:9px"></i> ${fmtDate(d.fecha_vencimiento)}</span>`:''}
-    </div>
-    ${d.estado!=='PAGADO'?`<div style="margin-top:8px"><button class="neg-pago-btn" onclick="negRegistrarPago('deudor','${d.id}','${id}')"><i class="ti ti-coins"></i> Registrar cobro</button></div>`:''}
-  </div>
-  <button class="edit-pill-btn" style="color:var(--red);align-self:flex-start" onclick="negDelDeudor('${id}','${d.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-</div>`).join('') : '<div class="neg-empty" style="padding:16px 0">Sin deudores registrados</div>'}
-  </div>
-</div>
-
-<!-- ACREEDORES -->
-<div class="neg-sec">
-  <div class="sec-hdr collapsible-hdr" data-target="neg-acr-body">
-    <div class="sec-hdr-row"><h2><i class="ti ti-alert-triangle"></i> Por pagar (Acreedores)</h2></div>
-    <div class="sec-hdr-sub">${acreedores.filter(a=>a.estado!=='PAGADO').length} pendientes · ${fmt(res.total_por_pagar||0)}</div>
-  </div>
-  <div id="neg-acr-body" class="collapsible-body">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-      <button class="btn btn-accent btn-sm" onclick="negNuevoAcreedor('${id}')"><i class="ti ti-plus"></i> Agregar</button>
-    </div>
-    ${acreedores.length ? acreedores.map(a=>`
-<div class="neg-inv-card" style="margin-bottom:8px">
-  <div class="neg-inv-main">
-    <div class="neg-inv-nombre">${a.nombre||'—'}</div>
-    <div class="neg-inv-meta">${a.concepto||''}</div>
-    <div class="neg-pago-row">
-      <span style="font-family:'Space Grotesk',system-ui;font-variant-numeric:tabular-nums;font-weight:700;color:var(--color-expense)">${fmt(a.monto_original||0)}</span>
-      <span style="color:var(--text-3);font-size:11px">pagado ${fmt(a.monto_pagado||0)}</span>
-      ${mkEstPago(a.estado)}
-      ${a.fecha_vencimiento?`<span style="font-size:10px;color:var(--text-3)"><i class="ti ti-calendar" style="font-size:9px"></i> ${fmtDate(a.fecha_vencimiento)}</span>`:''}
-    </div>
-    ${a.estado!=='PAGADO'?`<div style="margin-top:8px"><button class="neg-pago-btn" onclick="negRegistrarPago('acreedor','${a.id}','${id}')"><i class="ti ti-coins"></i> Registrar pago</button></div>`:''}
-  </div>
-  <button class="edit-pill-btn" style="color:var(--red);align-self:flex-start" onclick="negDelAcreedor('${id}','${a.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-</div>`).join('') : '<div class="neg-empty" style="padding:16px 0">Sin acreedores registrados</div>'}
-  </div>
-</div>
-
-<!-- INVERSIONES -->
-<div class="neg-sec">
-  <div class="sec-hdr collapsible-hdr" data-target="neg-inv-body">
-    <div class="sec-hdr-row"><h2><i class="ti ti-trending-up"></i> Inversiones</h2></div>
-    <div class="sec-hdr-sub">${inv.length} registros · ${fmt(res.total_inversiones||0)}</div>
-  </div>
-  <div id="neg-inv-body" class="collapsible-body">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-      <button class="btn btn-accent btn-sm" onclick="negNuevaInversion('${id}')"><i class="ti ti-plus"></i> Agregar</button>
-    </div>
-    ${inv.length ? inv.map(v=>`
-<div class="neg-inv-card" style="margin-bottom:8px">
-  <div class="neg-inv-main">
-    <div class="neg-inv-nombre">${v.nombre||'—'}</div>
-    <div class="neg-inv-meta">${v.tipo_inversion||''} ${v.monto_objetivo?'· meta '+fmt(v.monto_objetivo):''}</div>
-    <div class="neg-pago-row">
-      <span style="font-family:'Space Grotesk',system-ui;font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent-primary)">${fmt(v.monto_invertido||0)}</span>
-      ${v.rendimiento_esperado?`<span style="font-size:11px;color:var(--text-3)">rend. ${v.rendimiento_esperado}%</span>`:''}
-      <span class="neg-badge neg-st-${v.estado||'ACTIVA'}" style="font-size:9px">${v.estado||'ACTIVA'}</span>
-      ${v.fecha_vencimiento?`<span style="font-size:10px;color:var(--text-3)"><i class="ti ti-calendar" style="font-size:9px"></i> ${fmtDate(v.fecha_vencimiento)}</span>`:''}
-    </div>
-  </div>
-  <button class="edit-pill-btn" style="color:var(--red);align-self:flex-start" onclick="negDelInversion('${id}','${v.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-</div>`).join('') : '<div class="neg-empty" style="padding:16px 0">Sin inversiones registradas</div>'}
-  </div>
-</div>
-
-${_negRenderBloquesHtml(bloques, id)}`;
-  _negRenderCharts(id, gfFlujo, gfCat, gfCartera, bloques);
+<div class="pr-sin ng-sec">${_ngSecHdr('tx', '💳', 'Transacciones', d.trans.length + ' registro' + (d.trans.length !== 1 ? 's' : ''))}
+  ${_ngSecOpen('tx') ? `<div class="ng-body">${d.trans.length ? `<div class="mov-cards">${txs.map(_ngTx).join('')}</div>${d.trans.length > 8 ? `<button class="btn btn-ghost btn-sm ng-more" onclick="ngToggle('_ngTxAll')">${S._ngTxAll ? 'Ver menos' : `Ver las ${d.trans.length}`}</button>` : ''}` : '<div class="pr-hint" style="padding:12px">Aún no hay movimientos. Usa “Ingreso” o “Gasto” arriba.</div>'}</div>` : ''}</div>
+<div class="pr-sin ng-sec">${_ngSecHdr('cob', '📥', 'Por cobrar', d.deu.filter(x => x.estado !== 'PAGADO').length + ' pendientes · ' + fmt(cob))}
+  ${_ngSecOpen('cob') ? `<div class="ng-body">${d.deu.length ? d.deu.map(x => _ngCartera(x, 'deudor')).join('') : '<div class="pr-hint" style="padding:12px">Nadie te debe por este proyecto.</div>'}</div>` : ''}</div>
+<div class="pr-sin ng-sec">${_ngSecHdr('pag', '📤', 'Por pagar', d.acr.filter(x => x.estado !== 'PAGADO').length + ' pendientes · ' + fmt(pag))}
+  ${_ngSecOpen('pag') ? `<div class="ng-body">${d.acr.length ? d.acr.map(x => _ngCartera(x, 'acreedor')).join('') : '<div class="pr-hint" style="padding:12px">No debes nada por este proyecto.</div>'}</div>` : ''}</div>
+<div class="pr-sin ng-sec">${_ngSecHdr('inv', '🛠️', 'Plan de inversiones', d.inv.length + ' en la lista')}
+  ${_ngSecOpen('inv') ? `<div class="ng-body">${d.inv.length ? d.inv.map(_ngInv).join('') : '<div class="pr-hint" style="padding:12px">Anota aquí lo que planeas comprar o invertir para el proyecto.</div>'}</div>` : ''}</div>
+<div class="pr-sin ng-sec">${_ngSecHdr('gf', '📊', 'Gráficas', '')}
+  ${_ngSecOpen('gf') ? `<div class="ng-body ng-charts"><div class="neg-chart-item"><div class="neg-chart-ttl">Flujo de caja</div><div class="neg-ch-wrap"><canvas id="neg-ch-flujo-${id}"></canvas></div></div>
+    <div class="neg-chart-item"><div class="neg-chart-ttl">Gastos por categoría</div><div class="neg-ch-wrap"><canvas id="neg-ch-cat-${id}"></canvas></div></div>
+    <div class="neg-chart-item"><div class="neg-chart-ttl">Cartera</div><div class="neg-ch-wrap"><canvas id="neg-ch-cartera-${id}"></canvas></div></div></div>` : ''}</div>
+<div class="pr-sin ng-sec">${_ngSecHdr('blq', '🧩', 'Canvas', d.bloques.length + ' bloque' + (d.bloques.length !== 1 ? 's' : ''))}
+  ${_ngSecOpen('blq') ? `<div class="ng-body">${_negBloquesHTML(d.bloques, id)}</div>` : ''}</div>`;
+  _negRenderCharts(id, d);
 }
 
-function negVolverLista() {
-  S._negProyId = null;
-  rNegocios();
+function _negRenderCharts(proyId, d) {
+  const un = (canvasId, tipo, gf) => {
+    if (!$(canvasId)) return;
+    if ((gf?.labels || []).length && (gf?.datasets || []).length) mkC(canvasId, tipo, gf.labels, gf.datasets); else emptyChart(canvasId, 'Sin datos');
+  };
+  un(`neg-ch-flujo-${proyId}`, 'bar', d.gf.flujo); un(`neg-ch-cat-${proyId}`, 'doughnut', d.gf.cat); un(`neg-ch-cartera-${proyId}`, 'bar', d.gf.cartera);
+  const map = { flujo: d.gf.flujo, categorias: d.gf.cat, cartera: d.gf.cartera };
+  (d.bloques || []).filter(b => b.tipo === 'GRAFICA').forEach(b => un(`neg-bg-${b.id}`, b.contenido?.chartType || 'bar', map[b.contenido?.fuente || 'flujo']));
 }
 
-// ── Gráficas ─────────────────────────────────────────────────────────────────
-
-function _negRenderCharts(proyId, gfFlujo, gfCat, gfCartera, bloques) {
-  const gfMap = { flujo:gfFlujo, categorias:gfCat, cartera:gfCartera };
-
-  function renderOne(canvasId, tipo, gf) {
-    const labels = gf?.labels || [];
-    const dsets  = gf?.datasets || [];
-    if (labels.length && dsets.length) {
-      mkC(canvasId, tipo, labels, dsets);
-    } else {
-      emptyChart(canvasId, 'Sin datos');
-    }
-  }
-
-  renderOne(`neg-ch-flujo-${proyId}`,    'bar',      gfFlujo);
-  renderOne(`neg-ch-cat-${proyId}`,      'doughnut', gfCat);
-  renderOne(`neg-ch-cartera-${proyId}`,  'bar',      gfCartera);
-
-  // GRAFICA bloques
-  (bloques||[]).filter(b=>b.tipo==='GRAFICA').forEach(b => {
-    const fuente = b.contenido?.fuente || 'flujo';
-    const tipo   = b.contenido?.tipo   || 'bar';
-    renderOne(`neg-bg-${b.id}`, tipo, gfMap[fuente]);
-  });
-}
-
-// ── Canvas de bloques ─────────────────────────────────────────────────────────
-
-function _negEsc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function _negLinkify(txt) {
-  return txt.replace(/(https?:\/\/[^\s&<>"]+)/g, url =>
-    `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
-}
-
-const _NEG_BLOQUE_ICO = {NOTA:'ti-notes',LISTA:'ti-list-check',TABLA:'ti-table',RECORDATORIO:'ti-bell',GRAFICA:'ti-chart-bar'};
-const _NEG_BLOQUE_CLR = {NOTA:'#60a5fa',LISTA:'#4ade80',TABLA:'#f97316',RECORDATORIO:'#fbbf24',GRAFICA:'#a78bfa'};
-
-function _negBloqueBodyHtml(b, proyId) {
-  const cont = b.contenido;
+// ── Canvas de bloques (formato del servidor) ─────────────────────────────────
+function _negLinkify(txt) { return txt.replace(/(https?:\/\/[^\s&<>"]+)/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`); }
+const _NG_BQ = { NOTA:['📝','Nota'], LISTA:['✅','Lista'], TABLA:['📋','Tabla'], RECORDATORIO:['🔔','Recordatorio'], GRAFICA:['📈','Gráfica'] };
+function _negBloqueBody(b, proyId) {
+  const c = b.contenido || {};
   switch (b.tipo) {
-    case 'NOTA': {
-      const txt = typeof cont === 'string' ? cont : '';
-      return `<div class="neg-nota-body">${_negLinkify(_negEsc(txt))}</div>`;
-    }
+    case 'NOTA': return `<div class="neg-nota-body">${_negLinkify(_ngEsc(c.texto || ''))}</div>`;
     case 'LISTA': {
-      const items = Array.isArray(cont) ? cont : [];
-      const rows = items.map((it,i) =>
-        `<div class="neg-lista-item">
-  <input type="checkbox" class="neg-lista-check" ${it.marcado?'checked':''} onchange="negToggleListaItem('${b.id}',${i},this.checked,'${proyId}')">
-  <span class="neg-lista-txt${it.marcado?' done':''}">${_negEsc(it.texto||'')}</span>
-</div>`).join('');
-      return `<div>${rows}</div>
-<div style="margin-top:8px">
-  <button class="btn btn-ghost btn-sm" onclick="negAddListaItem('${b.id}','${proyId}')"><i class="ti ti-plus" style="font-size:11px"></i> Agregar ítem</button>
-</div>`;
+      const items = Array.isArray(c.items) ? c.items : [];
+      return `${items.map((it, i) => `<label class="neg-lista-item"><input type="checkbox" class="neg-lista-check" ${it.done ? 'checked' : ''} onchange="negToggleListaItem('${b.id}',${i},this.checked,'${proyId}')"><span class="neg-lista-txt${it.done ? ' done' : ''}">${_ngEsc(it.text || '')}</span></label>`).join('')}
+        <input class="inp ng-add" placeholder="＋ Agregar y Enter" onkeydown="if(event.key==='Enter')negAddListaItem('${b.id}','${proyId}',this)">`;
     }
     case 'TABLA': {
-      const cols = cont?.columns || [];
-      const rows = cont?.rows    || [];
-      if (!cols.length) return '<div class="neg-empty" style="padding:8px 0">Sin columnas definidas</div>';
-      const thead = cols.map(c=>`<th>${_negEsc(c)}</th>`).join('');
-      const tbody = rows.map(r=>`<tr>${cols.map((_,i)=>`<td>${_negEsc(String(r[i]??''))}</td>`).join('')}</tr>`).join('');
-      return `<div class="neg-tabla-scrl"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+      const cols = c.columns || [], rows = c.rows || [];
+      if (!cols.length) return '<div class="pr-hint">Sin columnas</div>';
+      return `<div class="neg-tabla-scrl"><table><thead><tr>${cols.map(x => `<th>${_ngEsc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${cols.map((_, i) => `<td>${_ngEsc(String(r[i] ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     }
-    case 'RECORDATORIO': {
-      const texto = cont?.texto || '';
-      const fecha = cont?.fecha || null;
-      return `<div class="neg-rec-row">
-  <i class="ti ti-bell neg-rec-ico"></i>
-  <div>
-    <div class="neg-rec-ttl">${_negEsc(texto)}</div>
-    ${fecha?`<div class="neg-rec-fecha"><i class="ti ti-calendar" style="font-size:10px"></i> ${fmtDate(fecha)}</div>`:''}
-  </div>
-</div>`;
-    }
-    case 'GRAFICA':
-      return `<div class="neg-ch-wrap"><canvas id="neg-bg-${b.id}"></canvas></div>`;
-    default:
-      return '<div class="neg-empty" style="padding:8px 0">Tipo desconocido</div>';
+    case 'RECORDATORIO': return `<div class="neg-rec-row"><span>🔔</span><div><div class="neg-rec-ttl">${_ngEsc(c.texto || '')}</div>${c.fecha ? `<div class="neg-rec-fecha">📅 ${fmtDate(String(c.fecha).slice(0, 10))}</div>` : ''}</div></div>`;
+    case 'GRAFICA': return `<div class="neg-ch-wrap"><canvas id="neg-bg-${b.id}"></canvas></div>`;
+    default: return '';
   }
 }
-
-function _negRenderBloquesHtml(bloques, proyId) {
-  const sorted = [...bloques].sort((a,b)=>(a.orden||0)-(b.orden||0));
-  const cards = sorted.map((b,i) => {
-    const c = _NEG_BLOQUE_CLR[b.tipo]||'var(--accent-primary)';
-    const up   = i>0 ? `<button class="edit-pill-btn" onclick="negMoverBloque('${proyId}','${b.id}','up')" title="Subir"><i class="ti ti-arrow-up" style="font-size:11px"></i></button>` : '';
-    const down = i<sorted.length-1 ? `<button class="edit-pill-btn" onclick="negMoverBloque('${proyId}','${b.id}','down')" title="Bajar"><i class="ti ti-arrow-down" style="font-size:11px"></i></button>` : '';
-    return `<div class="neg-bloque" data-bid="${b.id}">
-  <div class="neg-bloque-hdr">
-    <div class="neg-bloque-ico" style="background:${c}22;color:${c}"><i class="ti ${_NEG_BLOQUE_ICO[b.tipo]||'ti-square'}"></i></div>
-    <span class="neg-bloque-ttl">${_negEsc(b.titulo||b.tipo||'')}</span>
-    <div style="display:flex;gap:4px;margin-left:auto;flex-shrink:0">${up}${down}
-      <button class="edit-pill-btn" style="color:var(--red)" onclick="negDelBloque('${proyId}','${b.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-    </div>
-  </div>
-  <div class="neg-bloque-body">${_negBloqueBodyHtml(b, proyId)}</div>
-</div>`;
-  }).join('');
-
-  const emptyMsg = `<div class="neg-empty" style="padding:24px 0">El canvas está vacío.<br><small style="font-size:11px">Agrega notas, listas, tablas, recordatorios y gráficas.</small></div>`;
-  return `<div class="neg-sec">
-  <div style="padding:4px 0 8px;border-bottom:1px solid var(--border-default);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
-    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)"><i class="ti ti-layout-board"></i> Canvas</span>
-    <button class="btn btn-accent btn-sm" onclick="negNuevoBloque('${proyId}')"><i class="ti ti-plus"></i> Agregar bloque</button>
-  </div>
-  ${cards||emptyMsg}
-</div>`;
+function _negBloquesHTML(bloques, proyId) {
+  const sorted = [...bloques].sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  if (!sorted.length) return `<div class="pr-hint" style="padding:12px">Tu canvas está vacío: agrega notas, listas, tablas, recordatorios o gráficas con “Bloque”.</div>`;
+  return sorted.map((b, i) => `<div class="neg-bloque" data-bid="${b.id}"><div class="neg-bloque-hdr"><span>${(_NG_BQ[b.tipo] || ['🧩'])[0]}</span><span class="neg-bloque-ttl">${_ngEsc(b.titulo || (_NG_BQ[b.tipo] || ['', b.tipo])[1])}</span>
+    <div style="display:flex;gap:4px;margin-left:auto">${i > 0 ? `<button class="edit-pill-btn" onclick="negMoverBloque('${proyId}','${b.id}','up')" title="Subir"><i class="ti ti-arrow-up" style="font-size:11px"></i></button>` : ''}${i < sorted.length - 1 ? `<button class="edit-pill-btn" onclick="negMoverBloque('${proyId}','${b.id}','down')" title="Bajar"><i class="ti ti-arrow-down" style="font-size:11px"></i></button>` : ''}
+      <button class="edit-pill-btn" style="color:var(--red)" onclick="negDelBloque('${proyId}','${b.id}')" title="Eliminar"><i class="ti ti-trash" style="font-size:12px"></i></button></div></div>
+    <div class="neg-bloque-body">${_negBloqueBody(b, proyId)}</div></div>`).join('');
 }
-
-// ── Acciones de canvas ────────────────────────────────────────────────────────
-
-function negBloqueFormChange() {
-  const t = $('nb-tipo')?.value;
-  ['NOTA','LISTA','TABLA','RECORDATORIO','GRAFICA'].forEach(v => {
-    const d = $('nb-f-'+v);
-    if (d) d.style.display = v===t ? '' : 'none';
-  });
-}
-
-function negNuevoBloque(proyId) {
-  openM('Nuevo bloque', `
-<div style="display:flex;flex-direction:column;gap:10px">
-  <div><label>Tipo *</label>
-    <select id="nb-tipo" class="inp" onchange="negBloqueFormChange()" style="margin-top:4px">
-      <option value="NOTA">Nota</option>
-      <option value="LISTA">Lista / Checklist</option>
-      <option value="TABLA">Tabla</option>
-      <option value="RECORDATORIO">Recordatorio</option>
-      <option value="GRAFICA">Gráfica</option>
-    </select></div>
-  <div><label>Título (opcional)</label>
-    <input id="nb-titulo" class="inp" placeholder="Título del bloque" style="margin-top:4px"></div>
-  <div id="nb-f-NOTA"><label>Texto</label>
-    <textarea id="nb-nota-txt" class="inp" rows="4" placeholder="Texto... los enlaces se detectan automáticamente" style="margin-top:4px;resize:vertical"></textarea></div>
-  <div id="nb-f-LISTA" style="display:none"><label>Ítems (uno por línea)</label>
-    <textarea id="nb-lista-txt" class="inp" rows="4" placeholder="Ítem 1&#10;Ítem 2&#10;Ítem 3" style="margin-top:4px;resize:vertical"></textarea></div>
-  <div id="nb-f-TABLA" style="display:none">
-    <label>Columnas (separadas por coma)</label>
-    <input id="nb-tabla-cols" class="inp" placeholder="Nombre, Monto, Fecha" style="margin-top:4px">
-    <label style="margin-top:8px;display:block">Filas iniciales (una por línea, valores separados por coma)</label>
-    <textarea id="nb-tabla-rows" class="inp" rows="3" placeholder="valor1, valor2, valor3" style="margin-top:4px;resize:vertical"></textarea></div>
-  <div id="nb-f-RECORDATORIO" style="display:none">
-    <label>Texto del recordatorio</label>
-    <input id="nb-rec-txt" class="inp" placeholder="Recordatorio..." style="margin-top:4px">
-    <label style="margin-top:8px;display:block">Fecha</label>
-    <input id="nb-rec-fecha" class="inp" type="date" style="margin-top:4px"></div>
-  <div id="nb-f-GRAFICA" style="display:none">
-    <label>Fuente de datos</label>
-    <select id="nb-gf-fuente" class="inp" style="margin-top:4px">
-      <option value="flujo">Flujo de caja (ingresos vs gastos)</option>
-      <option value="categorias">Gastos por categoría</option>
-      <option value="cartera">Cartera (cobrar vs pagar)</option>
-    </select>
-    <label style="margin-top:8px;display:block">Tipo de gráfica</label>
-    <select id="nb-gf-tipo" class="inp" style="margin-top:4px">
-      <option value="bar">Barras</option>
-      <option value="line">Líneas</option>
-      <option value="doughnut">Dona</option>
-    </select></div>
-</div>`, async () => {
-    const tipo   = $('nb-tipo')?.value;
-    const titulo = $('nb-titulo')?.value?.trim()||null;
-    let contenido;
-    if (tipo==='NOTA') {
-      contenido = $('nb-nota-txt')?.value||'';
-    } else if (tipo==='LISTA') {
-      contenido = ($('nb-lista-txt')?.value||'').split('\n').map(l=>l.trim()).filter(Boolean).map(t=>({texto:t,marcado:false}));
-    } else if (tipo==='TABLA') {
-      const cols = ($('nb-tabla-cols')?.value||'').split(',').map(c=>c.trim()).filter(Boolean);
-      contenido  = {columns:cols, rows:($('nb-tabla-rows')?.value||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>l.split(',').map(c=>c.trim()))};
-    } else if (tipo==='RECORDATORIO') {
-      contenido = {texto:$('nb-rec-txt')?.value||'', fecha:$('nb-rec-fecha')?.value||null};
-    } else if (tipo==='GRAFICA') {
-      contenido = {fuente:$('nb-gf-fuente')?.value, tipo:$('nb-gf-tipo')?.value};
-    }
-    try {
-      await api('POST',`/api/negocios/proyecto/${proyId}/bloques`,{tipo,titulo,contenido});
-      S._negProyId = proyId;
-      const el=$('tab-negocios');
-      await _negRenderDetalle(el, proyId);
-      setTimeout(_initCollapsibles, 120);
-      toast('Bloque agregado');
-    } catch(e) { toast(e.message,'error'); return false; }
-  });
-}
-
 async function negDelBloque(proyId, bId) {
   if (!confirm('¿Eliminar este bloque?')) return;
-  try {
-    await api('DELETE',`/api/negocios/bloque/${bId}`);
-    S._negBloques = (S._negBloques||[]).filter(b=>b.id!==bId);
-    const el=$('tab-negocios');
-    await _negRenderDetalle(el, proyId);
-    setTimeout(_initCollapsibles, 120);
-    toast('Bloque eliminado');
-  } catch(e) { toast(e.message,'error'); }
+  try { await api('DELETE', `/api/negocios/bloque/${bId}`); await _ngRefrescar(proyId); toast('Bloque eliminado'); } catch (e) { toast(e.message, 'error'); }
 }
-
 async function negMoverBloque(proyId, bId, dir) {
-  const all = [...(S._negBloques||[])].sort((a,b)=>(a.orden||0)-(b.orden||0));
-  const idx = all.findIndex(b=>b.id===bId);
-  if (idx<0) return;
-  const swapIdx = dir==='up'?idx-1:idx+1;
-  if (swapIdx<0||swapIdx>=all.length) return;
-  const [a,b] = [all[idx], all[swapIdx]];
+  const all = [...(S._negBloques || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0)), i = all.findIndex(b => b.id === bId), j = dir === 'up' ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= all.length) return;
   try {
-    await Promise.all([
-      api('PUT',`/api/negocios/bloque/${a.id}`,{orden: b.orden??swapIdx}),
-      api('PUT',`/api/negocios/bloque/${b.id}`,{orden: a.orden??idx})
-    ]);
-    const el=$('tab-negocios');
-    await _negRenderDetalle(el, proyId);
-    setTimeout(_initCollapsibles, 120);
-  } catch(e) { toast(e.message,'error'); }
+    await Promise.all([api('PUT', `/api/negocios/bloque/${all[i].id}`, { orden: j }), api('PUT', `/api/negocios/bloque/${all[j].id}`, { orden: i })]);
+    await _ngRefrescar(proyId);
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function negToggleListaItem(bloqueId, idx, checked, proyId) {
+  const b = (S._negBloques || []).find(x => x.id === bloqueId); if (!b) return;
+  const items = (b.contenido?.items || []).map((it, i) => i === idx ? { ...it, done: checked } : it);
+  try { await api('PUT', `/api/negocios/bloque/${bloqueId}`, { contenido: { ...b.contenido, items } }); b.contenido = { ...b.contenido, items }; if (S._ngCache) S._ngCache.t = 0; _negRenderDetalle($('tab-negocios'), proyId, true); }
+  catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+async function negAddListaItem(bloqueId, proyId, inp) {
+  const text = (inp?.value || '').trim(); if (!text) return;
+  const b = (S._negBloques || []).find(x => x.id === bloqueId); if (!b) return;
+  try { await api('PUT', `/api/negocios/bloque/${bloqueId}`, { contenido: { ...b.contenido, items: [...(b.contenido?.items || []), { text, done: false }] } }); await _ngRefrescar(proyId); }
+  catch (e) { toast(e.message, 'error'); }
 }
 
-async function negToggleListaItem(bloqueId, itemIdx, checked, proyId) {
-  const bloque = (S._negBloques||[]).find(b=>b.id===bloqueId);
-  if (!bloque) return;
-  const items = Array.isArray(bloque.contenido) ? [...bloque.contenido] : [];
-  if (!items[itemIdx]) return;
-  items[itemIdx] = {...items[itemIdx], marcado:checked};
-
-  // Optimistic UI
-  const row = document.querySelector(`[data-bid="${bloqueId}"] .neg-lista-item:nth-child(${itemIdx+1})`);
-  const txt = row?.querySelector('.neg-lista-txt');
-  if (txt) txt.classList.toggle('done', checked);
-
+// Nuevo bloque: un solo pop-up; los mosaicos de arriba cambian el formulario sin cerrarlo.
+function negNuevoBloque(proyId, tipo) {
+  S._ngBq = { proyId, tipo: tipo || S._ngBq?.tipo || 'NOTA' };
+  abrirPop('Nuevo bloque', `<div class="pr-pop">
+    <div class="nd-wiz-tipos ng-bq-tipos">${Object.entries(_NG_BQ).map(([t, [e, l]]) => `<button class="nd-wiz-tipo${S._ngBq.tipo === t ? ' on' : ''}" onclick="negNuevoBloque('${proyId}','${t}')"><span>${e}</span>${l}</button>`).join('')}</div>
+    <input id="nb-titulo" class="inp" placeholder="Título (opcional)" style="margin-top:14px">
+    <div id="nb-form" style="margin-top:10px">${_negBqForm(S._ngBq.tipo)}</div>
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="negGuardarBloque()"><i class="ti ti-check"></i> Agregar</button></div></div>`, 'md');
+  setTimeout(() => $('nb-foco')?.focus(), 60);
+}
+function _negBqForm(t) {
+  if (t === 'NOTA') return `<textarea id="nb-foco" class="inp" rows="4" placeholder="Escribe… los enlaces se detectan solos" style="resize:vertical"></textarea>`;
+  if (t === 'LISTA') return `<textarea id="nb-foco" class="inp" rows="4" placeholder="Un elemento por línea" style="resize:vertical"></textarea>`;
+  if (t === 'TABLA') return `<input id="nb-foco" class="inp" placeholder="Columnas separadas por coma: Nombre, Monto, Fecha"><textarea id="nb-filas" class="inp" rows="3" placeholder="Filas (opcional): una por línea, valores separados por coma" style="margin-top:8px;resize:vertical"></textarea>`;
+  if (t === 'RECORDATORIO') return `<input id="nb-foco" class="inp" placeholder="¿Qué quieres recordar?"><input id="nb-fecha" class="inp" type="date" value="${toISO(new Date())}" style="margin-top:8px">`;
+  return `<select id="nb-fuente" class="inp"><option value="flujo">Flujo de caja (ingresos vs gastos)</option><option value="categorias">Gastos por categoría</option><option value="cartera">Cartera (cobrar vs pagar)</option></select>
+    <select id="nb-gtipo" class="inp" style="margin-top:8px"><option value="bar">Barras</option><option value="line">Líneas</option><option value="doughnut">Dona</option></select>`;
+}
+async function negGuardarBloque() {
+  const q = S._ngBq; if (!q) return;
+  const v = id => ($(id)?.value || '').trim();
+  let contenido;
+  if (q.tipo === 'NOTA') { contenido = { texto: v('nb-foco') }; if (!contenido.texto) { toast('Escribe algo', 'warn'); return; } }
+  else if (q.tipo === 'LISTA') { const items = v('nb-foco').split('\n').map(x => x.trim()).filter(Boolean).map(text => ({ text, done: false })); if (!items.length) { toast('Agrega al menos un elemento', 'warn'); return; } contenido = { items }; }
+  else if (q.tipo === 'TABLA') { const columns = v('nb-foco').split(',').map(x => x.trim()).filter(Boolean); if (!columns.length) { toast('Escribe las columnas', 'warn'); return; } contenido = { columns, rows: v('nb-filas').split('\n').map(x => x.trim()).filter(Boolean).map(l => l.split(',').map(c => c.trim())) }; }
+  else if (q.tipo === 'RECORDATORIO') { contenido = { texto: v('nb-foco'), fecha: v('nb-fecha') }; if (!contenido.texto || !contenido.fecha) { toast('Escribe qué y cuándo', 'warn'); return; } }
+  else contenido = { fuente: $('nb-fuente').value, chartType: $('nb-gtipo').value };
   try {
-    await api('PUT',`/api/negocios/bloque/${bloqueId}`,{contenido:items});
-    S._negBloques = (S._negBloques||[]).map(b=>b.id===bloqueId?{...b,contenido:items}:b);
-  } catch(e) {
-    toast('Error: '+e.message,'error');
-    const cb = row?.querySelector('.neg-lista-check');
-    if (cb) cb.checked = !checked;
-    if (txt) txt.classList.toggle('done', !checked);
+    await api('POST', `/api/negocios/proyecto/${q.proyId}/bloques`, { tipo: q.tipo, titulo: v('nb-titulo') || null, contenido, orden: (S._negBloques || []).length });
+    cerrarPop(); S._ngSec && (S._ngSec.blq = true); await _ngRefrescar(q.proyId); toast('Bloque agregado ✓');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ── Asistente de proyecto (3 pasos) ──────────────────────────────────────────
+function negNuevoProyecto() { _negWizard(); }
+function negEditarProyecto(id) { _negWizard(id); }
+function _negWizard(editId) {
+  const p = editId ? _negLista().find(x => x.id === editId) : null;
+  S._ngWiz = p ? { step: 1, editId, tipo: p.tipo, nombre: p.nombre || '', meta: Number(p.monto_meta) || 0, cap: Number(p.capital_inicial) || 0, fin: p.fecha_vencimiento ? String(p.fecha_vencimiento).slice(0, 10) : '', estado: p.estado || 'ACTIVO', desc: p.descripcion || '' }
+             : { step: 1, tipo: 'NEGOCIO', nombre: '', meta: 0, cap: 0, fin: '', estado: 'ACTIVO', desc: '' };
+  abrirPop(p ? 'Editar proyecto' : 'Nuevo proyecto', '<div id="ng-wiz" class="nd-wiz"></div>', 'md');
+  _ngWizPaint(); setTimeout(() => $('ngw-nombre')?.focus(), 60);
+}
+function _ngWizPaint() {
+  const w = S._ngWiz, box = $('ng-wiz'); if (!w || !box) return;
+  const dots = [1, 2, 3].map(n => `<span class="nd-wiz-dot${w.step === n ? ' on' : w.step > n ? ' ok' : ''}"></span>`).join('');
+  const emo = NG_TIPOS[w.tipo][0];
+  let c = '';
+  if (w.step === 1) {
+    c = `<div class="nd-wiz-q">¿Qué vas a llevar aquí?</div>
+      <div class="nd-wiz-tipos ng-tipos">${Object.entries(NG_TIPOS).map(([t, [e, l]]) => `<button class="nd-wiz-tipo${w.tipo === t ? ' on' : ''}" onclick="ngWizSet('tipo','${t}')"><span>${e}</span>${l}</button>`).join('')}</div>
+      <div class="nd-wiz-lbl">Ideas de un toque</div>
+      <div class="q-desp-chips">${NG_SUG[w.tipo].map(n => `<button class="q-desp-chip${w.nombre === n ? ' on' : ''}" onclick="ngWizSet('nombre','${n}')">${n}</button>`).join('')}</div>
+      <div class="nd-wiz-name"><span class="nd-wiz-emo" style="cursor:default">${emo}</span><input id="ngw-nombre" value="${_ngEsc(w.nombre)}" maxlength="80" placeholder="Nombre (ej. Mi tienda en línea)" oninput="S._ngWiz.nombre=this.value" onkeydown="if(event.key==='Enter')ngWizNext()"></div>`;
+  } else if (w.step === 2) {
+    const plazos = [['3 meses', 3], ['6 meses', 6], ['1 año', 12], ['2 años', 24]];
+    c = `<div class="nd-wiz-q">${emo} ¿Cuánto quieres lograr? <small style="font-weight:600;color:var(--text-3)">(opcional)</small></div>
+      <div class="nd-wiz-monto"><span>$</span><input id="ngw-meta" type="number" min="0" step="1000" inputmode="decimal" value="${w.meta || ''}" placeholder="0" oninput="S._ngWiz.meta=parseFloat(this.value)||0" onkeydown="if(event.key==='Enter')ngWizNext()"></div>
+      <div class="q-desp-chips nd-wiz-center">${[5000, 10000, 50000, 100000].map(v => `<button class="q-desp-chip" onclick="ngWizSumar(${v})">+ ${fmt(v).replace('.00', '')}</button>`).join('')}${w.meta ? `<button class="q-desp-chip" onclick="ngWizSet('meta',0)"><i class="ti ti-eraser"></i></button>` : ''}</div>
+      <div class="mt-ya"><label for="ngw-cap">Capital con el que arranco</label><span>$</span><input id="ngw-cap" type="number" min="0" step="100" inputmode="decimal" value="${w.cap || ''}" placeholder="0" oninput="S._ngWiz.cap=parseFloat(this.value)||0" onkeydown="if(event.key==='Enter')ngWizNext()"></div>
+      <div class="nd-wiz-q" style="margin-top:18px">📅 ¿Fecha límite?</div>
+      <div class="q-desp-chips nd-wiz-center">${plazos.map(([l, n]) => { const f = _ndMasMeses(n); return `<button class="q-desp-chip${w.fin === f ? ' on' : ''}" onclick="ngWizSet('fin','${f}')">${l}</button>`; }).join('')}<button class="q-desp-chip${!w.fin ? ' on' : ''}" onclick="ngWizSet('fin','')">Sin fecha</button></div>
+      <input type="date" class="nd-wiz-fecha" value="${w.fin}" onchange="ngWizSet('fin',this.value)" aria-label="Fecha límite">`;
+  } else {
+    c = `<div class="nd-wiz-q">Así queda</div>
+      <div class="nd-wiz-prev"><div class="nd-emo big">${emo}</div><div class="nd-wiz-prev-t">${_ngEsc(w.nombre) || '—'}</div><div class="nd-wiz-prev-s">${NG_TIPOS[w.tipo][1]}</div>
+        <div class="nd-card-nums"><div><span>🎯 Meta</span><b>${w.meta > 0 ? fmt(w.meta) : '—'}</b></div><div><span>💰 Capital</span><b>${fmt(w.cap || 0)}</b></div><div><span>📅 Fecha</span><b>${w.fin ? fmtDate(w.fin) : '—'}</b></div></div></div>
+      ${w.editId ? `<div class="nd-wiz-lbl">Estado</div><div class="q-desp-chips nd-wiz-center">${Object.entries(NG_EST).map(([k, [l]]) => `<button class="q-desp-chip${w.estado === k ? ' on' : ''}" onclick="ngWizSet('estado','${k}')">${l}</button>`).join('')}</div>` : ''}
+      <textarea class="nd-wiz-desc" placeholder="Notas (opcional)" maxlength="600" oninput="S._ngWiz.desc=this.value">${_ngEsc(w.desc)}</textarea>`;
   }
+  box.innerHTML = `<div class="nd-wiz-dots">${dots}</div>${c}<div class="nd-wiz-nav">
+    ${w.step > 1 ? `<button class="btn btn-ghost" onclick="ngWizSet('step',${w.step - 1})"><i class="ti ti-arrow-left"></i> Atrás</button>` : '<span></span>'}
+    ${w.step < 3 ? `<button class="btn btn-accent" onclick="ngWizNext()">Siguiente <i class="ti ti-arrow-right"></i></button>`
+      : `<button class="btn btn-accent" onclick="ngWizGuardar()"${w._busy ? ' disabled' : ''}>${w._busy ? 'Guardando…' : w.editId ? '<i class="ti ti-check"></i> Guardar cambios' : '🎉 Crear proyecto'}</button>`}</div>`;
 }
-
-async function negAddListaItem(bloqueId, proyId) {
-  const texto = prompt('Nuevo ítem:')?.trim();
-  if (!texto) return;
-  const bloque = (S._negBloques||[]).find(b=>b.id===bloqueId);
-  const items = Array.isArray(bloque?.contenido) ? [...bloque.contenido, {texto,marcado:false}] : [{texto,marcado:false}];
+function ngWizSet(k, v) { const w = S._ngWiz; if (!w) return; w[k] = v; _ngWizPaint(); if (k === 'nombre') $('ngw-nombre')?.focus(); }
+function ngWizSumar(v) { const w = S._ngWiz; if (!w) return; w.meta = (Number(w.meta) || 0) + v; _ngWizPaint(); }
+function ngWizNext() {
+  const w = S._ngWiz; if (!w) return;
+  if (w.step === 1 && !w.nombre.trim()) { toast('Ponle un nombre', 'error'); $('ngw-nombre')?.focus(); return; }
+  w.step = Math.min(3, w.step + 1); _ngWizPaint();
+  if (w.step === 2) setTimeout(() => $('ngw-meta')?.focus(), 30);
+}
+async function ngWizGuardar() {
+  const w = S._ngWiz; if (!w || w._busy) return;
+  w._busy = true; _ngWizPaint();
+  const body = { nombre: w.nombre.trim(), tipo: w.tipo, estado: w.estado || 'ACTIVO', monto_meta: Number(w.meta) || 0, capital_inicial: Number(w.cap) || 0,
+    fecha_vencimiento: w.fin || null, descripcion: w.desc.trim() || null };
   try {
-    await api('PUT',`/api/negocios/bloque/${bloqueId}`,{contenido:items});
-    S._negProyId = proyId;
-    const el=$('tab-negocios');
-    await _negRenderDetalle(el, proyId);
-    setTimeout(_initCollapsibles, 120);
-  } catch(e) { toast(e.message,'error'); }
+    let r;
+    if (w.editId) r = await api('PUT', `/api/negocios/proyecto/${w.editId}`, body);
+    else r = await api('POST', '/api/negocios', { ...body, user_phone: S.phone, fecha_inicio: toISO(new Date()) });
+    const nuevo = !w.editId, id = w.editId || r?.data?.id;
+    cerrarPop();
+    await _ngRefrescar(nuevo ? id : S._negProyId);
+    toast(nuevo ? `${NG_TIPOS[body.tipo][0]} ${body.nombre} creado ✓` : 'Cambios guardados ✓');
+  } catch (e) { w._busy = false; _ngWizPaint(); toast('Error: ' + e.message, 'error'); }
 }
-
-// ── Formularios / acciones ────────────────────────────────────────────────────
-
-function negNuevoProyecto() {
-  openM('Nuevo proyecto', `
-<div class="neg-form-grid">
-  <div class="neg-form-full"><label>Nombre *</label><input id="np-nombre" class="inp" placeholder="Mi negocio"></div>
-  <div><label>Tipo</label><select id="np-tipo" class="inp">
-    ${['NEGOCIO','EMPRENDIMIENTO','PROYECTO','INVERSION','FREELANCE'].map(t=>`<option value="${t}">${t}</option>`).join('')}
-  </select></div>
-  <div><label>Estado</label><select id="np-estado" class="inp">
-    ${['ACTIVO','PAUSADO','CERRADO'].map(t=>`<option value="${t}">${t}</option>`).join('')}
-  </select></div>
-  <div><label>Meta ($)</label><input id="np-meta" class="inp" type="number" min="0" placeholder="0"></div>
-  <div><label>Capital inicial ($)</label><input id="np-cap" class="inp" type="number" min="0" placeholder="0"></div>
-  <div><label>Inicio</label><input id="np-ini" class="inp" type="date"></div>
-  <div><label>Vencimiento</label><input id="np-venc" class="inp" type="date"></div>
-  <div class="neg-form-full"><label>Descripción</label><input id="np-desc" class="inp" placeholder="Opcional"></div>
-</div>`, async () => {
-    const nombre = $('np-nombre')?.value?.trim();
-    if (!nombre) { toast('El nombre es requerido','warn'); return false; }
-    try {
-      await api('POST','/api/negocios',{
-        phone: S.phone, nombre,
-        tipo:  $('np-tipo')?.value,
-        estado:$('np-estado')?.value,
-        monto_meta:     +($('np-meta')?.value||0),
-        capital_inicial:+($('np-cap')?.value||0),
-        fecha_inicio:   $('np-ini')?.value||null,
-        fecha_vencimiento:$('np-venc')?.value||null,
-        descripcion:    $('np-desc')?.value||null
-      });
-      await load();
-      toast('Proyecto creado');
-    } catch(e) { toast(e.message,'error'); return false; }
-  });
-}
-
-function negEditarProyecto(id) {
-  const p = _negLista().find(x=>x.id===id); if (!p) return;
-  openM('Editar proyecto', `
-<div class="neg-form-grid">
-  <div class="neg-form-full"><label>Nombre *</label><input id="ep-nombre" class="inp" value="${p.nombre||''}"></div>
-  <div><label>Tipo</label><select id="ep-tipo" class="inp">
-    ${['NEGOCIO','EMPRENDIMIENTO','PROYECTO','INVERSION','FREELANCE'].map(t=>`<option value="${t}"${p.tipo===t?' selected':''}>${t}</option>`).join('')}
-  </select></div>
-  <div><label>Estado</label><select id="ep-estado" class="inp">
-    ${['ACTIVO','PAUSADO','CERRADO'].map(t=>`<option value="${t}"${p.estado===t?' selected':''}>${t}</option>`).join('')}
-  </select></div>
-  <div><label>Meta ($)</label><input id="ep-meta" class="inp" type="number" value="${p.monto_meta||0}"></div>
-  <div><label>Capital inicial ($)</label><input id="ep-cap" class="inp" type="number" value="${p.capital_inicial||0}"></div>
-  <div><label>Inicio</label><input id="ep-ini" class="inp" type="date" value="${fd(p.fecha_inicio)||''}"></div>
-  <div><label>Vencimiento</label><input id="ep-venc" class="inp" type="date" value="${fd(p.fecha_vencimiento)||''}"></div>
-  <div class="neg-form-full"><label>Descripción</label><input id="ep-desc" class="inp" value="${p.descripcion||''}"></div>
-</div>`, async () => {
-    const nombre = $('ep-nombre')?.value?.trim();
-    if (!nombre) { toast('El nombre es requerido','warn'); return false; }
-    try {
-      await api('PUT',`/api/negocios/proyecto/${id}`,{
-        nombre, tipo:$('ep-tipo')?.value, estado:$('ep-estado')?.value,
-        monto_meta:+($('ep-meta')?.value||0), capital_inicial:+($('ep-cap')?.value||0),
-        fecha_inicio:$('ep-ini')?.value||null, fecha_vencimiento:$('ep-venc')?.value||null,
-        descripcion:$('ep-desc')?.value||null
-      });
-      await load(); toast('Proyecto actualizado');
-    } catch(e) { toast(e.message,'error'); return false; }
-  });
-}
-
 async function negEliminarProyecto(id) {
   if (!confirm('¿Eliminar este proyecto y todos sus datos?')) return;
-  try {
-    await api('DELETE',`/api/negocios/proyecto/${id}`);
-    S._negProyId = null;
-    await load();
-    toast('Proyecto eliminado');
-  } catch(e) { toast(e.message,'error'); }
+  try { await api('DELETE', `/api/negocios/proyecto/${id}`); S._negProyId = null; S._ngCache = null; await load(); toast('Proyecto eliminado'); }
+  catch (e) { toast(e.message, 'error'); }
 }
 
-function negNuevaTrans(proyId) {
-  openM('Nueva transacción', `
-<div class="neg-form-grid">
-  <div class="neg-form-full"><label>Concepto *</label><input id="nt-conc" class="inp" placeholder="Venta de servicio"></div>
-  <div><label>Tipo</label><select id="nt-tipo" class="inp"><option value="INGRESO">INGRESO</option><option value="GASTO">GASTO</option></select></div>
-  <div><label>Monto ($) *</label><input id="nt-monto" class="inp" type="number" min="0" placeholder="0"></div>
-  <div><label>Fecha</label><input id="nt-fecha" class="inp" type="date" value="${toISO(new Date())}"></div>
-  <div><label>Categoría</label><input id="nt-cat" class="inp" placeholder="Opcional"></div>
-  <div><label>Medio de pago</label><select id="nt-medio" class="inp">
-    ${['Efectivo','Transferencia','Tarjeta débito','Otro'].map(m=>`<option value="${m}">${m}</option>`).join('')}
-  </select></div>
-  <div class="neg-form-full"><label>Notas</label><input id="nt-notas" class="inp" placeholder="Opcional"></div>
-</div>`, async () => {
-    const concepto=$('nt-conc')?.value?.trim(), monto=+($('nt-monto')?.value||0);
-    if (!concepto||!monto) { toast('Concepto y monto requeridos','warn'); return false; }
-    try {
-      await api('POST',`/api/negocios/proyecto/${proyId}/transacciones`,{
-        concepto, monto, tipo:$('nt-tipo')?.value,
-        fecha:$('nt-fecha')?.value, categoria:$('nt-cat')?.value||null,
-        medio_pago:$('nt-medio')?.value||null, notas:$('nt-notas')?.value||null
-      });
-      S._negProyId = proyId; await load(); toast('Transacción registrada');
-    } catch(e) { toast(e.message,'error'); return false; }
-  });
-}
+// ── Pop-ups de captura (un paso, Enter guarda) ───────────────────────────────
+const _ngFechaChips = (id, sel) => `<div class="q-desp-chips nd-wiz-center">${[['Hoy', 0], ['Ayer', -1]].map(([l, d]) => { const f = toISO(new Date(Date.now() + d * 864e5)); return `<button class="q-desp-chip${sel === f ? ' on' : ''}" onclick="$('${id}').value='${f}';_ngChipOn(this)">${l}</button>`; }).join('')}<input type="date" id="${id}" value="${sel}" class="ng-date" onchange="_ngChipOn(null)" aria-label="Fecha"></div>`;
+function _ngChipOn(btn) { if (btn) { btn.parentElement.querySelectorAll('.q-desp-chip').forEach(b => b.classList.remove('on')); btn.classList.add('on'); } }
+const _ngPick = (grp, valor, el) => { S._ngPk = S._ngPk || {}; S._ngPk[grp] = valor; el.parentElement.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === el && (valor !== "" || grp === "reflejo"))); };
 
+function negTransPop(proyId, tipo) {
+  const d = S._ngCache?.trans || [], recientes = (campo, t) => [...new Set(d.filter(x => !t || x.tipo === t).map(x => x[campo]).filter(Boolean))].slice(0, 5);
+  S._ngPk = { tipo, metodo: '', reflejo: '' }; S._ngTxProy = proyId;
+  const tipos = [['INGRESO', '💰 Ingreso'], ['GASTO', '💸 Gasto'], ['INVERSION', '📈 Inversión']];
+  abrirPop('Nueva transacción', `<div class="pr-pop">
+    <div class="din-scope ng-tipos3">${tipos.map(([t, l]) => `<button class="${t === tipo ? 'on' : ''}" onclick="_ngPick('tipo','${t}',this)">${l}</button>`).join('')}</div>
+    <div class="nd-wiz-monto" style="margin-top:14px"><span>$</span><input id="nt-monto" type="number" min="0" step="50" inputmode="decimal" placeholder="0" onkeydown="if(event.key==='Enter')negGuardarTrans()"></div>
+    <input id="nt-conc" class="inp" placeholder="¿De qué fue? (ej. Venta de servicio)" maxlength="120" onkeydown="if(event.key==='Enter')negGuardarTrans()">
+    ${recientes('concepto').length ? `<div class="q-desp-chips" style="margin-top:6px">${recientes('concepto').map(c => `<button class="q-desp-chip" onclick="$('nt-conc').value=this.dataset.v" data-v="${_ngEsc(c)}">${_ngEsc(c)}</button>`).join('')}</div>` : ''}
+    <div class="nd-wiz-lbl">Fecha</div>${_ngFechaChips('nt-fecha', toISO(new Date()))}
+    <div class="nd-wiz-lbl">Pagado con</div>
+    <div class="q-desp-chips nd-wiz-center">${['Efectivo', 'Transferencia', 'Tarjeta'].map(m => `<button class="q-desp-chip" onclick="_ngPick('metodo',S._ngPk.metodo==='${m}'?'':'${m}',this)">${m}</button>`).join('')}</div>
+    <div class="nd-wiz-lbl">¿Mueve tu dinero personal?</div>
+    <div class="q-desp-chips nd-wiz-center"><button class="q-desp-chip on" onclick="_ngPick('reflejo','',this)">No</button><button class="q-desp-chip" onclick="_ngPick('reflejo','RETIRO',this)">👤 Me retiro</button><button class="q-desp-chip" onclick="_ngPick('reflejo','APORTE',this)">💼 Aporto</button></div>
+    <input id="nt-cat" class="inp" placeholder="Categoría (opcional)" list="nt-cats" style="margin-top:12px"><datalist id="nt-cats">${recientes('categoria').map(c => `<option value="${_ngEsc(c)}">`).join('')}</datalist>
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="negGuardarTrans()"><i class="ti ti-check"></i> Registrar</button></div></div>`, 'md');
+  setTimeout(() => $('nt-monto')?.focus(), 60);
+}
+async function negGuardarTrans() {
+  const pk = S._ngPk || {}, monto = parseFloat($('nt-monto')?.value) || 0, proyId = S._ngTxProy;
+  if (!(monto > 0)) { toast('Escribe el monto', 'warn'); $('nt-monto')?.focus(); return; }
+  const body = { tipo: pk.tipo, monto, concepto: ($('nt-conc')?.value || '').trim() || null, fecha: $('nt-fecha')?.value || toISO(new Date()), categoria: ($('nt-cat')?.value || '').trim() || null,
+    metodo_pago: pk.metodo || null, reflejo_personal: pk.reflejo || null, reflejo_user_phone: pk.reflejo ? S.phone : null };
+  try { await api('POST', `/api/negocios/proyecto/${proyId}/transacciones`, body); cerrarPop(); await _ngRefrescar(proyId); toast(`${pk.tipo === 'INGRESO' ? '💰' : pk.tipo === 'GASTO' ? '💸' : '📈'} Registrado: ${fmt(monto)}`); }
+  catch (e) { toast(e.message, 'error'); }
+}
 async function negDelTrans(proyId, id) {
   if (!confirm('¿Eliminar esta transacción?')) return;
-  try { await api('DELETE',`/api/negocios/transaccion/${id}`); S._negProyId=proyId; await load(); toast('Eliminada'); }
-  catch(e) { toast(e.message,'error'); }
+  try { await api('DELETE', `/api/negocios/transaccion/${id}`); await _ngRefrescar(proyId); toast('Eliminada'); } catch (e) { toast(e.message, 'error'); }
 }
 
-function negNuevoDeudor(proyId) {
-  openM('Nuevo deudor / cobro', `
-<div class="neg-form-grid">
-  <div class="neg-form-full"><label>Nombre *</label><input id="nd-nom" class="inp" placeholder="Cliente ABC"></div>
-  <div class="neg-form-full"><label>Concepto</label><input id="nd-conc" class="inp" placeholder="Servicio prestado"></div>
-  <div><label>Monto original ($) *</label><input id="nd-monto" class="inp" type="number" min="0" placeholder="0"></div>
-  <div><label>Vencimiento</label><input id="nd-venc" class="inp" type="date"></div>
-  <div class="neg-form-full"><label>Notas</label><input id="nd-notas" class="inp" placeholder="Opcional"></div>
-</div>`, async () => {
-    const nombre=$('nd-nom')?.value?.trim(), monto=+($('nd-monto')?.value||0);
-    if (!nombre||!monto) { toast('Nombre y monto requeridos','warn'); return false; }
-    try {
-      await api('POST',`/api/negocios/proyecto/${proyId}/deudores`,{
-        nombre, monto_original:monto, concepto:$('nd-conc')?.value||null,
-        fecha_vencimiento:$('nd-venc')?.value||null, notas:$('nd-notas')?.value||null
-      });
-      S._negProyId=proyId; await load(); toast('Deudor agregado');
-    } catch(e) { toast(e.message,'error'); return false; }
-  });
+function _ngCartPop(proyId, tipo) {
+  const cob = tipo === 'deudor'; S._ngCart = { proyId, tipo }; S._ngPk = {};
+  abrirPop(cob ? '📥 Nuevo por cobrar' : '📤 Nuevo por pagar', `<div class="pr-pop">
+    <input id="nc-nom" class="inp" placeholder="${cob ? '¿Quién te debe?' : '¿A quién le debes?'}" maxlength="80" onkeydown="if(event.key==='Enter')$('nc-monto').focus()">
+    <div class="nd-wiz-monto" style="margin-top:14px"><span>$</span><input id="nc-monto" type="number" min="0" step="50" inputmode="decimal" placeholder="0" onkeydown="if(event.key==='Enter')negGuardarCart()"></div>
+    <input id="nc-notas" class="inp" placeholder="¿Por qué? (opcional)" maxlength="160" onkeydown="if(event.key==='Enter')negGuardarCart()">
+    <div class="nd-wiz-lbl">Vence</div>
+    <div class="q-desp-chips nd-wiz-center">${[['7 días', 7], ['15 días', 15], ['1 mes', 30]].map(([l, n]) => `<button class="q-desp-chip" onclick="$('nc-venc').value='${toISO(new Date(Date.now() + n * 864e5))}';_ngChipOn(this)">${l}</button>`).join('')}<button class="q-desp-chip on" onclick="$('nc-venc').value='';_ngChipOn(this)">Sin fecha</button></div>
+    <input type="date" id="nc-venc" class="nd-wiz-fecha" aria-label="Fecha de vencimiento">
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="negGuardarCart()"><i class="ti ti-check"></i> Agregar</button></div></div>`);
+  setTimeout(() => $('nc-nom')?.focus(), 60);
 }
-
+function negNuevoDeudor(proyId) { _ngCartPop(proyId, 'deudor'); }
+function negNuevoAcreedor(proyId) { _ngCartPop(proyId, 'acreedor'); }
+async function negGuardarCart() {
+  const c = S._ngCart; if (!c) return;
+  const nombre = ($('nc-nom')?.value || '').trim(), monto = parseFloat($('nc-monto')?.value) || 0;
+  if (!nombre) { toast('¿Quién es?', 'warn'); $('nc-nom')?.focus(); return; }
+  if (!(monto > 0)) { toast('Escribe el monto', 'warn'); $('nc-monto')?.focus(); return; }
+  try {
+    await api('POST', `/api/negocios/proyecto/${c.proyId}/${c.tipo === 'deudor' ? 'deudores' : 'acreedores'}`, { nombre, monto_original: monto, monto_pagado: 0, estado: 'PENDIENTE',
+      notas: ($('nc-notas')?.value || '').trim() || null, fecha_vencimiento: $('nc-venc')?.value || null, fecha_origen: toISO(new Date()) });
+    cerrarPop(); await _ngRefrescar(c.proyId); toast(c.tipo === 'deudor' ? '📥 Por cobrar agregado' : '📤 Por pagar agregado');
+  } catch (e) { toast(e.message, 'error'); }
+}
 async function negDelDeudor(proyId, id) {
-  if (!confirm('¿Eliminar este deudor?')) return;
-  try { await api('DELETE',`/api/negocios/deudor/${id}`); S._negProyId=proyId; await load(); toast('Eliminado'); }
-  catch(e) { toast(e.message,'error'); }
+  if (!confirm('¿Eliminar este registro?')) return;
+  try { await api('DELETE', `/api/negocios/deudor/${id}`); await _ngRefrescar(proyId); toast('Eliminado'); } catch (e) { toast(e.message, 'error'); }
 }
-
-function negNuevoAcreedor(proyId) {
-  openM('Nuevo acreedor / deuda', `
-<div class="neg-form-grid">
-  <div class="neg-form-full"><label>Nombre *</label><input id="na-nom" class="inp" placeholder="Proveedor XYZ"></div>
-  <div class="neg-form-full"><label>Concepto</label><input id="na-conc" class="inp" placeholder="Factura compra"></div>
-  <div><label>Monto original ($) *</label><input id="na-monto" class="inp" type="number" min="0" placeholder="0"></div>
-  <div><label>Vencimiento</label><input id="na-venc" class="inp" type="date"></div>
-  <div class="neg-form-full"><label>Notas</label><input id="na-notas" class="inp" placeholder="Opcional"></div>
-</div>`, async () => {
-    const nombre=$('na-nom')?.value?.trim(), monto=+($('na-monto')?.value||0);
-    if (!nombre||!monto) { toast('Nombre y monto requeridos','warn'); return false; }
-    try {
-      await api('POST',`/api/negocios/proyecto/${proyId}/acreedores`,{
-        nombre, monto_original:monto, concepto:$('na-conc')?.value||null,
-        fecha_vencimiento:$('na-venc')?.value||null, notas:$('na-notas')?.value||null
-      });
-      S._negProyId=proyId; await load(); toast('Acreedor agregado');
-    } catch(e) { toast(e.message,'error'); return false; }
-  });
-}
-
 async function negDelAcreedor(proyId, id) {
-  if (!confirm('¿Eliminar este acreedor?')) return;
-  try { await api('DELETE',`/api/negocios/acreedor/${id}`); S._negProyId=proyId; await load(); toast('Eliminado'); }
-  catch(e) { toast(e.message,'error'); }
+  if (!confirm('¿Eliminar este registro?')) return;
+  try { await api('DELETE', `/api/negocios/acreedor/${id}`); await _ngRefrescar(proyId); toast('Eliminado'); } catch (e) { toast(e.message, 'error'); }
 }
-
 function negRegistrarPago(tipo, id, proyId) {
-  const es = tipo==='deudor'?'cobro':'pago';
-  openM(`Registrar ${es}`, `
-<div>
-  <label>Monto a ${tipo==='deudor'?'cobrar':'pagar'} ($) *</label>
-  <input id="np-monto" class="inp" type="number" min="1" placeholder="0" style="margin-top:6px">
-  <div style="font-size:11px;color:var(--text-3);margin-top:6px">Se sumará al monto ${tipo==='deudor'?'cobrado':'pagado'} acumulado.</div>
-</div>`, async () => {
-    const monto=+($('np-monto')?.value||0);
-    if (!monto) { toast('Ingresa el monto','warn'); return false; }
-    try {
-      const ep = tipo==='deudor' ? 'deudor' : 'acreedor';
-      await api('POST',`/api/negocios/${ep}/${id}/pago`,{ monto });
-      S._negProyId=proyId; await load(); toast(`${tipo==='deudor'?'Cobro':'Pago'} registrado`);
-    } catch(e) { toast(e.message,'error'); return false; }
-  });
+  const x = ((tipo === "deudor" ? S._ngCache?.deu : S._ngCache?.acr) || []).find(r => r.id === id), pend = x ? _ngPendiente(x) : 0, cob = tipo === 'deudor';
+  S._ngPago = { tipo, id, proyId };
+  abrirPop(cob ? '📥 Registrar cobro' : '📤 Registrar pago', `<div class="pr-pop">
+    <div class="nd-wiz-q">${_ngEsc(x?.nombre || '')} · pendiente ${fmt(pend)}</div>
+    <div class="nd-wiz-monto"><span>$</span><input id="pg-monto" type="number" min="0" step="50" inputmode="decimal" value="${pend || ''}" onkeydown="if(event.key==='Enter')negGuardarPago()"></div>
+    <div class="q-desp-chips nd-wiz-center">${pend > 0 ? `<button class="q-desp-chip" onclick="$('pg-monto').value=${pend}">Todo · ${fmt(pend)}</button>` : ''}${pend > 200 ? `<button class="q-desp-chip" onclick="$('pg-monto').value=${Math.round(pend / 2 * 100) / 100}">La mitad</button>` : ''}</div>
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="negGuardarPago()"><i class="ti ti-coins"></i> ${cob ? 'Cobrar' : 'Pagar'}</button></div></div>`);
+  setTimeout(() => { const i = $('pg-monto'); if (i) { i.focus(); i.select(); } }, 60);
+}
+async function negGuardarPago() {
+  const p = S._ngPago, monto = parseFloat($('pg-monto')?.value) || 0; if (!p) return;
+  if (!(monto > 0)) { toast('Escribe el monto', 'warn'); return; }
+  try { await api('POST', `/api/negocios/${p.tipo}/${p.id}/pago`, { monto }); cerrarPop(); await _ngRefrescar(p.proyId); toast(`${p.tipo === 'deudor' ? 'Cobro' : 'Pago'} de ${fmt(monto)} registrado ✓`); }
+  catch (e) { toast(e.message, 'error'); }
 }
 
 function negNuevaInversion(proyId) {
-  openM('Nueva inversión', `
-<div class="neg-form-grid">
-  <div class="neg-form-full"><label>Nombre *</label><input id="ni-nom" class="inp" placeholder="Fondo de inversión"></div>
-  <div><label>Tipo</label><select id="ni-tipo" class="inp">
-    ${['FONDO','ACCIONES','CRIPTO','INMUEBLE','OTRO'].map(t=>`<option value="${t}">${t}</option>`).join('')}
-  </select></div>
-  <div><label>Estado</label><select id="ni-est" class="inp">
-    ${['ACTIVA','COMPLETADA','CANCELADA'].map(t=>`<option value="${t}">${t}</option>`).join('')}
-  </select></div>
-  <div><label>Monto invertido ($) *</label><input id="ni-inv" class="inp" type="number" min="0" placeholder="0"></div>
-  <div><label>Meta ($)</label><input id="ni-meta" class="inp" type="number" min="0" placeholder="0"></div>
-  <div><label>Rendimiento esperado (%)</label><input id="ni-rend" class="inp" type="number" placeholder="0"></div>
-  <div><label>Vencimiento</label><input id="ni-venc" class="inp" type="date"></div>
-  <div class="neg-form-full"><label>Notas</label><input id="ni-notas" class="inp" placeholder="Opcional"></div>
-</div>`, async () => {
-    const nombre=$('ni-nom')?.value?.trim(), monto=+($('ni-inv')?.value||0);
-    if (!nombre||!monto) { toast('Nombre y monto requeridos','warn'); return false; }
-    try {
-      await api('POST',`/api/negocios/proyecto/${proyId}/inversiones`,{
-        nombre, monto_invertido:monto, tipo_inversion:$('ni-tipo')?.value,
-        estado:$('ni-est')?.value, monto_objetivo:+($('ni-meta')?.value||0)||null,
-        rendimiento_esperado:+($('ni-rend')?.value||0)||null,
-        fecha_vencimiento:$('ni-venc')?.value||null, notas:$('ni-notas')?.value||null
-      });
-      S._negProyId=proyId; await load(); toast('Inversión registrada');
-    } catch(e) { toast(e.message,'error'); return false; }
-  });
+  S._ngInvProy = proyId; S._ngPk = { cat: 'OTRO', pri: 'MEDIA' };
+  abrirPop('🛠️ Nueva inversión planeada', `<div class="pr-pop">
+    <input id="ni-nom" class="inp" placeholder="¿Qué quieres comprar o invertir?" maxlength="100" onkeydown="if(event.key==='Enter')$('ni-monto').focus()">
+    <div class="nd-wiz-tipos ng-cat5" style="margin-top:12px">${Object.entries(NG_CAT_EMO).map(([k, e]) => `<button class="nd-wiz-tipo${k === 'OTRO' ? ' on' : ''}" onclick="_ngPick('cat','${k}',this)"><span>${e}</span>${k.charAt(0) + k.slice(1).toLowerCase()}</button>`).join('')}</div>
+    <div class="nd-wiz-monto" style="margin-top:14px"><span>$</span><input id="ni-monto" type="number" min="0" step="100" inputmode="decimal" placeholder="Estimado" onkeydown="if(event.key==='Enter')negGuardarInv()"></div>
+    <div class="nd-wiz-lbl">Prioridad</div>
+    <div class="q-desp-chips nd-wiz-center">${[['ALTA', '🔴 Alta'], ['MEDIA', '🟡 Media'], ['BAJA', '🟢 Baja']].map(([k, l]) => `<button class="q-desp-chip${k === 'MEDIA' ? ' on' : ''}" onclick="_ngPick('pri','${k}',this)">${l}</button>`).join('')}</div>
+    <div class="nd-wiz-lbl">¿Para cuándo? (opcional)</div><input type="date" id="ni-fecha" class="nd-wiz-fecha">
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="negGuardarInv()"><i class="ti ti-check"></i> Agregar</button></div></div>`, 'md');
+  setTimeout(() => $('ni-nom')?.focus(), 60);
 }
-
+async function negGuardarInv() {
+  const proyId = S._ngInvProy, nombre = ($('ni-nom')?.value || '').trim();
+  if (!nombre) { toast('Ponle un nombre', 'warn'); $('ni-nom')?.focus(); return; }
+  try {
+    await api('POST', `/api/negocios/proyecto/${proyId}/inversiones`, { nombre, categoria: S._ngPk.cat, prioridad: S._ngPk.pri, monto_estimado: parseFloat($('ni-monto')?.value) || null, fecha_objetivo: $('ni-fecha')?.value || null, estado: 'PLANEADA' });
+    cerrarPop(); S._ngSec && (S._ngSec.inv = true); await _ngRefrescar(proyId); toast('🛠️ Agregada al plan');
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function negInvHecha(proyId, id) {
+  try { await api('PUT', `/api/negocios/inversion/${id}`, { estado: 'COMPLETADA' }); await _ngRefrescar(proyId); toast('¡Hecho! 🎉'); } catch (e) { toast(e.message, 'error'); }
+}
 async function negDelInversion(proyId, id) {
-  if (!confirm('¿Eliminar esta inversión?')) return;
-  try { await api('DELETE',`/api/negocios/inversion/${id}`); S._negProyId=proyId; await load(); toast('Eliminada'); }
-  catch(e) { toast(e.message,'error'); }
+  if (!confirm('¿Eliminar de la lista?')) return;
+  try { await api('DELETE', `/api/negocios/inversion/${id}`); await _ngRefrescar(proyId); toast('Eliminada'); } catch (e) { toast(e.message, 'error'); }
 }
 
 // ── CHAT IA (PWA) ─────────────────────────────────────────────────────────────
