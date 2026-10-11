@@ -1087,7 +1087,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .cal-wrap{flex-direction:column}
   .cal-day-panel{display:block;position:fixed;bottom:0;left:0;right:0;width:auto!important;border-radius:var(--radius-xl) var(--radius-xl) 0 0;border-bottom:none;z-index:200;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));max-height:72svh;overflow-y:auto;transform:translateY(110%);transition:transform .28s cubic-bezier(.32,1,.56,1)}
   .cal-day-panel:not(.open){transform:translateY(110%)}
-  .cal-day-panel.open{transform:translateY(0)}
+  .cal-day-panel.open{position:fixed;transform:translateY(0);box-shadow:0 -12px 40px rgba(0,0,0,.4)}
 }
 @media(min-width:900px){#mobile-nav{display:none!important}}
 
@@ -1824,6 +1824,51 @@ body.sheet-locked{overflow:hidden}
 .tile-dot{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ec4899;color:#fff;
   font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--mcard,var(--bg-surface))}
 .mini-tile{position:relative}
+
+/* ═══════════════════════════════════════════════════════ v16 — Calendario: feriados y rediseño */
+.cal-nav2{display:flex;align-items:center;justify-content:center;gap:12px;margin:0 0 12px}
+.cal-ttl{flex:1;min-width:0;text-align:center}
+.cal-mes{font-size:20px;font-weight:900;letter-spacing:-.4px;color:var(--text-1);line-height:1.15}
+.cal-mes-btn{background:none;border:none;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;padding:0}
+.cal-mes-btn i{font-size:15px;color:var(--accent-primary)}
+.cal-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:6px}
+.cal-chip{font-size:11px;font-weight:700;color:var(--text-2);background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);padding:3px 10px;white-space:nowrap}
+.cal-chip.fer{color:#f43f5e;border-color:rgba(244,63,94,.35);background:rgba(244,63,94,.08)}
+/* fines de semana: fondo apenas distinto; feriados: tinte rosado + emoji */
+.cd.finde{background:color-mix(in srgb,var(--text-1) 4%,var(--bg-surface))}
+.cd.finde .cdn{color:var(--text-3)}
+.cd.fer{background:rgba(244,63,94,.09);box-shadow:inset 0 2px 0 #f43f5e}
+.cd.fer .cdn{color:#f43f5e;font-weight:800}
+.cd.fer.today .cdn{color:var(--on-accent)}
+.cd-top{display:flex;align-items:center;gap:2px;margin-bottom:2px}
+.cd-fer{margin-left:auto;font-size:13px;line-height:1}
+.cev-bar.cev-fer{display:none;background:rgba(244,63,94,.18);color:#f43f5e;font-weight:700;cursor:default}
+@media(min-width:900px){.cev-bar.cev-fer{display:block}}
+.cal-pay-dot.warn{background:var(--color-warning);box-shadow:0 0 0 2px rgba(252,204,142,.35)}
+.ch:nth-child(1),.ch:nth-child(7){color:var(--text-3);opacity:.8}
+.cal-leg{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;font-size:11px;color:var(--text-3);margin:-4px 0 12px}
+.cal-leg span{display:inline-flex;align-items:center;gap:6px}
+.cal-leg i{display:inline-block;width:10px;height:10px;border-radius:3px}
+.cal-leg .lg-fin{background:color-mix(in srgb,var(--text-1) 10%,var(--bg-surface));border:1px solid var(--border-default)}
+.cal-leg .lg-pay{border-radius:50%;width:8px;height:8px;background:var(--green)}
+.cal-leg .lg-pay.warn{background:var(--color-warning)}
+/* lista de feriados del año */
+.cal-fer{margin:0 0 14px}
+.cal-fer-ttl{font-size:14px;font-weight:800;color:var(--text-1);text-align:center;margin-bottom:10px}
+.cal-fer-ttl span{display:block;font-size:11px;font-weight:600;color:var(--text-3)}
+.cal-fer-card{background:var(--bg-surface)}
+.cal-fer-card.pasado{opacity:.5}
+.cal-fer-card.prox{border-color:#f43f5e}
+.cal-fer-chip{font-size:11px;font-weight:700;color:var(--text-2);white-space:nowrap;flex-shrink:0}
+.cal-fer-card.prox .cal-fer-chip{color:#f43f5e}
+.cal-fer-fuente{font-size:11px;color:var(--text-3);text-align:center;margin-top:8px}
+/* panel del día */
+.cal-info{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-radius:var(--radius-md);background:var(--bg-surface-2);margin-bottom:8px}
+.cal-info.fer{background:rgba(244,63,94,.12)}
+.cal-info.warn{background:rgba(252,204,142,.14)}
+.cal-info-ic{font-size:20px;line-height:1.2}
+.cal-info b{display:block;font-size:13px;color:var(--text-1)}
+.cal-info small{display:block;font-size:11px;color:var(--text-2);margin-top:2px;line-height:1.4}
 </style>
 </head>
 <body>
@@ -7553,6 +7598,69 @@ async function changeCat(id, newCat) {
   }).catch(()=>{});
 }
 
+// ── DÍAS INHÁBILES: feriados oficiales de México + fines de semana ───────────
+// Días de descanso obligatorio según la Ley Federal del Trabajo, art. 74. Se calculan por regla (no hay
+// que mantener una lista por año ni depender de un servicio): 1 ene · 1er lunes de feb (Constitución) ·
+// 3er lunes de mar (Benito Juárez) · 1 may · 16 sep · 3er lunes de nov (Revolución) · 25 dic · 1 dic cada
+// 6 años (transmisión del Poder Ejecutivo: 2024, 2030, 2036…) · jornada electoral federal (1er domingo
+// de junio de 2021, 2024, 2027… ; las elecciones locales varían por estado y no se incluyen).
+const _FER_CACHE = {};
+function feriadosMX(y) {
+  if (_FER_CACHE[y]) return _FER_CACHE[y];
+  const f = {}, p2 = n => String(n).padStart(2, '0');
+  const enésimoLunes = (m, n) => 1 + ((1 - new Date(y, m, 1).getDay() + 7) % 7) + 7 * (n - 1);
+  const add = (m, d, nombre, emoji, corto, nota) => { f[`${y}-${p2(m + 1)}-${p2(d)}`] = { nombre, emoji, corto, nota: nota || '' }; };
+  add(0, 1, 'Año Nuevo', '🎆', 'Año Nuevo');
+  add(1, enésimoLunes(1, 1), 'Día de la Constitución', '📜', 'Constitución', 'Primer lunes de febrero (se conmemora el 5)');
+  add(2, enésimoLunes(2, 3), 'Natalicio de Benito Juárez', '🏛️', 'B. Juárez', 'Tercer lunes de marzo (se conmemora el 21)');
+  add(4, 1, 'Día del Trabajo', '🛠️', 'Trabajo');
+  add(8, 16, 'Día de la Independencia', '🔔', 'Independencia');
+  add(10, enésimoLunes(10, 3), 'Día de la Revolución', '✊', 'Revolución', 'Tercer lunes de noviembre (se conmemora el 20)');
+  if (y >= 2024 && (y - 2024) % 6 === 0) add(11, 1, 'Transmisión del Poder Ejecutivo Federal', '🏛️', 'Transmisión', 'Cada 6 años');
+  add(11, 25, 'Navidad', '🎄', 'Navidad');
+  if (y >= 2021 && (y - 2021) % 3 === 0) add(5, 1 + ((7 - new Date(y, 5, 1).getDay()) % 7), 'Jornada electoral federal', '🗳️', 'Elecciones', 'Primer domingo de junio · las locales varían por estado');
+  return (_FER_CACHE[y] = f);
+}
+const _calDow     = ds => new Date(ds + 'T12:00:00').getDay();
+const esFinde     = ds => { const w = _calDow(ds); return w === 0 || w === 6; };
+const feriadoDe   = ds => feriadosMX(+ds.slice(0, 4))[ds] || null;
+const esInhabil   = ds => esFinde(ds) || !!feriadoDe(ds);
+function diaHabilAnterior(ds) { const d = new Date(ds + 'T12:00:00'); do { d.setDate(d.getDate() - 1); } while (esInhabil(toISO(d))); return toISO(d); }
+const _calFechaLarga = ds => { const t = new Date(ds + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+const _calFechaCorta = ds => new Date(ds + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', '');
+
+// Lista de feriados de un año (se despliega con 🏖️)
+function _calFerHTML(y) {
+  const hoyD = new Date(toISO(new Date()) + 'T12:00:00');
+  const lista = Object.entries(feriadosMX(y)).sort((a, b) => a[0].localeCompare(b[0]));
+  const sig = lista.find(([ds]) => new Date(ds + 'T12:00:00') >= hoyD);
+  return `<div class="cal-fer">
+    <div class="cal-fer-ttl">🏖️ Feriados ${y} <span>descanso obligatorio</span></div>
+    <div class="mov-cards">${lista.map(([ds, f]) => {
+      const dif = Math.round((new Date(ds + 'T12:00:00') - hoyD) / 86400000);
+      const chip = dif === 0 ? 'Hoy' : dif === 1 ? 'Mañana' : dif > 1 ? `En ${dif} días` : 'Ya pasó';
+      const fin = esFinde(ds);
+      return `<div class="mov-card cal-fer-card${dif < 0 ? ' pasado' : ''}${sig && sig[0] === ds ? ' prox' : ''}">
+        <div class="mov-card-ic emo" style="background:rgba(244,63,94,.14)" aria-hidden="true">${f.emoji}</div>
+        <div class="mov-card-mid"><div class="mov-card-title">${f.nombre}</div>
+          <div class="mov-card-sub">${_calFechaLarga(ds)}${fin ? ' · cae en fin de semana' : ''}${f.nota ? ' · ' + f.nota : ''}</div></div>
+        <span class="cal-fer-chip">${chip}</span>
+      </div>`;
+    }).join('')}</div>
+    <div class="cal-fer-fuente">Fuente: Ley Federal del Trabajo, art. 74.</div>
+  </div>`;
+}
+function toggleCalFer() {
+  S._calFerOpen = !S._calFerOpen;
+  const w = $('cal-fer-wrap'), b = $('cal-fer-btn');
+  if (w) { w.style.display = S._calFerOpen ? '' : 'none'; if (S._calFerOpen) w.innerHTML = _calFerHTML(S.cy); }
+  if (b) { b.classList.toggle('on', S._calFerOpen); b.setAttribute('aria-expanded', S._calFerOpen ? 'true' : 'false'); }
+}
+function calHoy() {
+  const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
+  closeCalDay(); const w = $('cal-fer-wrap'); if (w && S._calFerOpen) w.innerHTML = _calFerHTML(S.cy);
+}
+
 // ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
 function _calGridHTML(evts, y, mo, refs, niditoItems) {
   const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -7560,6 +7668,7 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
   const today=toISO(new Date());
   const mm=String(mo+1).padStart(2,'0');
   const payDays=new Set([...(refs.dias_pago||[]),...getIngresosEsperados(refs).flatMap(i=>i.dias||[])]);
+  const FER=feriadosMX(y);
   // Build per-day event map
   const evtMap={};
   for(const e of evts){
@@ -7582,7 +7691,8 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
     const ds=`${y}-${mm}-${String(d).padStart(2,'0')}`;
     const de=evtMap[d]||[];
     const isPay=payDays.has(d);
-    const MAX=2;   // celdas de alto fijo: 2 eventos + "+N"
+    const dow=(first.getDay()+d-1)%7, finde=dow===0||dow===6, fer=FER[ds]||null;
+    const MAX=fer?1:2;   // celdas de alto fijo: [feriado en escritorio] + eventos + "+N"
     const bars=de.slice(0,MAX).map(e=>{
       const cls=e._type==='nidito'?'cev-nidito':'cev-event';
       const lbl=(e.titulo||'').replace(/"/g,'&quot;');
@@ -7590,8 +7700,13 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
       return `<span class="cev-bar ${cls}" onclick="event.stopPropagation();${act}" title="${lbl}">${e.titulo||''}</span>`;
     }).join('');
     const more=de.length>MAX?`<span class="cev-more">+${de.length-MAX}</span>`:'';
-    const payDot=isPay?`<span class="cal-pay-dot" title="Día de cobro"></span>`:'';
-    cells+=`<div class="cd${ds===today?' today':''}${S._calSel===ds?' cal-sel':''}" onclick="calDay('${ds}')"><div style="display:flex;align-items:center;margin-bottom:2px"><div class="cdn">${d}</div>${payDot}</div>${bars}${more}</div>`;
+    // Cobro en día inhábil (fin de semana o feriado): el depósito suele adelantarse al día hábil anterior
+    const payWarn=isPay&&(finde||fer);
+    const payTip=payWarn?`Cobro en día inhábil: suele depositarse el ${_calFechaCorta(diaHabilAnterior(ds))}`:'Día de cobro';
+    const payDot=isPay?`<span class="cal-pay-dot${payWarn?' warn':''}" title="${payTip}"></span>`:'';
+    const ferMark=fer?`<span class="cd-fer" title="${fer.nombre}">${fer.emoji}</span>`:'';
+    const ferBar=fer?`<span class="cev-bar cev-fer" title="${fer.nombre}">${fer.corto}</span>`:'';
+    cells+=`<div class="cd${ds===today?' today':''}${S._calSel===ds?' cal-sel':''}${finde?' finde':''}${fer?' fer':''}" onclick="calDay('${ds}')"><div class="cd-top"><div class="cdn">${d}</div>${payDot}${ferMark}</div>${ferBar}${bars}${more}</div>`;
   }
   // Siempre 6 filas (42 celdas) sin importar el mes, para que el tamaño del
   // calendario no cambie al navegar entre meses con distinta cantidad de
@@ -7599,13 +7714,19 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
   const total=first.getDay()+last.getDate();
   for(let i=total;i<42;i++) cells+=`<div class="cd oth"></div>`;
   const payList=[...payDays].sort((a,b)=>a-b).join(', ');
+  const nFer=Object.keys(FER).filter(k=>k.startsWith(`${y}-${mm}`)).length;
+  const esMesActual=y===new Date().getFullYear()&&mo===new Date().getMonth();
   return `
-<div class="cal-nav">
-  <button class="btn btn-ghost btn-sm" onclick="calN(-1)"><i class="ti ti-chevron-left"></i></button>
-  <h3>${MN[mo]} ${y}<span style="font-size:11px;color:var(--muted);margin-left:8px">${payDays.size?'💰 cobro: días '+payList:''}</span></h3>
-  <button class="btn btn-ghost btn-sm" onclick="calN(1)"><i class="ti ti-chevron-right"></i></button>
+<div class="cal-nav2">
+  <button class="p-arrow" onclick="calN(-1)" title="Mes anterior" aria-label="Mes anterior"><i class="ti ti-chevron-left"></i></button>
+  <div class="cal-ttl">
+    ${esMesActual?`<div class="cal-mes">${MN[mo]} ${y}</div>`:`<button class="cal-mes cal-mes-btn" onclick="calHoy()" title="Volver al mes actual"><i class="ti ti-home-2"></i> ${MN[mo]} ${y}</button>`}
+    <div class="cal-chips">${payDays.size?`<span class="cal-chip">💰 cobro: ${payList}</span>`:''}${nFer?`<span class="cal-chip fer">🏖️ ${nFer} feriado${nFer!==1?'s':''}</span>`:''}</div>
+  </div>
+  <button class="p-arrow" onclick="calN(1)" title="Mes siguiente" aria-label="Mes siguiente"><i class="ti ti-chevron-right"></i></button>
 </div>
-<div id="cal-grid">${cells}</div>`;
+<div id="cal-grid">${cells}</div>
+<div class="cal-leg"><span>🏖️ Feriado</span><span><i class="lg-fin"></i>Fin de semana</span><span><i class="lg-pay"></i>Cobro</span><span><i class="lg-pay warn"></i>Cobro en inhábil</span></div>`;
 }
 
 // Tarjetas de "Próximos Eventos" (<900px, ver CSS) — MISMOS datos/handlers que
@@ -7665,13 +7786,17 @@ async function rCal() {
   $('tab-calendario').innerHTML=`
 <div class="hdr">
   <h2><i class="ti ti-calendar"></i> Calendario</h2>
-  <button class="btn btn-accent btn-sm" onclick="oEvt()"><i class="ti ti-plus"></i> Evento</button>
+</div>
+<div class="ico-bar ico-bar-c">
+  <button class="ico-btn acc" onclick="oEvt()" title="Nuevo evento" aria-label="Nuevo evento"><i class="ti ti-plus"></i></button>
+  <button class="ico-btn${S._calUpOpen?' on':''}" id="cal-up-btn" onclick="toggleCalUp()" title="Próximos eventos" aria-label="Próximos eventos" aria-expanded="${S._calUpOpen?'true':'false'}">⏰</button>
+  <button class="ico-btn${S._calFerOpen?' on':''}" id="cal-fer-btn" onclick="toggleCalFer()" title="Feriados del año" aria-label="Feriados del año" aria-expanded="${S._calFerOpen?'true':'false'}">🏖️</button>
 </div>
 <div id="cal-day-ov" onclick="closeCalDay()"></div>
 <div class="cal-wrap">
   <div class="cal-main">
     <div id="cal-month-wrap">${_calGridHTML(evts,S.cy,S.cm,refs,nd)}</div>
-    <div style="display:flex;justify-content:center;margin:4px 0 12px"><button class="ico-tile${S._calUpOpen?' on':''}" id="cal-up-btn" onclick="toggleCalUp()" title="Próximos eventos" aria-label="Próximos eventos" aria-expanded="${S._calUpOpen?'true':'false'}">⏰</button></div>
+    <div id="cal-fer-wrap" style="display:${S._calFerOpen?'':'none'}">${S._calFerOpen?_calFerHTML(S.cy):''}</div>
     <div id="cal-upcoming-wrap" style="display:${S._calUpOpen?'':'none'}">${_calUpcomingHTML(evts)}</div>
   </div>
   <div class="cal-day-panel" id="cal-day-panel"></div>
@@ -7694,8 +7819,14 @@ function calDay(ds) {
   <strong style="font-size:14px;color:var(--text-1)">${d} de ${MN[m-1]} ${y}</strong>
   <button class="icon-btn" onclick="closeCalDay()"><i class="ti ti-x"></i></button>
 </div>`;
+  const _fer=feriadoDe(ds), _fin=esFinde(ds);
+  const _calInfo=_fer||_fin;
+  if(_fer) html+=`<div class="cal-info fer"><span class="cal-info-ic">${_fer.emoji}</span><div><b>${_fer.nombre}</b><small>Feriado oficial · descanso obligatorio${_fer.nota?' · '+_fer.nota:''}</small></div></div>`;
+  if(_fin&&!_fer) html+=`<div class="cal-info"><span class="cal-info-ic">🛋️</span><div><b>${_calDow(ds)===0?'Domingo':'Sábado'}</b><small>Fin de semana · día inhábil</small></div></div>`;
+  if(_fin&&_fer) html+=`<div class="cal-info"><span class="cal-info-ic">🛋️</span><div><b>Además cae en ${_calDow(ds)===0?'domingo':'sábado'}</b><small>Fin de semana · día inhábil</small></div></div>`;
+  if(payDays.has(d)&&_calInfo) html+=`<div class="cal-info warn"><span class="cal-info-ic">⚠️</span><div><b>Tu cobro cae en día inhábil</b><small>Suele depositarse el ${_calFechaLarga(diaHabilAnterior(ds)).toLowerCase()}. Planea tus pagos con eso en mente.</small></div></div>`;
   if(payDays.has(d)) html+=`<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--green);margin-bottom:10px"><i class="ti ti-coin" style="font-size:14px"></i> Día de cobro / ingreso</div>`;
-  if(!dayEvts.length&&!dayNd.length&&!payDays.has(d)){
+  if(!dayEvts.length&&!dayNd.length&&!payDays.has(d)&&!_calInfo){
     html+=`<p style="color:var(--text-3);font-size:12px;margin:0 0 14px">Sin eventos este día.</p>`;
   }
   dayEvts.forEach(e=>{
@@ -7741,6 +7872,7 @@ function calN(d){
   const wrap=$('cal-month-wrap');
   if(wrap) wrap.innerHTML=_calGridHTML(evts,S.cy,S.cm,refs,S._niditoItems||[]);
   else rCal();
+  const fw=$('cal-fer-wrap'); if(fw&&S._calFerOpen) fw.innerHTML=_calFerHTML(S.cy);
 }
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
