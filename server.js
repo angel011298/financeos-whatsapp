@@ -5573,11 +5573,17 @@ app.post('/api/update-refs', async (req, res) => {
 // (TDC y metas sin user_phone) al admin. Configura en Railway env vars:
 // ADMIN_PHONE=whatsapp:+521XXXXXXXXXX
 async function seedAdminOnStartup() {
-  const adminPhone = process.env.ADMIN_PHONE;
-  if (!adminPhone) return;
+  const envPhone = process.env.ADMIN_PHONE;
+  if (!envPhone) return;
   try {
-    // Solo inserta si NO existe — nunca sobreescribir preferencias (ai_preference, ai_model)
-    const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', adminPhone).single();
+    // El mismo número puede venir con otra forma (+52…, +521…, sin 52): se compara por sus últimos 10 dígitos
+    // para no crear un usuario fantasma. Si ya existe un admin con ese número, se usa SU teléfono.
+    const d10 = String(envPhone).replace(/D/g, '').slice(-10);
+    const { data: admins } = await sb.from('usuarios').select('id, telefono, role');
+    const mismos = (admins || []).filter(u => String(u.telefono || '').replace(/D/g, '').slice(-10) === d10);
+    const canon = mismos.find(u => u.telefono === 'whatsapp:+52' + d10) || mismos.find(u => u.telefono === envPhone) || mismos[0];
+    const adminPhone = canon ? canon.telefono : envPhone;
+    const existing = canon;
     if (!existing) {
       await sb.from('usuarios').insert([{ telefono: adminPhone, role: 'ADMIN_A', ai_preference: 'GEMINI', ai_model: 'gemini-2.5-flash' }]);
     }

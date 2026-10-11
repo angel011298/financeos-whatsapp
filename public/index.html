@@ -1890,6 +1890,79 @@ body.sheet-locked{overflow:hidden}
 .tr-grid label{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--text-2);text-align:center}
 .tr-grid input{width:100%;text-align:center;font-size:18px;font-weight:800}
 .tr-total{text-align:center;font-size:15px;font-weight:800;color:var(--text-1)}
+
+/* ═══════════════════════════════════════════════════════ v18 — Presupuesto y Metas (fase 2) */
+.pr-cover{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:22px;padding:18px 18px 14px;margin:0 auto 14px;max-width:720px;box-shadow:var(--shadow-sm)}
+.pr-cover.warn{border-color:rgba(251,191,36,.45)}
+.pr-cover.dng{border-color:rgba(248,113,113,.5)}
+.pr-cover-main{display:flex;flex-direction:column;align-items:center;gap:2px;margin-bottom:12px}
+.pr-cover-main span{font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em}
+.pr-cover-main b{font-size:clamp(30px,8vw,42px);font-weight:900;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.1}
+.pr-cover-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;text-align:center}
+.pr-cover-nums>div{min-width:0}
+.pr-cover-nums span{display:block;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.pr-cover-nums b{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pr-cover-nums b>.pr-pill{font-size:13px}
+.pr-cover-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--border-default);text-align:center;font-size:12px;color:var(--text-2)}
+.pr-cover-sm{padding:14px 16px 12px}
+.pr-cover-sm .pr-cover-nums{margin-top:0}
+.pr-pill{display:inline-flex;align-items:center;font-size:12px;font-weight:800;border-radius:var(--radius-pill);padding:2px 10px;white-space:nowrap;
+  color:var(--color-income);background:rgba(74,222,128,.13)}
+.pr-pill.warn{color:var(--color-warning);background:rgba(251,191,36,.14)}
+.pr-pill.dng{color:var(--color-expense);background:rgba(248,113,113,.15)}
+.pr-pill.neu{color:var(--text-2);background:var(--bg-surface-2)}
+.pr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px;margin-bottom:14px}
+.pr-card,.pr-goal{display:flex;flex-direction:column;gap:10px;text-align:left;font-family:inherit;color:inherit;width:100%;min-width:0;
+  background:var(--bg-surface);border:1px solid var(--border-default);border-radius:20px;padding:14px 16px;box-shadow:var(--shadow-sm)}
+.pr-card{cursor:pointer;transition:transform .15s,border-color .15s}
+.pr-card:hover{transform:translateY(-1px);border-color:var(--text-3)}
+.pr-card.warn{border-color:rgba(251,191,36,.4)}
+.pr-card.dng{border-color:rgba(248,113,113,.45)}
+.pr-goal.done{border-color:rgba(74,222,128,.35);background:rgba(74,222,128,.04)}
+.pr-card-top,.pr-goal-top{display:flex;align-items:center;gap:10px;min-width:0}
+.pr-card-name{flex:1;min-width:0;display:flex;flex-direction:column}
+.pr-card-name b{font-size:15px;font-weight:800;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-card-name small{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
+.pr-nums.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pr-nums>div{min-width:0;background:var(--bg-surface-2);border-radius:12px;padding:6px 4px}
+.pr-nums span{display:block;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:1px}
+.pr-nums b{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pr-nums b.warn{color:var(--color-warning)}
+.pr-hint{font-size:12px;color:var(--text-2);text-align:center}
+.pr-hint.warn{color:var(--color-warning)}
+.pr-hint.ok{color:var(--color-income);font-weight:700}
+.pr-hint.bad{color:var(--color-expense)}
+.pr-goal-amts{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pr-goal-amts b{font-size:15px;font-weight:800}
+.pr-goal-amts span{font-size:12px;color:var(--text-3)}
+.pr-goal-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px}
+.pr-goal-acts{display:inline-flex;gap:4px}
+.pr-sin{max-width:720px;margin:0 auto 14px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:18px;overflow:hidden}
+.pr-sin-hdr{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:13px 16px;background:none;border:none;color:var(--text-2);
+  font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-align:left}
+.pr-sin-hdr i{font-size:16px;color:var(--text-3);flex-shrink:0}
+.pr-sin-list{display:flex;flex-direction:column;border-top:1px solid var(--border-default)}
+.pr-sin-row{display:flex;align-items:center;gap:10px;padding:9px 14px;background:none;border:none;border-bottom:1px solid var(--border-default);color:inherit;font-family:inherit;cursor:pointer;text-align:left;width:100%}
+.pr-sin-row:last-child{border-bottom:none}
+.pr-sin-row:hover{background:var(--bg-surface-2)}
+.pr-sin-n{flex:1;min-width:0;font-size:14px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-sin-v{font-size:13px;font-weight:700;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pr-sin-v.red{color:var(--color-expense)}
+.pr-sin-add{font-size:12px;font-weight:700;color:var(--accent-primary);white-space:nowrap;display:inline-flex;align-items:center;gap:2px}
+.pr-empty{max-width:520px;margin:6px auto 18px;text-align:center;padding:26px 20px;border-radius:22px;border:1px dashed var(--border-default);color:var(--text-2)}
+.pr-empty>div{font-size:40px;margin-bottom:6px}
+.pr-empty b{display:block;font-size:16px;color:var(--text-1);margin-bottom:4px}
+.pr-empty p{font-size:13px;margin:0 0 12px;line-height:1.5}
+.pr-sec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 2px 10px}
+.pr-sec h3{margin:0;font-size:16px;font-weight:900;letter-spacing:-.2px;color:var(--text-1)}
+.pr-sec a{font-size:12px;color:var(--accent-couple);cursor:pointer;font-weight:700;white-space:nowrap}
+.nd-wiz-tipos.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mt-ya{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;font-size:13px;font-weight:700;color:var(--text-2)}
+.mt-ya input{width:130px;text-align:center;font-weight:800}
+.mt-ya span{font-weight:800}
+.pr-pop .nd-wiz-q{margin-bottom:14px}
+#tab-presupuesto .cal-nav2{max-width:720px;margin-left:auto;margin-right:auto}
 </style>
 </head>
 <body>
@@ -4168,7 +4241,7 @@ function abrirPop(titulo, html, size) {
   p.querySelector('.pop-panel').className = 'pop-panel' + (size ? ' pop-' + size : '');
   p.classList.add('open');
 }
-function cerrarPop() { $('pop')?.classList.remove('open'); S._qPop = null; S._ndWiz = null; }
+function cerrarPop() { $('pop')?.classList.remove('open'); S._qPop = null; S._ndWiz = null; S._mtWiz = null; S._prPop = null; S._abono = null; }
 
 // Gastos esta quincena → toque en Efectivo / Pluxee / Débito: pop-up con las tarjetas de esa forma de
 // pago (las mismas de la lista, con sus casillas y botones). rQuincenaPanel deja listas la función que
@@ -4677,7 +4750,7 @@ function rQuincenaPanel(ctx) {
           ${catIcHTML(catG || 'OTROS', g)}
           <div class="mov-card-mid${esDesp ? ' q-card-tap' : ''}"${esDesp ? ` onclick="toggleQDesp()" role="button" tabindex="0" title="${S._qDespOpen ? 'Ocultar artículos' : 'Ver artículos'}"` : ''}>
             <div class="mov-card-title">${g.descripcion}${esDesp ? `<i class="ti ti-chevron-${S._qDespOpen ? 'up' : 'down'}"></i>` : ''}</div>
-            <div class="mov-card-sub">${esTr ? `${g._dias} día${g._dias !== 1 ? 's' : ''} hábil${g._dias !== 1 ? 'es' : ''} × ${fmt(g._diario)} · combi ${fmt(g._tarifas.combi)} · camión ${fmt(g._tarifas.camion)} · metro ${fmt(g._tarifas.metro)}` : sub}</div>
+            ${esTr ? '' : `<div class="mov-card-sub">${sub}</div>`}
           </div>
           <div class="mov-card-val red">${fmt(g.monto)}</div>
           <div class="q-card-foot">
@@ -4974,23 +5047,6 @@ function oEditExpItem(tipo, id) {
 <div class="fr"><label>Descripción</label><input id="ei-desc" value="${(item.descripcion||'').replace(/"/g,'&quot;')}" placeholder="Ej: Sueldo"></div>
 <div class="fr"><label>Monto por quincena ($)</label><input id="ei-monto" type="number" min="0" step="1" value="${item.monto||0}"></div>`;
   }
-  $('ovl').classList.add('open');
-}
-
-function eMeta(meta) {
-  if (!meta) return;
-  S.mctx = { tabla: 'metas', id: meta.id };
-  $('m-title').textContent = 'Editar Meta';
-  $('m-body').innerHTML = `
-<div class="fr"><label>Nombre</label><input id="f-nombre" value="${(meta.nombre||'').replace(/"/g,'&quot;')}"></div>
-<div class="f2">
-  <div class="fr"><label>Objetivo ($)</label><input id="f-meta" type="number" min="0" value="${meta.meta||0}"></div>
-  <div class="fr"><label>Ya tengo ($)</label><input id="f-actual" type="number" min="0" value="${meta.actual||0}"></div>
-</div>
-<div class="f2">
-  <div class="fr"><label>Tipo</label><select id="f-tipo"><option${(meta.tipo||'ahorro')==='ahorro'?' selected':''}>ahorro</option><option${meta.tipo==='compra'?' selected':''}>compra</option></select></div>
-  <div class="fr"><label>Fecha objetivo</label><input id="f-fecha-obj" type="date" value="${meta.fecha_objetivo||''}"></div>
-</div>`;
   $('ovl').classList.add('open');
 }
 
@@ -5919,9 +5975,6 @@ function rDash() {
   <div class="mini-bal-wrap${dsgOn('dash-dsg','balance')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='balance'}" onclick="toggleDsgPanel('balance',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver cómo se calcula">
     <div class="mini-bal-lbl">Balance <i class="ti ti-scale" style="font-size:12px"></i></div>
     <div class="mini-bal${bal<0?' neg':''}">${bal<0?'-':''}${_bMain}<span class="cents">${_bCent}</span></div>
-    <div class="mini-sub ${bal>=0?'pos':'neg'}">
-      <i class="ti ti-trending-${bal>=0?'up':'down'}"></i>
-      Balance ${bal>=0?'positivo':'negativo'} · ${pMovs.length} movimiento${pMovs.length!==1?'s':''}</div>
   </div>
   <div class="mini-rows">
     <div class="mini-row${dsgOn('dash-dsg','gastos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='gastos'}" onclick="toggleDsgPanel('gastos',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de egresos">
@@ -5938,7 +5991,6 @@ function rDash() {
   </div>
 </div>
 ${dsgPanelHTML('dash-dsg','dash')}
-<div class="mini-grid-hdr">Todo lo demás</div>
 <div class="mini-grid">${EMOJIS.map(([e,k,lbl])=>
   `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span>${k==='wishlist' && S._wlNuevos > 0 ? `<span class="tile-dot">${S._wlNuevos}</span>` : ''}</button>`).join('')}</div>
 <div class="q-dash-wrap">
@@ -6694,91 +6746,154 @@ ${buscando ? `<div class="ico-search"><i class="ti ti-search"></i><input id="tdc
   } else { emptyChart('c-tdc','Sin tarjetas configuradas'); emptyChart('c-tdc2',''); }
 }
 
-// Tarjetas por categoría (<900px, ver CSS) — MISMOS datos/handlers que la
-// tabla de escritorio (editLimitePpto/deleteLimitePpto). El límite se edita
-// igual que en la tabla: ieCell no requiere un <td>, funciona con cualquier
-// elemento — se le pasa el <span> de la tarjeta directamente.
-function _prspCardsHTML(rows, cm) {
-  if (!rows.length) return '';
-  return `<div class="prsp-cards">${rows.map(({c,r,l}) => {
-    const p = l>0 ? Math.min(100,Math.round(r/l*100)) : 0;
-    const st = p>=100?'dng':p>=80?'warn':'';
-    const stLbl = p>=100?'<span style="color:var(--color-expense);font-size:10px;font-weight:600">Excedido</span>':p>=80?'<span style="color:var(--color-warning);font-size:10px">Cerca del límite</span>':'';
-    const exc = l>0 ? Math.min(35,Math.max(0,p>100?Math.round(r/l*100)-100:0)) : 0;
-    return `<div class="prsp-card">
-      <div class="prsp-card-hdr">
-        <div style="display:flex;align-items:center;gap:7px;min-width:0">
-          <span style="width:9px;height:9px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};flex-shrink:0"></span>
-          <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c}</strong>
-        </div>
-        <button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button>
-      </div>
-      ${l>0 ? `<div class="prsp-card-pbar">
-        <div class="bpbar${p>100?' over':''}" style="flex:1"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div>${exc>0?`<div class="bpover" style="width:${exc}%"></div>`:''}</div>
-        <span style="font-weight:700;color:${p>=100?'var(--color-expense)':p>=80?'var(--color-warning)':'var(--text-2)'};font-size:12px;flex-shrink:0">${p}%</span>
-      </div>${stLbl?`<div style="margin-bottom:6px">${stLbl}</div>`:''}` : ''}
-      <div class="prsp-card-nums">
-        <div><span class="prsp-card-lbl">Real</span><span class="red">${fmt(r)}</span></div>
-        <div><span class="prsp-card-lbl">Límite</span><span class="editable" style="cursor:pointer" title="Clic para editar límite" onclick="editLimitePpto(this,'${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3)\'>+ límite</span>'}</span></div>
-        <div><span class="prsp-card-lbl">Disponible</span><span class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</span></div>
-      </div>
-    </div>`;
-  }).join('')}</div>`;
+// ═══ PRESUPUESTO Y METAS (fase 2) ═══════════════════════════════════════════════════════════════════
+// Portada del mes (cuánto te queda), una tarjeta por categoría con límite y semáforo, y las categorías
+// sin límite recogidas en una sola fila plegable. Un toque en una tarjeta abre UN solo pop-up con el
+// monto (ya sugerido) → Enter guarda. Los límites son mensuales, así que esta vista siempre es de un mes.
+const _PR_MN = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function _prMesInfo() {
+  const off = S._prOff || 0, now = new Date(), d = new Date(now.getFullYear(), now.getMonth() + off, 1);
+  const short = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return { off, short, from: toISO(d), to: toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0)),
+           label: `${_PR_MN[d.getMonth()]} ${d.getFullYear()}`, y: d.getFullYear(), m: d.getMonth(),
+           diasMes: new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() };
+}
+function _prRows(mi) {
+  const movs = filterMovs(S.data.movs || [], mi.from, mi.to).filter(m => m.tipo === 'GASTO');
+  const lim = {}; (S.data.presupuesto || []).filter(p => p.mes === mi.short).forEach(p => { lim[p.categoria] = p.limite || 0; });
+  const cats = [...new Set([...CATS, ...Object.keys(lim), ...movs.map(m => m.categoria)])].filter(Boolean);
+  return cats.map(c => ({ c, r: movs.filter(m => m.categoria === c).reduce((a, m) => a + (m.monto || 0), 0), l: lim[c] || 0 }));
+}
+// Promedio mensual de los 3 meses anteriores (para sugerir un límite con un toque)
+function _prPromedio3(cat, mi) {
+  let tot = 0, n = 0;
+  for (let k = 1; k <= 3; k++) {
+    const d = new Date(mi.y, mi.m - k, 1), f = toISO(d), t = toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    const s = filterMovs(S.data.movs || [], f, t).filter(m => m.tipo === 'GASTO' && m.categoria === cat).reduce((a, m) => a + (m.monto || 0), 0);
+    if (s > 0) { tot += s; n++; }
+  }
+  return n ? Math.ceil(tot / n / 50) * 50 : 0;
+}
+const _prEst = p => p >= 100 ? 'dng' : p >= 80 ? 'warn' : '';
+const _prEstTxt = p => p >= 100 ? 'Excedido' : p >= 80 ? 'Cuidado' : 'Vas bien';
+
+function prN(d) { S._prOff = (S._prOff || 0) + d; rPresp(); }
+function prHoy() { S._prOff = 0; rPresp(); }
+function prToggle(k) { S[k] = !S[k]; rPresp(); }
+function prAgregar() { S._prSin = true; rPresp(); setTimeout(() => $('pr-sin')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60); }
+
+function _prCardHTML({ c, r, l }, mi) {
+  const p = l > 0 ? Math.round(r / l * 100) : 0, st = _prEst(p), pb = Math.min(100, p), exc = Math.min(35, Math.max(0, p - 100));
+  const dia = new Date().getDate(), proy = mi.off === 0 && dia > 3 ? Math.round(r / dia * mi.diasMes) : 0;
+  const aviso = p < 100 && proy > l ? `<div class="pr-hint warn">⚠️ A este ritmo llegarías a ${fmt(proy)}</div>` : '';
+  return `<button class="pr-card ${st}" data-c="${_ndEsc(c)}" onclick="prPop(this.dataset.c)" title="Cambiar el límite de ${_ndEsc(c)}">
+    <div class="pr-card-top">${catIcHTML(c)}
+      <div class="pr-card-name"><b>${_ndEsc(c)}</b><small>${_prEstTxt(p)}</small></div>
+      <span class="pr-pill ${st}">${p}%</span></div>
+    <div class="bpbar${p > 100 ? ' over' : ''}"><div class="bpfill${st ? ' ' + st : ''}" style="width:${pb}%"></div>${exc > 0 ? `<div class="bpover" style="width:${exc}%"></div>` : ''}</div>
+    <div class="pr-nums">
+      <div><span>Gastado</span><b class="red">${fmt(r)}</b></div>
+      <div><span>Límite</span><b>${fmt(l)}</b></div>
+      <div><span>${r > l ? 'Excedido' : 'Disponible'}</span><b class="${r > l ? 'red' : 'green'}">${fmt(Math.abs(l - r))}</b></div>
+    </div>${aviso}</button>`;
 }
 
-// ── RENDER: PRESUPUESTO ──────────────────────────────────────────────────────
+function _prSinRow({ c, r }) {
+  return `<button class="pr-sin-row" data-c="${_ndEsc(c)}" onclick="prPop(this.dataset.c)">
+    ${catIcHTML(c)}<span class="pr-sin-n">${_ndEsc(c)}</span>
+    <span class="pr-sin-v${r > 0 ? ' red' : ''}">${r > 0 ? fmt(r) : 'sin gasto'}</span><span class="pr-sin-add"><i class="ti ti-plus"></i> límite</span></button>`;
+}
+
+function prPop(cat) {
+  const mi = _prMesInfo(), row = _prRows(mi).find(x => x.c === cat) || { c: cat, r: 0, l: 0 };
+  const prom = _prPromedio3(cat, mi), gast = Math.ceil(row.r / 50) * 50;
+  const sug = row.l || prom || gast || '';
+  S._prPop = { c: cat, mes: mi.short, l: row.l };
+  const chips = [prom ? [`Promedio 3 meses · ${fmt(prom)}`, prom] : null, row.r > 0 ? [`Lo gastado · ${fmt(gast)}`, gast] : null].filter(Boolean);
+  abrirPop(`${CAT_EMOJI[cat] || '📦'} Límite de ${cat}`, `<div class="pr-pop">
+    <div class="nd-wiz-q">¿Cuánto quieres gastar en ${_ndEsc(cat)} en ${mi.label.split(' ')[0].toLowerCase()}?</div>
+    <div class="nd-wiz-monto"><span>$</span><input id="pr-lim" type="number" min="0" step="50" inputmode="decimal" value="${sug}" placeholder="0" onkeydown="if(event.key==='Enter')prGuardar()"></div>
+    <div class="q-desp-chips nd-wiz-center">${chips.map(([t, v]) => `<button class="q-desp-chip" onclick="$('pr-lim').value=${v};$('pr-lim').focus()">${t}</button>`).join('')}
+      ${[500, 1000].map(v => `<button class="q-desp-chip" onclick="$('pr-lim').value=(parseFloat($('pr-lim').value)||0)+${v};$('pr-lim').focus()">+ ${fmt(v).replace('.00', '')}</button>`).join('')}</div>
+    <div class="nd-wiz-nav">${row.l > 0 ? `<button class="btn btn-ghost" onclick="prGuardar(0)"><i class="ti ti-trash"></i> Quitar límite</button>` : '<span></span>'}
+      <button class="btn btn-accent" onclick="prGuardar()"><i class="ti ti-check"></i> Guardar</button></div></div>`);
+  setTimeout(() => { const i = $('pr-lim'); if (i) { i.focus(); i.select(); } }, 60);
+}
+async function prGuardar(forzar) {
+  const p = S._prPop; if (!p) return;
+  const limite = forzar === 0 ? 0 : (parseFloat($('pr-lim')?.value) || 0);
+  try {
+    await api('PUT', '/api/presupuesto', { user_phone: S.phone, categoria: p.c, limite, mes: p.mes });
+    cerrarPop(); S._prPop = null;
+    await load();
+    toast(limite > 0 ? `${CAT_EMOJI[p.c] || '📦'} Límite de ${p.c}: ${fmt(limite)}` : `Límite de ${p.c} quitado`);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+function prExcel() {
+  const mi = _prMesInfo(), rows = _prRows(mi).filter(x => x.r > 0 || x.l > 0);
+  exportRowsToExcel(rows, [
+    { label: 'Categoría', get: x => x.c }, { label: 'Gastado', get: x => x.r, num: true }, { label: 'Límite', get: x => x.l, num: true },
+    { label: 'Disponible', get: x => x.l > 0 ? x.l - x.r : 0, num: true }, { label: 'Uso %', get: x => x.l > 0 ? Math.round(x.r / x.l * 100) : 0, num: true },
+  ], 'presupuesto_' + mi.short);
+}
+
 function rPresp() {
-  const r = getPeriodoRange();
-  const cm = r.short || r.from.substring(0, 7);
-  const movs = filterMovs(S.data.movs||[], r.from, r.to).filter(m=>m.tipo==='GASTO');
-  const prsp=(S.data.presupuesto||[]).filter(p=>p.mes===cm);
-  const rows=CATS.map(c=>{const rv=movs.filter(m=>m.categoria===c).reduce((a,m)=>a+(m.monto||0),0);const l=(prsp.find(p=>p.categoria===c)||{}).limite||0;return{c,r:rv,l};}).filter(x=>x.r>0||x.l>0);
-  $('tab-presupuesto').innerHTML=`
-<div class="hdr">
-  <h2><i class="ti ti-report-money"></i> Presupuesto y Metas</h2>
+  const mi = _prMesInfo(), todas = _prRows(mi);
+  const conL = todas.filter(x => x.l > 0).sort((a, b) => (b.r / b.l) - (a.r / a.l));
+  const sinL = todas.filter(x => !x.l).sort((a, b) => b.r - a.r || CATS.indexOf(a.c) - CATS.indexOf(b.c));
+  const L = conL.reduce((a, x) => a + x.l, 0), R = conL.reduce((a, x) => a + x.r, 0), disp = L - R;
+  const pct = L > 0 ? Math.round(R / L * 100) : 0, st = _prEst(pct);
+  const sinGasto = sinL.reduce((a, x) => a + x.r, 0), sinN = sinL.filter(x => x.r > 0).length;
+  const sub = L > 0 ? (disp >= 0 ? `Te quedan ${fmt(disp)} de ${fmt(L)}` : `Te pasaste ${fmt(-disp)}`) : 'Pon un límite y ve cuánto te queda';
+  const esActual = mi.off === 0;
+  const rowsExcel = todas.filter(x => x.r > 0 || x.l > 0);
+  $('tab-presupuesto').innerHTML = `
+<div class="cal-hero">
+  <div class="cal-hero-ttl"><span aria-hidden="true">🎯</span> Presupuesto y Metas</div>
+  <div class="cal-hero-sub">${sub}</div>
 </div>
-${periodoSelectorHTML()}
-<div class="hdr" style="margin-bottom:8px">
-  <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-list-details"></i> Gastos vs límites por categoría</span>
-  <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAgregarLimitePpto('${cm}')"><i class="ti ti-plus"></i> Agregar categoría</button>
+<div class="cal-nav2">
+  <button class="p-arrow" onclick="prN(-1)" title="Mes anterior" aria-label="Mes anterior"><i class="ti ti-chevron-left"></i></button>
+  <div class="cal-ttl">${esActual ? `<div class="cal-mes">${mi.label}</div>` : `<button class="cal-mes cal-mes-btn" onclick="prHoy()" title="Volver al mes actual"><i class="ti ti-home-2"></i> ${mi.label}</button>`}</div>
+  <button class="p-arrow" onclick="prN(1)" title="Mes siguiente" aria-label="Mes siguiente"><i class="ti ti-chevron-right"></i></button>
 </div>
+<div class="ico-bar ico-bar-c">
+  <button class="ico-btn acc" onclick="prAgregar()" title="Agregar límite a una categoría" aria-label="Agregar límite"><i class="ti ti-plus"></i></button>
+  <button class="ico-btn${S._prAn ? ' on' : ''}" onclick="prToggle('_prAn')" title="Gráficas" aria-label="Gráficas" aria-expanded="${!!S._prAn}">📊</button>
+  ${rowsExcel.length ? `<button class="ico-btn" onclick="prExcel()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
+</div>
+${L > 0 ? `<div class="pr-cover ${st}">
+  <div class="pr-cover-main"><span>${disp >= 0 ? 'Te quedan' : 'Te pasaste por'}</span><b class="${disp >= 0 ? 'green' : 'red'}">${fmt(Math.abs(disp))}</b></div>
+  <div class="bpbar${pct > 100 ? ' over' : ''}"><div class="bpfill${st ? ' ' + st : ''}" style="width:${Math.min(100, pct)}%"></div></div>
+  <div class="pr-cover-nums">
+    <div><span>Presupuesto</span><b>${fmt(L)}</b></div>
+    <div><span>Gastado</span><b class="red">${fmt(R)}</b></div>
+    <div><span>Usado</span><b><span class="pr-pill ${st}">${pct}%</span></b></div>
+  </div>
+  ${sinGasto > 0 ? `<div class="pr-cover-foot">＋ ${fmt(sinGasto)} en ${sinN} categoría${sinN !== 1 ? 's' : ''} sin límite</div>` : ''}
+</div>` : `<div class="pr-empty"><div>🧮</div><b>Aún no hay límites para ${mi.label.split(' ')[0].toLowerCase()}</b><p>Elige una categoría abajo y ponle un tope: aquí verás cuánto te queda.</p></div>`}
 <div id="rebal-container"></div>
-${_prspCardsHTML(rows, cm)}
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-chart-bar"></i> Análisis de Presupuesto</h2></div><div class="sec-hdr-sub">Gasto real vs límites por categoría</div></div>
-<div class="cbox" style="margin-bottom:14px">
-  <h3>Presupuesto vs Gasto Real</h3>${ctBtns('c-prsp',LINE,'bar')}
-  <div class="cwrap"><canvas id="c-prsp"></canvas></div>
-  <div id="legend-c-prsp" class="chart-legend"></div>
-</div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-list-details"></i> Gastos vs Límites (tabla)</h2></div></div>
-<div class="prsp-table-view">
-${rows.length ? tglBtn('tbl-prsp') : ''}${rows.length ? mkTable({ id:'tbl-prsp', exportName:'presupuesto_categorias', numbered:true, empty:'Sin gastos ni límites configurados este mes',
-  columns:[
-    {key:'c',label:'Categoría',filter:'select',value:x=>x.c},
-    {key:'r',label:'Real',num:true,value:x=>x.r},
-    {key:'l',label:'Límite',num:true,value:x=>x.l},
-    {key:'disp',label:'Disponible',num:true,value:x=>x.l>0?(x.l-x.r):0},
-    {key:'uso',label:'Uso',num:true,width:'130px',value:x=>x.l>0?Math.min(100,Math.round(x.r/x.l*100)):0},
-    {key:'_acts',label:'',sortable:false}],
-  rows,
-  renderRow:({c,r,l})=>{const p=l>0?Math.min(100,Math.round(r/l*100)):0;const st=p>=100?'dng':p>=80?'warn':'';const stLbl=p>=100?'<span style="color:var(--color-expense);font-size:10px;font-weight:600">Excedido</span>':p>=80?'<span style="color:var(--color-warning);font-size:10px">Cerca del límite</span>':'';return`<tr>
-  <td><div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${CAT_CLR[c]||'var(--text-3)'};display:inline-block;flex-shrink:0"></span>${c}</div></td>
-  <td class="red">${fmt(r)}</td>
-  <td class="editable" style="cursor:pointer;color:var(--muted)" title="Clic para editar límite" onclick="editLimitePpto(this,'${c}',${l},'${cm}')">${l>0?fmt(l):'<span style=\'color:var(--text-3)\'>+ límite</span>'}</td>
-  <td class="${l>0&&r>l?'red':'green'}">${l>0?fmt(l-r):'—'}</td>
-  <td>${l>0?(()=>{const pReal=Math.round(r/l*100);const exc=Math.min(35,Math.max(0,pReal-100));return `<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;color:${pReal>=100?'var(--color-expense)':pReal>=80?'var(--color-warning)':'var(--text-2)'}">${pReal}%</span>${stLbl}</div><div class="bpbar${pReal>100?' over':''}"><div class="bpfill${st?' '+st:''}" style="width:${p}%"></div>${exc>0?`<div class="bpover" style="width:${exc}%"></div>`:''}</div></div>`;})():'—'}</td>
-  <td style="white-space:nowrap"><button class="edit-pill-btn" style="color:var(--red)" title="Quitar límite" onclick="deleteLimitePpto('${c}','${cm}')"><i class="ti ti-x" style="font-size:12px"></i></button></td>
-</tr>`} }) : '<p style="color:var(--text-3);text-align:center;padding:20px;font-size:12px">Sin gastos ni límites configurados este mes</p>'}
-</div>
-<div class="sec-hdr"><div class="sec-hdr-row"><h2><i class="ti ti-heart-handshake" style="color:var(--accent-couple)"></i> Proyectos y Metas del Nidito</h2><div class="sec-hdr-sub"><a style="font-size:11px;color:var(--accent-couple);cursor:pointer" onclick="go('nidito')">Ver detalle →</a></div></div></div>
+${conL.length ? `<div class="pr-grid">${conL.map(x => _prCardHTML(x, mi)).join('')}</div>` : ''}
+${sinL.length ? `<div class="pr-sin" id="pr-sin">
+  <button class="pr-sin-hdr" onclick="prToggle('_prSin')" aria-expanded="${!!S._prSin}">
+    <span>Sin límite · ${sinL.length} categoría${sinL.length !== 1 ? 's' : ''}${sinGasto > 0 ? ` · <b class="red">${fmt(sinGasto)}</b> gastado` : ''}</span>
+    <i class="ti ti-chevron-${S._prSin ? 'up' : 'down'}"></i></button>
+  ${S._prSin ? `<div class="pr-sin-list">${sinL.map(_prSinRow).join('')}</div>` : ''}
+</div>` : ''}
+${S._prAn ? `<div class="cbox" style="margin-top:14px">
+  <h3>Presupuesto vs gasto real</h3>${ctBtns('c-prsp', LINE, 'bar')}
+  <div class="cwrap"><canvas id="c-prsp"></canvas></div><div id="legend-c-prsp" class="chart-legend"></div>
+</div>` : ''}
+<div class="pr-sec"><h3><span aria-hidden="true">💞</span> Proyectos y metas del Nidito</h3><a onclick="go('nidito')">Ver detalle →</a></div>
 <div id="nidito-prsp-section"></div>
-<div class="sec-hdr" style="margin-top:16px"><div class="sec-hdr-row"><h2><i class="ti ti-target"></i> Objetivos de Ahorro</h2></div></div>
 <div id="objs-section"></div>`;
-  if (rows.length) mkC('c-prsp',S.ct['c-prsp']||'bar',rows.map(x=>x.c),[
-    {label:'Real',  data:rows.map(x=>x.r), backgroundColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'88'), borderColor:rows.map((x,i)=>CAT_CLR[x.c]||CLR[i%CLR.length])},
-    {label:'Límite',data:rows.map(x=>x.l), backgroundColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'33'), borderColor:rows.map((x,i)=>(CAT_CLR[x.c]||CLR[i%CLR.length])+'88')}
-  ]);
-  else emptyChart('c-prsp','Sin datos de presupuesto este mes');
+  if (S._prAn) {
+    const rows = todas.filter(x => x.r > 0 || x.l > 0);
+    if (rows.length) mkC('c-prsp', S.ct['c-prsp'] || 'bar', rows.map(x => x.c), [
+      { label: 'Real',   data: rows.map(x => x.r), backgroundColor: rows.map((x, i) => (CAT_CLR[x.c] || CLR[i % CLR.length]) + '88'), borderColor: rows.map((x, i) => CAT_CLR[x.c] || CLR[i % CLR.length]) },
+      { label: 'Límite', data: rows.map(x => x.l), backgroundColor: rows.map((x, i) => (CAT_CLR[x.c] || CLR[i % CLR.length]) + '33'), borderColor: rows.map((x, i) => (CAT_CLR[x.c] || CLR[i % CLR.length]) + '88') }]);
+    else emptyChart('c-prsp', 'Sin datos de presupuesto este mes');
+  }
   loadRebalanceo();
   rNiditoPresp();
   rObjs();
@@ -6874,180 +6989,240 @@ ${metas.map(ndMiniBar).join('')}` : ''}
 ${otros.length ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">${otros.map(ndMiniChip).join('')}</div>` : ''}`;
 }
 
-// ── RENDER: OBJETIVOS ────────────────────────────────────────────────────────
+function _mtEmoji(nombre, tipo) {
+  const n = String(nombre || '').toLowerCase();
+  const m = [[/viaje|vacaci|europa|playa|par[ií]s|canc[uú]n|italia|oaxaca|japón|japon/, '✈️'], [/moto/, '🏍️'], [/carro|auto|coche|veh[ií]culo/, '🚗'],
+    [/casa|depa|departamento|enganche/, '🏠'], [/educaci|escuela|curso|maestr|carrera|diplomado/, '🎓'], [/emergencia|fondo|colch[oó]n/, '🛟'],
+    [/boda|matrimoni|bautizo|anillo/, '💍'], [/retiro|jubilaci/, '🏖️'], [/laptop|compu|mac|pc\b/, '💻'], [/celular|iphone|tel[eé]fono|ipad|tablet/, '📱'],
+    [/regalo|cumple|navidad/, '🎁'], [/psp|consola|playstation|xbox|switch|videojuego/, '🎮'], [/negocio|inversi/, '💼'], [/m[eé]dic|salud|dentist/, '🩺']]
+    .find(([re]) => re.test(n));
+  return m ? m[1] : (tipo === 'compra' ? '🛍️' : '🐷');
+}
+const MT_SUG = { ahorro: [['🛟', 'Fondo de emergencia'], ['✈️', 'Viaje'], ['🏠', 'Enganche'], ['🎓', 'Estudios'], ['💍', 'Boda'], ['🏖️', 'Retiro']],
+                 compra: [['💻', 'Laptop'], ['📱', 'Celular'], ['🏍️', 'Moto'], ['🚗', 'Auto'], ['🎮', 'Consola'], ['🎁', 'Regalo']] };
+
+// Capacidad de ahorro de la quincena actual: ingreso esperado − gastos esperados; se sugiere el 20 %.
+function _prCapacidad() {
+  const refs = (S.data.user || {}).external_refs || {}, qi = getQuincenaInfo(0);
+  const ingQ = calcIngresosEsperadosPeriodo(refs, qi.from, qi.to);
+  const gasQ = getGastosEsperados(refs, getQKey(qi)).filter(g => !esTransporteFijo(g)).reduce((a, g) => a + (g.monto || 0), 0) + getDinerito(getQKey(qi)) + (compromisoNiditoItem(qi)?.monto || 0) + (transporteItem(qi)?.monto || 0);
+  const dispQ = Math.max(0, ingQ - gasQ);
+  return { qi, ingQ, gasQ, dispQ, ahorroQ: Math.round(dispQ * 0.2) };
+}
+
 function exportObjetivosAhorro() {
   const rows = S._metasRows || [];
-  const cols = [
-    { label: 'Nombre',         get: m => m.nombre || '' },
-    { label: 'Tipo',           get: m => m.tipo || 'ahorro' },
-    { label: 'Meta',           get: m => m.meta || 0, num: true },
-    { label: 'Ya ahorrado',    get: m => m.actual || 0, num: true },
-    { label: 'Falta',          get: m => Math.max(0, (m.meta||0) - (m.actual||0)), num: true },
-    { label: 'Progreso %',     get: m => m.meta > 0 ? Math.min(100, Math.round((m.actual||0)/m.meta*100)) : 0, num: true },
+  exportRowsToExcel(rows, [
+    { label: 'Nombre', get: m => m.nombre || '' }, { label: 'Tipo', get: m => m.tipo || 'ahorro' },
+    { label: 'Meta', get: m => m.meta || 0, num: true }, { label: 'Ya ahorrado', get: m => m.actual || 0, num: true },
+    { label: 'Falta', get: m => Math.max(0, (m.meta || 0) - (m.actual || 0)), num: true },
+    { label: 'Progreso %', get: m => m.meta > 0 ? Math.min(100, Math.round((m.actual || 0) / m.meta * 100)) : 0, num: true },
     { label: 'Fecha objetivo', get: m => m.fecha_objetivo || '' },
-  ];
-  exportRowsToExcel(rows, cols, 'objetivos_ahorro');
+  ], 'objetivos_ahorro');
 }
+const MT_ORDEN = [['pct', 'Progreso'], ['falta', 'Lo que falta'], ['meta', 'Monto objetivo'], ['nombre', 'Nombre (A-Z)'], ['fecha', 'Fecha límite']];
+function mtOrden() {
+  const i = MT_ORDEN.findIndex(([k]) => k === (S.metaSort || 'pct'));
+  S.metaSort = MT_ORDEN[(i + 1) % MT_ORDEN.length][0];
+  toast('Orden: ' + MT_ORDEN.find(([k]) => k === S.metaSort)[1]);
+  rObjs();
+}
+
 function rObjs() {
-  const metas = S.data.metas || [];
-  const refs  = (S.data.user||{}).external_refs || {};
-  const now   = new Date();
-  S._metaData = {};
-  metas.forEach(m => { S._metaData[m.id] = m; });
-
-  // Savings capacity (current quincena)
-  const qi    = getQuincenaInfo(0);
-  const ingQ  = calcIngresosEsperadosPeriodo(refs, qi.from, qi.to);
-  const gasQ  = getGastosEsperados(refs, getQKey(qi)).filter(g => !esTransporteFijo(g)).reduce((a,g)=>a+(g.monto||0),0) + getDinerito(getQKey(qi)) + (compromisoNiditoItem(qi)?.monto || 0) + (transporteItem(qi)?.monto || 0);
-  const dispQ = Math.max(0, ingQ - gasQ);
-  const ahorroQ = Math.round(dispQ * 0.2);
-
-  // Summary totals
-  const totalObj = metas.reduce((a,m)=>a+(m.meta||0),0);
-  const totalAct = metas.reduce((a,m)=>a+(m.actual||0),0);
-  const totalFlt = Math.max(0, totalObj - totalAct);
-
-  // Orden configurable por el usuario
+  const metas = S.data.metas || [], now = new Date();
+  S._metaData = {}; metas.forEach(m => { S._metaData[m.id] = m; });
+  const { qi, dispQ, ahorroQ } = _prCapacidad();
+  const totalObj = metas.reduce((a, m) => a + (m.meta || 0), 0), totalAct = metas.reduce((a, m) => a + (m.actual || 0), 0);
   if (!S.metaSort) S.metaSort = 'pct';
   const sortFns = {
-    pct:    (a,b)=>{const pa=a.meta>0?(a.actual||0)/a.meta:0,pb=b.meta>0?(b.actual||0)/b.meta:0; if(pa>=1&&pb<1)return 1; if(pb>=1&&pa<1)return -1; return pa-pb;},
-    meta:   (a,b)=>(b.meta||0)-(a.meta||0),
-    falta:  (a,b)=>Math.max(0,(b.meta||0)-(b.actual||0))-Math.max(0,(a.meta||0)-(a.actual||0)),
-    nombre: (a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'),
-    fecha:  (a,b)=>String(a.fecha_objetivo||'9999').localeCompare(String(b.fecha_objetivo||'9999')),
+    pct: (a, b) => { const pa = a.meta > 0 ? (a.actual || 0) / a.meta : 0, pb = b.meta > 0 ? (b.actual || 0) / b.meta : 0; if (pa >= 1 && pb < 1) return 1; if (pb >= 1 && pa < 1) return -1; return pa - pb; },
+    meta: (a, b) => (b.meta || 0) - (a.meta || 0),
+    falta: (a, b) => Math.max(0, (b.meta || 0) - (b.actual || 0)) - Math.max(0, (a.meta || 0) - (a.actual || 0)),
+    nombre: (a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'),
+    fecha: (a, b) => String(a.fecha_objetivo || '9999').localeCompare(String(b.fecha_objetivo || '9999')),
   };
   const sorted = [...metas].sort(sortFns[S.metaSort] || sortFns.pct);
   S._metasRows = sorted;
 
-  const goalCards = sorted.map(m => {
-    const actual=m.actual||0, objetivo=m.meta||0;
-    const faltante=Math.max(0,objetivo-actual);
-    const pct=objetivo>0?Math.min(100,Math.round(actual/objetivo*100)):0;
-    const done=pct>=100;
-    const fechaObj=m.fecha_objetivo?new Date(m.fecha_objetivo+'T00:00:00'):null;
-    const diasLeft=fechaObj?Math.max(0,Math.round((fechaObj-now)/86400000)):null;
-    const quincsLeft=diasLeft!==null?Math.max(1,Math.ceil(diasLeft/15)):null;
-    const aportNec=quincsLeft&&faltante>0?Math.ceil(faltante/quincsLeft):null;
-    const quincsProj=ahorroQ>0&&faltante>0?Math.ceil(faltante/ahorroQ):null;
-    const fechaProj=quincsProj!==null?new Date(now.getTime()+quincsProj*15*86400000):null;
-    const barColor=done?'var(--green)':'var(--accent-primary)';
-    const urgency=aportNec&&ahorroQ>0?(aportNec>ahorroQ*1.5?'var(--red)':aportNec>ahorroQ?'var(--color-warning)':'var(--green)'):'var(--text-2)';
-    const icon=metaIconClass(m.nombre,m.tipo);
-    return `<div class="goal-card${done?' goal-done':''}">
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
-    <div style="display:flex;align-items:center;gap:9px">
-      <div style="width:36px;height:36px;border-radius:10px;background:var(--bg-surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <i class="ti ${icon}" style="font-size:16px;color:${done?'var(--green)':'var(--text-2)'}"></i>
+  const cards = sorted.map(m => {
+    const actual = m.actual || 0, objetivo = m.meta || 0, falta = Math.max(0, objetivo - actual);
+    const pct = objetivo > 0 ? Math.min(100, Math.round(actual / objetivo * 100)) : 0, done = pct >= 100;
+    const qr = m.fecha_objetivo ? _ndQR(m.fecha_objetivo) : null;
+    const aport = qr && falta > 0 ? Math.ceil(falta / qr) : null;
+    const quincs = ahorroQ > 0 && falta > 0 ? Math.ceil(falta / ahorroQ) : null;
+    const urg = aport && ahorroQ > 0 ? (aport > ahorroQ * 1.5 ? 'dng' : aport > ahorroQ ? 'warn' : '') : '';
+    const proy = quincs ? toISO(new Date(now.getTime() + quincs * 15 * 86400000)) : null;
+    const vencida = m.fecha_objetivo && qr === 0 && !done;
+    return `<div class="pr-goal${done ? ' done' : ''}">
+      <div class="pr-goal-top">
+        <div class="mov-card-ic emo" style="background:${done ? 'rgba(74,222,128,.16)' : 'rgba(129,140,248,.16)'}" aria-hidden="true">${_mtEmoji(m.nombre, m.tipo)}</div>
+        <div class="pr-card-name"><b>${_ndEsc(m.nombre)}</b><small>${m.tipo === 'compra' ? 'Compra' : 'Ahorro'}${m.fecha_objetivo ? ` · hasta ${fmtDate(m.fecha_objetivo)}` : ''}</small></div>
+        <span class="pr-pill ${done ? '' : 'neu'}">${done ? '✓ Lograda' : pct + '%'}</span>
       </div>
-      <div>
-        <div style="font-weight:600;font-size:14px;color:var(--text-1);line-height:1.2">${m.nombre}</div>
-        <div style="font-size:11px;color:var(--muted)">${m.tipo||'ahorro'}${m.fecha_objetivo?` · hasta ${fmtDate(m.fecha_objetivo)}`:''}</div>
+      <div class="bpbar"><div class="bpfill${done ? '' : ''}" style="width:${pct}%;${done ? 'background:var(--color-income)' : ''}"></div></div>
+      <div class="pr-goal-amts"><b class="green">${fmt(actual)}</b><span>de ${fmt(objetivo)}</span></div>
+      ${done ? `<div class="pr-hint ok">🏆 ¡Meta alcanzada!</div>` : `<div class="pr-nums two">
+        <div><span>Falta</span><b>${fmt(falta)}</b></div>
+        <div><span>${aport ? 'Necesitas / quincena' : 'Sin fecha límite'}</span><b class="${urg === 'dng' ? 'red' : urg === 'warn' ? 'warn' : ''}">${aport ? fmt(aport) : '—'}</b></div>
       </div>
-    </div>
-    <div style="display:flex;gap:3px;align-items:center">
-      ${done?`<span style="font-size:10px;background:rgba(74,222,128,.15);color:var(--green);padding:2px 7px;border-radius:var(--radius-pill);font-weight:600;white-space:nowrap">✓ Lograda</span>`:''}
-      <button class="edit-pill-btn" title="Editar" onclick="eMeta(S._metaData[${m.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-      <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMeta(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
-    </div>
-  </div>
-  <div style="margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-      <span style="font-size:11px;color:var(--muted)">Progreso</span>
-      <span style="font-size:12px;font-weight:700;color:${barColor}">${pct}%</span>
-    </div>
-    <div style="height:7px;background:var(--border-default);border-radius:4px;overflow:hidden">
-      <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width .4s"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;margin-top:3px">
-      <span style="font-size:12px;color:var(--green);font-weight:600">${fmt(actual)}</span>
-      <span style="font-size:11px;color:var(--text-3)">de ${fmt(objetivo)}</span>
-    </div>
-  </div>
-  ${!done?`<div style="border-top:1px solid var(--border-default);padding-top:9px">
-    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px;margin-bottom:8px">
-      <div style="background:var(--bg-surface-2);border-radius:7px;padding:6px 8px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:1px">Falta</div>
-        <div style="font-size:12px;font-weight:700;color:var(--text-1)">${fmt(faltante)}</div>
-      </div>
-      <div style="background:var(--bg-surface-2);border-radius:7px;padding:6px 8px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:1px">${aportNec?'Necesitas/quinc':'Sin fecha límite'}</div>
-        <div style="font-size:12px;font-weight:700;color:${aportNec?urgency:'var(--text-3)'}">${aportNec?fmt(aportNec):'—'}</div>
-      </div>
-    </div>
-    ${fechaProj?`<div style="font-size:11px;color:var(--text-3);margin-bottom:7px;display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="font-size:11px"></i> Con 20% de ahorro (${fmt(ahorroQ)}/quinc) → <strong style="color:var(--text-2)">${fmtDate(toISO(fechaProj))}</strong></div>`:''}
-    <button class="btn btn-ghost btn-sm" onclick="abonarMeta(${m.id},${actual})" style="width:100%;justify-content:center"><i class="ti ti-circle-plus"></i> Abonar</button>
-  </div>`:`<div style="border-top:1px solid rgba(74,222,128,.2);padding-top:8px;text-align:center;font-size:12px;color:var(--green)"><i class="ti ti-trophy"></i> ¡Meta alcanzada!</div>`}
-</div>`;
+      ${vencida ? `<div class="pr-hint warn">⌛ La fecha ya pasó</div>` : proy ? `<div class="pr-hint">🗓️ Con tu ahorro sugerido (${fmt(ahorroQ)}/quinc) → ${fmtDate(proy)}</div>` : ''}`}
+      <div class="pr-goal-foot">
+        ${done ? '<span></span>' : `<button class="btn btn-accent btn-sm" onclick="abonarMeta(${m.id},${actual})"><i class="ti ti-circle-plus"></i> Abonar</button>`}
+        <span class="pr-goal-acts">
+          <button class="edit-pill-btn" title="Editar" onclick="eMeta(S._metaData[${m.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+          <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMeta(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
+        </span>
+      </div></div>`;
   }).join('');
 
-  const ohost = $('objs-section') || $('tab-objetivos');
-  if (!ohost) return;
-  ohost.innerHTML=`
-<div class="hdr" style="margin-bottom:14px">
-  <span style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px"><i class="ti ti-flag"></i> Metas de ahorro y compras — progreso y capacidad</span>
-  <div style="display:flex;gap:8px">
-    ${metas.length ? `<button class="ico-btn" onclick="exportObjetivosAhorro()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
-    <button class="btn btn-accent btn-sm" onclick="oMeta()"><i class="ti ti-plus"></i> Nueva Meta</button>
-  </div>
+  const host = $('objs-section') || $('tab-objetivos'); if (!host) return;
+  host.innerHTML = `
+<div class="pr-sec"><h3><span aria-hidden="true">🐷</span> Metas de ahorro y compras</h3></div>
+<div class="ico-bar ico-bar-c">
+  <button class="ico-btn acc" onclick="oMeta()" title="Nueva meta" aria-label="Nueva meta"><i class="ti ti-plus"></i></button>
+  ${metas.length > 1 ? `<button class="ico-btn" onclick="mtOrden()" title="Ordenar: ${MT_ORDEN.find(([k]) => k === S.metaSort)[1]}" aria-label="Cambiar el orden"><i class="ti ti-arrows-sort"></i></button>` : ''}
+  ${metas.length ? `<button class="ico-btn" onclick="exportObjetivosAhorro()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
 </div>
-${metas.length?`
-<div class="cards" style="margin-bottom:14px">
-  <div class="card">
-    <div class="card-lbl">Por ahorrar</div>
-    <div class="card-val">${fmt(totalFlt)}</div>
+${metas.length ? `<div class="pr-cover pr-cover-sm">
+  <div class="pr-cover-nums">
+    <div><span>Por ahorrar</span><b>${fmt(Math.max(0, totalObj - totalAct))}</b></div>
+    <div><span>Ya ahorrado</span><b class="green">${fmt(totalAct)}</b></div>
+    <div><span>Libre / quincena</span><b class="${dispQ > 0 ? 'green' : 'red'}">${fmt(dispQ)}</b></div>
   </div>
-  <div class="card">
-    <div class="card-lbl">Ya ahorrado</div>
-    <div class="card-val green">${fmt(totalAct)}</div>
-  </div>
-  <div class="card" title="Ingreso quincenal menos gastos fijos configurados">
-    <div class="card-lbl">Libre/quincena</div>
-    <div class="card-val ${dispQ>0?'green':'red'}">${fmt(dispQ)}</div>
-  </div>
+  ${ahorroQ > 0 ? `<div class="pr-cover-foot">💡 Ahorro sugerido (20 % de lo libre en ${qi.label}): <b>${fmt(ahorroQ)}</b> por quincena</div>` : ''}
 </div>
-${dispQ>0?`<div class="cbox" style="margin-bottom:14px;border-left:3px solid var(--green);padding:12px 16px">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:4px"><i class="ti ti-bulb" style="color:#fbbf24"></i> Capacidad de ahorro — ${qi.label}</div>
-      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--text-2)">Ingreso <strong style="color:var(--green)">${fmt(ingQ)}</strong></span>
-        <span style="font-size:12px;color:var(--text-2)">Gastos fijos <strong style="color:var(--red)">${fmt(gasQ)}</strong></span>
-        <span style="font-size:12px;color:var(--text-2)">Libre <strong style="color:var(--accent-primary)">${fmt(dispQ)}</strong></span>
-      </div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Ahorro sugerido (20%)</div>
-      <div style="font-size:20px;font-weight:700;color:var(--green)">${fmt(ahorroQ)}<span style="font-size:12px;font-weight:400;color:var(--muted)">/quinc</span></div>
-      ${metas.filter(m=>(m.actual||0)<(m.meta||0)).length?`<div style="font-size:11px;color:var(--muted)">${fmt(Math.round(ahorroQ/Math.max(1,metas.filter(m=>(m.actual||0)<(m.meta||0)).length)))} por meta activa</div>`:''}
-    </div>
-  </div>
-</div>`:''}
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-  <span style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Ordenar por</span>
-  <select onchange="S.metaSort=this.value;rObjs()" style="width:auto;padding:6px 10px;font-size:12px">
-    ${[['pct','Progreso'],['falta','Lo que falta'],['meta','Monto objetivo'],['nombre','Nombre (A-Z)'],['fecha','Fecha límite']].map(([v,l])=>`<option value="${v}"${S.metaSort===v?' selected':''}>${l}</option>`).join('')}
-  </select>
-</div>
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:11px;margin-bottom:14px">
-  ${goalCards}
-</div>
-<div class="cbox">
-  <h3>Progreso de Metas</h3>${ctBtns('c-meta',[['Horiz.','bar-h'],['Barras','bar'],['Dona','doughnut'],['Polar','polarArea']],'bar-h')}
-  <div class="cwrap"><canvas id="c-meta"></canvas></div>
-  <div id="legend-c-meta" class="chart-legend"></div>
-</div>`:`<div style="text-align:center;padding:64px 20px;color:var(--text-3)">
-  <i class="ti ti-piggy-bank" style="font-size:48px;display:block;margin-bottom:14px;opacity:.35"></i>
-  <div style="font-size:15px;font-weight:600;margin-bottom:6px;color:var(--text-2)">Sin metas de ahorro</div>
-  <div style="font-size:13px;margin-bottom:20px">Empieza con algo concreto: una moto, un viaje, fondo de emergencias</div>
-  <button class="btn btn-accent" onclick="oMeta()"><i class="ti ti-plus"></i> Crear primera meta</button>
-</div>`}`;
+<div class="pr-grid">${cards}</div>
+${S._prAn ? `<div class="cbox" style="margin-top:14px">
+  <h3>Progreso de metas</h3>${ctBtns('c-meta', [['Horiz.', 'bar-h'], ['Barras', 'bar'], ['Dona', 'doughnut'], ['Polar', 'polarArea']], 'bar-h')}
+  <div class="cwrap"><canvas id="c-meta"></canvas></div><div id="legend-c-meta" class="chart-legend"></div></div>` : ''}`
+: `<div class="pr-empty"><div>🐷</div><b>Aún no tienes metas</b><p>Una moto, un viaje, un fondo de emergencias… Te ayudo a calcular cuánto ahorrar por quincena.</p>
+  <button class="btn btn-accent" onclick="oMeta()"><i class="ti ti-plus"></i> Crear mi primera meta</button></div>`}`;
+  if (metas.length && S._prAn) {
+    const mc = metas.map((_, i) => CLR[i % CLR.length]);
+    mkC('c-meta', S.ct['c-meta'] || 'bar-h', metas.map(m => m.nombre), [
+      { label: 'Ahorrado', data: metas.map(m => m.actual || 0), backgroundColor: mc.map(c => c + 'cc'), borderColor: mc },
+      { label: 'Objetivo', data: metas.map(m => m.meta || 0), backgroundColor: mc.map(c => c + '33'), borderColor: mc.map(c => c + '88') }]);
+  }
+}
 
-  if (metas.length) {
-    const mc = metas.map((_,i) => CLR[i % CLR.length]);
-    mkC('c-meta',S.ct['c-meta']||'bar-h',metas.map(m=>m.nombre),
-      [{label:'Ahorrado', data:metas.map(m=>m.actual||0), backgroundColor:mc.map(c=>c+'cc'), borderColor:mc},
-       {label:'Objetivo', data:metas.map(m=>m.meta||0),   backgroundColor:mc.map(c=>c+'33'), borderColor:mc.map(c=>c+'88')}]);
-  } else emptyChart('c-meta','Agrega metas para ver el progreso');
+// ── Meta: asistente de 3 pasos (crear y editar) ──────────────────────────────
+// Paso 1 qué es (tipo + idea de un toque + nombre) · Paso 2 cuánto, cuánto ya tienes y para cuándo ·
+// Paso 3 resumen con lo que tocaría ahorrar por quincena frente a tu ahorro sugerido.
+function metaWizard(editId) {
+  const m = editId ? (S.data.metas || []).find(x => x.id === editId) : null;
+  S._mtWiz = m
+    ? { step: 1, editId, tipo: m.tipo === 'compra' ? 'compra' : 'ahorro', nombre: m.nombre || '', meta: Number(m.meta) || 0, actual: Number(m.actual) || 0, fin: m.fecha_objetivo ? String(m.fecha_objetivo).slice(0, 10) : '' }
+    : { step: 1, tipo: 'ahorro', nombre: '', meta: 0, actual: 0, fin: '' };
+  abrirPop(m ? 'Editar meta' : 'Nueva meta', '<div id="mt-wiz" class="nd-wiz"></div>', 'md');
+  _mtWizPaint();
+  setTimeout(() => $('mtw-nombre')?.focus(), 60);
+}
+function oMeta() { metaWizard(); }
+function eMeta(meta) { if (meta) metaWizard(meta.id); }
+function _mtWizPaint() {
+  const w = S._mtWiz, box = $('mt-wiz'); if (!w || !box) return;
+  const dots = [1, 2, 3].map(n => `<span class="nd-wiz-dot${w.step === n ? ' on' : w.step > n ? ' ok' : ''}"></span>`).join('');
+  const emo = _mtEmoji(w.nombre, w.tipo);
+  let cuerpo = '';
+  if (w.step === 1) {
+    cuerpo = `<div class="nd-wiz-q">¿Qué quieres lograr?</div>
+      <div class="nd-wiz-tipos two">${[['ahorro', '🐷', 'Ahorrar'], ['compra', '🛍️', 'Comprar algo']].map(([t, e, l]) => `<button class="nd-wiz-tipo${w.tipo === t ? ' on' : ''}" onclick="mtWizSet('tipo','${t}')"><span>${e}</span>${l}</button>`).join('')}</div>
+      <div class="nd-wiz-lbl">Ideas de un toque</div>
+      <div class="q-desp-chips">${MT_SUG[w.tipo].map(([e, n]) => `<button class="q-desp-chip${w.nombre === n ? ' on' : ''}" onclick="mtWizSet('nombre','${n}')">${e} ${n}</button>`).join('')}</div>
+      <div class="nd-wiz-name"><span class="nd-wiz-emo" style="cursor:default">${emo}</span>
+        <input id="mtw-nombre" value="${_ndEsc(w.nombre)}" maxlength="80" placeholder="Nombre (ej. Viaje a Oaxaca)" oninput="S._mtWiz.nombre=this.value" onkeydown="if(event.key==='Enter')mtWizNext()"></div>`;
+  } else if (w.step === 2) {
+    const plazos = [['3 meses', 3], ['6 meses', 6], ['1 año', 12], ['2 años', 24]];
+    cuerpo = `<div class="nd-wiz-q">${emo} ¿Cuánto necesitas juntar?</div>
+      <div class="nd-wiz-monto"><span>$</span><input id="mtw-meta" type="number" min="0" step="100" inputmode="decimal" value="${w.meta || ''}" placeholder="0" oninput="S._mtWiz.meta=parseFloat(this.value)||0" onkeydown="if(event.key==='Enter')mtWizNext()"></div>
+      <div class="q-desp-chips nd-wiz-center">${[1000, 5000, 10000, 20000].map(v => `<button class="q-desp-chip" onclick="mtWizSumar(${v})">+ ${fmt(v).replace('.00', '')}</button>`).join('')}
+        ${w.meta ? `<button class="q-desp-chip" onclick="mtWizSet('meta',0)"><i class="ti ti-eraser"></i></button>` : ''}</div>
+      <div class="mt-ya"><label for="mtw-actual">Ya tengo</label><span>$</span><input id="mtw-actual" type="number" min="0" step="50" inputmode="decimal" value="${w.actual || ''}" placeholder="0" oninput="S._mtWiz.actual=parseFloat(this.value)||0" onkeydown="if(event.key==='Enter')mtWizNext()"></div>
+      <div class="nd-wiz-q" style="margin-top:18px">📅 ¿Para cuándo?</div>
+      <div class="q-desp-chips nd-wiz-center">${plazos.map(([l, n]) => { const f = _ndMasMeses(n); return `<button class="q-desp-chip${w.fin === f ? ' on' : ''}" onclick="mtWizSet('fin','${f}')">${l}</button>`; }).join('')}
+        <button class="q-desp-chip${!w.fin ? ' on' : ''}" onclick="mtWizSet('fin','')">Sin fecha</button></div>
+      <input type="date" class="nd-wiz-fecha" value="${w.fin}" onchange="mtWizSet('fin',this.value)" aria-label="Fecha objetivo">`;
+  } else {
+    const falta = Math.max(0, (w.meta || 0) - (w.actual || 0)), qr = w.fin ? _ndQR(w.fin) : null, porQ = qr > 0 && falta > 0 ? Math.ceil(falta / qr) : 0;
+    const { ahorroQ } = _prCapacidad(), quincs = ahorroQ > 0 && falta > 0 ? Math.ceil(falta / ahorroQ) : null;
+    let veredicto = '';
+    if (!(w.meta > 0)) veredicto = `<div class="nd-wiz-calc muted">Ponle un monto para calcular cuánto ahorrar por quincena.</div>`;
+    else if (falta === 0) veredicto = `<div class="nd-wiz-calc">🏆 ¡Ya la tienes completa!</div>`;
+    else if (porQ) veredicto = `<div class="nd-wiz-calc">Necesitas <b>${fmt(porQ)}</b> por quincena.</div>
+      <div class="pr-hint ${ahorroQ <= 0 ? 'warn' : porQ <= ahorroQ ? 'ok' : porQ <= ahorroQ * 1.5 ? 'warn' : 'bad'}">${ahorroQ <= 0 ? 'Esta quincena no te queda margen libre calculado.' : porQ <= ahorroQ ? `✅ Cabe en tu ahorro sugerido (${fmt(ahorroQ)}/quinc).` : `⚠️ Es más que tu ahorro sugerido (${fmt(ahorroQ)}/quinc): alarga el plazo o baja el monto.`}</div>`;
+    else if (quincs) veredicto = `<div class="nd-wiz-calc">Sin fecha: con tu ahorro sugerido (<b>${fmt(ahorroQ)}</b>/quinc) la logras en <b>${quincs}</b> quincenas.</div>`;
+    else veredicto = `<div class="nd-wiz-calc muted">Pon una fecha para calcular cuánto ahorrar por quincena.</div>`;
+    cuerpo = `<div class="nd-wiz-q">Así queda</div>
+      <div class="nd-wiz-prev"><div class="nd-emo big">${emo}</div>
+        <div class="nd-wiz-prev-t">${_ndEsc(w.nombre) || '—'}</div>
+        <div class="nd-wiz-prev-s">${w.tipo === 'compra' ? '🛍️ Compra' : '🐷 Ahorro'}</div>
+        <div class="nd-card-nums">
+          <div><span>🎯 Meta</span><b>${w.meta > 0 ? fmt(w.meta) : '—'}</b></div>
+          <div><span>💰 Ya tengo</span><b>${fmt(w.actual || 0)}</b></div>
+          <div><span>📅 Fecha</span><b>${w.fin ? fmtDate(w.fin) : '—'}</b></div>
+        </div>${veredicto}</div>`;
+  }
+  box.innerHTML = `<div class="nd-wiz-dots">${dots}</div>${cuerpo}
+    <div class="nd-wiz-nav">
+      ${w.step > 1 ? `<button class="btn btn-ghost" onclick="mtWizSet('step',${w.step - 1})"><i class="ti ti-arrow-left"></i> Atrás</button>` : '<span></span>'}
+      ${w.step < 3 ? `<button class="btn btn-accent" onclick="mtWizNext()">Siguiente <i class="ti ti-arrow-right"></i></button>`
+                   : `<button class="btn btn-accent" onclick="mtWizGuardar()"${w._busy ? ' disabled' : ''}>${w._busy ? '<i class="ti ti-loader-2"></i> Guardando…' : w.editId ? '<i class="ti ti-check"></i> Guardar cambios' : '🎉 Crear meta'}</button>`}
+    </div>`;
+}
+function mtWizSet(k, v) {
+  const w = S._mtWiz; if (!w) return; w[k] = v;
+  if (k === 'tipo' && !MT_SUG[v].some(([, n]) => n === w.nombre)) { /* conserva el nombre escrito */ }
+  _mtWizPaint();
+  if (k === 'nombre') $('mtw-nombre')?.focus();
+}
+function mtWizSumar(v) { const w = S._mtWiz; if (!w) return; w.meta = (Number(w.meta) || 0) + v; _mtWizPaint(); }
+function mtWizNext() {
+  const w = S._mtWiz; if (!w) return;
+  if (w.step === 1 && !w.nombre.trim()) { toast('Ponle un nombre', 'error'); $('mtw-nombre')?.focus(); return; }
+  if (w.step === 2 && !(w.meta > 0)) { toast('Escribe cuánto necesitas', 'error'); $('mtw-meta')?.focus(); return; }
+  w.step = Math.min(3, w.step + 1); _mtWizPaint();
+  if (w.step === 2) setTimeout(() => $('mtw-meta')?.focus(), 30);
+}
+async function mtWizGuardar() {
+  const w = S._mtWiz; if (!w || w._busy) return;
+  if (!w.nombre.trim()) { w.step = 1; _mtWizPaint(); toast('Ponle un nombre', 'error'); return; }
+  w._busy = true; _mtWizPaint();
+  const body = { user_phone: S.phone, nombre: w.nombre.trim(), meta: Number(w.meta) || 0, actual: Number(w.actual) || 0, tipo: w.tipo, fecha_objetivo: w.fin || null };
+  try {
+    const r = w.editId ? await api('PUT', `/api/metas/${w.editId}`, body) : await api('POST', '/api/metas', body);
+    if (r?.success === false) throw new Error(r.error || 'No se pudo guardar');
+    const nuevo = !w.editId, e = _mtEmoji(body.nombre, body.tipo);
+    cerrarPop(); await load();
+    toast(nuevo ? `${e} ${body.nombre} creada ✓` : 'Cambios guardados ✓');
+  } catch (err) { w._busy = false; _mtWizPaint(); toast('Error: ' + err.message, 'error'); }
+}
+
+// ── Abonar: un solo pop-up con atajos (sin cuadros de texto del navegador) ───
+function abonarMeta(id, currentActual) {
+  const m = S._metaData[id]; if (!m) return;
+  const falta = Math.max(0, (m.meta || 0) - (currentActual || 0));
+  S._abono = { id, actual: currentActual || 0 };
+  abrirPop(`${_mtEmoji(m.nombre, m.tipo)} Abonar a ${m.nombre}`, `<div class="pr-pop">
+    <div class="nd-wiz-q">Llevas ${fmt(currentActual || 0)} de ${fmt(m.meta || 0)}</div>
+    <div class="nd-wiz-monto"><span>$</span><input id="ab-monto" type="number" min="0" step="50" inputmode="decimal" placeholder="0" onkeydown="if(event.key==='Enter')abonoGuardar()"></div>
+    <div class="q-desp-chips nd-wiz-center">${[100, 500, 1000].map(v => `<button class="q-desp-chip" onclick="abonoSumar(${v})">+ ${fmt(v).replace('.00', '')}</button>`).join('')}
+      ${falta > 0 ? `<button class="q-desp-chip" onclick="abonoSet(${falta})">Lo que falta · ${fmt(falta)}</button>` : ''}</div>
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="abonoGuardar()"><i class="ti ti-circle-plus"></i> Abonar</button></div></div>`);
+  setTimeout(() => $('ab-monto')?.focus(), 60);
+}
+function abonoSumar(v) { const i = $('ab-monto'); i.value = (parseFloat(i.value) || 0) + v; i.focus(); }
+function abonoSet(v) { const i = $('ab-monto'); i.value = v; i.focus(); }
+async function abonoGuardar() {
+  const a = S._abono, abono = parseFloat($('ab-monto')?.value);
+  if (!a) return;
+  if (isNaN(abono) || abono <= 0) { toast('Escribe un monto', 'error'); $('ab-monto')?.focus(); return; }
+  const nuevo = a.actual + abono;
+  try {
+    await api('PUT', `/api/metas/${a.id}`, { user_phone: S.phone, actual: nuevo });
+    cerrarPop(); S._abono = null;
+    await load();
+    toast(`¡Abono de ${fmt(abono)} registrado! Total: ${fmt(nuevo)} 🎉`);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
 function metaIconClass(nombre, tipo) {
@@ -7062,21 +7237,6 @@ function metaIconClass(nombre, tipo) {
   if (/retiro|jubilaci/.test(n)) return 'ti-chart-line';
   if (/laptop|compu|celular|electr/.test(n)) return 'ti-device-laptop';
   return 'ti-piggy-bank';
-}
-
-async function abonarMeta(id, currentActual) {
-  const meta = S._metaData[id];
-  if (!meta) return;
-  const input = prompt(`¿Cuánto quieres abonar a "${meta.nombre}"?\nActualmente tienes: ${fmt(currentActual)}`, '');
-  if (input === null) return;
-  const abono = parseFloat(input);
-  if (isNaN(abono) || abono <= 0) { toast('Monto inválido','error'); return; }
-  const nuevo = (currentActual||0) + abono;
-  try {
-    await api('PUT', `/api/metas/${id}`, { user_phone: S.phone, actual: nuevo });
-    await load();
-    toast(`¡Abono de ${fmt(abono)} registrado! Total: ${fmt(nuevo)} 🎉`);
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ── MOVIMIENTOS — FILTER HELPERS ─────────────────────────────────────────────
@@ -8127,22 +8287,6 @@ function oEvt(rec=null) {
 }
 function eEvt(rec) { oEvt(rec); }
 
-function oMeta() {
-  S.mctx = { tabla:'metas', id:null };
-  $('m-title').textContent = 'Nueva Meta de Ahorro';
-  $('m-body').innerHTML=`
-<div class="fr"><label>Nombre</label><input id="f-nombre" placeholder="Fondo emergencia, iPhone, viaje…"></div>
-<div class="f2">
-  <div class="fr"><label>Objetivo ($)</label><input id="f-meta" type="number" min="0"></div>
-  <div class="fr"><label>Ya tengo ($)</label><input id="f-actual" type="number" min="0" value="0"></div>
-</div>
-<div class="f2">
-  <div class="fr"><label>Tipo</label><select id="f-tipo"><option>ahorro</option><option>compra</option></select></div>
-  <div class="fr"><label>Fecha objetivo <span style="color:var(--muted);font-size:11px">(opcional)</span></label><input id="f-fecha-obj" type="date"></div>
-</div>`;
-  $('ovl').classList.add('open');
-}
-
 function closeM() { $('ovl').classList.remove('open'); }
 
 function openM(title, bodyHtml, onSave) {
@@ -8348,37 +8492,6 @@ async function setFormaPago(descripcion, formaPago) {
     S.data.user.external_refs.forma_pago_gastos[descripcion] = nuevoValor;
     renderTab(S.tab);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
-}
-
-// ── PRESUPUESTO: EDICIÓN INLINE DE LÍMITES ───────────────────────────────────
-function editLimitePpto(td, categoria, currentVal, mes) {
-  ieCell(td, {type:'number', value:currentVal||0, onSave:async val=>{
-    await api('PUT','/api/presupuesto',{user_phone:S.phone,categoria,limite:val,mes});
-    await load();
-    toast(`Límite de ${categoria} → ${fmt(val)}`);
-  }});
-}
-
-async function deleteLimitePpto(categoria, mes) {
-  if (!confirm(`¿Quitar el límite de "${categoria}"?`)) return;
-  try {
-    await api('PUT', '/api/presupuesto', { user_phone: S.phone, categoria, limite: 0, mes });
-    await load();
-    toast(`Límite de ${categoria} eliminado`);
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
-}
-
-function oAgregarLimitePpto(mes) {
-  const refs  = (S.data.user||{}).external_refs||{};
-  const prsp  = (S.data.presupuesto||[]).filter(p=>p.mes===mes&&p.limite>0);
-  const usadas = prsp.map(p=>p.categoria);
-  const libres = CATS.filter(c=>!usadas.includes(c));
-  if (!libres.length) { toast('Todas las categorías ya tienen límite','info'); return; }
-  const cat = prompt(`¿Qué categoría agregar?\n${libres.map((c,i)=>`${i+1}. ${c}`).join('\n')}\n\nEscribe el nombre exacto:`);
-  if (!cat) return;
-  const catVal = libres.find(c=>c.toLowerCase()===cat.trim().toLowerCase());
-  if (!catVal) { toast('Categoría no válida','error'); return; }
-  editLimitePpto(catVal, 0, mes);
 }
 
 // ── DESPENSA ──────────────────────────────────────────────────────────────────
