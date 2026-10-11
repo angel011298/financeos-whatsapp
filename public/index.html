@@ -672,6 +672,14 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
   white-space:nowrap;   /* el signo y el monto no se separan en dos renglones */
 }
 .kpi-sub{font-size:var(--text-xs);color:var(--text-3);margin-top:4px;font-weight:600}
+/* Escritorio: cifras grandes. 15cqi llena el ancho de la tarjeta sin salirse (un monto de 10
+   caracteres mide ≈ 5.9em); en móvil manda la regla de max-width:899px, más abajo. */
+@media(min-width:900px){
+  .kpi{padding:18px 8px}   /* a 1209px estas tarjetas miden ≈170px: el padding lateral no puede comerse el monto */
+  .kpi-val{font-size:clamp(20px,16.5cqi,40px);letter-spacing:-.5px;line-height:1.15}
+  .kpi-lbl{font-size:var(--text-sm);margin-bottom:10px}
+  .kpi-sub{font-size:var(--text-sm);margin-top:6px}
+}
 
 /* ═══════════════════════════════════════════════════════ MOVIMIENTOS FILTER */
 .mov-filter{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px}
@@ -2353,6 +2361,24 @@ function _startLivePoll() {
   // Lo que comparte la pareja: punto en 🎁 aunque no tengas la Wishlist abierta
   setTimeout(wlBadgePar, 2500);
   setInterval(() => { if (document.visibilityState === 'visible') wlBadgePar(); }, 20000);
+}
+
+// ── Cifras de los widgets (.kpi-val): tan grandes como quepan ────────────────
+// El CSS las pide grandes (fluido, ver .kpi-val). Si una cifra larga (p. ej. "−$116,821.11" en la vista
+// Año) no cabe en su tarjeta, se encoge solo lo necesario; las normales conservan el tamaño grande.
+function _fitKpis() {
+  document.querySelectorAll('.kpi-val').forEach(v => {
+    if (!v.offsetParent) return;
+    v.style.fontSize = '';
+    let f = parseFloat(getComputedStyle(v).fontSize);
+    while (v.scrollWidth > v.clientWidth + 1 && f > 11) { f -= 1; v.style.fontSize = f + 'px'; }
+  });
+}
+{
+  let _fitT = null;
+  const _fitSoon = () => { clearTimeout(_fitT); _fitT = setTimeout(_fitKpis, 40); };
+  new MutationObserver(_fitSoon).observe(document.body, { childList: true, subtree: true, characterData: true });
+  window.addEventListener('resize', _fitSoon);
 }
 
 // ── IA PREFERENCE ────────────────────────────────────────────────────────────
