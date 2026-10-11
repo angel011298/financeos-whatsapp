@@ -1963,6 +1963,13 @@ body.sheet-locked{overflow:hidden}
 .mt-ya span{font-weight:800}
 .pr-pop .nd-wiz-q{margin-bottom:14px}
 #tab-presupuesto .cal-nav2{max-width:720px;margin-left:auto;margin-right:auto}
+.din-scope{display:flex;gap:6px;justify-content:center;margin:16px 0 4px}
+.din-scope button{flex:1;max-width:200px;padding:9px 8px;border-radius:14px;border:1px solid var(--border-default);background:var(--bg-surface-2);color:var(--text-2);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.din-scope button.on{border-color:var(--accent-couple);color:var(--text-1)}
+.tipd{position:fixed;z-index:10000;background:var(--text-1);color:var(--bg-surface);border-radius:12px;padding:7px 13px;font-size:12px;font-weight:700;white-space:nowrap;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:none;opacity:0;transform:translateY(-3px);transition:opacity .15s,transform .15s}
+.tipd.on{opacity:1;transform:none}
+[data-tipd]{cursor:default}
 </style>
 </head>
 <body>
@@ -3361,8 +3368,8 @@ function periodoSelectorHTML() {
   <div class="p-nav">
     <button class="p-arrow" onclick="navPeriodo(-1)" title="Periodo anterior" aria-label="Periodo anterior"><i class="ti ti-chevron-left"></i></button>
     ${S.periodo.offset !== 0
-      ? `<button class="p-range p-range-btn" onclick="navPeriodo(0,'reset')" title="Volver al periodo actual"><i class="ti ti-home-2"></i> ${r.label}</button>`
-      : `<span class="p-range">${r.label}</span>`}
+      ? `<button class="p-range p-range-btn" onclick="navPeriodo(0,'reset')" aria-label="Volver al periodo actual" ${tipD(r.from, r.to)}><i class="ti ti-home-2"></i> ${r.label}</button>`
+      : `<span class="p-range" ${tipD(r.from, r.to)}>${r.label}</span>`}
     <button class="p-arrow" onclick="navPeriodo(1)" title="Periodo siguiente" aria-label="Periodo siguiente"><i class="ti ti-chevron-right"></i></button>
   </div>
 </div>`;
@@ -4241,6 +4248,45 @@ function abrirPop(titulo, html, size) {
   p.querySelector('.pop-panel').className = 'pop-panel' + (size ? ' pop-' + size : '');
   p.classList.add('open');
 }
+// ── GLOBO DE AYUDA (data-tipd) ───────────────────────────────────────────────
+// Al dejar el cursor 1 s sobre una etiqueta de periodo aparece un globo con las fechas exactas
+// ("25 de septiembre a 09 de octubre"). En táctil: mantener presionado.
+const _MES_L = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function rangoTxt(from, to) {
+  if (!from || !to) return '';
+  const f = new Date(from + 'T12:00:00'), t = new Date(to + 'T12:00:00'), cruza = f.getFullYear() !== t.getFullYear();
+  const d = (x, y) => `${String(x.getDate()).padStart(2, '0')} de ${_MES_L[x.getMonth()]}${y ? ' de ' + x.getFullYear() : ''}`;
+  return from === to ? d(f, false) : `${d(f, cruza)} a ${d(t, cruza)}`;
+}
+const tipD = (from, to) => `data-tipd="${rangoTxt(from, to)}"`;
+(function () {
+  let timer = null, el = null, tgt = null;
+  const ocultar = () => { clearTimeout(timer); timer = null; if (el) { el.remove(); el = null; } };
+  const mostrar = t => {
+    if (!t.isConnected) return;
+    ocultar();
+    el = document.createElement('div'); el.className = 'tipd'; el.setAttribute('role', 'tooltip'); el.textContent = t.dataset.tipd;
+    document.body.appendChild(el);
+    const r = t.getBoundingClientRect(), w = el.offsetWidth;
+    el.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+    el.style.top = (r.bottom + 8 > innerHeight - 40 ? r.top - el.offsetHeight - 8 : r.bottom + 8) + 'px';
+    requestAnimationFrame(() => el && el.classList.add('on'));
+  };
+  document.addEventListener('mouseover', e => {
+    const t = e.target.closest ? e.target.closest('[data-tipd]') : null;
+    if (t === tgt) return;
+    ocultar(); tgt = t;
+    if (t) timer = setTimeout(() => mostrar(t), 1000);
+  }, true);
+  ['mousedown', 'scroll', 'keydown', 'wheel'].forEach(ev => document.addEventListener(ev, () => { ocultar(); }, true));
+  document.addEventListener('mouseleave', () => { ocultar(); tgt = null; });
+  document.addEventListener('touchstart', e => {
+    const t = e.target.closest ? e.target.closest('[data-tipd]') : null; if (!t) return;
+    ocultar(); timer = setTimeout(() => { mostrar(t); timer = setTimeout(ocultar, 2600); }, 600);
+  }, { passive: true });
+  document.addEventListener('touchend', () => { clearTimeout(timer); }, { passive: true });
+})();
+
 function cerrarPop() { $('pop')?.classList.remove('open'); S._qPop = null; S._ndWiz = null; S._mtWiz = null; S._prPop = null; S._abono = null; }
 
 // Gastos esta quincena → toque en Efectivo / Pluxee / Débito: pop-up con las tarjetas de esa forma de
@@ -4383,10 +4429,7 @@ function editCuenta(el, key) {
 // 'dashboard' NO está aquí: Inicio tiene su propio módulo de notas ilimitadas
 // (ver niLoad/niRenderList más abajo), no la nota única de texto libre que
 // comparten estas otras 5 pestañas.
-const NOTAS_TABS = {
-  presupuesto:'Presupuesto y Metas',
-  negocios:'Negocios',                                  deudas:'Deudas TDC',
-};
+const NOTAS_TABS = {};   // el botón de Notas se quitó de todas las pestañas
 
 // El contenido lo escribe el propio usuario, pero puede pegar HTML de cualquier
 // sitio: se limpian scripts y handlers para que un pegado nunca ejecute código.
@@ -4707,7 +4750,7 @@ function rQuincenaPanel(ctx) {
           </div>
           <div class="mov-card-val red">${fmt(g.monto)}</div>
           <div class="q-card-foot"><div class="mov-card-acts">
-            <button class="edit-pill-btn" title="Editar en Nidito" onclick="ndIrADinerito('${qKey}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+            <button class="edit-pill-btn" title="Cambiar el monto" onclick="dinPop('${qKey}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
           </div></div>
         </div>`;
         }
@@ -4773,7 +4816,7 @@ function rQuincenaPanel(ctx) {
 
   return `<div class="q-panel">
   <div class="q-hdr">
-    <span style="font-size:12px;font-weight:600;color:var(--text-2)">${qi.label}</span>
+    <span style="font-size:12px;font-weight:600;color:var(--text-2)" ${tipD(qi.from, qi.to)}>${qi.label}</span>
   </div>
 
   <!-- Stats row — se omite en Inicio: el balance y los totales de Ingresos/Gastos ya
@@ -5960,7 +6003,7 @@ function rDash() {
   <div class="mini-name">${who}</div>
   <div class="mini-per">
     <button onclick="navPeriodo(-1)" aria-label="Periodo anterior"><i class="ti ti-chevron-left"></i></button>
-    <span class="mini-per-lbl">${r.label}</span>
+    <span class="mini-per-lbl" ${tipD(r.from, r.to)}>${r.label}</span>
     <button onclick="navPeriodo(1)" aria-label="Periodo siguiente"><i class="ti ti-chevron-right"></i></button>
   </div>
   <div class="mini-pills">${tipos.map(([l,v])=>
@@ -6186,7 +6229,7 @@ function _ndPaint() {
   <div class="nd-hero-ttl"><span aria-hidden="true">💞</span> Nidito</div>
   <div class="nd-per">
     <button onclick='ndPickQ(${JSON.stringify(prevQ)})' aria-label="Quincena anterior"><i class="ti ti-chevron-left"></i></button>
-    <span>${q.label}</span>
+    <span ${tipD(q.inicio, q.fin)}>${q.label}</span>
     <button onclick='ndPickQ(${JSON.stringify(nextQ)})' aria-label="Quincena siguiente"><i class="ti ti-chevron-right"></i></button>
   </div>
 </div>
@@ -6250,7 +6293,42 @@ function _ndCard(it, angelPh, aliciaPh) {
 
 function ndTab(t)      { S._ndTab = t; _ndPaint(); }
 function ndDinLista()  { S._ndDinList = !S._ndDinList; _ndPaint(); }
-function ndDinEditar() { S._ndDinEdit = !S._ndDinEdit; _ndPaint(); if (S._ndDinEdit) setTimeout(() => $('nd-din-val')?.select(), 0); }
+function ndDinEditar() { dinPop(S._niditoQ?.key); }
+// Dinerito de novios (3,500 por defecto en cada quincena): un solo pop-up, con la opción de aplicarlo a las siguientes.
+const _qKeysDesde = (key, n) => {
+  const out = []; let [y, m, h] = String(key).split('-'); y = +y; m = +m;
+  for (let i = 0; i < n; i++) { out.push(`${y}-${String(m).padStart(2, '0')}-${h}`); if (h === 'A') h = 'B'; else { h = 'A'; m++; if (m > 12) { m = 1; y++; } } }
+  return out;
+};
+function dinPop(qKey) {
+  qKey = qKey || S._niditoQ?.key || getQKey(getQuincenaInfo(0));
+  const cur = (S._niditoQ?.key === qKey && S._ndDin != null) ? Number(S._ndDin) : getDinerito(qKey);
+  S._dinPop = { qKey, sig: false };
+  abrirPop('💸 Dinerito de novios', `<div class="pr-pop">
+    <div class="nd-wiz-q">${formatQuincena(qKey)}</div>
+    <div class="nd-wiz-monto"><span>$</span><input id="din-val" type="number" min="0" step="100" inputmode="decimal" value="${cur || ''}" placeholder="0" onkeydown="if(event.key==='Enter')dinGuardar()"></div>
+    <div class="q-desp-chips nd-wiz-center">${[2500, 3000, 3500, 4000].map(v => `<button class="q-desp-chip" onclick="$('din-val').value=${v};$('din-val').focus()">${fmt(v).replace('.00', '')}</button>`).join('')}</div>
+    <div class="din-scope" role="group" aria-label="Alcance">
+      <button class="on" id="din-sc0" onclick="dinScope(false)">Solo esta quincena</button>
+      <button id="din-sc1" onclick="dinScope(true)">Esta y las siguientes</button></div>
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="dinGuardar()"><i class="ti ti-check"></i> Guardar</button></div></div>`);
+  setTimeout(() => { const i = $('din-val'); if (i) { i.focus(); i.select(); } }, 60);
+}
+function dinScope(sig) { if (S._dinPop) S._dinPop.sig = sig; $('din-sc0')?.classList.toggle('on', !sig); $('din-sc1')?.classList.toggle('on', sig); }
+async function dinGuardar() {
+  const p = S._dinPop; if (!p) return;
+  const val = Math.max(0, parseFloat($('din-val')?.value) || 0);
+  try {
+    await api('PUT', '/api/nidito/dinerito', { user_phone: S.phone, monto: val, quincena: p.qKey, desde_aqui: p.sig });
+    if (!S.data.nidito_dinerito_all) S.data.nidito_dinerito_all = {};
+    (p.sig ? _qKeysDesde(p.qKey, 36) : [p.qKey]).forEach(k => { S.data.nidito_dinerito_all[k] = val; });
+    if (S._niditoQ?.key === p.qKey) S._ndDin = val;
+    cerrarPop(); S._dinPop = null;
+    if (S.tab === 'nidito') _ndPaint();
+    await load();
+    toast(`Dinerito: ${fmt(val)}${p.sig ? ' · esta y las siguientes' : ''}`);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
 function ndToggle(id) {
   const abrir = !S._ndOpen.has(id);
   if (abrir) S._ndOpen.add(id); else S._ndOpen.delete(id);

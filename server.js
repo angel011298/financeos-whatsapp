@@ -2507,6 +2507,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       .reduce((a, c) => a + c.monto, 0);
     const dineritoAll = {};
     (nidDin.data || []).forEach(r => { dineritoAll[r.quincena_key] = Number(r.monto) || 0; });
+    if (user.data && user.data.role === 'ADMIN_A') await sembrarDinerito(phone, dineritoAll, qActual);
     const nidito_dinerito_val = dineritoAll[qActual] || 0;
     const negProjIds = (negProys.data || []).map(p => p.id);
     const negReflejos = negProjIds.length
@@ -2893,11 +2894,44 @@ app.get('/api/nidito/dinerito', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// Claves de quincena consecutivas (YYYY-MM-A|B) a partir de una dada
+function _qKeysDesde(key, n) {
+  const out = []; let [y, m, h] = String(key).split('-'); y = +y; m = +m;
+  for (let i = 0; i < n; i++) {
+    out.push(`${y}-${String(m).padStart(2, '0')}-${h}`);
+    if (h === 'A') h = 'B'; else { h = 'A'; m++; if (m > 12) { m = 1; y++; } }
+  }
+  return out;
+}
+// Dinerito de novios predeterminado: 3,500 por quincena, agendado en las próximas quincenas que falten
+// (solo cuenta de Ángel). Si el usuario cambia o pone 0 una quincena, esa fila ya existe y no se vuelve a tocar.
+const DINERITO_DEF = 3500, DINERITO_HORIZ = 36, _sembrandoDin = new Set();
+async function sembrarDinerito(phone, dineritoAll, qActual) {
+  const faltan = _qKeysDesde(qActual, DINERITO_HORIZ).filter(k => !(k in dineritoAll));
+  if (!faltan.length || _sembrandoDin.has(phone)) return;
+  _sembrandoDin.add(phone);
+  try {
+    const { error } = await sb.from('nidito_dinerito').upsert(
+      faltan.map(k => ({ user_phone: phone, quincena_key: k, monto: DINERITO_DEF, updated_at: new Date().toISOString() })),
+      { onConflict: 'user_phone,quincena_key', ignoreDuplicates: true });
+    if (!error) faltan.forEach(k => { dineritoAll[k] = DINERITO_DEF; });
+  } catch (e) { console.error('sembrarDinerito:', e.message); }
+  finally { _sembrandoDin.delete(phone); }
+}
+
 app.put('/api/nidito/dinerito', async (req, res) => {
   try {
-    const { user_phone, monto, quincena } = req.body;
+    const { user_phone, monto, quincena, desde_aqui } = req.body;
     if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
     const qKey = quincena || getQuincenaActual().key;
+    if (desde_aqui) {   // esta quincena y las siguientes
+      const m = Math.max(0, parseFloat(monto) || 0), now = new Date().toISOString();
+      const { error } = await sb.from('nidito_dinerito').upsert(
+        _qKeysDesde(qKey, DINERITO_HORIZ).map(k => ({ user_phone, quincena_key: k, monto: m, updated_at: now })),
+        { onConflict: 'user_phone,quincena_key' });
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      return res.json({ success: true, desde_aqui: true, keys: DINERITO_HORIZ });
+    }
     const { data, error } = await sb.from('nidito_dinerito')
       .upsert({ user_phone, quincena_key: qKey, monto: monto || 0, updated_at: new Date().toISOString() },
                { onConflict: 'user_phone,quincena_key' })
