@@ -1,3 +1,6 @@
 node_modules/
 .env
 *.log
+
+# Contiene el enlace personal de Alicia (token firmado)
+INSTRUCCIONES_ALICIA.md
