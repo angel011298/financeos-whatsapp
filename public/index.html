@@ -1994,6 +1994,29 @@ body.sheet-locked{overflow:hidden}
 .ng-tipos .nd-wiz-tipo,.ng-bq-tipos .nd-wiz-tipo,.ng-cat5 .nd-wiz-tipo{font-size:11px;padding:10px 2px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ng-tipos3 button{max-width:none;font-size:12px}
 @media(max-width:480px){.ng-quick{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* ═══════════════════════════════════════════════════════ v20 — Fase 4: Cuentas, Consejos IA, Notas, Chat */
+.cu-wrap .pr-grid{margin-top:2px}
+.cu-card{cursor:pointer}
+.cu-val{font-size:clamp(22px,6vw,28px);font-weight:900;letter-spacing:-.6px;font-variant-numeric:tabular-nums;line-height:1.1;color:var(--text-1)}
+.cu-val.neg{color:var(--color-expense)}
+.cu-ret{align-self:flex-start}
+.cs-intro{text-align:center;font-size:13px;font-weight:600;color:var(--text-2);margin:0 0 4px}
+.cs-grid{margin-top:4px}
+.cs-card{box-shadow:none}
+.cs-card.alerta{border-color:rgba(248,113,113,.4)}
+.cs-card.ahorro{border-color:rgba(74,222,128,.3)}
+.cs-body{font-size:13.5px;color:var(--text-2);line-height:1.6}
+.cs-sm{display:block;font-weight:600;color:var(--text-3);font-size:11px}
+.ni-card{border-radius:18px;align-items:center}
+.ni-card .mov-card-ic{flex-shrink:0}
+.ni-list{gap:10px}
+.chat-sug{display:flex;gap:8px;overflow-x:auto;padding:8px 0 4px;flex-shrink:0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.chat-sug::-webkit-scrollbar{display:none}
+.chat-sug button{flex:0 0 auto;max-width:78vw;padding:7px 13px;border-radius:var(--radius-pill);border:1px solid var(--border-default);background:var(--bg-surface);
+  color:var(--text-2);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.chat-sug button:hover{color:var(--text-1);border-color:var(--text-3)}
+.chat-nav-back .chat-ttl{font-weight:900;font-size:16px;letter-spacing:-.2px;color:var(--text-1)}
 </style>
 </head>
 <body>
@@ -4378,75 +4401,67 @@ function _rendimientoMensual(saldo, tasaAnual) {
   return saldo * (Math.pow(1 + tasaAnual / 100, 1 / 12) - 1);
 }
 
+const CUENTA_EMO = { efectivo:'💵', banamex:'🏦', revolut_debito:'💳', revolut:'🐷', pluxee:'🎫' };
+
+// Un solo vistazo: total arriba y una tarjeta por cuenta. Tocar la tarjeta abre UN pop-up para cambiar el saldo;
+// en las cuentas con "Retirar" el mismo pop-up cambia a retiro de cajero con un toque (sin segundo formulario).
 function rCuentasWidget() {
   const refs  = (S.data.user || {}).external_refs || {};
   const c     = refs.cuentas || {};
   const tasas = refs.cuentas_tasa || {};
   const total = CUENTAS_DEF.reduce((a, d) => a + (Number(c[d.key]) || 0), 0);
-  return `<div class="cuentas-box">
-  <div class="cuentas-hdr">
-    <span><i class="ti ti-wallet" style="color:var(--accent-primary)"></i> Mis cuentas</span>
-    <span class="cuentas-note">Solo monitoreo — no cuenta como ingreso ni gasto</span>
+  return `<div id="cu-root" class="cu-wrap">
+  <div class="pr-cover pr-cover-sm">
+    <div class="pr-cover-main"><span>Total monitoreado</span><b>${fmt(total)}</b></div>
+    <div class="pr-cover-foot" style="border:none;margin-top:6px;padding-top:0">Solo monitoreo: no cuenta como ingreso ni gasto</div>
   </div>
-  <div class="cuentas-grid">
+  <div class="pr-grid">
     ${CUENTAS_DEF.map(d => {
-      const saldo = Number(c[d.key]) || 0;
-      const tasa  = Number(tasas[d.key]) || 0;
-      const rend  = _rendimientoMensual(saldo, tasa);
-      return `<div class="cuenta-card" style="border-left:3px solid ${d.color}">
-      <div class="cuenta-lbl"><i class="ti ${d.icon}" style="color:${d.color}"></i> ${d.label}</div>
-      <div class="cuenta-row">
-        <div class="cuenta-val"${saldo<0?' style="color:var(--color-expense)"':''} title="${saldo<0?'Saldo negativo: no puede ser real, revisa tus movimientos o corrígelo con un clic':'Clic para editar el saldo'}" onclick="editCuenta(this,'${d.key}')">${fmt(saldo)}</div>
-        ${d.retiro ? `<button type="button" class="cuenta-retiro-btn" title="Retiro de cajero: pasa a Efectivo (no cuenta como gasto)" onclick="oRetiro('${d.key}')"><i class="ti ti-minus"></i> Retirar</button>` : ''}
-      </div>
-      ${tasa ? `<div class="cuenta-tasa" title="Estimado con la tasa anual; el saldo real es el que reporte tu banco">${tasa}% anual · ≈ +${fmt(rend)}/mes</div>` : ''}
-    </div>`;
+      const saldo = Number(c[d.key]) || 0, tasa = Number(tasas[d.key]) || 0, rend = _rendimientoMensual(saldo, tasa);
+      return `<div class="pr-card cu-card" role="button" tabindex="0" onclick="cuentaPop('${d.key}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+          title="Tocar para cambiar el saldo">
+        <div class="pr-card-top"><div class="mov-card-ic emo" style="background:${d.color}26" aria-hidden="true">${CUENTA_EMO[d.key] || '💰'}</div>
+          <div class="pr-card-name"><b>${d.label}</b><small>${tasa ? `${tasa}% anual · ≈ +${fmt(rend)}/mes` : 'Toca para cambiar el saldo'}</small></div></div>
+        <div class="cu-val${saldo < 0 ? ' neg' : ''}">${fmt(saldo)}</div>
+        ${saldo < 0 ? '<div class="pr-hint warn">⚠️ Saldo negativo: revísalo o corrígelo</div>' : ''}
+        ${d.retiro ? `<button type="button" class="btn btn-ghost btn-sm cu-ret" title="Retiro de cajero: pasa a Efectivo (no cuenta como gasto)" onclick="event.stopPropagation();cuentaPop('${d.key}','retiro')"><i class="ti ti-arrow-down-right"></i> Retirar a efectivo</button>` : ''}
+      </div>`;
     }).join('')}
-    <div class="cuenta-card cuenta-total">
-      <div class="cuenta-lbl"><i class="ti ti-sigma"></i> Total monitoreado</div>
-      <div class="cuenta-val" style="color:var(--accent-primary);cursor:default">${fmt(total)}</div>
-    </div>
   </div>
 </div>`;
 }
+function cuRepaint() { const r = $('cu-root'); if (r) r.outerHTML = rCuentasWidget(); }
+function oRetiro(key) { cuentaPop(key, 'retiro'); }
 
-function oRetiro(key) {
-  const def = CUENTAS_DEF.find(d => d.key === key);
-  S.mctx = { mode: 'retiro-cuenta', key };
-  $('m-title').textContent = `Retirar efectivo — ${def?.label || key}`;
-  $('m-body').innerHTML = `
-<div class="fr"><label>Monto retirado ($)</label><input id="ret-monto" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
-<div style="font-size:11px;color:var(--text-3)">Se resta de ${def?.label || key} y se suma a tu Efectivo. No se registra como gasto — el dinero sigue siendo tuyo, solo cambió de lugar.</div>`;
-  $('ovl').classList.add('open');
-  setTimeout(() => $('ret-monto')?.focus(), 50);
+function cuentaPop(key, modo) {
+  const d = CUENTAS_DEF.find(x => x.key === key); if (!d) return;
+  S._cuPop = { key, modo: (modo === 'retiro' && d.retiro) ? 'retiro' : 'saldo' };
+  _cuPopPaint();
 }
-
-function editCuenta(el, key) {
-  if (el.querySelector('input')) return;
-  const cur  = Number((((S.data.user || {}).external_refs || {}).cuentas || {})[key]) || 0;
-  const prev = el.innerHTML;
-  el.innerHTML = '';
-  const inp = document.createElement('input');
-  inp.type = 'number'; inp.step = 'any'; inp.inputMode = 'decimal'; inp.className = 'cuenta-inp';
-  inp.value = cur || '';
-  el.appendChild(inp);
-  inp.focus(); inp.select();
-  let done = false;
-  const save = async () => {
-    if (done) return; done = true;
-    const val = parseFloat(inp.value);
-    if (isNaN(val) || val === cur) { el.innerHTML = prev; return; }
-    try {
-      await api('POST', '/api/update-refs', { phone: S.phone, field: 'cuentas', action: 'set', itemId: key, value: val });
-      await load();
-      toast('Saldo actualizado ✓');
-    } catch(e) { el.innerHTML = prev; toast('Error: ' + e.message, 'error'); }
-  };
-  inp.addEventListener('blur', save);
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter')  { e.preventDefault(); save(); }
-    if (e.key === 'Escape') { done = true; el.innerHTML = prev; }
-  });
+function cuModo(m) { if (S._cuPop) { S._cuPop.modo = m; _cuPopPaint(); } }
+function _cuPopPaint() {
+  const p = S._cuPop; if (!p) return;
+  const d = CUENTAS_DEF.find(x => x.key === p.key), cur = Number((((S.data.user || {}).external_refs || {}).cuentas || {})[p.key]) || 0, ret = p.modo === 'retiro';
+  abrirPop(`${CUENTA_EMO[p.key] || '💰'} ${d.label}`, `<div class="pr-pop">
+    ${d.retiro ? `<div class="din-scope"><button class="${ret ? '' : 'on'}" onclick="cuModo('saldo')">Cambiar saldo</button><button class="${ret ? 'on' : ''}" onclick="cuModo('retiro')">Retirar a efectivo</button></div>` : ''}
+    <div class="nd-wiz-q" style="margin-top:${d.retiro ? 14 : 0}px">${ret ? '¿Cuánto retiraste del cajero?' : 'Saldo actual'}</div>
+    <div class="nd-wiz-monto"><span>$</span><input id="cu-val" type="number" ${ret ? 'min="0"' : ''} step="any" inputmode="decimal" value="${ret ? '' : (cur || '')}" placeholder="0" onkeydown="if(event.key==='Enter')cuGuardar()"></div>
+    ${ret ? `<div class="q-desp-chips nd-wiz-center">${[200, 500, 1000, 2000].map(v => `<button class="q-desp-chip" onclick="$('cu-val').value=(parseFloat($('cu-val').value)||0)+${v};$('cu-val').focus()">+ ${fmt(v).replace('.00', '')}</button>`).join('')}</div>
+      <div class="pr-hint" style="margin-top:10px">Se resta de ${d.label} y se suma a tu Efectivo. No es un gasto: el dinero sigue siendo tuyo.</div>`
+      : `<div class="pr-hint">Lo que reporta tu banco hoy. Se ajusta solo cuando registras un movimiento con esta cuenta.</div>`}
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="cuGuardar()"><i class="ti ti-check"></i> ${ret ? 'Retirar' : 'Guardar'}</button></div></div>`);
+  setTimeout(() => { const i = $('cu-val'); if (i) { i.focus(); i.select(); } }, 60);
+}
+async function cuGuardar() {
+  const p = S._cuPop; if (!p) return;
+  const val = parseFloat($('cu-val')?.value), ret = p.modo === 'retiro';
+  if (isNaN(val) || (ret && val <= 0)) { toast(ret ? 'Escribe cuánto retiraste' : 'Escribe el saldo', 'warn'); $('cu-val')?.focus(); return; }
+  try {
+    await api('POST', '/api/update-refs', { phone: S.phone, field: 'cuentas', action: ret ? 'retiro' : 'set', itemId: p.key, value: val });
+    cerrarPop(); S._cuPop = null;
+    await load(); cuRepaint();
+    toast(ret ? `Retiro de ${fmt(val)} pasado a Efectivo ✓` : 'Saldo actualizado ✓');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ── NOTAS POR PESTAÑA (editor de texto enriquecido tipo Notas de iPhone) ──────
@@ -5590,23 +5605,33 @@ function _niFecha(iso) {
   return `${String(d.getDate()).padStart(2,'0')} ${MESES_CORTO[d.getMonth()]}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-function niRenderList() {
-  const root = $('ni-root'); if (!root) return;
-  const notas = S._notasInicio || [];
-  root.innerHTML = `
-  <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-    <button class="btn btn-accent btn-sm" onclick="niNueva()"><i class="ti ti-plus"></i> Nueva nota</button>
-  </div>
-  ${!notas.length ? `<div class="ni-empty"><i class="ti ti-notes" style="font-size:28px;display:block;margin-bottom:8px;opacity:.5"></i>Sin notas todavía</div>` : `
-  <div class="ni-list">${notas.map(n => `
-    <div class="ni-card" onclick="niOpen('${n.id}')">
+function niBuscar(v) { S._niQ = v; const l = $('ni-lista'); if (l) l.innerHTML = _niCardsHTML(); }
+function niToggleBuscar() { S._niBuscando = !S._niBuscando; if (!S._niBuscando) S._niQ = ''; niRenderList(); if (S._niBuscando) setTimeout(() => $('ni-q')?.focus(), 30); }
+function _niCardsHTML() {
+  const q = String(S._niQ || '').toLowerCase().trim();
+  const notas = (S._notasInicio || []).filter(n => !q || `${n.titulo || ''} ${_niPreview(n.contenido)}`.toLowerCase().includes(q));
+  if (!notas.length) return `<div class="pr-empty" style="margin:6px auto"><div>${q ? '🔎' : '📝'}</div><b>${q ? 'Sin resultados' : 'Sin notas todavía'}</b>${q ? '' : '<p>Apunta ideas, pendientes o pega imágenes. Todo se guarda solo.</p>'}</div>`;
+  return `<div class="ni-list">${notas.map(n => `
+    <div class="ni-card" role="button" tabindex="0" onclick="niOpen('${n.id}')" onkeydown="if(event.key==='Enter')this.click()">
+      <div class="mov-card-ic emo" style="background:rgba(251,191,36,.16)" aria-hidden="true">📝</div>
       <div class="ni-card-mid">
-        <div class="ni-card-title">${(n.titulo||'').trim() ? n.titulo : '<em style="color:var(--text-3);font-style:normal">Sin título</em>'}</div>
-        <div class="ni-card-prev">${_niPreview(n.contenido)}</div>
+        <div class="ni-card-title">${(n.titulo || '').trim() ? _ngEsc(n.titulo) : '<em style="color:var(--text-3);font-style:normal">Sin título</em>'}</div>
+        <div class="ni-card-prev">${_ngEsc(_niPreview(n.contenido))}</div>
         <div class="ni-card-date">${_niFecha(n.updated_at)}</div>
       </div>
       <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="event.stopPropagation();niDelete('${n.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
-    </div>`).join('')}</div>`}`;
+    </div>`).join('')}</div>`;
+}
+function niRenderList() {
+  const root = $('ni-root'); if (!root) return;
+  const hay = (S._notasInicio || []).length > 0;
+  root.innerHTML = `
+  <div class="ico-bar ico-bar-c">
+    <button class="ico-btn acc" onclick="niNueva()" title="Nueva nota" aria-label="Nueva nota"><i class="ti ti-plus"></i></button>
+    ${hay ? `<button class="ico-btn${S._niBuscando ? ' on' : ''}" onclick="niToggleBuscar()" title="Buscar" aria-label="Buscar" aria-expanded="${!!S._niBuscando}"><i class="ti ti-search"></i></button>` : ''}
+  </div>
+  ${S._niBuscando ? `<div class="ico-search"><i class="ti ti-search"></i><input id="ni-q" value="${_ngEsc(S._niQ || '')}" placeholder="Buscar en tus notas…" oninput="niBuscar(this.value)" aria-label="Buscar notas"></div>` : ''}
+  <div id="ni-lista">${_niCardsHTML()}</div>`;
 }
 
 async function niNueva() {
@@ -6082,38 +6107,28 @@ function _insightSkeleton() {
 function _patronesCard() {
   const pats = S.data.patrones || [];
   if (!pats.length) return '';
-  const top = pats.slice(0, 8);
-  const lines = top.map(p => {
-    const avg = p.monto_promedio != null ? `promedio ${fmt(p.monto_promedio)}` : '';
+  const rows = pats.slice(0, 8).map(p => {
+    const avg = p.monto_promedio != null ? `prom. ${fmt(p.monto_promedio)}` : '';
     const frec = p.frecuencia_mensual != null ? `${(+p.frecuencia_mensual).toFixed(1)}x/mes` : '';
-    const cat  = p.categoria ? `<span style="color:var(--text-3);font-size:12px">[${p.categoria}]</span>` : '';
-    return `<div style="display:flex;align-items:baseline;gap:6px;padding:5px 0;border-bottom:1px solid var(--border-default)">
-      <span style="flex:1;font-weight:500">${p.concepto_clave||p.concepto||'—'}</span>
-      ${cat}
-      <span style="color:var(--text-3);font-size:12px;white-space:nowrap">${[frec,avg].filter(Boolean).join(' · ')}</span>
-    </div>`;
+    return `<div class="pr-sin-row" style="cursor:default"><span class="pr-sin-n">${_ngEsc(p.concepto_clave || p.concepto || '—')}<small class="cs-sm">${[p.categoria ? _ngEsc(p.categoria) : '', frec].filter(Boolean).join(' · ')}</small></span><span class="pr-sin-v">${avg}</span></div>`;
   }).join('');
-  return `<div class="insight-card patrones">
-    <span class="insight-badge">🔍 Patrones</span>
-    <div class="insight-title">Patrones detectados en tus gastos</div>
-    <div class="insight-body">${lines}</div>
-  </div>`;
+  return `<div class="pr-sin" style="margin:14px auto 0"><button class="pr-sin-hdr" onclick="csPat()" aria-expanded="${!!S._csPat}"><span>🔍 Patrones en tus gastos · ${Math.min(8, pats.length)}</span><i class="ti ti-chevron-${S._csPat ? 'up' : 'down'}"></i></button>${S._csPat ? `<div class="pr-sin-list">${rows}</div>` : ''}</div>`;
 }
+function csPat() { S._csPat = !S._csPat; const s = $('insights-section'); if (s && S._insights) s.innerHTML = _renderInsightCards(S._insights.data); }
 
 function _renderInsightCards(consejos) {
   const patronCard = _patronesCard();
-  return `<p style="color:var(--text-2);font-size:12.5px;margin-bottom:14px">Patrones detectados en tus hábitos</p>
-  <div class="insight-grid">${consejos.map(c=>{
-    const tipo = c.tipo||'habito';
-    return `<div class="insight-card ${tipo}">
-      <span class="insight-badge">${INSIGHT_BADGE[tipo]||tipo}</span>
-      <div class="insight-title">${c.titulo||''}</div>
-      <div class="insight-body">${(c.cuerpo||'').replace(/\n/g,'<br>')}</div>
+  const EMO = { ahorro:'💚', alerta:'🚨', habito:'⚡', logro:'🏆' }, CLR = { ahorro:'74,222,128', alerta:'248,113,113', habito:'251,191,36', logro:'129,140,248' };
+  return `<div class="cs-intro">Lo que detecté en tus hábitos de gasto</div>
+  <div class="ico-bar ico-bar-c"><button class="ico-btn acc" onclick="fetchInsights(true)" title="Generar recomendaciones nuevas" aria-label="Generar recomendaciones nuevas"><i class="ti ti-sparkles"></i></button></div>
+  <div class="pr-grid cs-grid">${consejos.map(c => {
+    const tipo = c.tipo || 'habito';
+    return `<div class="pr-goal cs-card ${tipo}">
+      <div class="pr-goal-top"><div class="mov-card-ic emo" style="background:rgba(${CLR[tipo] || '129,140,248'},.16)" aria-hidden="true">${EMO[tipo] || '💡'}</div>
+        <div class="pr-card-name"><b>${_ngEsc(c.titulo || '')}</b><small>${(INSIGHT_BADGE[tipo] || tipo).replace(/^\S+\s/, '')}</small></div></div>
+      <div class="cs-body">${_ngEsc(c.cuerpo || '').replace(/\n/g, '<br>')}</div>
     </div>`;
-  }).join('')}${patronCard}</div>
-  <button class="btn btn-accent btn-sm" onclick="fetchInsights(true)" style="width:100%;justify-content:center;margin-top:14px">
-    <i class="ti ti-sparkles"></i> Generar recomendaciones
-  </button>`;
+  }).join('')}</div>${patronCard}`;
 }
 
 async function fetchInsights(force=false) {
@@ -9429,9 +9444,10 @@ function rChat() {
 <div class="chat-wrap">
   <div class="chat-nav-back">
     <button class="round-btn" onclick="go('dashboard')" style="background:var(--bg-surface-2)" title="Inicio"><i class="ti ti-arrow-left"></i></button>
-    <span style="font-weight:600;font-size:var(--text-sm)">Asistente IA ✨</span>
+    <span class="chat-ttl">✨ Asistente IA</span>
   </div>
   <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"></div></div>
+  <div class="chat-sug" id="chat-sug">${CHAT_SUG.map(t => `<button type="button" onclick="chatSug(this.textContent)">${t}</button>`).join('')}</div>
   <form class="chat-bar" onsubmit="event.preventDefault();sendChat()">
     <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
       <i class="ti ti-microphone" id="mic-icon"></i>
@@ -9580,6 +9596,13 @@ function _chatEsMovil() {
   return window.matchMedia('(max-width:700px)').matches;
 }
 
+// Respuestas rápidas: preguntas frecuentes que el asistente responde con cálculos exactos.
+const CHAT_SUG = ['💸 ¿Cuánto llevo gastado esta quincena?', '🧾 ¿Cuánto me falta por pagar?', '💙 Gastos con Alicia por quincena', '💳 ¿Cuánto debo en total?', '📊 Compara esta quincena con la anterior', '🐷 ¿Cuánto puedo ahorrar?'];
+function chatSug(txt) {
+  const i = $('chat-input'); if (!i) return;
+  i.value = String(txt || '').replace(/^\S+\s/, '');   // sin el emoji inicial
+  sendChat();
+}
 async function sendChat() {
   const input = $('chat-input');
   const text  = input?.value.trim();
