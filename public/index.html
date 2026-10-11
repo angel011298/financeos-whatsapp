@@ -4384,8 +4384,8 @@ function editCuenta(el, key) {
 // (ver niLoad/niRenderList más abajo), no la nota única de texto libre que
 // comparten estas otras 5 pestañas.
 const NOTAS_TABS = {
-  presupuesto:'Presupuesto y Metas', nidito:'Nidito',
-  negocios:'Negocios',   calendario:'Calendario',           deudas:'Deudas TDC',
+  presupuesto:'Presupuesto y Metas',
+  negocios:'Negocios',                                  deudas:'Deudas TDC',
 };
 
 // El contenido lo escribe el propio usuario, pero puede pegar HTML de cualquier
@@ -4643,10 +4643,7 @@ function rQuincenaPanel(ctx) {
       title="Ver ${p.n ? 'los ' + p.n + ' gasto' + (p.n !== 1 ? 's' : '') : 'gastos'} con ${lbl}">
       <div class="tarj-lbl">${emoji} ${lbl}${p.n ? '<span class="tarj-n"> · ' + p.n + '</span>' : ''}</div>
       <div class="tarj-val">${p.n ? fmt(p.total) : '—'}</div>
-      ${!p.n ? '<div class="tarj-sub">sin gastos</div>' : p.pend === 0 ? '<div class="tarj-sub pos">todo pagado ✓</div>' : ''}
-      ${qOff === 0 && p.pend > 0 ? `<div class="tarj-sub">saldo ${fmt(saldo)}</div>${p.pend > saldo
-        ? `<div class="tarj-sub neg">faltan ${fmt(p.pend - saldo)}</div>`
-        : `<div class="tarj-sub pos">alcanza ✓</div>`}` : ''}
+      ${!p.n ? '<div class="tarj-sub">sin gastos</div>' : ''}
     </div>`;
   const tarjHTML = tarjCol('🏦', 'Efectivo', _porMedio('efectivo'), Number(_cts.efectivo) || 0, `tarj-card-ef-${ctx}`, S._tarjOpen, 'efectivo')
                  + tarjCol('🎫', 'Pluxee', _porMedio('pluxee'), Number(_cts.pluxee) || 0, `tarj-card-px-${ctx}`, S._tarjOpen, 'pluxee')
@@ -4844,7 +4841,6 @@ function rQuincenaPanel(ctx) {
       <div class="q-total-widget q-bal-widget" title="Ingresos de la quincena menos el total de gastos (incluye Dinerito de novios)">
         <span class="qt-lbl"><i class="ti ti-scale"></i> Balance quincena</span>
         <span class="qt-val ${balPlan >= 0 ? 'green' : 'red'}">${balPlan < 0 ? '−' : ''}${fmt(Math.abs(balPlan))}</span>
-        <span class="qt-sub">Ingresos ${fmt(balIng)} − Gastos ${fmt(totalGasEsp)}</span>
       </div>
     </div>` : ''}
     <div style="display:flex;justify-content:center;margin-bottom:14px">
@@ -6205,15 +6201,6 @@ function _ndPaint() {
     : `<div class="nd-din2-val ${restante >= 0 ? 'pos' : 'neg'}">${restante < 0 ? '−' : ''}${fmt(Math.abs(restante))}</div>
        <div class="nd-din2-sub">${restante >= 0 ? 'disponibles' : 'de más'} · ${fmt(din)} asignado</div>`}
   <div class="tdc-bar nd-bar${restante < 0 ? ' over' : ''}"><span style="--p:${pctDin}%"></span></div>
-  <button class="nd-din2-meta" onclick="ndDinLista()" aria-expanded="${!!S._ndDinList}">
-    ${CAT_EMOJI.Alicia} ${fmt(gastado)} con Alicia · ${qMovsAlicia.length} gasto${qMovsAlicia.length !== 1 ? 's' : ''}
-    ${qMovsAlicia.length ? `<i class="ti ti-chevron-${S._ndDinList ? 'up' : 'down'}"></i>` : ''}
-  </button>
-  ${S._ndDinList && qMovsAlicia.length ? `<div class="mov-cards nd-din2-list">${qMovsAlicia.map(m => `<div class="mov-card">
-      ${catIcHTML(m.categoria, m)}
-      <div class="mov-card-mid"><div class="mov-card-title">${_ndEsc(m.concepto || m.descripcion || '—')}</div><div class="mov-card-sub">${fmtDate(m.fecha)}${m.medio_pago ? ' · ' + _ndEsc(m.medio_pago) : ''}</div></div>
-      <div class="mov-card-val red">−${fmt(m.monto)}</div>
-    </div>`).join('')}</div>` : ''}
   ${comprQ > 0 ? `<div class="nd-din2-comp">🤝 Compromiso quincenal al Nidito <b>${fmt(comprQ)}</b></div>` : ''}
 </div>
 
@@ -8071,7 +8058,6 @@ async function rCal() {
   $('tab-calendario').innerHTML=`
 <div class="cal-hero">
   <div class="cal-hero-ttl"><span aria-hidden="true">📅</span> Calendario</div>
-  <div class="cal-hero-sub">${sub}</div>
 </div>
 <div class="ico-bar ico-bar-c">
   <button class="ico-btn acc${p==='new'?' on':''}" id="cal-new-btn" onclick="calPanel('new')" title="Nuevo evento" aria-label="Nuevo evento" aria-expanded="${p==='new'}"><i class="ti ti-plus"></i></button>
