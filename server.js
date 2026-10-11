@@ -2545,12 +2545,14 @@ function verifyShareToken(token) {
 
 // LA pareja: Ángel (administrador) y Alicia. La tabla guarda cuentas de prueba, duplicados y números
 // que se registran solos al escribirle al bot, así que "la pareja" no puede ser "cualquier no-admin":
-// se elige por nombre y, a igualdad, la cuenta más antigua (ADMIN_PHONE manda si está definido).
+// se elige por nombre y, a igualdad, la cuenta más antigua.
 async function parejaPrincipal() {
   const { data: users } = await sb.from('usuarios').select('telefono, nombre, role, created_at').order('created_at', { ascending: true });
   const lista = users || [];
   const admins = lista.filter(u => u.role === 'ADMIN_A'), otros = lista.filter(u => u.role !== 'ADMIN_A');
-  const a = admins.find(u => u.telefono === process.env.ADMIN_PHONE) || admins.find(u => /[aá]ngel/i.test(u.nombre || '')) || admins[0] || null;
+  // El NOMBRE manda sobre ADMIN_PHONE: en Render esa variable apunta a otra variante del número de Ángel
+  // (+521…, sin datos) y no a su cuenta real; la más antigua con nombre de Ángel es la que tiene todo.
+  const a = admins.find(u => /[aá]ngel/i.test(u.nombre || '')) || admins.find(u => u.telefono === process.env.ADMIN_PHONE) || admins[0] || null;
   const b = otros.find(u => /alicia/i.test(u.nombre || '')) || null;
   return { a, b };
 }
