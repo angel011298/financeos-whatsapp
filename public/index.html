@@ -2017,6 +2017,20 @@ body.sheet-locked{overflow:hidden}
   color:var(--text-2);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .chat-sug button:hover{color:var(--text-1);border-color:var(--text-3)}
 .chat-nav-back .chat-ttl{font-weight:900;font-size:16px;letter-spacing:-.2px;color:var(--text-1)}
+
+/* ═══════════════════════════════════════════════════════ v21 — Swipe to reveal (móvil) */
+.sw-panel{position:absolute;display:flex;overflow:hidden;z-index:1}
+.sw-btn{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:none;border-radius:0;cursor:pointer;
+  font-family:inherit;font-size:11px;font-weight:800;color:#fff;padding:0 4px}
+.sw-btn i{font-size:20px;line-height:1}
+.sw-btn.edit{background:#3b82f6}
+.sw-btn.warn{background:#d97706}
+.sw-btn.del{background:#dc2626}
+@media (hover:none) and (pointer:coarse){
+  /* en el teléfono los botoncitos de la tarjeta se reemplazan por el deslizar */
+  .mov-card .edit-pill-btn,.pr-goal .edit-pill-btn,.ni-card .edit-pill-btn,.q-item-row .edit-pill-btn,.tdc-card .edit-pill-btn,.wl-card .wl-act.del{display:none!important}
+}
+.wl-act.edit-sw{display:none!important}
 </style>
 </head>
 <body>
@@ -3730,6 +3744,7 @@ function _wlHead(it) {
     ${it.enlace ? `<a class="wl-act ico" href="${_wlEsc(it.enlace)}" target="_blank" rel="noopener noreferrer" title="Abrir enlace"><i class="ti ti-external-link"></i></a>` : ''}
     <button class="wl-act ico share${it.compartido ? ' on' : ''}" onclick="wlCompartir('${it.id}')" aria-pressed="${!!it.compartido}" title="${it.compartido ? 'Dejar de compartir con ' : 'Compartir con '}${_wlEsc(_wlPar())}">💞</button>
     <button class="wl-act ico" onclick="wlEditar('${it.id}')" title="Editar"><i class="ti ti-pencil"></i></button>
+    <button class="wl-act edit-sw" hidden title="Editar" onclick="wlEditar('${it.id}')"><i class="ti ti-pencil"></i></button>
     <button class="wl-act ico del" onclick="wlEliminar('${it.id}')" title="Eliminar"><i class="ti ti-trash"></i></button>
   </div>`;
 }
@@ -6311,6 +6326,7 @@ function _ndCard(it, angelPh, aliciaPh) {
   const cuando = !it.fecha_fin ? '📅 Sin fecha'
     : `📅 ${fmtDate(it.fecha_fin)}${dias < 0 ? ' · vencida' : dias === 0 ? ' · hoy' : qr ? ` · ${qr} quinc.` : ''}`;
   return `<div class="nd-card${abierto ? ' nd-open' : ''}${it.estado === 'PAUSADO' ? ' paused' : ''}" id="nditem-${it.id}">
+    <div class="sw-src" hidden><button class="edit-pill-btn" title="Editar" onclick="ndEditItem('${it.id}')"></button><button class="edit-pill-btn" title="${it.estado === 'PAUSADO' ? 'Reanudar' : 'Pausar'}" onclick="ndEstado('${it.id}','${it.estado === 'PAUSADO' ? 'ACTIVO' : 'PAUSADO'}')"></button><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="ndDelItem('${it.id}')"></button></div>
     <div class="nd-card-top" id="ndh-${it.id}" onclick="ndToggle('${it.id}')" role="button" tabindex="0" aria-expanded="${abierto}"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div class="nd-emo" aria-hidden="true">${_ndEmo(it)}</div>
@@ -10051,6 +10067,114 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     const dx = e.changedTouches[0].clientX - _swipeX;
     if (_swipeX < 35 && dx > 65) go('dashboard');
   }, { passive: true });
+})();
+
+// ── SWIPE TO REVEAL (móvil) ─────────────────────────────────────────────────────
+// Deslizar una tarjeta hacia la izquierda descubre sus acciones (editar, posponer, eliminar…), como en las apps
+// del teléfono. Es genérico: toma los botones .edit-pill-btn / .wl-act.del que ya trae cada tarjeta y los muestra
+// como un panel grande detrás de ella; al tocarlos dispara el MISMO botón original, así que no se duplica ninguna
+// lógica. En pantallas táctiles esos botones chicos se ocultan (ver CSS .sw-*), en escritorio todo sigue igual.
+(function () {
+  if (!('ontouchstart' in window)) return;
+  const BTN = '.edit-pill-btn, .wl-act.edit-sw, .wl-act.del', CONOCIDA = '.mov-card, .pr-goal, .ni-card, .wl-card, .q-item-row, .nd-card, .tdc-card';
+  const SKIP = 'input,textarea,select,[contenteditable="true"],.sw-panel,.tbl-scroll,.gx-tabs,.chat-sug,svg,canvas';
+  let st = null, abierta = null;
+
+  const tieneCaja = cs => parseFloat(cs.borderTopWidth) > 0 || !/^(rgba\(0, 0, 0, 0\)|transparent)$/.test(cs.backgroundColor);
+  const botones = c => [...c.querySelectorAll(BTN)].filter(b => !b.closest('.sw-panel'));
+  function candidata(t) {
+    for (let el = t, i = 0; el && el !== document.body && i < 9; el = el.parentElement, i++) {
+      const b = botones(el);
+      if (b.length > 4) return null;
+      if (!b.length) continue;
+      if (el.matches(CONOCIDA)) return el;
+      const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      if (cs.display !== 'table-row' && tieneCaja(cs) && r.width >= innerWidth * 0.5 && r.height <= 300) return el;
+    }
+    return null;
+  }
+  const etiqueta = b => {
+    const t = (b.getAttribute('title') || b.getAttribute('aria-label') || '').trim();
+    if (/posponer/i.test(t)) return ['Posponer', 'warn'];
+    if (/pausar|reanudar/i.test(t)) return [/reanudar/i.test(t) ? 'Reanudar' : 'Pausar', 'warn'];
+    if (/elimin|quitar|borr/i.test(t) || /--red|color-expense/.test(b.getAttribute('style') || '') || b.classList.contains('del')) return [/quitar/i.test(t) ? 'Quitar' : 'Eliminar', 'del'];
+    if (/editar/i.test(t)) return ['Editar', 'edit'];
+    return [t.split(' ')[0] || 'Acción', 'edit'];
+  };
+  function abrirPanel(c) {
+    if (c._sw) return c._sw;
+    const cs = getComputedStyle(c), bs = botones(c).slice(0, 4);
+    const sw = c._sw = { prev: { pos: c.style.position, ov: c.style.overflow, tr: c.style.transition, tf: c.style.transform, z: c.style.zIndex }, W: bs.length * 74 };
+    if (cs.position === 'static') c.style.position = 'relative';
+    c.style.overflow = 'visible'; c.style.zIndex = '2'; c.style.willChange = 'transform';
+    const p = document.createElement('div'); p.className = 'sw-panel'; p.style.cssText = `width:${sw.W}px;left:calc(100% + ${parseFloat(cs.borderRightWidth) || 0}px);top:${-(parseFloat(cs.borderTopWidth) || 0)}px;bottom:${-(parseFloat(cs.borderBottomWidth) || 0)}px;border-radius:0 ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} 0`;
+    bs.forEach(b => {
+      const [lbl, k] = etiqueta(b), ic = b.querySelector('i');
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'sw-btn ' + k; x.setAttribute('aria-label', lbl);
+      x.innerHTML = `<i class="${ic ? ic.className : 'ti ti-dots'}"></i><span>${lbl}</span>`;
+      x.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); cerrar(c); setTimeout(() => b.click(), 60); });
+      p.appendChild(x);
+    });
+    c.appendChild(p); sw.panel = p;
+    return sw;
+  }
+  function mover(c, x, anim) { c.style.transition = anim ? 'transform .22s cubic-bezier(.32,1,.56,1)' : 'none'; c.style.transform = x ? `translateX(${x}px)` : ''; }
+  function cerrar(c) {
+    if (!c || !c._sw) return;
+    const sw = c._sw; mover(c, 0, true); if (abierta === c) abierta = null;
+    setTimeout(() => {
+      if (c._sw !== sw) return;
+      sw.panel.remove(); c.style.position = sw.prev.pos; c.style.overflow = sw.prev.ov; c.style.zIndex = sw.prev.z; c.style.willChange = ''; c.style.transition = sw.prev.tr; c.style.transform = sw.prev.tf; c._sw = null;
+    }, 240);
+  }
+
+  document.addEventListener('touchstart', e => {
+    const t = e.target;
+    if (abierta && !abierta.isConnected) abierta = null;
+    if (abierta && !abierta.contains(t)) cerrar(abierta);
+    st = null;
+    if (e.touches.length !== 1 || t.closest(SKIP)) return;
+    const c = candidata(t); if (!c) return;
+    st = { x: e.touches[0].clientX, y: e.touches[0].clientY, c, modo: null, base: c === abierta ? -c._sw.W : 0, t: Date.now(), cur: 0 };
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!st) return;
+    const dx = e.touches[0].clientX - st.x, dy = e.touches[0].clientY - st.y;
+    if (!st.modo) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.3) { st.modo = 'h'; abrirPanel(st.c); if (abierta && abierta !== st.c) cerrar(abierta); }
+      else if (Math.abs(dy) > 8) { st.modo = 'v'; if (abierta === st.c) cerrar(st.c); return; }
+      else return;
+    }
+    if (st.modo !== 'h') return;
+    if (e.cancelable) e.preventDefault();
+    const W = st.c._sw.W; let x = st.base + dx;
+    if (x > 0) x = x / 4; else if (x < -W) x = -W + (x + W) / 4;   // un poco de resistencia en los extremos
+    st.cur = x; mover(st.c, x, false);
+  }, { passive: false });
+  document.addEventListener('touchend', () => {
+    if (!st || st.modo !== 'h') { st = null; return; }
+    const c = st.c, W = c._sw.W, v = (st.cur - st.base) / Math.max(1, Date.now() - st.t);   // px/ms (negativo = hacia la izquierda)
+    const abrir = v < -0.35 ? true : v > 0.35 ? false : st.cur < -W / 2;
+    if (abrir) { mover(c, -W, true); abierta = c; } else cerrar(c);
+    st = null;
+  }, { passive: true });
+  // Un toque en una tarjeta abierta solo la cierra (no dispara lo que hace tocarla); al desplazar la lista también se cierra.
+  document.addEventListener('click', e => {
+    if (abierta && abierta.isConnected && abierta.contains(e.target) && !e.target.closest('.sw-panel')) { e.preventDefault(); e.stopPropagation(); cerrar(abierta); }
+  }, true);
+  window.addEventListener('scroll', () => { if (abierta) cerrar(abierta); }, true);
+
+  // Pista de una sola vez (los botones chicos ya no se ven en el teléfono)
+  try {
+    if (matchMedia('(hover:none) and (pointer:coarse)').matches && !localStorage.getItem('sw_hint')) {
+      let n = 0; const iv = setInterval(() => {
+        if (++n > 8) return clearInterval(iv);
+        if (!S.phone || !document.querySelector('.mov-card, .pr-goal, .ni-card')) return;
+        clearInterval(iv); localStorage.setItem('sw_hint', '1');
+        toast('👈 Desliza una tarjeta hacia la izquierda para editar o eliminar', 'success');
+      }, 4000);
+    }
+  } catch (e) { /* sin almacenamiento: no se muestra la pista */ }
 })();
 </script>
 
