@@ -172,6 +172,16 @@ app.get('/', (_req, res) => {
   res.set(NO_CACHE_HEADERS);
   res.send(_injectedHtml);
 });
+// manifest.json: con ?t=<token válido de una cuenta NO admin, la PWA instalada arranca en /?t=<token>.
+// Así Alicia no tiene que escribir su número al instalar la app (en iPhone la PWA no comparte
+// almacenamiento con Safari). Sin token (o con uno inválido) se sirve el manifest normal.
+app.get('/manifest.json', (req, res) => {
+  const base = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'manifest.json'), 'utf8'));
+  const t = String(req.query.t || '');
+  if (t && verifyShareToken(t)) base.start_url = '/?t=' + encodeURIComponent(t);
+  res.set({ ...NO_CACHE_HEADERS, 'Content-Type': 'application/manifest+json; charset=utf-8' });
+  res.send(JSON.stringify(base));
+});
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModified: false }));
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
@@ -2533,6 +2543,26 @@ function verifyShareToken(token) {
   return phone;
 }
 
+// LA pareja: Ángel (administrador) y Alicia. La tabla guarda cuentas de prueba, duplicados y números
+// que se registran solos al escribirle al bot, así que "la pareja" no puede ser "cualquier no-admin":
+// se elige por nombre y, a igualdad, la cuenta más antigua (ADMIN_PHONE manda si está definido).
+async function parejaPrincipal() {
+  const { data: users } = await sb.from('usuarios').select('telefono, nombre, role, created_at').order('created_at', { ascending: true });
+  const lista = users || [];
+  const admins = lista.filter(u => u.role === 'ADMIN_A'), otros = lista.filter(u => u.role !== 'ADMIN_A');
+  const a = admins.find(u => u.telefono === process.env.ADMIN_PHONE) || admins.find(u => /[aá]ngel/i.test(u.nombre || '')) || admins[0] || null;
+  const b = otros.find(u => /alicia/i.test(u.nombre || '')) || null;
+  return { a, b };
+}
+// La pareja de un usuario: Alicia para Ángel y viceversa. Cualquier otra cuenta (de prueba, duplicada o
+// ajena) NO tiene pareja → no ve ni copia lo que ellos comparten.
+async function parejaDe(phone) {
+  const { a, b } = await parejaPrincipal();
+  if (a && b && phone === a.telefono) return b;
+  if (a && b && phone === b.telefono) return a;
+  return null;
+}
+
 // Genera el enlace seguro para el usuario NO admin (Alicia). Solo Ángel (ADMIN_A)
 // puede generarlo. Nunca emite token para una cuenta admin.
 app.post('/api/share-link', async (req, res) => {
@@ -2541,8 +2571,7 @@ app.post('/api/share-link', async (req, res) => {
     if (!phone) return res.status(400).json({ success: false, error: 'Falta phone' });
     const { data: caller } = await sb.from('usuarios').select('role').eq('telefono', phone).single();
     if (!caller || caller.role !== 'ADMIN_A') return res.status(403).json({ success: false, error: 'Solo el administrador puede generar el enlace' });
-    const { data: users } = await sb.from('usuarios').select('telefono, nombre, role');
-    const target = (users || []).find(u => u.role !== 'ADMIN_A');
+    const target = (await parejaPrincipal()).b;
     if (!target) return res.status(404).json({ success: false, error: 'No hay usuario destino registrado' });
     const token = signShareToken(target.telefono);
     res.json({ success: true, token, nombre: target.nombre || 'Alicia' });
@@ -4358,6 +4387,7 @@ function wlLimpiar(b = {}) {
   if (b.categoria !== undefined) d.categoria = CATEGORIAS.includes(b.categoria) ? b.categoria : 'OTROS';
   if (b.notas     !== undefined) d.notas     = String(b.notas).slice(0, 2000);
   if (b.forma_pago !== undefined) d.forma_pago = WL_FORMAS.includes(b.forma_pago) ? b.forma_pago : '';
+  if (b.compartido !== undefined) d.compartido = b.compartido === true;
   if (b.enlace    !== undefined) {
     let e = String(b.enlace).trim().slice(0, 500);
     if (/^(javascript|data|vbscript):/i.test(e)) e = '';
@@ -4438,6 +4468,50 @@ app.get('/api/wishlist', async (req, res) => {
       .eq('user_phone', phone).is('deleted_at', null).order('orden', { ascending: false }).order('created_at', { ascending: false });
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data: await wlConciliar(phone, data || []) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Deseos que la PAREJA marcó como compartidos. Solo lectura; el servidor decide quién es la pareja
+// (nunca se acepta un teléfono de otro usuario), así que solo se ve lo que ella eligió compartir.
+const WL_PUBLICO = 'id,nombre,precio,prioridad,categoria,enlace,notas,estado,comprado_at,created_at';
+app.get('/api/wishlist/compartidos', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) return res.status(400).json({ success: false, error: 'phone requerido' });
+    const par = await parejaDe(phone);
+    if (!par) return res.json({ success: true, de: '', data: [], copiados: [] });
+    const { data, error } = await sb.from('wishlist').select(WL_PUBLICO + ',quincena_key')
+      .eq('user_phone', par.telefono).eq('compartido', true).is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    const rows = await wlConciliar(par.telefono, data || []);   // "comprado" al día, como lo ve su dueña
+    const ids = rows.map(r => r.id);
+    let copiados = [];
+    if (ids.length) {
+      const { data: mias } = await sb.from('wishlist').select('origen_id').eq('user_phone', phone).is('deleted_at', null).in('origen_id', ids);
+      copiados = (mias || []).map(m => m.origen_id);
+    }
+    res.json({ success: true, de: par.nombre || '', data: rows.map(({ quincena_key, ...r }) => r), copiados });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/wishlist/:id/copiar', async (req, res) => {
+  try {
+    const { user_phone } = req.body;
+    if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
+    const par = await parejaDe(user_phone);
+    if (!par) return res.status(404).json({ success: false, error: 'No hay pareja registrada' });
+    const { data: src } = await sb.from('wishlist').select('*').eq('id', req.params.id).eq('user_phone', par.telefono)
+      .eq('compartido', true).is('deleted_at', null).maybeSingle();
+    if (!src) return res.status(404).json({ success: false, error: 'Ese deseo ya no está compartido' });
+    const { data: ya } = await sb.from('wishlist').select('id').eq('user_phone', user_phone).eq('origen_id', src.id).is('deleted_at', null).limit(1);
+    if (ya?.length) return res.status(409).json({ success: false, error: 'Ya está en tu lista' });
+    const { data, error } = await sb.from('wishlist').insert({
+      user_phone, origen_id: src.id, nombre: src.nombre, precio: src.precio, prioridad: src.prioridad,
+      categoria: src.categoria, enlace: src.enlace, notas: src.notas,
+    }).select().single();
+    if (error || !data?.id) return res.status(400).json({ success: false, error: error?.message || 'No se pudo copiar' });
+    res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
