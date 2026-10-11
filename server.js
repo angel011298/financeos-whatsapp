@@ -1487,7 +1487,7 @@ function tryParseBatch(text, today) {
     if (/efectivo/.test(r))      return 'efectivo';
     if (/transferencia/.test(r)) return 'transferencia';
     // Las tarjetas de credito dejaron de ser medio de pago: se normalizan a debito.
-    if (/bbva|hey|liverpool|amex|nu|rappi|palacio/.test(r)) return 'débito';
+    if (/bbva|\bhey\b|liverpool|amex|\bnu\b|rappi|palacio/.test(r)) return 'débito';
     if (/tarjeta/.test(r))       return 'débito';
     return s.trim();
   }
@@ -2129,7 +2129,8 @@ Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprad
     ? `\nGASTOS CON ALICIA (comentarios menciona "alicia" — totales YA CALCULADOS sobre TODO el historial, no solo los últimos movimientos; úsalos siempre para responder, nunca sumes tú mismo):
   Esta quincena (${qActualKey}): ${fmt(aliciaEstaQuincena)}
   Promedio por quincena (${aliciaQuincenas.length} quincena${aliciaQuincenas.length===1?'':'s'} con datos): ${fmt(aliciaPromedioPorQuincena)}
-  Total histórico: ${fmt(aliciaTotalHistorico)} (${aliciaMovs.length} movimiento${aliciaMovs.length===1?'':'s'})`
+  Total histórico: ${fmt(aliciaTotalHistorico)} (${aliciaMovs.length} movimiento${aliciaMovs.length===1?'':'s'})
+  Por quincena (más reciente primero): ${aliciaQuincenas.sort().reverse().map(k => `${labelQuincena(k)} ${k.slice(0,4)}: ${fmt(aliciaPorQuincena[k])}`).join(' | ')}`
     : '';
 
   const dynamicBlock = `Hoy: ${today} | Mes: ${mesStr} | Quincena actual: ${qi.key} (${qi.inicio} a ${qi.fin})
@@ -3949,9 +3950,16 @@ app.post('/webhook', async (req, res) => {
             await sb.from('acciones_pendientes').update({ estado: 'cancelada' }).eq('id', existingPending.id);
           }
 
+          // Preguntas frecuentes: respuesta exacta de la base, sin IA (solo lectura)
+          const faqWA = await faqFinanciero(From, Body || '').catch(() => null);
           // extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
-          const { intent, toolArgs } = await extractIntent(Body || '', From);
-          if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
+          const { intent, toolArgs } = faqWA ? { intent: 'CONSULTA', toolArgs: null } : await extractIntent(Body || '', From);
+          if (faqWA) {
+            await guardarMensaje(From, 'user', Body || '');
+            reply = faqWA;
+            await guardarMensaje(From, 'assistant', reply);
+            replySaved = true;
+          } else if ((intent === 'REGISTRO' || intent === 'EDICION' || intent === 'ELIMINACION') && toolArgs) {
             await guardarMensaje(From, 'user', Body || '');
             const { msg } = await proposeDbAction(From, toolArgs, Body || '');
             await guardarMensaje(From, 'assistant', msg);
@@ -4101,6 +4109,15 @@ No expliques nada, devuelve solo esa línea.`
           _resolveInFlight(reply);
           return res.json({ reply, transcription: isAudio ? text : undefined });
         }
+      }
+
+      // Preguntas frecuentes: respuesta exacta calculada de la base, sin IA (más rápida y sin inventar)
+      const faq = await faqFinanciero(phone, text).catch(e => { console.error('faq:', e.message); return null; });
+      if (faq) {
+        reply = faq;
+        await guardarMensaje(phone, 'assistant', reply);
+        _resolveInFlight(reply);
+        return res.json({ reply, transcription: isAudio ? text : undefined });
       }
 
       const ext = await withTimeout(
@@ -4769,7 +4786,8 @@ function _asAyuda(sinIA) {
 • *Borrar*: "borra el último gasto", "elimina el gasto de tacos", "deshacer"
 • *Wishlist*: "agrega a mi wishlist audífonos 1500", "quita audífonos de la wishlist", "mi wishlist"
 • *Estadísticas*: "¿cuánto gasté en comida este mes?", "¿cómo voy?", "¿en qué gasto más?", "mis saldos"
-• *Consejos*: "dame recomendaciones"`;
+• *Consejos*: "dame recomendaciones"
+• *Preguntas frecuentes*: "¿cuánto he gastado con Alicia por quincena?", "¿qué me falta pagar?", "¿me alcanza para 1500?", "compara esta quincena con la pasada", "¿cómo voy a cerrar el mes?", "¿cuánto he ahorrado?", "mis suscripciones", "gastos hormiga", "¿cuánto debo?"`;
 }
 
 // Gastos/ingresos que se pueden registrar sin IA. Devuelve items de executeDbAction o null.
@@ -4970,6 +4988,307 @@ async function _asConsejos(phone) {
   return `🧭 *Recomendaciones de tu asesor*\n${tips.slice(0, 6).map(x => `• ${x}`).join('\n')}`;
 }
 
+// ── PREGUNTAS FRECUENTES (respuestas exactas, SIN IA) ─────────────────────────
+// Lo que más se pregunta un asesor financiero personal, contestado con cálculos directos sobre la
+// base: nunca inventa ni estima lo que sí se puede contar. Corre ANTES de la IA (más rápido y exacto)
+// y también cuando la IA falla. Si la pregunta no encaja, devuelve null y la IA responde como siempre.
+const _FQ_MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const _fqMesLbl = k => { const [y, m] = k.split('-'); return `${_FQ_MES[+m - 1]} ${y}`; };
+const _fqQLbl   = k => { const m = String(k).match(/^(\d{4})-(\d{2})-([AB])$/); return m ? `${m[3] === 'A' ? '1ª' : '2ª'} ${_FQ_MES[+m[2] - 1]} ${m[1]}` : k; };
+const _fqBar    = (v, max) => max > 0 && v > 0 ? ' ' + '▇'.repeat(Math.max(1, Math.round(v / max * 8))) : '';
+const _fqPct    = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
+const _fqEsAlicia = m => m.categoria === 'Alicia' || /\balicia\b/i.test(`${m.concepto || ''} ${m.comentarios || ''}`);
+const _fqConcepto = m => (m.concepto || '—').replace(/^\[ppto\]\s*/i, '').trim() || '—';
+const _fqQAnterior = q => { const x = new Date(q.inicio + 'T12:00:00'); x.setDate(x.getDate() - 1); return getQuincena(_aiso(x)); };
+const _fqDias = (from, to) => Math.max(1, Math.round((new Date(to + 'T12:00:00') - new Date(from + 'T12:00:00')) / 86400000) + 1);
+const _fqRegistro = /^(?:hoy\s+|ayer\s+)?(gaste|pague|compre|me pagaron|me depositaron|recibi|cobre|agrega|agregar|anota|anotar|registra|registrar|borra|borrar|elimina|eliminar|programa|programar|quita|quitar|deshacer|deshaz)\b/;
+
+// ¿Es una pregunta / consulta? (no un registro: "gasté 120 en tacos" nunca entra aquí)
+function _fqEsPregunta(text) {
+  const t = _anrm(text);
+  if (!t || t.length > 240) return false;
+  if (_fqRegistro.test(t) && !/\?/.test(text)) return false;
+  return /\?/.test(text)
+    || /^(cuanto|cuantos|cuantas|cual|cuales|que|como|cuando|donde|en que|dame|dime|muestrame|muestra|ensename|lista|listame|quiero saber|quiero ver|necesito saber|compara|comparame|tengo|me alcanza|puedo|hay|ver|mis|mi|resumen|desglose|historial|proyecta|calcula)\b/.test(t)
+    || /\b(por quincena|por mes|cada quincena|cada mes|mes a mes|quincena a quincena)\b/.test(t)
+    || /\b(hormiga|suscripciones?|colchon|fondo de emergencia|dinerito|recurrentes?)\b/.test(t);   // temas claros aunque no sea pregunta
+}
+
+// Qué movimientos cuentan: con Alicia, una categoría, un medio de pago, ingresos, ahorro o todo.
+function _fqFiltro(t) {
+  if (/\balicia\b/.test(t)) return { lbl: 'con Alicia', fn: m => m.tipo === 'GASTO' && _fqEsAlicia(m), alicia: true };
+  if (/\b(ingreso|ingresos|gane|me pagaron|entradas|cobre|me entro|me entraron)\b/.test(t)) return { lbl: 'de ingresos', fn: m => m.tipo === 'INGRESO', ingreso: true };
+  if (/\b(ahorre|ahorrado|ahorro|ahorros)\b/.test(t)) return { lbl: 'a ahorro', fn: m => m.tipo === 'GASTO' && _asEsAhorro(m) };
+  const cat = CATEGORIAS.find(c => c !== 'Alicia' && new RegExp(`\\b${_anrm(c)}\\b`).test(t));
+  if (cat) return { lbl: `en ${cat}`, fn: m => m.tipo === 'GASTO' && m.categoria === cat };
+  const medios = [
+    [/\b(pluxee|vales)\b/, 'con Pluxee', m => /pluxee|vales/i.test(m.medio_pago || '')],
+    [/\befectivo\b/, 'en efectivo', m => /efectivo/i.test(m.medio_pago || '')],
+    [/\bbanamex\b/, 'con Banamex', m => /banamex/i.test(m.medio_pago || '')],
+    [/\brevolut\b/, 'con Revolut', m => /revolut/i.test(m.medio_pago || '')],
+    [/\btransferencia\b/, 'por transferencia', m => /transfer/i.test(m.medio_pago || '')],
+    [/\b(debito|tarjeta)\b/, 'con débito', m => /d[eé]bito|banamex|revolut/i.test(m.medio_pago || '')],
+  ].find(([re]) => re.test(t));
+  if (medios) return { lbl: medios[1], fn: m => m.tipo === 'GASTO' && medios[2](m), medio: true };
+  return { lbl: 'en total', fn: m => m.tipo === 'GASTO', todo: true };
+}
+const _fqAgrupa = t => /\b(por quincena|por quincenas|cada quincena|quincenas|quincenal|quincenales|quincena a quincena)\b/.test(t) ? 'q'
+  : /\b(por mes|por meses|cada mes|mensual|mensuales|mes a mes|meses)\b/.test(t) ? 'm'
+  : /\b(por semana|por semanas|cada semana|semanal|semanales)\b/.test(t) ? 's' : null;
+
+// Serie por quincena / mes / semana (con barras), p. ej. "lo que he gastado con Alicia por quincena"
+async function _fqSerie(phone, D, agr, f) {
+  const hs = hoy(), movs = D.movs.filter(f.fn);
+  const periodos = [];
+  if (agr === 'q') { let q = getQuincena(hs); for (let i = 0; i < 12; i++) { periodos.push({ k: q.key, from: q.inicio, to: q.fin, lbl: _fqQLbl(q.key) }); q = _fqQAnterior(q); } }
+  else if (agr === 'm') { const d = new Date(hs + 'T12:00:00'); for (let i = 0; i < 12; i++) { const x = new Date(d.getFullYear(), d.getMonth() - i, 1); const k = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; periodos.push({ k, from: k + '-01', to: _aiso(new Date(x.getFullYear(), x.getMonth() + 1, 0)), lbl: _fqMesLbl(k) }); } }
+  else { const l = new Date(hs + 'T12:00:00'); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); for (let i = 0; i < 8; i++) { const a = new Date(l); a.setDate(a.getDate() - 7 * i); const b = new Date(a); b.setDate(b.getDate() + 6); periodos.push({ k: _aiso(a), from: _aiso(a), to: _aiso(b), lbl: `sem. ${a.getDate()} ${_FQ_MES[a.getMonth()]}` }); } }
+  periodos.forEach(p => { const en = movs.filter(m => m.fecha >= p.from && m.fecha <= p.to); p.v = _asSum(en); p.n = en.length; p.actual = p.from <= hs && hs <= p.to; });
+  while (periodos.length && periodos[periodos.length - 1].v === 0) periodos.pop();   // sin datos antes del primero
+  if (!periodos.length) return `No encontré ${f.ingreso ? 'ingresos' : 'gastos'} ${f.lbl} en los últimos meses.`;
+  periodos.reverse();
+  let din = {};
+  if (f.alicia && agr === 'q') {
+    const { data } = await sb.from('nidito_dinerito').select('quincena_key, monto').eq('user_phone', phone);
+    (data || []).forEach(r => { din[r.quincena_key] = Number(r.monto) || 0; });
+  }
+  const max = Math.max(...periodos.map(p => p.v)), cerrados = periodos.filter(p => !p.actual);
+  const prom = cerrados.length ? _asSum(cerrados.map(p => ({ monto: p.v }))) / cerrados.length : 0;
+  const total = _asSum(periodos.map(p => ({ monto: p.v }))), top = periodos.reduce((a, p) => p.v > a.v ? p : a, periodos[0]);
+  const unidad = { q: 'quincena', m: 'mes', s: 'semana' }[agr];
+  const lineas = periodos.map(p => {
+    const d = din[p.k];
+    const extra = d ? ` de ${fmt(d)} ${p.v > d ? '⚠️' : '✅'}` : '';
+    return `• ${p.lbl}${p.actual ? ' (en curso)' : ''}: *${fmt(p.v)}*${extra}${_fqBar(p.v, max)}`;
+  });
+  return `${f.ingreso ? '💰' : f.alicia ? '🩵' : '📊'} *${f.ingreso ? 'Ingresos' : 'Gastos ' + f.lbl} por ${unidad}*\n${lineas.join('\n')}\n`
+    + `Total: ${fmt(total)} · Promedio por ${unidad}${cerrados.length !== periodos.length ? ' cerrad' + (unidad === 'mes' ? 'o' : 'a') : ''}: ${fmt(prom)}\n`
+    + `Más alto: ${top.lbl} (${fmt(top.v)})${Object.keys(din).length ? '\n✅/⚠️ = dentro / por encima del Dinerito de novios asignado' : ''}`;
+}
+
+// "¿Cuánto he gastado con Alicia?" (sin pedir agrupación): resumen + guía
+function _fqAlicia(D) {
+  const hs = hoy(), q = getQuincena(hs), qa = _fqQAnterior(q), mesIni = hs.slice(0, 8) + '01';
+  const al = D.movs.filter(m => m.tipo === 'GASTO' && _fqEsAlicia(m));
+  if (!al.length) return 'No encontré gastos con Alicia en los últimos meses.';
+  const en = (from, to) => _asSum(al.filter(m => m.fecha >= from && m.fecha <= to));
+  const qs = new Set(al.map(m => getQuincena(m.fecha).key)); qs.delete(q.key);
+  const cerr = al.filter(m => getQuincena(m.fecha).key !== q.key);
+  const conc = {}; al.filter(m => m.fecha >= mesIni).forEach(m => { const k = _fqConcepto(m); conc[k] = (conc[k] || 0) + m.monto; });
+  const top = Object.entries(conc).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  return `🩵 *Gastos con Alicia*\n• Esta quincena: *${fmt(en(q.inicio, q.fin))}*\n• Quincena pasada: ${fmt(en(qa.inicio, qa.fin))}\n• Este mes: ${fmt(en(mesIni, hs))}\n`
+    + `• Promedio por quincena: ${fmt(qs.size ? _asSum(cerr) / qs.size : 0)}\n• Total registrado: ${fmt(_asSum(al))} (${al.length} gastos)`
+    + (top.length ? `\nEn qué, este mes: ${top.map(([k, v]) => `${k} ${fmt(v)}`).join(' · ')}` : '')
+    + `\n_Pídeme "por quincena" o "por mes" para ver el detalle._`;
+}
+
+async function _fqDinerito(phone, D) {
+  const q = getQuincena(hoy()), sig = siguienteQuincena(q);
+  const { data } = await sb.from('nidito_dinerito').select('quincena_key, monto').eq('user_phone', phone).in('quincena_key', [q.key, sig.key]);
+  const asig = k => Number((data || []).find(r => r.quincena_key === k)?.monto) || 0;
+  const gastado = _asSum(D.movs.filter(m => m.tipo === 'GASTO' && _fqEsAlicia(m) && m.fecha >= q.inicio && m.fecha <= q.fin));
+  const a = asig(q.key), rest = a - gastado;
+  if (!a) return `💕 No tienes Dinerito de novios asignado para la ${_fqQLbl(q.key)}. Llevas ${fmt(gastado)} gastado con Alicia. Asígnalo en Nidito.`;
+  return `💕 *Dinerito de novios — ${_fqQLbl(q.key)}*\n• Asignado: ${fmt(a)}\n• Gastado con Alicia: ${fmt(gastado)} (${_fqPct(gastado, a)}%)\n• ${rest >= 0 ? `Te quedan *${fmt(rest)}*` : `Te pasaste por *${fmt(-rest)}*`}`
+    + (asig(sig.key) ? `\nPara la ${_fqQLbl(sig.key)} tienes ${fmt(asig(sig.key))} asignado.` : '');
+}
+
+// Lo planeado de la quincena que aún no se palomea, y si cada cuenta alcanza para pagarlo
+async function _fqPendientesData(phone, D) {
+  const q = getQuincena(hoy()), fpMap = D.refs.forma_pago_gastos || {};
+  const pagados = new Set(D.movs.filter(m => m.tipo === 'GASTO' && /^\[ppto\]/i.test(m.concepto || '') && m.fecha >= q.inicio && m.fecha <= q.fin).map(m => _anrm(_fqConcepto(m))));
+  const items = gastosEsperadosQuincena(D.refs, q.key).filter(g => Number(g.monto) > 0 && !pagados.has(_anrm(g.descripcion)))
+    .map(g => ({ desc: g.descripcion, monto: Number(g.monto), fp: fpMap[g.descripcion] || g.forma_pago || '' }));
+  const { data: dn } = await sb.from('nidito_dinerito').select('monto').eq('user_phone', phone).eq('quincena_key', q.key).maybeSingle();
+  const din = Number(dn?.monto) || 0;
+  if (din > 0) {
+    const resto = din - _asSum(D.movs.filter(m => m.tipo === 'GASTO' && _fqEsAlicia(m) && m.fecha >= q.inicio && m.fecha <= q.fin));
+    if (resto > 0) items.push({ desc: '💕 Dinerito de novios (por gastar)', monto: resto, fp: '', din: true });
+  }
+  return { q, items, total: _asSum(items.map(i => ({ monto: i.monto }))) };
+}
+async function _fqPendientes(phone, D) {
+  const { q, items, total } = await _fqPendientesData(phone, D);
+  if (!items.length) return `✅ No te falta pagar nada de lo planeado en la ${_fqQLbl(q.key)}.`;
+  const c = D.refs.cuentas || {}, FP = { efectivo: ['🏦 Efectivo', Number(c.efectivo) || 0], pluxee: ['🎫 Pluxee', Number(c.pluxee) || 0], tarjeta_debito: ['💳 Débito', (Number(c.banamex) || 0) + (Number(c.revolut_debito) || 0)] };
+  const porFp = {}; items.filter(i => !i.din).forEach(i => { porFp[i.fp] = (porFp[i.fp] || 0) + i.monto; });
+  const chequeo = Object.entries(porFp).filter(([k]) => FP[k]).map(([k, v]) => { const [l, s] = FP[k]; return `  ${l}: ${fmt(v)} · saldo ${fmt(s)} ${s >= v ? '✅' : `⚠️ faltan ${fmt(v - s)}`}`; });
+  return `🧾 *Te falta pagar en la ${_fqQLbl(q.key)}: ${fmt(total)}*\n${items.sort((a, b) => b.monto - a.monto).map(i => `• ${i.desc}: ${fmt(i.monto)}${i.fp ? ` (${{ efectivo: 'efectivo', pluxee: 'Pluxee', tarjeta_debito: 'débito' }[i.fp] || i.fp})` : ''}`).join('\n')}`
+    + (chequeo.length ? `\n¿Alcanza el saldo?\n${chequeo.join('\n')}` : '') + (porFp[''] ? `\n_${fmt(porFp[''])} sin forma de pago asignada._` : '');
+}
+
+// "¿Me alcanza para X?" / "¿Cuánto puedo gastar?": balance de la quincena menos lo que falta pagar
+async function _fqAlcanza(phone, D, text) {
+  const q = getQuincena(hoy()), qm = _asEn(D.movs, { from: q.inicio, to: q.fin });
+  const bal = _asSum(qm.filter(m => m.tipo === 'INGRESO')) + _asRemanente(D) - _asSum(qm.filter(m => m.tipo === 'GASTO'));
+  const pend = (await _fqPendientesData(phone, D)).total, libre = bal - pend, dias = _fqDias(hoy(), q.fin);
+  const monto = _anum((text.match(/\$?\s*(\d[\d,]*(?:\.\d+)?)/) || [])[1] || '');
+  let out = `🧮 *${_fqQLbl(q.key)}*\n• Balance: ${_amoney(bal)}\n• Falta pagar de lo planeado: ${fmt(pend)}\n• *Libre de verdad: ${_amoney(libre)}*`;
+  if (monto) out += libre >= monto ? `\n✅ Sí te alcanza para ${fmt(monto)}: te quedarían ${fmt(libre - monto)} (≈ ${fmt((libre - monto) / dias)} por día los ${dias} días que faltan).`
+                                   : `\n❌ No te alcanza para ${fmt(monto)}: te faltarían ${fmt(monto - libre)}. Puedes agendarlo en tu Wishlist para otra quincena.`;
+  else out += libre > 0 ? `\nPuedes gastar ≈ *${fmt(libre / dias)} por día* los ${dias} días que faltan.` : `\nNo hay margen: cualquier gasto extra te deja en negativo.`;
+  return out;
+}
+
+// Esta quincena (o mes / semana) contra la anterior, en el MISMO número de días para que sea justo
+function _fqComparar(D, t) {
+  const hs = hoy(); let act, ant, nom;
+  if (/\bmes\b/.test(t)) {
+    const d = new Date(hs + 'T12:00:00'), p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    act = { from: hs.slice(0, 8) + '01', to: hs }; ant = { from: _aiso(p).slice(0, 8) + '01', to: _aiso(new Date(p.getFullYear(), p.getMonth() + 1, 0)) }; nom = ['este mes', 'el mes pasado'];
+  } else if (/\bsemana\b/.test(t)) {
+    const l = new Date(hs + 'T12:00:00'); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); const pl = new Date(l); pl.setDate(pl.getDate() - 7); const pf = new Date(pl); pf.setDate(pf.getDate() + 6);
+    act = { from: _aiso(l), to: hs }; ant = { from: _aiso(pl), to: _aiso(pf) }; nom = ['esta semana', 'la semana pasada'];
+  } else {
+    const q = getQuincena(hs), qa = _fqQAnterior(q); act = { from: q.inicio, to: hs }; ant = { from: qa.inicio, to: qa.fin }; nom = ['esta quincena', 'la quincena pasada'];
+  }
+  const dias = _fqDias(act.from, act.to), antMismo = { from: ant.from, to: _aiso(new Date(new Date(ant.from + 'T12:00:00').getTime() + (dias - 1) * 86400000)) };
+  const real = r => _asEn(D.movs, r).filter(m => m.tipo === 'GASTO' && !_asEsAhorro(m));
+  const a = _asSum(real(act)), b = _asSum(real(antMismo)), bTot = _asSum(real(ant));
+  const cat = r => { const o = {}; real(r).forEach(m => { o[m.categoria || 'OTROS'] = (o[m.categoria || 'OTROS'] || 0) + m.monto; }); return o; };
+  const ca = cat(act), cb = cat(antMismo);
+  const cambios = [...new Set([...Object.keys(ca), ...Object.keys(cb)])].map(k => [k, (ca[k] || 0) - (cb[k] || 0)]).filter(([, v]) => Math.abs(v) >= 1).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1])).slice(0, 3);
+  const dif = a - b;
+  return `⚖️ *${nom[0][0].toUpperCase() + nom[0].slice(1)} vs ${nom[1]}* (primeros ${dias} día${dias !== 1 ? 's' : ''} de cada ${nom[0] === 'este mes' ? 'uno' : 'una'})\n• ${nom[0]}: *${fmt(a)}*\n• ${nom[1]}: ${fmt(b)}${bTot !== b ? ` (completa: ${fmt(bTot)})` : ''}\n`
+    + `${dif > 0 ? `🔺 Vas ${fmt(dif)} arriba` : dif < 0 ? `🔻 Vas ${fmt(-dif)} abajo` : 'Vas igual'}${b > 0 ? ` (${dif > 0 ? '+' : ''}${_fqPct(dif, b)}%)` : ''}.`
+    + (cambios.length ? `\nLo que más cambió: ${cambios.map(([k, v]) => `${k} ${v > 0 ? '+' : '−'}${fmt(Math.abs(v))}`).join(' · ')}` : '') + '\n_Sin contar transferencias a ahorro._';
+}
+
+// A este ritmo, ¿cómo cierro el mes / la quincena?
+function _fqProyeccion(D, t) {
+  const hs = hoy(), mes = /\bmes\b/.test(t);
+  const q = getQuincena(hs), r = mes ? { from: hs.slice(0, 8) + '01', to: _aiso(new Date(+hs.slice(0, 4), +hs.slice(5, 7), 0)) } : { from: q.inicio, to: q.fin };
+  const en = _asEn(D.movs, { from: r.from, to: hs }), real = en.filter(m => m.tipo === 'GASTO' && !_asEsAhorro(m));
+  const pasados = _fqDias(r.from, hs), total = _fqDias(r.from, r.to), g = _asSum(real), ritmo = g / pasados, proy = ritmo * total;
+  const ing = _asSum(en.filter(m => m.tipo === 'INGRESO')) + (mes ? 0 : _asRemanente(D)), aho = _asSum(en.filter(m => m.tipo === 'GASTO' && _asEsAhorro(m)));
+  const cierre = ing - aho - proy;
+  return `🔮 *Proyección de ${mes ? 'este mes' : 'esta quincena'}* (día ${pasados} de ${total})\n• Llevas ${fmt(g)} gastado · ritmo ${fmt(ritmo)} por día\n• Al mismo ritmo cerrarías en *${fmt(proy)}*\n`
+    + `• Con ${fmt(ing)} de ingresos${aho ? ` y ${fmt(aho)} ya apartado a ahorro` : ''}, el cierre sería ≈ *${_amoney(cierre)}*\n`
+    + (cierre < 0 ? `⚠️ Para no cerrar en negativo, baja tu gasto a ≈ ${fmt(Math.max(0, (ing - aho - g) / Math.max(1, total - pasados)))} por día.` : `✅ Vas bien: te sobraría dinero si mantienes el ritmo.`);
+}
+
+function _fqAhorro(D) {
+  const hs = hoy(), q = getQuincena(hs), mesIni = hs.slice(0, 8) + '01', ano = hs.slice(0, 4) + '-01-01';
+  const aho = D.movs.filter(m => m.tipo === 'GASTO' && _asEsAhorro(m)), en = r => _asSum(_asEn(aho, r));
+  const meses = []; const d = new Date(hs + 'T12:00:00');
+  for (let i = 5; i >= 0; i--) { const x = new Date(d.getFullYear(), d.getMonth() - i, 1); const k = _aiso(x).slice(0, 7); const r = { from: k + '-01', to: _aiso(new Date(x.getFullYear(), x.getMonth() + 1, 0)) };
+    const ing = _asSum(_asEn(D.movs, r).filter(m => m.tipo === 'INGRESO')), a = en(r); if (a || ing) meses.push([_fqMesLbl(k), a, ing]); }
+  const max = Math.max(0, ...meses.map(m => m[1]));
+  const saldo = Number((D.refs.cuentas || {}).revolut) || 0, tasa = Number((D.refs.cuentas_tasa || {}).revolut) || 0;
+  const ingMes = _asSum(_asEn(D.movs, { from: mesIni, to: hs }).filter(m => m.tipo === 'INGRESO')), ahoMes = en({ from: mesIni, to: hs });
+  return `🐷 *Tu ahorro*\n• Esta quincena: ${fmt(en({ from: q.inicio, to: q.fin }))}\n• Este mes: *${fmt(ahoMes)}*${ingMes ? ` (${_fqPct(ahoMes, ingMes)}% de tus ingresos)` : ''}\n• En el año: ${fmt(en({ from: ano, to: hs }))}\n`
+    + (meses.length ? `Por mes:\n${meses.map(([l, a, i]) => `  • ${l}: ${fmt(a)}${i ? ` (${_fqPct(a, i)}%)` : ''}${_fqBar(a, max)}`).join('\n')}\n` : '')
+    + `💜 Saldo en Revolut ahorro: *${fmt(saldo)}*${tasa ? ` · rinde ≈ ${fmt(saldo * tasa / 100 / 12)} al mes (${tasa}% anual)` : ''}\n`
+    + (ingMes && ahoMes / ingMes < 0.1 ? '💡 Lo sano es apartar 10–20% apenas cobras.' : ahoMes ? '💚 Buen ritmo de ahorro.' : '💡 Aparta aunque sea 10% apenas cobres: lo que no ves, no lo gastas.');
+}
+
+async function _fqDeudas(phone) {
+  const { data } = await sb.from('tdc').select('nombre, a_pagar, pagado, estado, mes_objetivo').eq('user_phone', phone);
+  const vivas = (data || []).map(t => ({ ...t, saldo: Math.max(0, (Number(t.a_pagar) || 0) - (Number(t.pagado) || 0)) })).filter(t => t.saldo > 0);
+  if (!vivas.length) return '🎉 No tienes deudas de tarjeta registradas con saldo pendiente.';
+  const total = _asSum(vivas.map(t => ({ monto: t.saldo }))), pagado = _asSum((data || []).map(t => ({ monto: Number(t.pagado) || 0 }))), aPagar = _asSum((data || []).map(t => ({ monto: Number(t.a_pagar) || 0 })));
+  const orden = [...vivas].sort((a, b) => a.saldo - b.saldo);
+  return `💳 *Debes ${fmt(total)}* en ${vivas.length} tarjeta${vivas.length !== 1 ? 's' : ''} (llevas ${_fqPct(pagado, aPagar)}% pagado)\n${vivas.sort((a, b) => b.saldo - a.saldo).map(t => `• ${t.nombre}: ${fmt(t.saldo)}${t.estado && t.estado !== 'activo' ? ` · ${t.estado}` : ''}${t.mes_objetivo ? ` · meta ${t.mes_objetivo}` : ''}`).join('\n')}\n`
+    + `💡 Método bola de nieve: paga el mínimo en todas y todo lo extra a *${orden[0].nombre}* (${fmt(orden[0].saldo)}), la más chica. Al liquidarla, pasa ese pago a ${orden[1] ? orden[1].nombre : 'la siguiente'}.`;
+}
+
+// Gastos que se repiten en varios meses (suscripciones, servicios, rutina)
+function _fqRecurrentes(D) {
+  const hs = hoy(), d = new Date(hs + 'T12:00:00'), desde = _aiso(new Date(d.getFullYear(), d.getMonth() - 5, 1));
+  const g = {}; D.movs.filter(m => m.tipo === 'GASTO' && m.fecha >= desde && !_asEsAhorro(m)).forEach(m => {
+    const k = _anrm(_fqConcepto(m)); if (!k || k === '—') return;
+    (g[k] = g[k] || { nombre: _fqConcepto(m), meses: new Set(), total: 0, n: 0 }); g[k].meses.add(m.fecha.slice(0, 7)); g[k].total += m.monto; g[k].n++;
+  });
+  const rec = Object.values(g).filter(x => x.meses.size >= 3).map(x => ({ ...x, prom: x.total / x.meses.size })).sort((a, b) => b.prom - a.prom).slice(0, 10);
+  if (!rec.length) return 'No encontré gastos que se repitan en 3 o más meses (en los últimos 6).';
+  const tot = _asSum(rec.map(x => ({ monto: x.prom })));
+  return `🔁 *Gastos que se repiten cada mes* (aparecen en 3+ de los últimos 6 meses)\n${rec.map(x => `• ${x.nombre}: ≈ ${fmt(x.prom)}/mes · ${x.meses.size} meses`).join('\n')}\nSuman ≈ *${fmt(tot)} al mes* (${fmt(tot * 12)} al año). 💡 Revisa cuáles ya no usas.`;
+}
+
+function _fqHormiga(D, t) {
+  const r = /\b(quincena|semana|hoy|ayer|ano)\b/.test(t) ? _asRango(t) : { from: hoy().slice(0, 8) + '01', to: hoy(), label: 'este mes' };
+  const h = _asEn(D.movs, r).filter(m => m.tipo === 'GASTO' && m.monto < 100 && !_asEsAhorro(m));
+  if (!h.length) return `🐜 Sin gastos hormiga (menores a $100) ${r.label}.`;
+  const tot = _asSum(h), dias = _fqDias(r.from, r.to < hoy() ? r.to : hoy());
+  const c = {}; h.forEach(m => { const k = _fqConcepto(m); c[k] = (c[k] || 0) + m.monto; });
+  return `🐜 *Gastos hormiga ${r.label}* (menores a $100)\n• ${h.length} compras · *${fmt(tot)}*\n• Los que más suman: ${Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${k} ${fmt(v)}`).join(' · ')}\nA este ritmo serían ≈ ${fmt(tot / dias * 365)} al año.`;
+}
+
+function _fqColchon(D) {
+  const c = D.refs.cuentas || {}, dinero = Object.keys(CUENTAS_LABEL).reduce((a, k) => a + (Number(c[k]) || 0), 0);
+  const tres = [1, 2, 3].map(k => { const x = new Date(hoy() + 'T12:00:00'); x.setMonth(x.getMonth() - k, 1); const r = { from: _aiso(x).slice(0, 8) + '01', to: _aiso(new Date(x.getFullYear(), x.getMonth() + 1, 0)) }; return _asSum(_asEn(D.movs, r).filter(m => m.tipo === 'GASTO' && !_asEsAhorro(m))); }).filter(v => v > 0);
+  if (!tres.length) return 'Aún no tengo meses completos de gastos para calcular tu colchón.';
+  const prom = tres.reduce((a, v) => a + v, 0) / tres.length, meses = dinero / prom;
+  return `🛟 *Tu colchón de emergencia*\n• Dinero en cuentas: ${fmt(dinero)}\n• Gasto mensual promedio (${tres.length} meses): ${fmt(prom)}\n• Te alcanza para *${meses.toFixed(1)} meses* sin ingresos\n`
+    + (meses >= 6 ? '✅ Excelente: arriba de 6 meses.' : meses >= 3 ? '🟡 Bien: la meta ideal es 6 meses.' : `🔴 Por debajo de 3 meses: faltan ${fmt(3 * prom - dinero)} para el mínimo sano.`);
+}
+
+function _fqMayores(D, t) {
+  const r = /\b(hoy|ayer|semana|quincena|mes|ano)\b/.test(t) ? _asRango(t) : { from: hoy().slice(0, 8) + '01', to: hoy(), label: 'este mes' };
+  const g = _asEn(D.movs, r).filter(m => m.tipo === 'GASTO').sort((a, b) => b.monto - a.monto).slice(0, 5);
+  if (!g.length) return `Sin gastos ${r.label}.`;
+  return `💸 *Tus gastos más grandes ${r.label}*\n${g.map((m, i) => `${i + 1}. ${_fqConcepto(m)}: *${fmt(m.monto)}* · ${m.categoria || 'OTROS'} · ${m.fecha.slice(8)}/${m.fecha.slice(5, 7)}${_asEsAhorro(m) ? ' 🐷' : ''}`).join('\n')}`;
+}
+
+function _fqUltimos(D, t) {
+  const dia = /\bhoy\b/.test(t) ? hoy() : /\bayer\b/.test(t) ? _asRango(t).from : null;
+  const l = (dia ? D.movs.filter(m => m.fecha === dia) : D.movs).sort((a, b) => (b.fecha + (b.created_at || '')).localeCompare(a.fecha + (a.created_at || ''))).slice(0, 10);
+  if (!l.length) return `Sin movimientos ${dia ? (dia === hoy() ? 'hoy' : 'ayer') : 'registrados'}.`;
+  return `🧾 *${dia ? `Movimientos de ${dia === hoy() ? 'hoy' : 'ayer'}` : 'Tus últimos movimientos'}*\n${l.map(m => `• ${m.fecha.slice(8)}/${m.fecha.slice(5, 7)} ${m.tipo === 'INGRESO' ? '➕' : '➖'} ${_fqConcepto(m)}: ${fmt(m.monto)}${m.medio_pago ? ` · ${m.medio_pago}` : ''}`).join('\n')}`
+    + (dia ? `\nTotal gastado: ${fmt(_asSum(l.filter(m => m.tipo === 'GASTO')))}` : '');
+}
+
+function _fqPromedio(D) {
+  const hs = hoy(), q = getQuincena(hs), d = new Date(hs + 'T12:00:00'), p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  const real = r => _asSum(_asEn(D.movs, r).filter(m => m.tipo === 'GASTO' && !_asEsAhorro(m)));
+  const mesR = { from: hs.slice(0, 8) + '01', to: hs }, antR = { from: _aiso(p).slice(0, 8) + '01', to: _aiso(new Date(p.getFullYear(), p.getMonth() + 1, 0)) };
+  const pq = real({ from: q.inicio, to: hs }) / _fqDias(q.inicio, hs), pm = real(mesR) / _fqDias(mesR.from, hs), pa = real(antR) / _fqDias(antR.from, antR.to);
+  return `📅 *Tu gasto promedio por día*\n• Esta quincena: *${fmt(pq)}*\n• Este mes: ${fmt(pm)}\n• Mes pasado: ${fmt(pa)}\n${pa > 0 ? (pm > pa ? `🔺 Este mes vas ${_fqPct(pm - pa, pa)}% arriba del mes pasado.` : `🔻 Este mes vas ${_fqPct(pa - pm, pa)}% abajo del mes pasado.`) : ''}\n_Sin contar transferencias a ahorro._`;
+}
+
+function _fqCategorias(D, t) {
+  const r = _asRango(t), g = _asEn(D.movs, r).filter(m => m.tipo === 'GASTO');
+  const real = g.filter(m => !_asEsAhorro(m)), tot = _asSum(real), aho = _asSum(g.filter(_asEsAhorro));
+  if (!real.length) return `Sin gastos ${r.label}.`;
+  const o = {}; real.forEach(m => { o[m.categoria || 'OTROS'] = (o[m.categoria || 'OTROS'] || 0) + m.monto; });
+  const filas = Object.entries(o).sort((a, b) => b[1] - a[1]), max = filas[0][1];
+  return `📊 *Gastos por categoría ${r.label}* (${fmt(tot)})\n${filas.map(([k, v]) => `• ${k}: ${fmt(v)} (${_fqPct(v, tot)}%)${_fqBar(v, max)}`).join('\n')}${aho ? `\n🐷 Además apartaste ${fmt(aho)} a ahorro.` : ''}`;
+}
+
+function _fqTotal(D, t, f) {
+  const r = _asRango(t), en = _asEn(D.movs, r).filter(f.fn);
+  if (!en.length) return `No encontré ${f.ingreso ? 'ingresos' : 'gastos'} ${f.lbl} ${r.label}.`;
+  const c = {}; en.forEach(m => { const k = _fqConcepto(m); c[k] = (c[k] || 0) + m.monto; });
+  return `${f.ingreso ? '💰' : '💸'} ${f.ingreso ? 'Ingresos' : 'Gastaste'} ${f.lbl} ${r.label}: *${fmt(_asSum(en))}* (${en.length} movimiento${en.length !== 1 ? 's' : ''})\nLo principal: ${Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${k} ${fmt(v)}`).join(' · ')}`;
+}
+
+// Punto de entrada: texto de respuesta o null si no es una pregunta frecuente
+async function faqFinanciero(phone, text) {
+  if (!_fqEsPregunta(text)) return null;
+  const t = _anrm(text);
+  const D = await _asDatos(phone);
+  const agr = _fqAgrupa(t);
+  if (/\bdinerito\b/.test(t) && !agr) return await _fqDinerito(phone, D);
+  if (/(me falta pagar|por pagar|pendientes? de pago|pagos pendientes|debo pagar|tengo que pagar|proximos pagos|que me falta)/.test(t)) return await _fqPendientes(phone, D);
+  if (/(cuanto puedo gastar|me alcanza|puedo comprar|puedo gastar|cuanto tengo libre|cuanto me sobra)/.test(t)) return await _fqAlcanza(phone, D, text);
+  if (/(cuanto debo|mis deudas|\bdeudas?\b|tarjetas de credito|\btdc\b)/.test(t)) return await _fqDeudas(phone);
+  if (/(suscripcion|suscripciones|recurrente|recurrentes|cargos fijos|pagos fijos|que pago cada mes)/.test(t)) return _fqRecurrentes(D);
+  if (/(hormiga|gastos chicos|gastos pequenos|compras chicas|gastitos)/.test(t)) return _fqHormiga(D, t);
+  if (/(fondo de emergencia|colchon|cuantos meses aguanto|cuanto tiempo aguanto)/.test(t)) return _fqColchon(D);
+  if (/(compar|\bvs\b|contra (la|el)|diferencia con|\b(mas|menos)\b.*\b(pasad[oa]|anterior)\b)/.test(t)) return _fqComparar(D, t);
+  if (/(voy a gastar|proyecc|al ritmo|a este ritmo|cuanto gastare|como cerrare|como voy a cerrar|como terminare|como voy a terminar)/.test(t)) return _fqProyeccion(D, t);
+  if (/(ahorrad|cuanto ahorro|mi ahorro|mis ahorros|tasa de ahorro|cuanto llevo ahorrado|cuanto he ahorrado|rendimiento)/.test(t) && !agr) return _fqAhorro(D);
+  if (/(gasto mas grande|mayor gasto|mayores gastos|lo mas caro|gastos mas grandes|mas caro)/.test(t)) return _fqMayores(D, t);
+  if (/(ultimos (gastos|movimientos|registros)|movimientos recientes|gastos recientes|que gaste (hoy|ayer)|gastos de (hoy|ayer))/.test(t)) return _fqUltimos(D, t);
+  if (/(promedio|al dia|diario|por dia)/.test(t) && /gast/.test(t) && !agr) return _fqPromedio(D);
+  const f = _fqFiltro(t);
+  if (agr) return await _fqSerie(phone, D, agr, f);
+  if (f.alicia) return _fqAlicia(D);
+  if (/(por categoria|categorias|desglose)/.test(t)) return _fqCategorias(D, t);
+  if ((f.medio || f.ingreso) && /(gast|pag|ingres|gane|cobre|entro|entraron)/.test(t)) return _fqTotal(D, t, f);
+  return null;   // el resto lo resuelven _asEstadistica o la IA
+}
+
 // Punto de entrada. opts.soloConsulta: no escribe nada (WhatsApp sin IA). Devuelve texto o null.
 async function asesorLocal(phone, text, opts = {}) {
   const t = _anrm(text);
@@ -4990,6 +5309,8 @@ async function asesorLocal(phone, text, opts = {}) {
       return buildWebChatReply(execs);
     }
   }
+  const faq = await faqFinanciero(phone, text);
+  if (faq) return faq;
   const est = await _asEstadistica(phone, t);
   if (est) return est;
   return null;
