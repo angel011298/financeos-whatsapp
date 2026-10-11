@@ -1869,6 +1869,27 @@ body.sheet-locked{overflow:hidden}
 .cal-info-ic{font-size:20px;line-height:1.2}
 .cal-info b{display:block;font-size:13px;color:var(--text-1)}
 .cal-info small{display:block;font-size:11px;color:var(--text-2);margin-top:2px;line-height:1.4}
+
+/* ═══════════════════════════════════════════════════════ v17 — Calendario: título, desplegables, eventos */
+.cal-hero{text-align:center;margin:4px 0 12px}
+.cal-hero-ttl{font-size:22px;font-weight:900;letter-spacing:-.4px;color:var(--text-1)}
+.cal-hero-sub{font-size:12px;font-weight:600;color:var(--text-3);margin-top:4px}
+.cal-new{max-width:560px;margin:0 auto 16px;padding:16px;border-radius:20px;background:var(--bg-surface);border:1px solid var(--border-default);display:grid;gap:10px}
+.cal-new-ttl{font-size:15px;font-weight:800;color:var(--text-1);text-align:center}
+.cal-new input,.cal-new select,.cal-new textarea{width:100%;min-width:0}
+.cal-new-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.cal-new-tipos{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.cal-new-acts{display:flex;justify-content:center;gap:8px}
+#cal-upcoming-wrap,#cal-fer-wrap{max-width:720px;margin:0 auto 16px}
+.cal-ev-card .mov-card-note{margin-top:4px}
+.cal-fer-chip.hoy{color:var(--color-warning)}
+.cal-fer-ttl span{display:block}
+.tr-form{display:grid;gap:12px}
+.tr-hint{font-size:12px;color:var(--text-2);margin:0;text-align:center;line-height:1.5}
+.tr-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tr-grid label{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--text-2);text-align:center}
+.tr-grid input{width:100%;text-align:center;font-size:18px;font-weight:800}
+.tr-total{text-align:center;font-size:15px;font-weight:800;color:var(--text-1)}
 </style>
 </head>
 <body>
@@ -3236,30 +3257,23 @@ function getGastosEsperados(refs, qKey) {
 // Calcula ingresos esperados para cualquier rango de fechas [from, to]
 // Ingresos tipo 'beca/mensual': cuenta cuántos días 1 caen en el rango
 // Ingresos tipo 'sueldo quincenal': prorratea por días usando base 15
+// Ingresos esperados de un rango: se suma, quincena por quincena, lo esperado de cada quincena que toca el
+// rango (proporcional a los días del rango que caen en ella; una quincena completa da su total exacto).
+// La beca (mensual) solo cuenta en la quincena que contiene el día 1. Con los ingresos predeterminados
+// sembrados por el servidor, cada quincena trae su propio sueldo/vales/beca.
 function calcIngresosEsperadosPeriodo(refs, from, to) {
-  const items = getIngresosEsperados(refs);
-  const fromDate = new Date(from + 'T00:00:00');
-  const toDate   = new Date(to   + 'T00:00:00');
-  const days = Math.round((toDate - fromDate) / 86400000) + 1;
+  const dias = {};   // qKey → días del rango dentro de esa quincena
+  const d = new Date(from + 'T12:00:00'), fin = new Date(to + 'T12:00:00');
+  for (; d <= fin; d.setDate(d.getDate() + 1)) {
+    const qi = getQuincenaInfo(getQuincenaOffsetFromDate(toISO(d))), k = getQKey(qi);
+    (dias[k] = dias[k] || { qi, n: 0 }).n++;
+  }
   let total = 0;
-  items.forEach(ing => {
-    const dias  = ing.dias || [];
-    const monto = ing.monto || 0;
-    if (!monto) return;
-    const isMensual = /beca|mensual/i.test(ing.descripcion || '');
-    if (isMensual) {
-      // Cuenta cuántas veces cae el día 1 en el rango (pago mensual fijo)
-      const cur = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
-      const end = new Date(toDate.getFullYear(),   toDate.getMonth(),   1);
-      while (cur <= end) {
-        const payISO = toISO(cur);
-        if (payISO >= from && payISO <= to) total += monto;
-        cur.setMonth(cur.getMonth() + 1);
-      }
-    } else {
-      // Sueldo quincenal: prorratea linealmente — 1 quincena (15 días) = monto completo
-      total += monto * days / 15;
-    }
+  Object.entries(dias).forEach(([k, { qi, n }]) => {
+    const largo = Math.round((new Date(qi.to + 'T12:00:00') - new Date(qi.from + 'T12:00:00')) / 86400000) + 1;
+    const suma = getIngresosEsperados(refs, k).filter(i => (i.monto || 0) > 0 && (/beca|mensual/i.test(i.descripcion || '') ? dayInQuincena(1, qi) : true))
+      .reduce((a, i) => a + (i.monto || 0), 0);
+    total += suma * Math.min(1, n / largo);
   });
   return Math.round(total * 100) / 100;
 }
@@ -4009,6 +4023,53 @@ function _wlSelBarHTML() {
   </div>`;
 }
 
+// ── Transporte automático → "Gastos esta quincena" ───────────────────────────
+// Gasto diario de lunes a viernes en días hábiles (sin feriados): combi $28 + camión $20 + metro $10. Se calcula
+// para CADA quincena según sus días hábiles y se inyecta solo al pintar/sumar, como la Despensa y el Dinerito:
+// NUNCA dentro de getGastosEsperados (posponerGasto vuelve a guardar esa lista). Sustituye al "Transporte" fijo
+// que hubiera guardado (queda en la base, solo deja de mostrarse). Las tarifas se editan con el lápiz de la tarjeta.
+const TRANSPORTE_ID = '_transporte_';
+const TRANSPORTE_DEF = { combi: 28, camion: 20, metro: 10 };
+const esTransporteFijo = g => transporteActivo() && /^transporte$/i.test((g.descripcion || '').trim());   // solo se oculta si el automático está activo
+function transporteTarifas() {
+  const t = ((((S.data || {}).user || {}).external_refs || {}).transporte_diario) || {};
+  const v = k => { const n = Number(t[k] ?? TRANSPORTE_DEF[k]); return isFinite(n) && n >= 0 ? n : TRANSPORTE_DEF[k]; };
+  return { combi: v('combi'), camion: v('camion'), metro: v('metro') };
+}
+function diasHabilesQ(qi) {
+  let n = 0; const d = new Date(qi.from + 'T12:00:00'), fin = new Date(qi.to + 'T12:00:00');
+  for (; d <= fin; d.setDate(d.getDate() + 1)) if (!esInhabil(toISO(d))) n++;
+  return n;
+}
+const transporteActivo = () => { const r = (((S.data || {}).user || {}).external_refs) || {}; return r.transporte_auto === true || !!r.transporte_diario; };
+function transporteItem(qi) {
+  if (!transporteActivo()) return null;
+  const t = transporteTarifas(), diario = t.combi + t.camion + t.metro, dias = diasHabilesQ(qi), monto = Math.round(dias * diario * 100) / 100;
+  return monto > 0 ? { _id: TRANSPORTE_ID, descripcion: 'Transporte', monto, categoria: 'Transporte', forma_pago: 'efectivo', _isTransporte: true, _dias: dias, _diario: diario, _tarifas: t } : null;
+}
+function editarTransporte() {
+  const t = transporteTarifas();
+  abrirPop('🚌 Transporte diario', `<div class="tr-form">
+    <p class="tr-hint">Se cuenta solo en <b>días hábiles</b> (lunes a viernes, sin feriados). Cada quincena se calcula sola.</p>
+    <div class="tr-grid">
+      <label>🚐 Combi<input id="tr-combi" type="number" min="0" step="1" inputmode="decimal" value="${t.combi}"></label>
+      <label>🚌 Camión<input id="tr-camion" type="number" min="0" step="1" inputmode="decimal" value="${t.camion}"></label>
+      <label>🚇 Metro<input id="tr-metro" type="number" min="0" step="1" inputmode="decimal" value="${t.metro}"></label>
+    </div>
+    <div class="tr-total" id="tr-total"></div>
+    <div class="cal-new-acts"><button class="btn btn-ghost" onclick="cerrarPop()">Cancelar</button><button class="btn btn-accent" onclick="guardarTransporte()"><i class="ti ti-check"></i> Guardar</button></div>
+  </div>`);
+  const upd = () => { const s = ['combi', 'camion', 'metro'].reduce((a, k) => a + (parseFloat($('tr-' + k)?.value) || 0), 0); const el = $('tr-total'); if (el) el.textContent = `= ${fmt(s)} por día hábil`; };
+  ['combi', 'camion', 'metro'].forEach(k => $('tr-' + k)?.addEventListener('input', upd)); upd();
+}
+async function guardarTransporte() {
+  const v = k => Math.max(0, parseFloat($('tr-' + k)?.value) || 0);
+  try {
+    await api('POST', '/api/update-refs', { phone: S.phone, field: 'transporte_diario', action: 'set', value: { combi: v('combi'), camion: v('camion'), metro: v('metro') } });
+    cerrarPop(); await load(); toast('🚌 Transporte actualizado ✓');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
 // ── Dinerito de novios → "Gastos esta quincena" ──────────────────────────────
 // Lo asignado en Nidito → Dinerito de novios (por persona y quincena) cuenta como gasto
 // presupuestado de ESA quincena. Se inyecta solo al pintar/sumar, como la Despensa: NUNCA dentro
@@ -4140,14 +4201,6 @@ function _escGlobal(e) {
   if ($('dash-sheet')?.classList.contains('open')) { cerrarHoja(); return; }
   if ($('mobile-sheet')?.classList.contains('open')) { closeMobileMore(); return; }
   if (S.tab !== 'dashboard') go('dashboard');
-}
-
-// ── Calendario: Próximos eventos plegable con un icono ───────────────────────
-function toggleCalUp() {
-  S._calUpOpen = !S._calUpOpen;
-  const w = $('cal-upcoming-wrap'), b = $('cal-up-btn');
-  if (w) w.style.display = S._calUpOpen ? '' : 'none';
-  if (b) { b.classList.toggle('on', S._calUpOpen); b.setAttribute('aria-expanded', S._calUpOpen ? 'true' : 'false'); }
 }
 
 // ── Movimientos: Análisis visual plegable ────────────────────────────────────
@@ -4433,7 +4486,7 @@ function rQuincenaPanel(ctx) {
   const hasQBudget = (refs.budget_q || {})[qKey] != null;
   const allIngEsp = getIngresosEsperados(refs, qKey);
   // Eliminar cualquier entrada "Despensa" de los gastos fijos — se reemplaza con el total real de la lista
-  const gasEsp    = getGastosEsperados(refs, qKey).filter(g => !/^despensa$/i.test((g.descripcion || '').trim()));
+  const gasEsp    = getGastosEsperados(refs, qKey).filter(g => !/^despensa$/i.test((g.descripcion || '').trim()) && !esTransporteFijo(g));
 
   // Inject DESPENSA entry — si hay una guardada en budget_q la usa (editable); si no, inyecta sintética
   if (refs.hide_despensa_gastos !== true) {
@@ -4458,6 +4511,8 @@ function rQuincenaPanel(ctx) {
   if (_dinItem) gasEsp.push(_dinItem);
   const _compItem = compromisoNiditoItem(qi);   // aportaciones activas a proyectos/metas del Nidito
   if (_compItem) gasEsp.push(_compItem);
+  const _trItem = transporteItem(qi);   // Transporte automático: días hábiles de ESTA quincena × tarifa diaria
+  if (_trItem) gasEsp.push(_trItem);
 
   // Populate lookup for inline editing; tag items with their storage key
   S._expItemData = {};
@@ -4616,12 +4671,13 @@ function rQuincenaPanel(ctx) {
         const cClrG   = CAT_CLR[catG] || '#94a3b8';
         const sub     = [catG, g.comentarios].filter(Boolean).join(' · ') || '—';
         const esDesp  = /^despensa$/i.test((g.descripcion || '').trim());   // Despensa guardada en el presupuesto
+        const esTr    = !!g._isTransporte;
         return `<div class="mov-card q-card${pagadoId?' pagado':''}">
           ${chk}
           ${catIcHTML(catG || 'OTROS', g)}
           <div class="mov-card-mid${esDesp ? ' q-card-tap' : ''}"${esDesp ? ` onclick="toggleQDesp()" role="button" tabindex="0" title="${S._qDespOpen ? 'Ocultar artículos' : 'Ver artículos'}"` : ''}>
             <div class="mov-card-title">${g.descripcion}${esDesp ? `<i class="ti ti-chevron-${S._qDespOpen ? 'up' : 'down'}"></i>` : ''}</div>
-            <div class="mov-card-sub">${sub}</div>
+            <div class="mov-card-sub">${esTr ? `${g._dias} día${g._dias !== 1 ? 's' : ''} hábil${g._dias !== 1 ? 'es' : ''} × ${fmt(g._diario)} · combi ${fmt(g._tarifas.combi)} · camión ${fmt(g._tarifas.camion)} · metro ${fmt(g._tarifas.metro)}` : sub}</div>
           </div>
           <div class="mov-card-val red">${fmt(g.monto)}</div>
           <div class="q-card-foot">
@@ -4631,9 +4687,9 @@ function rQuincenaPanel(ctx) {
               <button class="q-fp-pill${fpPlux?' on on-px':''}" onclick="setFormaPago('${nomSafe}','pluxee')" title="Marcar como vales Pluxee"><i class="ti ti-basket"></i> Pluxee</button>
             </div>
             <div class="mov-card-acts">
-              <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('gastos','${_id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-              <button class="edit-pill-btn" title="Posponer a la siguiente quincena" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
-              <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
+              <button class="edit-pill-btn" title="${esTr ? 'Editar tarifas de transporte' : 'Editar'}" onclick="${esTr ? 'editarTransporte()' : `oEditExpItem('gastos','${_id}')`}"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+              ${esTr ? '' : `<button class="edit-pill-btn" title="Posponer a la siguiente quincena" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
+              <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>`}
             </div>
           </div>
           ${esDesp && S._qDespOpen ? _qDespExpHTML(true) : ''}
@@ -4761,7 +4817,8 @@ async function loadQIA(ctx, qi) {
     const qMovs    = filterMovs(movs, qi.from, qi.to);
     const ingEspQ  = getIngresosEsperados(refs).filter(i => (i.dias||[]).some(d => dayInQuincena(d, qi)));
     const _din     = dineritoItem(getQKey(qi)), _comp = compromisoNiditoItem(qi);
-    const gasEsp   = [...getGastosEsperados(refs, getQKey(qi)), ...(_din ? [_din] : []), ...(_comp ? [_comp] : [])];
+    const _tr = transporteItem(qi);
+    const gasEsp   = [...getGastosEsperados(refs, getQKey(qi)).filter(g => !esTransporteFijo(g)), ...(_din ? [_din] : []), ...(_comp ? [_comp] : []), ...(_tr ? [_tr] : [])];
     const espIng   = ingEspQ.reduce((a,i) => a+(i.monto||0), 0);
     const espGas   = gasEsp.reduce((a,g) => a+(g.monto||0), 0);
     const realIng  = qMovs.filter(m=>m.tipo==='INGRESO').reduce((a,m)=>a+(m.monto||0), 0);
@@ -5212,10 +5269,18 @@ function desgloseHTML(key, scope) {
       return `<div class="dsg-inner">${rows.join('')}${_dsgTotal('Total egresos', total, 'var(--color-expense)')}
         ${scope === 'mov' ? '' : `<div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();abrirModulo('movimientos','Movimientos')"><i class="ti ti-list"></i> Ver movimientos</button></div>`}</div>`;
     }
-    // Los ingresos son pocos: se listan uno por uno.
-    const rows = [...list].sort((a, b) => (b.monto || 0) - (a.monto || 0))
-      .map(m => _dsgRow(m.concepto || m.descripcion || 'Ingreso', m.monto,
-            'var(--color-income)', null, fmtDate(fd(m.fecha))));
+    // Los ingresos se agrupan por concepto (p. ej. tres depósitos de "Mamá" = una sola fila con su suma).
+    const _norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+    const grupos = {};
+    list.forEach(m => {
+      const nom = (m.concepto || m.descripcion || 'Ingreso').trim() || 'Ingreso', k = _norm(nom);
+      const g = (grupos[k] = grupos[k] || { nom, monto: 0, n: 0, ult: '' });
+      g.monto += m.monto || 0; g.n++;
+      const f = fd(m.fecha) || ''; if (f > g.ult) g.ult = f;
+    });
+    const rows = Object.values(grupos).sort((a, b) => b.monto - a.monto)
+      .map(g => _dsgRow(g.nom, g.monto, 'var(--color-income)', total > 0 ? Math.round(g.monto / total * 100) : null,
+            g.n > 1 ? `${g.n} ingresos · último ${fmtDate(g.ult)}` : fmtDate(g.ult)));
     if (rem > 0) rows.unshift(_dsgRow('Remanente de la quincena anterior', rem, 'var(--color-income)', null, 'sobrante que pasa a esta quincena'));
     const refs   = (S.data.user || {}).external_refs || {};
     const esp    = scope === 'mov' ? 0 : calcIngresosEsperadosPeriodo(refs, r.from, r.to);
@@ -5811,8 +5876,8 @@ function rDash() {
   const _qOff = S.periodo.tipo==='quincena' ? S.periodo.offset : getQuincenaOffsetFromDate(r.from);
   const _qKey = getQKey(getQuincenaInfo(_qOff));
   const gasEspTot = getGastosEsperados(refs, _qKey)
-    .filter(g=>!/^despensa$/i.test((g.descripcion||'').trim()))
-    .reduce((a,g)=>a+(g.monto||0),0) + getDinerito(_qKey) + (compromisoNiditoItem(getQuincenaInfo(_qOff))?.monto || 0);
+    .filter(g=>!/^despensa$/i.test((g.descripcion||'').trim()) && !esTransporteFijo(g))
+    .reduce((a,g)=>a+(g.monto||0),0) + getDinerito(_qKey) + (compromisoNiditoItem(getQuincenaInfo(_qOff))?.monto || 0) + (transporteItem(getQuincenaInfo(_qOff))?.monto || 0);
   const remQ = S.periodo.tipo==='quincena' ? getRemanente(S.periodo.offset) : 0;   // solo en vista de quincena
   const bal = ingC + remQ - gasC;   // Balance = Ingresos (+ remanente en quincena) − Egresos, igual en toda la app
   const pats = S.data.patrones||[];
@@ -6833,7 +6898,7 @@ function rObjs() {
   // Savings capacity (current quincena)
   const qi    = getQuincenaInfo(0);
   const ingQ  = calcIngresosEsperadosPeriodo(refs, qi.from, qi.to);
-  const gasQ  = getGastosEsperados(refs, getQKey(qi)).reduce((a,g)=>a+(g.monto||0),0) + getDinerito(getQKey(qi)) + (compromisoNiditoItem(qi)?.monto || 0);
+  const gasQ  = getGastosEsperados(refs, getQKey(qi)).filter(g => !esTransporteFijo(g)).reduce((a,g)=>a+(g.monto||0),0) + getDinerito(getQKey(qi)) + (compromisoNiditoItem(qi)?.monto || 0) + (transporteItem(qi)?.monto || 0);
   const dispQ = Math.max(0, ingQ - gasQ);
   const ahorroQ = Math.round(dispQ * 0.2);
 
@@ -7629,37 +7694,143 @@ function diaHabilAnterior(ds) { const d = new Date(ds + 'T12:00:00'); do { d.set
 const _calFechaLarga = ds => { const t = new Date(ds + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }); return t.charAt(0).toUpperCase() + t.slice(1); };
 const _calFechaCorta = ds => new Date(ds + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', '');
 
-// Lista de feriados de un año (se despliega con 🏖️)
+// ── Calendario: desplegables bajo los botones, feriados y próximos eventos ───
+const CAL_TIPOS = [['evento', '📌'], ['recordatorio', '⏰'], ['cumpleaños', '🎂'], ['cita', '🩺'], ['tarea', '✅'], ['otro', '✨']];
+const CAL_TIPO_EMO = Object.fromEntries(CAL_TIPOS);
+const _calDias = ds => Math.round((new Date(ds + 'T12:00:00') - new Date(toISO(new Date()) + 'T12:00:00')) / 86400000);
+// Emoji del evento: por tipo; si es el genérico, se infiere del título (cumpleaños, citas, pagos…)
+const _calHora = h => String(h || '').slice(0, 5);
+function _calEmo(e) {
+  if (e.tipo && e.tipo !== 'evento' && CAL_TIPO_EMO[e.tipo]) return CAL_TIPO_EMO[e.tipo];
+  const t = String(e.titulo || '').toLowerCase();
+  return /cumple|aniversario/.test(t) ? '🎂' : /cita|doctor|psic|dentista|consulta/.test(t) ? '🩺' : /pago|vence|corte|renta|tarjeta/.test(t) ? '💳' : /cepillo|medicina|pastilla/.test(t) ? '⏰' : '📌';
+}
+const _calCuando = dif => dif === 0 ? 'Hoy' : dif === 1 ? 'Mañana' : dif > 1 ? `En ${dif} días` : dif === -1 ? 'Ayer' : 'Ya pasó';
+
+// Feriados, del más próximo al más lejano: primero los que faltan (en orden cronológico) y al final los que
+// ya pasaron (el más reciente primero). En el año en curso se suman los del año siguiente.
+function _calFerLista(y) {
+  const hoyY = new Date().getFullYear(), años = y === hoyY ? [y, y + 1] : [y];
+  const todos = años.flatMap(a => Object.entries(feriadosMX(a)));
+  const prox = todos.filter(([ds]) => _calDias(ds) >= 0).sort((a, b) => a[0].localeCompare(b[0]));
+  const pas  = todos.filter(([ds]) => _calDias(ds) < 0).sort((a, b) => b[0].localeCompare(a[0]));
+  return [...prox, ...pas];
+}
 function _calFerHTML(y) {
-  const hoyD = new Date(toISO(new Date()) + 'T12:00:00');
-  const lista = Object.entries(feriadosMX(y)).sort((a, b) => a[0].localeCompare(b[0]));
-  const sig = lista.find(([ds]) => new Date(ds + 'T12:00:00') >= hoyD);
+  const lista = _calFerLista(y), sig = lista.find(([ds]) => _calDias(ds) >= 0);
+  const hoyY = new Date().getFullYear();
   return `<div class="cal-fer">
-    <div class="cal-fer-ttl">🏖️ Feriados ${y} <span>descanso obligatorio</span></div>
+    <div class="cal-fer-ttl">🏖️ Feriados <span>descanso obligatorio · del más próximo al más lejano</span></div>
     <div class="mov-cards">${lista.map(([ds, f]) => {
-      const dif = Math.round((new Date(ds + 'T12:00:00') - hoyD) / 86400000);
-      const chip = dif === 0 ? 'Hoy' : dif === 1 ? 'Mañana' : dif > 1 ? `En ${dif} días` : 'Ya pasó';
-      const fin = esFinde(ds);
+      const dif = _calDias(ds), año = +ds.slice(0, 4);
       return `<div class="mov-card cal-fer-card${dif < 0 ? ' pasado' : ''}${sig && sig[0] === ds ? ' prox' : ''}">
         <div class="mov-card-ic emo" style="background:rgba(244,63,94,.14)" aria-hidden="true">${f.emoji}</div>
         <div class="mov-card-mid"><div class="mov-card-title">${f.nombre}</div>
-          <div class="mov-card-sub">${_calFechaLarga(ds)}${fin ? ' · cae en fin de semana' : ''}${f.nota ? ' · ' + f.nota : ''}</div></div>
-        <span class="cal-fer-chip">${chip}</span>
+          <div class="mov-card-sub">${_calFechaLarga(ds)}${año !== hoyY ? ' de ' + año : ''}${esFinde(ds) ? ' · cae en fin de semana' : ''}${f.nota ? ' · ' + f.nota : ''}</div></div>
+        <span class="cal-fer-chip">${_calCuando(dif)}</span>
       </div>`;
     }).join('')}</div>
-    <div class="cal-fer-fuente">Fuente: Ley Federal del Trabajo, art. 74.</div>
   </div>`;
 }
-function toggleCalFer() {
-  S._calFerOpen = !S._calFerOpen;
-  const w = $('cal-fer-wrap'), b = $('cal-fer-btn');
-  if (w) { w.style.display = S._calFerOpen ? '' : 'none'; if (S._calFerOpen) w.innerHTML = _calFerHTML(S.cy); }
-  if (b) { b.classList.toggle('on', S._calFerOpen); b.setAttribute('aria-expanded', S._calFerOpen ? 'true' : 'false'); }
+function _calProxFeriado() { const x = _calFerLista(new Date().getFullYear()).find(([ds]) => _calDias(ds) >= 0); return x ? { ds: x[0], ...x[1] } : null; }
+
+// ── Próximos eventos: tarjetas con orden, búsqueda y Excel (como Movimientos y Wishlist) ──
+function _calEvProximos(evts) {
+  const hoy = toISO(new Date()), q = (S._calQ || '').trim().toLowerCase();
+  let l = evts.filter(e => (fd(e.fecha) || '') >= hoy)
+    .filter(e => !q || `${e.titulo || ''} ${e.descripcion || ''} ${e.tipo || ''}`.toLowerCase().includes(q));
+  const o = S._calSort || 'asc';
+  l.sort((a, b) => o === 'az' ? (a.titulo || '').localeCompare(b.titulo || '', 'es')
+    : (o === 'desc' ? -1 : 1) * ((fd(a.fecha) || '').localeCompare(fd(b.fecha) || '') || (a.hora || '').localeCompare(b.hora || '')));
+  return l.slice(0, 100);
 }
-function calHoy() {
-  const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
-  closeCalDay(); const w = $('cal-fer-wrap'); if (w && S._calFerOpen) w.innerHTML = _calFerHTML(S.cy);
+function _calEvCard(e) {
+  const ds = fd(e.fecha), dif = _calDias(ds), fer = feriadoDe(ds);
+  const sub = [_calFechaLarga(ds), _calHora(e.hora), e.recurrente && e.recurrente !== 'no' ? '🔁 ' + e.recurrente : ''].filter(Boolean).join(' · ');
+  return `<div class="mov-card q-card cal-ev-card">
+    <div class="mov-card-ic emo" style="background:var(--bg-surface-2)" aria-hidden="true">${_calEmo(e)}</div>
+    <div class="mov-card-mid"><div class="mov-card-title">${_wlEsc(e.titulo)}</div>
+      <div class="mov-card-sub">${_wlEsc(sub)}${fer ? ` · ${fer.emoji} ${_wlEsc(fer.nombre)}` : ''}</div>
+      ${e.descripcion ? `<div class="mov-card-note">${_wlEsc(e.descripcion)}</div>` : ''}</div>
+    <span class="cal-fer-chip${dif <= 1 ? ' hoy' : ''}">${_calCuando(dif)}</span>
+    <div class="q-card-foot"><div class="mov-card-acts">
+      <button class="edit-pill-btn" title="Editar" onclick="eEvt(S._calData[${e.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+      <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dEvt(${e.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
+    </div></div>
+  </div>`;
 }
+function _calListaEvHTML(evts) {
+  const l = _calEvProximos(evts);
+  return l.length ? l.map(_calEvCard).join('') : `<div class="desp-empty">${S._calQ ? 'Sin resultados' : '🎈 Sin eventos próximos'}</div>`;
+}
+function _calUpcomingHTML(evts) {
+  const buscando = S._calSearchOpen || !!S._calQ, o = S._calSort || 'asc';
+  const ic = { asc: 'sort-ascending', desc: 'sort-descending', az: 'sort-a-z' }[o];
+  const lbl = { asc: 'Orden: más próximo primero · toca para invertir', desc: 'Orden: más lejano primero · toca para A–Z', az: 'Orden: A–Z · toca para volver a por fecha' }[o];
+  return `<div class="ico-bar ico-bar-c">
+      <button class="ico-btn on" onclick="calOrdenEv()" title="${lbl}" aria-label="${lbl}"><i class="ti ti-${ic}"></i></button>
+      <button class="ico-btn${buscando ? ' on' : ''}" onclick="calToggleBuscar()" title="Buscar" aria-label="Buscar" aria-expanded="${buscando}"><i class="ti ti-search"></i></button>
+      <button class="ico-btn" onclick="calExcelEv()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
+    </div>
+    ${buscando ? `<div class="ico-search"><i class="ti ti-search"></i><input id="cal-q" value="${_wlEsc(S._calQ || '')}" placeholder="Buscar evento…" oninput="calBuscarEv(this.value)" aria-label="Buscar evento"></div>` : ''}
+    <div class="mov-cards" id="cal-ev-list">${_calListaEvHTML(evts)}</div>`;
+}
+function calOrdenEv() { S._calSort = { asc: 'desc', desc: 'az', az: 'asc' }[S._calSort || 'asc']; _calPanelsPaint(); }
+function calToggleBuscar() { S._calSearchOpen = !S._calSearchOpen; if (!S._calSearchOpen) S._calQ = ''; _calPanelsPaint(); if (S._calSearchOpen) $('cal-q')?.focus(); }
+function calBuscarEv(v) { S._calQ = v; const l = $('cal-ev-list'); if (l) l.innerHTML = _calListaEvHTML(S.data.calendario || []); }
+function calExcelEv() {
+  exportRowsToExcel(_calEvProximos(S.data.calendario || []), [
+    { label: 'Fecha', get: e => fd(e.fecha) || '' }, { label: 'Hora', get: e => _calHora(e.hora) }, { label: 'Título', get: e => e.titulo || '' },
+    { label: 'Tipo', get: e => e.tipo || 'evento' }, { label: 'Recurrente', get: e => e.recurrente || 'no' }, { label: 'Descripción', get: e => e.descripcion || '' },
+  ], 'eventos');
+}
+
+// ── Nuevo evento: formulario en línea, justo debajo de los botones ──
+function _calNuevoHTML() {
+  const f = S._calNewFecha || S._calSel || toISO(new Date()), t = S._calNewTipo || 'evento';
+  return `<div class="cal-new">
+    <div class="cal-new-ttl">${CAL_TIPO_EMO[t]} Nuevo evento</div>
+    <input id="cn-titulo" maxlength="120" placeholder="Pago BBVA, cumpleaños, cita…" onkeydown="if(event.key==='Enter')calGuardarNuevo()">
+    <div class="cal-new-row"><input id="cn-fecha" type="date" value="${f}" aria-label="Fecha"><input id="cn-hora" type="time" aria-label="Hora (opcional)"></div>
+    <div class="cal-new-tipos" role="radiogroup" aria-label="Tipo">${CAL_TIPOS.map(([k, e]) => `<button type="button" class="q-desp-chip${k === t ? ' on' : ''}" role="radio" aria-checked="${k === t}" onclick="calNuevoTipo('${k}',this)">${e} ${k}</button>`).join('')}</div>
+    <div class="cal-new-row"><select id="cn-rec" aria-label="Se repite">${['no', 'diario', 'semanal', 'mensual', 'anual'].map(r => `<option value="${r}">${r === 'no' ? 'No se repite' : '🔁 ' + r}</option>`).join('')}</select></div>
+    <textarea id="cn-desc" rows="2" maxlength="500" placeholder="Detalles (opcional)"></textarea>
+    <div class="cal-new-acts"><button class="btn btn-ghost" onclick="calPanel(null)">Cancelar</button><button class="btn btn-accent" onclick="calGuardarNuevo()"><i class="ti ti-check"></i> Guardar</button></div>
+  </div>`;
+}
+function calNuevoTipo(t, btn) {
+  S._calNewTipo = t;
+  btn.parentElement.querySelectorAll('.q-desp-chip').forEach(b => { const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  const ttl = document.querySelector('.cal-new-ttl'); if (ttl) ttl.textContent = `${CAL_TIPO_EMO[t]} Nuevo evento`;
+}
+async function calGuardarNuevo() {
+  const titulo = ($('cn-titulo')?.value || '').trim();
+  if (!titulo) { toast('Ponle un título', 'error'); $('cn-titulo')?.focus(); return; }
+  const datos = { user_phone: S.phone, titulo, fecha: $('cn-fecha')?.value || toISO(new Date()), hora: $('cn-hora')?.value || null,
+    tipo: S._calNewTipo || 'evento', recurrente: $('cn-rec')?.value || 'no', descripcion: ($('cn-desc')?.value || '').trim() };
+  try {
+    const r = await api('POST', '/api/calendario', datos);
+    if (r?.success === false) throw new Error(r.error || 'No se pudo guardar');
+    S._calPanel = null; S._calNewFecha = null; S._calNewTipo = null;
+    await load();
+    toast(`${CAL_TIPO_EMO[datos.tipo]} Evento guardado`);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+function calNuevoEn(ds) { closeCalDay(); S._calNewFecha = ds; S._calPanel = 'new'; _calPanelsPaint(); $('cn-titulo')?.focus(); }
+
+// Un solo desplegable abierto a la vez (Nuevo evento / Próximos / Feriados), siempre bajo los botones
+function calPanel(k) { S._calPanel = (k === null || S._calPanel === k) ? null : k; if (S._calPanel !== 'new') S._calNewFecha = null; _calPanelsPaint(); if (S._calPanel === 'new') setTimeout(() => $('cn-titulo')?.focus(), 30); }
+function toggleCalUp()  { calPanel('up'); }
+function toggleCalFer() { calPanel('fer'); }
+function _calPanelsPaint() {
+  const p = S._calPanel, evts = S.data.calendario || [];
+  const set = (id, on, html) => { const w = $(id); if (w) { w.style.display = on ? '' : 'none'; if (on) w.innerHTML = html(); else w.innerHTML = ''; } };
+  set('cal-new-wrap', p === 'new', _calNuevoHTML);
+  set('cal-upcoming-wrap', p === 'up', () => _calUpcomingHTML(evts));
+  set('cal-fer-wrap', p === 'fer', () => _calFerHTML(S.cy));
+  [['cal-new-btn', 'new'], ['cal-up-btn', 'up'], ['cal-fer-btn', 'fer']].forEach(([id, k]) => { const b = $(id); if (b) { b.classList.toggle('on', p === k); b.setAttribute('aria-expanded', p === k); } });
+}
+function calHoy() { const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth(); closeCalDay(); }
 
 // ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
 function _calGridHTML(evts, y, mo, refs, niditoItems) {
@@ -7729,75 +7900,31 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
 <div class="cal-leg"><span>🏖️ Feriado</span><span><i class="lg-fin"></i>Fin de semana</span><span><i class="lg-pay"></i>Cobro</span><span><i class="lg-pay warn"></i>Cobro en inhábil</span></div>`;
 }
 
-// Tarjetas de "Próximos Eventos" (<900px, ver CSS) — MISMOS datos/handlers que
-// la tabla de escritorio (eEvt/dEvt), solo presentación distinta. Editar abre
-// el formulario completo; no hay edición inline por campo en la tarjeta, ese
-// patrón (ieCal en <td>) es de escritorio.
-function _calCardsHTML(up) {
-  if (!up.length) return `<div class="tdc-cards-empty">Sin eventos próximos</div>`;
-  return `<div class="tdc-cards">${up.map(e => `<div class="tdc-card">
-      <div class="tdc-card-hdr">
-        <strong>${e.titulo||''}</strong>
-        <span class="badge b-activo">${e.tipo||'evento'}</span>
-      </div>
-      <div class="tdc-card-nums" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
-        <div><span class="tdc-card-lbl">Fecha</span><span>${fmtDate(e.fecha)}</span></div>
-        <div><span class="tdc-card-lbl">Hora</span><span>${e.hora||'—'}</span></div>
-      </div>
-      ${e.descripcion ? `<div style="font-size:12px;color:var(--text-2);margin-top:6px">${e.descripcion}</div>` : ''}
-      <div class="tdc-card-acts">
-        <button class="btn btn-ghost btn-sm" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'><i class="ti ti-pencil"></i> Editar</button>
-        <button class="btn btn-ghost btn-sm" style="color:var(--color-expense)" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i> Eliminar</button>
-      </div>
-    </div>`).join('')}</div>`;
-}
-
-function _calUpcomingHTML(evts) {
-  const today=toISO(new Date());
-  const up=evts.filter(e=>fd(e.fecha)>=today).sort((a,b)=>(fd(a.fecha)||'').localeCompare(fd(b.fecha)||'')).slice(0,100);
-  return _calCardsHTML(up.slice(0,80)) + `<div class="cal-table-view">` + tglBtn('tbl-cal') + mkTable({ id:'tbl-cal', exportName:'calendario', numbered:true, limit:80, empty:'Sin eventos próximos',
-    columns:[
-      {key:'fecha',label:'Fecha',filter:'text',value:e=>fd(e.fecha)||e.fecha||''},
-      {key:'hora',label:'Hora',value:e=>e.hora||'—'},
-      {key:'titulo',label:'Título',filter:'text',value:e=>e.titulo||''},
-      {key:'tipo',label:'Tipo',filter:'select',value:e=>e.tipo||'evento'},
-      {key:'descripcion',label:'Descripción',filter:'text',value:e=>e.descripcion||''},
-      {key:'_acts',label:'',sortable:false}],
-    rows:up,
-    renderRow:e=>`<tr>
-  <td class="editable" onclick="ieCal(this,${e.id},'fecha')">${fmtDate(e.fecha)}</td>
-  <td class="editable" onclick="ieCal(this,${e.id},'hora')" style="color:var(--muted)">${e.hora||'—'}</td>
-  <td class="editable" onclick="ieCal(this,${e.id},'titulo')"><strong>${e.titulo}</strong></td>
-  <td class="editable" onclick="ieCal(this,${e.id},'tipo')" style="color:var(--muted)">${e.tipo||'evento'}</td>
-  <td class="editable" onclick="ieCal(this,${e.id},'descripcion')" style="color:var(--muted)">${e.descripcion||''}</td>
-  <td class="acts">
-    <button class="btn btn-ghost" style="padding:6px 10px" onclick='eEvt(${JSON.stringify(e).replace(/'/g,"&#39;")})'><i class="ti ti-pencil"></i></button>
-    <button class="btn btn-danger" style="padding:6px 10px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
-  </td>
-</tr>`}) + `</div>`;
-}
-
 async function rCal() {
   const evts=S.data.calendario||[];
   S._calData={}; evts.forEach(e=>{S._calData[e.id]=e;});
   const refs=(S.data.user||{}).external_refs||{};
   if(!S._niditoItems) await _ndFetch();
   const nd=S._niditoItems||[];
+  const p=S._calPanel||null, pf=_calProxFeriado();
+  const sub=`${_calFechaLarga(toISO(new Date()))}${pf?` · ${pf.emoji} ${pf.corto} ${_calCuando(_calDias(pf.ds)).toLowerCase()}`:''}`;
   $('tab-calendario').innerHTML=`
-<div class="hdr">
-  <h2><i class="ti ti-calendar"></i> Calendario</h2>
+<div class="cal-hero">
+  <div class="cal-hero-ttl"><span aria-hidden="true">📅</span> Calendario</div>
+  <div class="cal-hero-sub">${sub}</div>
 </div>
 <div class="ico-bar ico-bar-c">
-  <button class="ico-btn acc" onclick="oEvt()" title="Nuevo evento" aria-label="Nuevo evento"><i class="ti ti-plus"></i></button>
-  <button class="ico-btn${S._calUpOpen?' on':''}" id="cal-up-btn" onclick="toggleCalUp()" title="Próximos eventos" aria-label="Próximos eventos" aria-expanded="${S._calUpOpen?'true':'false'}">⏰</button>
-  <button class="ico-btn${S._calFerOpen?' on':''}" id="cal-fer-btn" onclick="toggleCalFer()" title="Feriados del año" aria-label="Feriados del año" aria-expanded="${S._calFerOpen?'true':'false'}">🏖️</button>
+  <button class="ico-btn acc${p==='new'?' on':''}" id="cal-new-btn" onclick="calPanel('new')" title="Nuevo evento" aria-label="Nuevo evento" aria-expanded="${p==='new'}"><i class="ti ti-plus"></i></button>
+  <button class="ico-btn${p==='up'?' on':''}" id="cal-up-btn" onclick="calPanel('up')" title="Próximos eventos" aria-label="Próximos eventos" aria-expanded="${p==='up'}">⏰</button>
+  <button class="ico-btn${p==='fer'?' on':''}" id="cal-fer-btn" onclick="calPanel('fer')" title="Feriados" aria-label="Feriados" aria-expanded="${p==='fer'}">🏖️</button>
 </div>
+<div id="cal-new-wrap" style="display:${p==='new'?'':'none'}">${p==='new'?_calNuevoHTML():''}</div>
+<div id="cal-upcoming-wrap" style="display:${p==='up'?'':'none'}">${p==='up'?_calUpcomingHTML(evts):''}</div>
+<div id="cal-fer-wrap" style="display:${p==='fer'?'':'none'}">${p==='fer'?_calFerHTML(S.cy):''}</div>
 <div id="cal-day-ov" onclick="closeCalDay()"></div>
 <div class="cal-wrap">
   <div class="cal-main">
     <div id="cal-month-wrap">${_calGridHTML(evts,S.cy,S.cm,refs,nd)}</div>
-    <div id="cal-fer-wrap" style="display:${S._calFerOpen?'':'none'}">${S._calFerOpen?_calFerHTML(S.cy):''}</div>
-    <div id="cal-upcoming-wrap" style="display:${S._calUpOpen?'':'none'}">${_calUpcomingHTML(evts)}</div>
   </div>
   <div class="cal-day-panel" id="cal-day-panel"></div>
 </div>`;
@@ -7848,7 +7975,7 @@ function calDay(ds) {
   ${it.tipo?`<div style="opacity:.75;font-size:11px;margin-top:2px">${it.tipo}</div>`:''}
 </div>`;
   });
-  html+=`<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:4px" onclick="closeCalDay();oEvt({fecha:'${ds}'})"><i class="ti ti-plus"></i> Agregar evento</button>`;
+  html+=`<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:4px" onclick="calNuevoEn('${ds}')"><i class="ti ti-plus"></i> Agregar evento</button>`;
   const panel=$('cal-day-panel');
   if(panel){panel.innerHTML=html;panel.classList.add('open');}
   const ov=$('cal-day-ov');
@@ -7872,7 +7999,7 @@ function calN(d){
   const wrap=$('cal-month-wrap');
   if(wrap) wrap.innerHTML=_calGridHTML(evts,S.cy,S.cm,refs,S._niditoItems||[]);
   else rCal();
-  const fw=$('cal-fer-wrap'); if(fw&&S._calFerOpen) fw.innerHTML=_calFerHTML(S.cy);
+  if(S._calPanel==='fer') _calPanelsPaint();
 }
 
 // ── MODALS ────────────────────────────────────────────────────────────────────

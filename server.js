@@ -853,9 +853,77 @@ function _aplicaEnQuincena(item, letra) {
   return dias.some(d => letra === 'A' ? (d >= 10 && d <= 24) : (d >= 25 || d <= 9));
 }
 
+// ── Días hábiles (espejo del cliente): feriados de descanso obligatorio (LFT art. 74) + fines de semana ──
+const _FER_SRV = {};
+function feriadosMX(y) {
+  if (_FER_SRV[y]) return _FER_SRV[y];
+  const f = new Set(), p2 = n => String(n).padStart(2, '0');
+  const lunes = (m, n) => 1 + ((1 - new Date(y, m, 1).getDay() + 7) % 7) + 7 * (n - 1);
+  const add = (m, d) => f.add(`${y}-${p2(m + 1)}-${p2(d)}`);
+  add(0, 1); add(1, lunes(1, 1)); add(2, lunes(2, 3)); add(4, 1); add(8, 16); add(10, lunes(10, 3)); add(11, 25);
+  if (y >= 2024 && (y - 2024) % 6 === 0) add(11, 1);
+  if (y >= 2021 && (y - 2021) % 3 === 0) add(5, 1 + ((7 - new Date(y, 5, 1).getDay()) % 7));
+  return (_FER_SRV[y] = f);
+}
+const _esHabil = ds => { const w = new Date(ds + 'T12:00:00').getDay(); return w !== 0 && w !== 6 && !feriadosMX(+ds.slice(0, 4)).has(ds); };
+function diasHabilesQuincena(q) {
+  let n = 0; const d = new Date(q.inicio + 'T12:00:00'), fin = new Date(q.fin + 'T12:00:00');
+  for (; d <= fin; d.setDate(d.getDate() + 1)) if (_esHabil(d.toISOString().slice(0, 10))) n++;
+  return n;
+}
+// Transporte automático: gasto diario de lunes a viernes en días hábiles (combi + camión + metro).
+const TRANSPORTE_DEF = { combi: 28, camion: 20, metro: 10 };
+function transporteQuincena(refs, q) {
+  const t = { ...TRANSPORTE_DEF, ...(refs.transporte_diario || {}) };
+  const diario = (Number(t.combi) || 0) + (Number(t.camion) || 0) + (Number(t.metro) || 0), dias = diasHabilesQuincena(q);
+  return { dias, diario, monto: Math.round(dias * diario * 100) / 100, tarifas: t };
+}
+// Ingresos predeterminados: 1ª quincena (10–24) y 2ª (25–9). La beca es mensual (día 1 → cae en la 2ª).
+const INGRESOS_PRED = {
+  A: [{ k: 'sueldo', descripcion: 'Sueldo', monto: 13776.37, dias: [10] }, { k: 'vales', descripcion: 'Vales', monto: 3566.22, dias: [10] }],
+  B: [{ k: 'sueldo', descripcion: 'Sueldo', monto: 14202.37, dias: [25] }, { k: 'beca', descripcion: 'Beca', monto: 500, dias: [1] }],
+};
+const _sembrando = new Set();
+// Pone los ingresos predeterminados en las quincenas que no tienen ninguno (la actual y las 11 siguientes), UNA vez
+// por quincena: se vuelven datos reales (editables y borrables) y lo que borres no se vuelve a sembrar.
+async function sembrarIngresosPred(phone, refs) {
+  if (!refs || _sembrando.has(phone)) return refs;
+  const hechos = new Set(Array.isArray(refs.ingresos_pred_sembrados) ? refs.ingresos_pred_sembrados : []);
+  const claves = []; let q = getQuincena(hoy());
+  for (let i = 0; i < 12; i++) { claves.push(q.key); q = siguienteQuincena(q); }
+  const faltan = claves.filter(k => !hechos.has(k));
+  if (!faltan.length && refs.transporte_auto !== undefined) return refs;
+  _sembrando.add(phone);
+  try {
+    const nuevo = { ...refs, budget_q: { ...(refs.budget_q || {}) } };
+    for (const k of faltan) {
+      const qb = nuevo.budget_q[k] || { gastos: [], ingresos: [] };
+      const hay = Array.isArray(qb.ingresos) && qb.ingresos.length;
+      if (!hay) nuevo.budget_q[k] = { ...qb, gastos: Array.isArray(qb.gastos) ? qb.gastos : [], ingresos: INGRESOS_PRED[k.slice(-1)].map(it => ({ _id: `pd-${k}-${it.k}`, descripcion: it.descripcion, monto: it.monto, dias: it.dias })) };
+      hechos.add(k);
+    }
+    nuevo.ingresos_pred_sembrados = [...hechos].sort();
+    if (nuevo.transporte_auto === undefined) nuevo.transporte_auto = true;   // Transporte automático solo para esta cuenta
+    const { error } = await sb.from('usuarios').update({ external_refs: nuevo }).eq('telefono', phone);
+    return error ? refs : nuevo;
+  } finally { _sembrando.delete(phone); }
+}
+
 // Espejo server-side de getGastosEsperados() del frontend: los gastos propios de la
 // quincena (budget_q) mandan, y la plantilla global rellena lo que no esté cubierto.
 function gastosEsperadosQuincena(refs, qKey) {
+  const base = _gastosEsperadosBase(refs, qKey), q = _quincenaDeKey(qKey);
+  if (!(refs.transporte_auto === true || refs.transporte_diario)) return base;   // sin transporte automático: tal cual
+  const sin = base.filter(g => !/^transporte$/i.test((g.descripcion || '').trim()));
+  if (!q) return base;
+  const t = transporteQuincena(refs, q);
+  return t.monto > 0 ? [...sin, { _id: '_transporte_', descripcion: 'Transporte', monto: t.monto, categoria: 'Transporte', forma_pago: 'efectivo' }] : sin;
+}
+function _quincenaDeKey(qKey) {
+  const m = String(qKey || '').match(/^(\d{4})-(\d{2})-([AB])$/);
+  return m ? getQuincena(`${m[1]}-${m[2]}-${m[3] === 'A' ? '15' : '28'}`) : null;
+}
+function _gastosEsperadosBase(refs, qKey) {
   const letra  = String(qKey || '').slice(-1);
   const global = (Array.isArray(refs.gastos_esperados) ? refs.gastos_esperados : [])
     .filter(g => _aplicaEnQuincena(g, letra));
@@ -2426,6 +2494,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden')
         .eq('user_phone', phone).is('deleted_at', null).order('orden').order('id'),
     ]);
+    if (user.data && user.data.role === 'ADMIN_A') user.data.external_refs = await sembrarIngresosPred(phone, user.data.external_refs || {});
     const nidito_compromisos = (nidAsig.data || []).filter(r => Number(r.monto_quincenal) > 0).map(r => ({
       id: r.item_id, titulo: r.nidito_items?.titulo || 'Nidito', tipo: r.nidito_items?.tipo || '', estado: r.nidito_items?.estado || '',
       fecha_inicio: r.nidito_items?.fecha_inicio || null, fecha_fin: r.nidito_items?.fecha_fin || null, monto: Number(r.monto_quincenal),
@@ -5399,7 +5468,10 @@ app.post('/api/update-refs', async (req, res) => {
     if (selErr && selErr.code !== 'PGRST116') return res.status(500).json({ success: false, error: selErr.message });
     const refs = { ...(cur?.external_refs || {}) };
 
-    if (field === 'hide_despensa_gastos') {
+    if (field === 'transporte_diario' && action === 'set') {
+      const v = req.body.value || {}, num = x => Math.max(0, Math.min(10000, Number(x) || 0));
+      refs.transporte_diario = { combi: num(v.combi), camion: num(v.camion), metro: num(v.metro) };
+    } else if (field === 'hide_despensa_gastos') {
       refs.hide_despensa_gastos = req.body.value === true;
     } else if (field === 'cuentas' && action === 'set') {
       // Saldos de cuentas para MONITOREO (Banamex débito, Revolut ahorro).
