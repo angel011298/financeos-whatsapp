@@ -800,8 +800,36 @@ function aplicarReglasCategoria(datos, textoOriginal = '') {
   return datos;
 }
 
+// ── Semanas ISO 'YYYY-Www' (lunes a domingo): la unidad de presupuesto de Alicia ───────────────
+function _lunesUTC(d) { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); const w = x.getUTCDay(); x.setUTCDate(x.getUTCDate() - (w === 0 ? 6 : w - 1)); return x; }
+const _isoD = d => d.toISOString().slice(0, 10);
+function semanaKey(fechaISO) {
+  const lun = _lunesUTC(new Date(String(fechaISO).slice(0, 10) + 'T12:00:00Z'));
+  const jue = new Date(lun); jue.setUTCDate(lun.getUTCDate() + 3);
+  const y = jue.getUTCFullYear(), lun1 = _lunesUTC(new Date(Date.UTC(y, 0, 4)));
+  return `${y}-W${String(1 + Math.round((jue - lun1) / 864e5 / 7 - 3 / 7)).padStart(2, '0')}`;
+}
+function semanaRango(qKey) {
+  const m = String(qKey || '').match(/^(\d{4})-W(\d{2})$/); if (!m) return null;
+  const lun = _lunesUTC(new Date(Date.UTC(+m[1], 0, 4))); lun.setUTCDate(lun.getUTCDate() + (+m[2] - 1) * 7);
+  const dom = new Date(lun); dom.setUTCDate(lun.getUTCDate() + 6);
+  return { from: _isoD(lun), to: _isoD(dom) };
+}
+// Clave del periodo de presupuesto de una cuenta para una fecha: semana (USER_B) o quincena (resto)
+const _rolCache = new Map();
+async function claveUnidad(phone, fecha) {
+  let rol = _rolCache.get(phone);
+  if (!rol || Date.now() - rol.t > 300000) {
+    const { data } = await sb.from('usuarios').select('role').eq('telefono', phone).maybeSingle();
+    rol = { v: data?.role || '', t: Date.now() }; _rolCache.set(phone, rol);
+  }
+  return rol.v === 'USER_B' ? semanaKey(fecha) : getQuincena(fecha).key;
+}
+
 // Etiqueta legible de quincena: "2026-06-B" → "2ª quincena de junio"
 function labelQuincena(qKey) {
+  const sr = semanaRango(qKey);
+  if (sr) { const d = new Date(sr.from + 'T12:00:00Z'); return `semana del ${d.getUTCDate()} de ${['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][d.getUTCMonth()]}`; }
   const m = String(qKey || '').match(/^(\d{4})-(\d{2})-([AB])$/);
   if (!m) return qKey;
   const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -811,7 +839,7 @@ function labelQuincena(qKey) {
 
 async function addGastoProgramado(phone, datos, origen, texto_original) {
   const fecha = datos.fecha || hoy();
-  const qKey  = getQuincena(fecha).key;
+  const qKey  = await claveUnidad(phone, fecha);   // semana para Alicia, quincena para Ángel
   const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
   const refs = { ...(cur?.external_refs || {}) };
   if (!refs.budget_q) refs.budget_q = {};
@@ -4491,7 +4519,7 @@ app.post('/api/notas-inicio/upload-confirm', async (req, res) => {
 // Presupuesto, vía external_refs.budget_q) → comprado. Agendar reutiliza el mismo mecanismo
 // que los gastos programados del chat: el gasto aparece en "Gastos esta quincena" de esa
 // quincena y, al marcarse como pagado ahí, el deseo pasa a comprado (ver wlConciliar).
-const WL_RE_QKEY = /^\d{4}-(0[1-9]|1[0-2])-[AB]$/;
+const WL_RE_QKEY = /^\d{4}-((0[1-9]|1[0-2])-[AB]|W(0[1-9]|[1-4]\d|5[0-3]))$/;
 // Formas de pago de un deseo = las de "Gastos esta quincena"; WL_MEDIO las traduce al medio_pago
 // de un movimiento (así el saldo de la cuenta correcta se ajusta al registrarlo).
 const WL_FORMAS = ['', 'efectivo', 'tarjeta_debito', 'pluxee'];
@@ -4501,6 +4529,7 @@ const wlMedio = (refs, row) => WL_MEDIO[(refs.forma_pago_gastos || {})[row.nombr
 
 // 'YYYY-MM-A' = días 10–24; 'YYYY-MM-B' = día 25 a 9 del mes siguiente (igual que getQuincena).
 function wlRangoQuincena(qKey) {
+  const sr = semanaRango(qKey); if (sr) return sr;
   const [y, m, l] = qKey.split('-');
   if (l === 'A') return { from: `${y}-${m}-10`, to: `${y}-${m}-24` };
   const M = Number(m), nm = M === 12 ? 1 : M + 1, ny = M === 12 ? Number(y) + 1 : Number(y);

@@ -2532,6 +2532,10 @@ async function load() {
     S.data = r.data || {};
     S.data.despensa = rd.success ? (rd.data || []) : [];
     S._liveSig = JSON.stringify(r.data || {});
+    if (S._periodoIni !== S.phone) {   // primera carga de esta cuenta: arranca en su unidad (Semana para Alicia)
+      S._periodoIni = S.phone;
+      if (_unidad() === 'semana' && S.periodo.tipo === 'quincena' && !S.periodo.offset) S.periodo = { tipo: 'semana', offset: 0 };
+    }
   }
   renderTab(S.tab);
 }
@@ -3236,7 +3240,7 @@ function toISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-function getQuincenaInfo(off) {
+function _qInfoQuincena(off) {
   off = off || 0;
   const now = new Date();
   const day = now.getDate();
@@ -3267,16 +3271,59 @@ function getQuincenaInfo(off) {
   return { from, to, label, q: is2nd ? 2 : 1, month, year };
 }
 
+
+// ── UNIDAD DE PRESUPUESTO ────────────────────────────────────────────────────
+// Ángel planea por QUINCENA (10–24 / 25–9) y Alicia por SEMANA (lunes a domingo). Todo lo que se organiza
+// por periodo de presupuesto (Gastos esta quincena/semana, ingresos y gastos esperados, posponer, remanente,
+// Wishlist agendada) pasa por getQuincenaInfo / getQKey / getQuincenaOffsetFromDate, que respetan la unidad
+// de la cuenta abierta. El selector de periodo "Quinc" sigue siendo una quincena real (_qInfoQuincena).
+// Claves: quincena 'YYYY-MM-A|B', semana ISO 'YYYY-Www'.
+const _unidad = () => ((((S.data || {}).user || {}).role) === 'USER_B') ? 'semana' : 'quincena';
+const _uTxt = () => _unidad();
+function _lunes(d) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const w = x.getDay(); x.setDate(x.getDate() - (w === 0 ? 6 : w - 1)); return x; }
+function _isoSemana(lun) {
+  const jue = new Date(lun.getFullYear(), lun.getMonth(), lun.getDate() + 3), y = jue.getFullYear();
+  const lun1 = _lunes(new Date(y, 0, 4));
+  return { y, w: 1 + Math.round((jue - lun1) / (7 * 86400000) - 3 / 7) };
+}
+function _semanaInfo(off) {
+  const lun = _lunes(new Date()); lun.setDate(lun.getDate() + (off || 0) * 7);
+  const dom = new Date(lun.getFullYear(), lun.getMonth(), lun.getDate() + 6);
+  const { y, w } = _isoSemana(lun), key = `${y}-W${String(w).padStart(2, '0')}`, dd = d => String(d.getDate()).padStart(2, '0');
+  const label = lun.getMonth() === dom.getMonth()
+    ? `Semana ${dd(lun)} – ${dd(dom)} ${MESES[dom.getMonth()]} ${dom.getFullYear()}`
+    : `Semana ${dd(lun)} ${MESES_CORTO[lun.getMonth()].toUpperCase()} – ${dd(dom)} ${MESES_CORTO[dom.getMonth()].toUpperCase()} ${dom.getFullYear()}`;
+  return { from: toISO(lun), to: toISO(dom), label, w: true, key, year: lun.getFullYear(), month: lun.getMonth() };
+}
+function _semanaOffset(dateStr) {
+  if (!dateStr) return 0;
+  return Math.round((_lunes(new Date(dateStr + 'T12:00:00')) - _lunes(new Date())) / (7 * 86400000));
+}
+function _semanaDeKey(k) {
+  const m = String(k || '').match(/^(\d{4})-W(\d{2})$/); if (!m) return null;
+  const lun = _lunes(new Date(+m[1], 0, 4)); lun.setDate(lun.getDate() + (+m[2] - 1) * 7);
+  return { from: toISO(lun), to: toISO(new Date(lun.getFullYear(), lun.getMonth(), lun.getDate() + 6)) };
+}
+function _diasDelRango(from, to) {
+  const out = new Set(), d = new Date(from + 'T12:00:00'), f = new Date(to + 'T12:00:00');
+  for (; d <= f; d.setDate(d.getDate() + 1)) out.add(d.getDate());
+  return out;
+}
+function getQuincenaInfo(off) { return _unidad() === 'semana' ? _semanaInfo(off) : _qInfoQuincena(off); }
+function getQuincenaOffsetFromDate(dateStr) { return _unidad() === 'semana' ? _semanaOffset(dateStr) : _qOffQuincena(dateStr); }
+
 function getQKey(qi) {
+  if (qi.w) return qi.key;
   return `${qi.year}-${String(qi.month + 1).padStart(2, '0')}-${qi.q === 2 ? 'B' : 'A'}`;
 }
 
 // Devuelve true si el día del mes (1-31) cae dentro de la quincena qi
 function dayInQuincena(day, qi) {
+  if (qi.w) return _diasDelRango(qi.from, qi.to).has(day);
   return qi.q === 1 ? (day >= 10 && day <= 24) : (day >= 25 || day <= 9);
 }
 
-function getQuincenaOffsetFromDate(dateStr) {
+function _qOffQuincena(dateStr) {
   if (!dateStr) return 0;
   const d = new Date(dateStr + 'T00:00:00');
   const dDay = d.getDate();
@@ -3321,7 +3368,7 @@ function getPeriodoRange() {
   const { tipo, offset } = S.periodo;
   const now = new Date();
   if (tipo === 'quincena') {
-    const qi = getQuincenaInfo(offset);
+    const qi = _qInfoQuincena(offset);   // el selector "Quinc" siempre es una quincena real
     return { from: qi.from, to: qi.to, label: qi.label, tipo, short: '' };
   }
   let from, to, label, short = '';
@@ -3331,7 +3378,7 @@ function getPeriodoRange() {
     const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
     const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
     from = toISO(mon); to = toISO(sun);
-    label = `${fmtDate(from)} – ${fmtDate(to)}`;
+    label = _semanaInfo(offset).label;
   } else if (tipo === 'mes') {
     const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
     from = toISO(d);
@@ -3376,6 +3423,8 @@ function getIngresosEsperados(refs, qKey) {
 function gastoAplicaQuincena(item, qKey) {
   const dias = item.dias || [];
   if (!dias.length) return true;
+  const sw = _semanaDeKey(qKey);   // semana: aplica si alguno de sus días cae en ella
+  if (sw) { const ds = _diasDelRango(sw.from, sw.to); return dias.some(d => ds.has(d)); }
   const letra = String(qKey || '').slice(-1); // 'A' o 'B'
   return dias.some(d => letra === 'A' ? (d >= 10 && d <= 24) : (d >= 25 || d <= 9));
 }
@@ -3682,6 +3731,8 @@ const _wlItem = id => (S._wl?.items || []).find(x => x.id === id);
 const _wlNorm = r => ({ ...r, precio: Number(r.precio) || 0 });
 
 function _wlQLabel(k) {
+  const sw = _semanaDeKey(k);
+  if (sw) { const d = new Date(sw.from + 'T12:00:00'); return `semana del ${d.getDate()} ${MESES_CORTO[d.getMonth()]} ${d.getFullYear()}`; }
   const m = String(k || '').match(/^(\d{4})-(\d{2})-([AB])$/);
   return m ? `${m[3]==='A'?'1ª':'2ª'} ${MESES_CORTO[+m[2]-1]} ${m[1]}` : '';
 }
@@ -3798,8 +3849,21 @@ function _wlEditor(it) {
 
 function _wlPanel(it) {
   const pn = S._wl.panel;
+  if (pn.tipo === 'agendar' && _unidad() === 'semana') {
+    const sw = _semanaDeKey(it.quincena_key), dflt = sw ? sw.from : _semanaInfo(1).from;
+    return `<div class="wl-panel">
+      <div class="wl-panel-t">Agendar en una semana</div>
+      <div class="wl-q-row"><input type="date" id="wl-qd" value="${dflt}" aria-label="Cualquier día de la semana"></div>
+      <div class="wl-hint">Elige cualquier día: queda en esa semana (lunes a domingo) dentro de “Gastos esta semana”. Cuando lo marques como pagado ahí, el deseo pasa a comprado solo.</div>
+      <div class="wl-acts" style="margin:0">
+        <button class="wl-act pri" onclick="wlConfirmarAgenda('${it.id}')"><i class="ti ti-check"></i> ${it.estado==='agendado'?'Mover':'Agendar'}</button>
+        ${it.estado === 'agendado' ? `<button class="wl-act" onclick="wlQuitarAgenda('${it.id}')">Quitar de agenda</button>` : ''}
+        <button class="wl-act" onclick="wlCerrarPanel()">Cancelar</button>
+      </div>
+    </div>`;
+  }
   if (pn.tipo === 'agendar') {
-    const k  = it.quincena_key || getQKey(getQuincenaInfo(1));
+    const k  = (/^\d{4}-\d{2}-[AB]$/.test(it.quincena_key || '') && it.quincena_key) || getQKey(_qInfoQuincena(1));
     const m  = k.match(/^(\d{4})-(\d{2})-([AB])$/);
     const y0 = new Date().getFullYear();
     const ys = []; for (let y = Math.min(y0, +m[1]); y <= y0 + 5; y++) ys.push(y);
@@ -3873,7 +3937,7 @@ function wlRender() {
   root.innerHTML = `
     ${_wlSegHTML()}
     ${st.error ? `<div class="wl-empty" style="color:var(--color-expense);padding:8px">No se pudo cargar: ${_wlEsc(st.error)}</div>` : ''}
-    <div class="wl-bal">Balance de esta quincena: <b style="color:${st._disp>=0?'var(--color-income)':'var(--color-expense)'}">${st._disp<0?'−':''}${fmt(Math.abs(st._disp))}</b></div>
+    <div class="wl-bal">Balance de esta ${_uTxt()}: <b style="color:${st._disp>=0?'var(--color-income)':'var(--color-expense)'}">${st._disp<0?'−':''}${fmt(Math.abs(st._disp))}</b></div>
     <div class="wl-stats" id="wl-stats">${_wlStatsHTML()}</div>
     <form class="wl-add" onsubmit="return wlAgregar(event)">
       <input id="wl-new-n" placeholder="¿Qué deseas?" maxlength="200" autocomplete="off" aria-label="Nuevo deseo">
@@ -3988,7 +4052,7 @@ async function _wlAccion(id, fn, okMsg) {
 }
 
 function wlConfirmarAgenda(id) {
-  const qKey = `${$('wl-qy').value}-${$('wl-qm').value}-${$('wl-qq').value}`;
+  const qKey = $('wl-qd') ? _semanaInfo(_semanaOffset($('wl-qd').value)).key : `${$('wl-qy').value}-${$('wl-qm').value}-${$('wl-qq').value}`;
   return _wlAccion(id, () => api('POST', `/api/wishlist/${id}/agendar`, { user_phone: S.phone, qKey }), `Agendado en la ${_wlQLabel(qKey)} ✓`);
 }
 function wlQuitarAgenda(id) {
@@ -4674,7 +4738,7 @@ function rQuincenaPanel(ctx) {
   const refs   = (S.data.user || {}).external_refs || {};
   // Derive quincena offset from the selected period
   let qOff;
-  if (S.periodo.tipo === 'quincena') {
+  if (S.periodo.tipo === _unidad()) {
     qOff = S.periodo.offset;
   } else {
     const pr = getPeriodoRange();
@@ -4891,7 +4955,7 @@ function rQuincenaPanel(ctx) {
             </div>
             <div class="mov-card-acts">
               <button class="edit-pill-btn" title="${esTr ? 'Editar tarifas de transporte' : 'Editar'}" onclick="${esTr ? 'editarTransporte()' : `oEditExpItem('gastos','${_id}')`}"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-              ${esTr ? '' : `<button class="edit-pill-btn" title="Posponer a la siguiente quincena" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
+              ${esTr ? '' : `<button class="edit-pill-btn" title="Posponer a la siguiente ${_uTxt()}" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
               <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>`}
             </div>
           </div>
@@ -4931,7 +4995,7 @@ function rQuincenaPanel(ctx) {
   <!-- Ingresos esperados this quincena -->
   <div style="margin-bottom:10px">
     <div class="q-section-lbl" style="justify-content:space-between">
-      <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esta quincena</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ti-trending-up" style="color:var(--green)"></i> Ingresos esta ${_uTxt()}</span>
       <div style="display:flex;gap:6px">
         ${ingEspQ.length ? `<button class="ico-btn" onclick="exportIngresosQuincena('${ctx}')" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
         <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
@@ -4939,7 +5003,7 @@ function rQuincenaPanel(ctx) {
     </div>
     ${remanente > 0 ? `
     <div class="q-item-row">
-      <span style="font-size:12px">🔁 Remanente <span style="color:var(--muted);font-size:11px">de la quincena anterior</span></span>
+      <span style="font-size:12px">🔁 Remanente <span style="color:var(--muted);font-size:11px">de la ${_uTxt()} anterior</span></span>
       <div style="display:flex;align-items:center;gap:6px"><span class="green" style="font-weight:600">${fmt(remanente)}</span></div>
     </div>` : ''}
     ${ingEspQ.length ? ingEspQ.map(ing=>`
@@ -4951,14 +5015,14 @@ function rQuincenaPanel(ctx) {
           <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('ingresos','${ing._id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
           <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('ingresos_esperados','${ing._id}')"><i class="ti ti-x" style="font-size:12px"></i></button>`:''}
       </div>
-    </div>`).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin ingresos esperados esta quincena. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('ingresos')">+ Agregar</button></div>`}
+    </div>`).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin ingresos esperados esta ${_uTxt()}. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('ingresos')">+ Agregar</button></div>`}
   </div>
 
   <!-- Gastos presupuestados esta quincena -->
   <div style="margin-bottom:10px">
     ${ctx === 'dash' ? '' : `
     <div class="sec-hdr" style="margin:14px 0 12px">
-      <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta quincena</h2></div>
+      <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta ${_uTxt()}</h2></div>
     </div>`}
     ${gasEsp.length ? `
     <div class="q-pay-wrap">
@@ -4968,11 +5032,11 @@ function rQuincenaPanel(ctx) {
       </div>
       <div class="tarj-card">${tarjHTML}</div>
       <div class="q-total-widget">
-        <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos quincena</span>
+        <span class="qt-lbl"><i class="ti ti-sigma"></i> Total gastos ${_uTxt()}</span>
         <span class="qt-val red">${fmt(totalGasEsp)}</span>
       </div>
       <div class="q-total-widget q-bal-widget" title="Ingresos de la quincena menos el total de gastos (incluye Dinerito de novios)">
-        <span class="qt-lbl"><i class="ti ti-scale"></i> Balance quincena</span>
+        <span class="qt-lbl"><i class="ti ti-scale"></i> Balance ${_uTxt()}</span>
         <span class="qt-val ${balPlan >= 0 ? 'green' : 'red'}">${balPlan < 0 ? '−' : ''}${fmt(Math.abs(balPlan))}</span>
       </div>
     </div>` : ''}
@@ -4983,7 +5047,7 @@ function rQuincenaPanel(ctx) {
     ${tglBtn('tbl-gastos-q-'+ctx, "exportGastosQuincena('"+ctx+"')", { centrado: true, antes: sortBtn })}
     <div class="mov-cards" id="tbl-gastos-q-${ctx}-body">
       ${gasVista.map(cardHTML).join('')}
-    </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Aún no hay gastos registrados esta quincena. Usa el botón <strong>Registrar Próximo Gasto</strong> de arriba.</div>`}
+    </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Aún no hay gastos registrados esta ${_uTxt()}. Usa el botón <strong>Registrar Próximo Gasto</strong> de arriba.</div>`}
     <div style="margin-top:10px;background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;border:1px solid var(--border-default)">
       <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">🧩 Gastos planeados por categoría${ctBtns(qChId,[['Dona','doughnut'],['Barras','bar-h']],'doughnut')}</div>
       <div class="cwrap"><canvas id="${qChId}"></canvas></div>
@@ -5420,7 +5484,7 @@ function _dsgTotal(lbl, monto, color, signo = '') {
 function desgloseHTML(key, scope) {
   const r     = getPeriodoRange();
   const pMovs = scope === 'mov' ? getMovFiltradas() : filterMovs(S.data.movs || [], r.from, r.to);
-  const rem   = scope !== 'mov' && S.periodo.tipo === 'quincena' ? getRemanente(S.periodo.offset) : 0;
+  const rem   = scope !== 'mov' && S.periodo.tipo === _unidad() ? getRemanente(S.periodo.offset) : 0;
   const ingL  = pMovs.filter(m => m.tipo === 'INGRESO'), gasL = pMovs.filter(m => m.tipo === 'GASTO');
   const ing   = ingL.reduce((a, m) => a + (m.monto || 0), 0), gas = gasL.reduce((a, m) => a + (m.monto || 0), 0);
 
@@ -6069,12 +6133,12 @@ function rDash() {
   const ingEsp = calcIngresosEsperadosPeriodo(refs, r.from, r.to);
   // "presup." de gastos = total de gastos fijos de la quincena vigente (mismos helpers que
   // el panel de quincena; deriva la quincena desde el periodo igual que él).
-  const _qOff = S.periodo.tipo==='quincena' ? S.periodo.offset : getQuincenaOffsetFromDate(r.from);
+  const _qOff = S.periodo.tipo===_unidad() ? S.periodo.offset : getQuincenaOffsetFromDate(r.from);
   const _qKey = getQKey(getQuincenaInfo(_qOff));
   const gasEspTot = getGastosEsperados(refs, _qKey)
     .filter(g=>!/^despensa$/i.test((g.descripcion||'').trim()) && !esTransporteFijo(g))
     .reduce((a,g)=>a+(g.monto||0),0) + getDinerito(_qKey) + (compromisoNiditoItem(getQuincenaInfo(_qOff))?.monto || 0) + (transporteItem(getQuincenaInfo(_qOff))?.monto || 0);
-  const remQ = S.periodo.tipo==='quincena' ? getRemanente(S.periodo.offset) : 0;   // solo en vista de quincena
+  const remQ = S.periodo.tipo===_unidad() ? getRemanente(S.periodo.offset) : 0;   // solo en vista de quincena
   const bal = ingC + remQ - gasC;   // Balance = Ingresos (+ remanente en quincena) − Egresos, igual en toda la app
   const pats = S.data.patrones||[];
   S._patData = {};
@@ -6135,7 +6199,7 @@ ${dsgPanelHTML('dash-dsg','dash')}
   `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span>${k==='wishlist' && S._wlNuevos > 0 ? `<span class="tile-dot">${S._wlNuevos}</span>` : ''}</button>`).join('')}</div>
 <div class="q-dash-wrap">
   <button class="q-dash-btn mini-tile${S._qDashOpen?' on':''}" id="q-dash-btn" onclick="toggleQuincenaDash()"
-    title="Gastos esta quincena" aria-label="Gastos esta quincena"
+    title="Gastos esta ${_uTxt()}" aria-label="Gastos esta ${_uTxt()}"
     aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">🧮</button>
   <button class="q-dash-btn mini-tile" onclick="dashEmoji('movimientos')" title="Movimientos" aria-label="Movimientos">📒</button>
 </div>
@@ -7416,7 +7480,7 @@ function setMovPreset(p) {
   initMovF();
   const now = new Date(), cm = curMes();
   if (p === 'hoy')      { S.movF.desde = S.movF.hasta = toISO(now); }
-  else if (p === 'quincena') { const qi=getQuincenaInfo(0); S.movF.desde=qi.from; S.movF.hasta=qi.to; }
+  else if (p === 'quincena') { const qi=_qInfoQuincena(0); S.movF.desde=qi.from; S.movF.hasta=qi.to; }
   else if (p === 'mes') { S.movF.desde=cm+'-01'; S.movF.hasta=toISO(new Date(now.getFullYear(),now.getMonth()+1,0)); }
   else if (p === 'semestre') { S.movF.desde=toISO(new Date(now.getFullYear(),now.getMonth()-5,1)); S.movF.hasta=toISO(now); }
   else if (p === 'anio') { S.movF.desde=now.getFullYear()+'-01-01'; S.movF.hasta=toISO(now); }
