@@ -2617,7 +2617,14 @@ function verifyShareToken(token) {
 // LA pareja: Ángel (administrador) y Alicia. La tabla guarda cuentas de prueba, duplicados y números
 // que se registran solos al escribirle al bot, así que "la pareja" no puede ser "cualquier no-admin":
 // se elige por nombre y, a igualdad, la cuenta más antigua.
+let _parejaCache = null;
 async function parejaPrincipal() {
+  if (_parejaCache && Date.now() - _parejaCache.t < 60000) return _parejaCache.v;
+  const v = await _parejaPrincipal();
+  _parejaCache = { t: Date.now(), v };
+  return v;
+}
+async function _parejaPrincipal() {
   const { data: users } = await sb.from('usuarios').select('telefono, nombre, role, created_at').order('created_at', { ascending: true });
   const lista = users || [];
   const admins = lista.filter(u => u.role === 'ADMIN_A'), otros = lista.filter(u => u.role !== 'ADMIN_A');
@@ -4561,22 +4568,31 @@ async function wlPagosQ(phone, r) {
 async function wlConciliar(phone, rows) {
   const ag = rows.filter(r => (r.estado === 'agendado' || r.estado === 'comprado') && r.quincena_key);
   if (!ag.length) return rows;
-  const refs = await wlGetRefs(phone);
+  const rangos = ag.map(r => wlRangoQuincena(r.quincena_key));
+  const desde = rangos.reduce((a, x) => (x.from < a ? x.from : a), '9999-12-31'), hasta = rangos.reduce((a, x) => (x.to > a ? x.to : a), '0000-01-01');
+  const [refs, { data: pagos }] = await Promise.all([
+    wlGetRefs(phone),
+    sb.from('movimientos').select('concepto, fecha').eq('user_phone', phone).eq('tipo', 'GASTO')
+      .in('concepto', [...new Set(ag.map(r => '[Ppto] ' + r.nombre))]).is('deleted_at', null).gte('fecha', desde).lte('fecha', hasta),
+  ]);
+  const cambios = [];
   for (const r of ag) {
     let cambio = null;
     const enPpto = wlEnPresupuesto(refs, r.quincena_key, r.id);
     if (r.estado === 'agendado' && !enPpto) {
       cambio = { estado: 'pendiente', quincena_key: null };
     } else if (enPpto) {
-      const pagado = (await wlPagosQ(phone, r)).length > 0;
+      const { from, to } = wlRangoQuincena(r.quincena_key);
+      const pagado = (pagos || []).some(p => p.concepto === '[Ppto] ' + r.nombre && p.fecha >= from && p.fecha <= to);
       if (r.estado === 'agendado' && pagado)  cambio = { estado: 'comprado', comprado_at: new Date().toISOString() };
       if (r.estado === 'comprado' && !pagado) cambio = { estado: 'agendado', comprado_at: null };
     }
     if (cambio) {
-      await sb.from('wishlist').update({ ...cambio, updated_at: new Date().toISOString() }).eq('id', r.id);
+      cambios.push(sb.from('wishlist').update({ ...cambio, updated_at: new Date().toISOString() }).eq('id', r.id));
       Object.assign(r, cambio);
     }
   }
+  await Promise.all(cambios);
   return rows;
 }
 
@@ -4586,34 +4602,37 @@ app.get('/api/wishlist', async (req, res) => {
   try {
     const { phone } = req.query;
     if (!phone) return res.status(400).json({ success: false, error: 'phone requerido' });
-    const { data, error } = await sb.from('wishlist').select('*')
-      .eq('user_phone', phone).is('deleted_at', null).order('orden', { ascending: false }).order('created_at', { ascending: false });
+    const [{ data, error }, par] = await Promise.all([
+      sb.from('wishlist').select('*').eq('user_phone', phone).is('deleted_at', null).order('orden', { ascending: false }).order('created_at', { ascending: false }),
+      req.query.par ? wlCompartidosDe(phone) : Promise.resolve(undefined),
+    ]);
     if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, data: await wlConciliar(phone, data || []) });
+    res.json({ success: true, data: await wlConciliar(phone, data || []), ...(par ? { par } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // Deseos que la PAREJA marcó como compartidos. Solo lectura; el servidor decide quién es la pareja
 // (nunca se acepta un teléfono de otro usuario), así que solo se ve lo que ella eligió compartir.
 const WL_PUBLICO = 'id,nombre,precio,prioridad,categoria,enlace,notas,estado,comprado_at,created_at';
+async function wlCompartidosDe(phone) {
+  const par = await parejaDe(phone);
+  if (!par) return { de: '', data: [], copiados: [] };
+  const { data, error } = await sb.from('wishlist').select(WL_PUBLICO + ',quincena_key')
+    .eq('user_phone', par.telefono).eq('compartido', true).is('deleted_at', null)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  const ids = (data || []).map(r => r.id);
+  const [rows, { data: mias }] = await Promise.all([
+    wlConciliar(par.telefono, data || []),   // "comprado" al día, como lo ve su dueña
+    ids.length ? sb.from('wishlist').select('origen_id').eq('user_phone', phone).is('deleted_at', null).in('origen_id', ids) : Promise.resolve({ data: [] }),
+  ]);
+  return { de: par.nombre || '', data: rows.map(({ quincena_key, ...r }) => r), copiados: (mias || []).map(m => m.origen_id) };
+}
 app.get('/api/wishlist/compartidos', async (req, res) => {
   try {
     const { phone } = req.query;
     if (!phone) return res.status(400).json({ success: false, error: 'phone requerido' });
-    const par = await parejaDe(phone);
-    if (!par) return res.json({ success: true, de: '', data: [], copiados: [] });
-    const { data, error } = await sb.from('wishlist').select(WL_PUBLICO + ',quincena_key')
-      .eq('user_phone', par.telefono).eq('compartido', true).is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    if (error) return res.status(400).json({ success: false, error: error.message });
-    const rows = await wlConciliar(par.telefono, data || []);   // "comprado" al día, como lo ve su dueña
-    const ids = rows.map(r => r.id);
-    let copiados = [];
-    if (ids.length) {
-      const { data: mias } = await sb.from('wishlist').select('origen_id').eq('user_phone', phone).is('deleted_at', null).in('origen_id', ids);
-      copiados = (mias || []).map(m => m.origen_id);
-    }
-    res.json({ success: true, de: par.nombre || '', data: rows.map(({ quincena_key, ...r }) => r), copiados });
+    res.json({ success: true, ...(await wlCompartidosDe(phone)) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

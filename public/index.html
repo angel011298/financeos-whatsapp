@@ -814,8 +814,9 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .wl-add #wl-new-p{width:96px;flex:0 0 96px}
 .wl-add-btn{flex:0 0 42px;border-radius:var(--radius-md);border:none;background:var(--accent-primary);color:var(--on-accent);
   font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.wl-bar{display:flex;gap:8px;align-items:center;justify-content:space-between}
-.wl-bar select{flex:1;min-width:0;padding:7px 10px;font-size:12.5px}
+.wl-bar{display:flex;flex-direction:column;gap:8px;align-items:center}
+.wl-bar select{width:auto;max-width:210px;min-width:0;padding:6px 10px;font-size:12px;text-align:center}
+.wl-bar .wl-bar-btns{margin:0}
 .wl-list{display:flex;flex-direction:column;gap:8px}
 .wl-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:12px 14px}
 .wl-card.done{background:var(--bg-surface-2)}
@@ -2031,6 +2032,9 @@ body.sheet-locked{overflow:hidden}
   .mov-card .edit-pill-btn,.pr-goal .edit-pill-btn,.ni-card .edit-pill-btn,.q-item-row .edit-pill-btn,.tdc-card .edit-pill-btn,.wl-card .wl-act.del{display:none!important}
 }
 .wl-act.edit-sw{display:none!important}
+.desp-card .q-card-foot{justify-content:center}
+.desp-card .desp-tiendas{justify-content:center}
+.desp-precio{cursor:pointer}
 </style>
 </head>
 <body>
@@ -2566,7 +2570,7 @@ function _startLivePoll() {
     finally { _livePollBusy = false; }
   }, 2000);
   // Lo que comparte la pareja: punto en 🎁 aunque no tengas la Wishlist abierta
-  setTimeout(wlBadgePar, 2500);
+  setTimeout(wlPrefetch, 2500);   // deja la Wishlist lista antes de abrirla (y pinta el punto de lo compartido)
   setInterval(() => { if (document.visibilityState === 'visible') wlBadgePar(); }, 20000);
 }
 
@@ -3693,22 +3697,49 @@ function _wlDisponible() {
   return ing + getRemanente(0) - gas;
 }
 
-function wlAbrir() {
-  if (!S._wl) S._wl = { items: [], filtro: 'todos', orden: 'prioridad', editando: null, panel: null, error: '' };
-  S._wl.editando = null; S._wl.panel = null; S._wl.vista = 'mia'; S._wl.eleg = null;
-  _wlPollStart();
-  abrirHoja('Wishlist', '<div id="wl-root" class="wl-root"><div class="wl-empty">Cargando…</div></div>', wlCargar, { size: 'md' });
-}
-
-async function wlCargar() {
+// Carga rápida: la Wishlist se abre al instante con lo último que se vio (memoria o este teléfono) y se
+// actualiza sola en segundo plano con UNA sola petición (lista propia + lo que comparte la pareja).
+const _wlCacheKey = () => 'fos_wl_cache_' + (S.phone || '');
+function _wlInit() { if (!S._wl) S._wl = { items: [], filtro: 'todos', orden: 'prioridad', editando: null, panel: null, error: '' }; return S._wl; }
+function _wlCacheLoad() {
+  const st = _wlInit(); if (st._listo) return;
   try {
-    const r = await api('GET', `/api/wishlist?phone=${encodeURIComponent(S.phone)}`);
-    S._wl.items = (r.data || []).map(_wlNorm);
-    S._wl.error = '';
-  } catch (e) { S._wl.error = e.message; }
-  await wlCargarPar();
-  wlRender();
+    const c = JSON.parse(localStorage.getItem(_wlCacheKey()) || 'null');
+    if (c && Array.isArray(c.items)) { st.items = c.items.map(_wlNorm); st.par = c.par || st.par; st._listo = true; }
+  } catch { /* sin caché: se espera la red */ }
 }
+function _wlCacheSave() { try { localStorage.setItem(_wlCacheKey(), JSON.stringify({ items: S._wl.items, par: S._wl.par })); } catch {} }
+async function _wlFetch() {
+  const r = await api('GET', `/api/wishlist?phone=${encodeURIComponent(S.phone)}&par=1`);
+  const st = _wlInit();
+  st.items = (r.data || []).map(_wlNorm);
+  if (r.par) st.par = { de: r.par.de || '', items: r.par.data || [], copiados: r.par.copiados || [] };
+  else await wlCargarPar();   // servidor anterior: segunda petición
+  st.error = ''; st._listo = true;
+  st._sig = _wlSig(st.items, st.par);
+  S._wlNuevos = (st.par?.items || []).filter(i => !_wlVistos().has(i.id) && i.estado !== 'comprado').length;
+  _wlPintarBadge();
+  _wlCacheSave();
+}
+async function wlPrefetch() {
+  if (!S.phone) return;
+  try { await _wlFetch(); } catch { wlBadgePar(); }
+}
+function wlAbrir() {
+  const st = _wlInit();
+  _wlCacheLoad();
+  st.editando = null; st.panel = null; st.vista = 'mia'; st.eleg = null;
+  _wlPollStart();
+  abrirHoja('Wishlist', `<div id="wl-root" class="wl-root">${st._listo ? '' : '<div class="wl-empty">Cargando…</div>'}</div>`, () => { if (st._listo) wlRender(); wlCargar(); }, { size: 'md' });
+}
+async function wlCargar() {
+  const st = _wlInit(), antes = st._listo ? _wlSig(st.items, st.par) : null;
+  try { await _wlFetch(); } catch (e) { st.error = e.message; }
+  if (!$('wl-root')) return;
+  if (antes === null || antes !== _wlSig(st.items, st.par) || st.error) wlRender();   // sin parpadeo si nada cambió
+}
+function wlSoloComp() { const st = _wlInit(); st.soloComp = !st.soloComp; st.eleg = null; wlRender(); }
+function wlCiclarPrecio() { const st = _wlInit(); st.orden = st.orden === 'precio_desc' ? 'precio_asc' : st.orden === 'precio_asc' ? 'prioridad' : 'precio_desc'; wlRender(); }
 
 function _wlHead(it) {
   const p = WL_PRIO[it.prioridad] || WL_PRIO.media;
@@ -3826,7 +3857,7 @@ function wlRender() {
     ['antiguos',    (a, b) => new Date(a.created_at) - new Date(b.created_at)],
     ['nombre',      (a, b) => a.nombre.localeCompare(b.nombre, 'es')],
   ]).get(st.orden) || (() => 0);
-  const lista = st.items.filter(i => st.filtro === 'todos' || i.estado === st.filtro)
+  const lista = st.items.filter(i => (st.filtro === 'todos' || i.estado === st.filtro) && (!st.soloComp || i.compartido))
     .sort((a, b) => (a.estado === 'comprado') - (b.estado === 'comprado') || f(a, b));
   const cards = lista.map(it => `<div class="wl-card${it.estado==='comprado'?' done':''}${st.eleg ? ' selmode' : ''}" id="wl-c-${it.id}">
       ${st.eleg ? `<button class="wl-selchk${st.eleg.has(it.id) ? ' on' : ''}" onclick="wlSel('${it.id}')" aria-pressed="${st.eleg.has(it.id)}">${st.eleg.has(it.id) ? '💞 Se comparte' : '＋ Compartir'}</button>` : ''}
@@ -3834,7 +3865,9 @@ function wlRender() {
       ${st.editando === it.id ? _wlEditor(it) : ''}
       ${st.panel?.id === it.id ? _wlPanel(it) : ''}
     </div>`).join('');
-  const vacio = st.items.length
+  const vacio = st.soloComp && !st.items.some(i => i.compartido)
+    ? `Aún no compartes ningún deseo con ${_wlEsc(_wlPar())}. Toca 💞 en la tarjeta de un deseo para compartirlo.`
+    : st.items.length
     ? 'No hay deseos con ese filtro.'
     : 'Tu lista está vacía.<br>Escribe arriba algo que quieras y su precio aproximado. Puedes agendarlo en la quincena que te convenga.';
   root.innerHTML = `
@@ -3855,8 +3888,11 @@ function wlRender() {
         ${[['prioridad','Ordenar: prioridad'],['precio_desc','Precio: mayor a menor'],['precio_asc','Precio: menor a mayor'],['recientes','Más recientes'],['antiguos','Más antiguos'],['nombre','Nombre A–Z']]
           .map(([v, l]) => `<option value="${v}"${st.orden===v?' selected':''}>${l}</option>`).join('')}
       </select>
-      <button class="ico-btn${st.eleg ? ' on' : ''}" onclick="wlElegir()" title="Elegir qué compartir con ${_wlEsc(_wlPar())}" aria-label="Elegir qué compartir" aria-pressed="${!!st.eleg}">💞</button>
-      <button class="ico-btn" onclick="wlExcel()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
+      <div class="ico-bar ico-bar-c wl-bar-btns">
+        <button class="ico-btn${/^precio/.test(st.orden) ? ' on' : ''}" onclick="wlCiclarPrecio()" title="${st.orden === 'precio_desc' ? 'Precio: mayor a menor · toca para menor a mayor' : st.orden === 'precio_asc' ? 'Precio: menor a mayor · toca para quitar el orden' : 'Ordenar por precio'}" aria-label="Ordenar por precio"><i class="ti ti-${st.orden === 'precio_desc' ? 'sort-descending-numbers' : st.orden === 'precio_asc' ? 'sort-ascending-numbers' : 'arrows-sort'}"></i></button>
+        <button class="ico-btn${st.soloComp ? ' on' : ''}" onclick="wlSoloComp()" title="${st.soloComp ? 'Ver todos mis deseos' : 'Ver solo lo que compartes con ' + _wlEsc(_wlPar())}" aria-label="Ver solo lo compartido" aria-pressed="${!!st.soloComp}">💞</button>
+        <button class="ico-btn" onclick="wlExcel()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
+      </div>
     </div>
     ${_wlSelBarHTML()}
     <div class="wl-list">${cards || `<div class="wl-empty">${vacio}</div>`}</div>
@@ -5783,7 +5819,8 @@ async function niSave() {
 // Sankey · Mes a mes · Día a día · Nuevos (contrapartes) · Concentración · Saldo (permanencia).
 // Todo se calcula en el cliente con S.data.movs; "gasto" excluye las transferencias a Ahorro
 // (ese dinero no se gastó: se muestra aparte, igual que en la dona de Movimientos).
-const GX_TABS = [['sankey', 'El dinero'], ['flujo', 'Mes a mes'], ['dia', 'Día a día'], ['nuevos', 'Nuevos'], ['conc', 'Concentración'], ['saldo', 'Saldo']];
+const GX_TABS = [['sankey', 'Esta quincena'], ['flujo', 'Mes a mes'], ['dia', 'Día a día'], ['nuevos', 'Nuevos'], ['conc', 'Concentración'], ['saldo', 'Saldo']];
+const _gxSankeyLbl = () => S.periodo.tipo === 'semana' ? 'Esta semana' : 'Esta quincena';
 const gxEsAhorro = m => /\bahorro\b/i.test(m.concepto || '') || /\bahorro\b/i.test(m.comentarios || '');
 const _gxMovs   = () => { const hoy = toISO(new Date()); return (S.data.movs || []).filter(m => !m.deleted_at && m.fecha && m.fecha <= hoy); };
 const _gxSum    = a => a.reduce((s, m) => s + (m.monto || 0), 0);
@@ -5829,11 +5866,11 @@ function gxPanel() {
   const tabs = { sankey: _gxSankeyTab, flujo: _gxFlujoTab, dia: _gxDiaTab, nuevos: _gxNuevosTab, conc: _gxConcTab, saldo: _gxSaldoTab };
   const body = (tabs[st.tab] || _gxSankeyTab)();
   root.innerHTML = `<div class="gx-tabs" role="tablist">${GX_TABS.map(([k, l]) =>
-    `<button class="gx-btn${st.tab === k ? ' on' : ''}" role="tab" aria-selected="${st.tab === k}" onclick="gxTab('${k}')">${l}</button>`).join('')}</div>${body.html}`;
+    `<button class="gx-btn${st.tab === k ? ' on' : ''}" role="tab" aria-selected="${st.tab === k}" onclick="gxTab('${k}')">${k === 'sankey' ? _gxSankeyLbl() : l}</button>`).join('')}</div>${body.html}`;
   if (body.draw) body.draw();
 }
 
-// 1) El dinero — Sankey
+// 1) Esta quincena — Sankey
 function _gxSankeyTab() {
   const r = getPeriodoRange(), mv = filterMovs(_gxMovs(), r.from, r.to);
   const ing = mv.filter(m => m.tipo === 'INGRESO');
@@ -5842,7 +5879,7 @@ function _gxSankeyTab() {
   const tIng = _gxSum(ing), tGas = _gxSum(gas), tAho = _gxSum(aho);
   const kpis = _gxKpi('Ingresos', gxMoney(tIng), 'in') + _gxKpi('Egresos sin ahorro', gxMoney(tGas), 'out')
     + _gxKpi('Ahorrado', gxMoney(tAho), 'pay') + _gxKpi(tIng - tGas - tAho >= 0 ? 'Sobra' : 'Falta', gxMoney(Math.abs(tIng - tGas - tAho)), tIng - tGas - tAho >= 0 ? 'in' : 'out');
-  if (!ing.length && !gasAll.length) return { html: _gxCard('El dinero', r.label, kpis, '', _gxEmpty('Sin movimientos en este período')) };
+  if (!ing.length && !gasAll.length) return { html: _gxCard(_gxSankeyLbl(), r.label, kpis, '', _gxEmpty('Sin movimientos en este período')) };
   const top = (arr, n, kf) => { const e = _gxGrp(arr, kf); const head = e.slice(0, n), rest = e.slice(n).reduce((a, x) => a + x[1], 0); return rest > 0 ? [...head, ['Otros', rest]] : head; };
   const src = top(ing, 5, m => m.concepto || 'Ingreso').map(([name, value]) => ({ name, value, color: 'var(--gx-in)' }));
   const dst = top(gas, 6, _gxCat).map(([name, value]) => ({ name, value, color: CAT_CLR[name] || 'var(--gx-neu)' }));
@@ -5854,7 +5891,7 @@ function _gxSankeyTab() {
     ? 'Gastaste más de lo que ingresó en este período: la diferencia salió de saldo que ya tenías.'
     : `De cada $100 que ingresaron, ${tIng > 0 ? Math.round(tAho / tIng * 100) : 0} se fueron a ahorro y ${tIng > 0 ? Math.round((tIng - gastado) / tIng * 100) : 0} quedaron sin asignar.`;
   return {
-    html: _gxCard('El dinero', r.label, kpis, '', _gxStage(), `<div class="gx-note">${gxEsc(note)} Toca una banda para ver el monto.</div>`),
+    html: _gxCard(_gxSankeyLbl(), r.label, kpis, '', _gxStage(), `<div class="gx-note">${gxEsc(note)} Toca una banda para ver el monto.</div>`),
     draw: () => gxDraw($('gx-main'), w => gxSankey(w, src, dst, { hub: 'Período' })),
   };
 }
@@ -7440,7 +7477,7 @@ function getMovFiltradas() {
 // ── MOVIMIENTOS — CHART ───────────────────────────────────────────────────────
 function renderMovChart(filtered) {
   initMovF();
-  const type=S.movF.chartType;
+  const type=S.movF.chartType==='line'?'sankey':S.movF.chartType;
   const gastos=filtered.filter(m=>m.tipo==='GASTO');
   const canvas=$('mov-chart');
   if (!canvas) return;
@@ -7485,13 +7522,23 @@ function renderMovChart(filtered) {
       {label:'Gastos',  data:ms.map(m=>all.filter(x=>x.tipo==='GASTO'  &&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0)),backgroundColor:'#f8717155',borderColor:'#f87171'},
       {label:'Ingresos',data:ms.map(m=>all.filter(x=>x.tipo==='INGRESO'&&(x.fecha||'').startsWith(m)).reduce((a,x)=>a+(x.monto||0),0)),backgroundColor:'#34d39955',borderColor:'#34d399'}
     ]);
-  } else if (type==='line') {
-    const dates=[...new Set(filtered.map(m=>fd(m.fecha)))].sort();
-    if (!dates.length) { emptyChart('mov-chart','Sin movimientos en este periodo'); return; }
-    mkC('mov-chart','line',dates,[
-      {label:'Gastos',  data:dates.map(d=>gastos.filter(m=>fd(m.fecha)===d).reduce((a,x)=>a+(x.monto||0),0)),borderColor:'#f87171',backgroundColor:'#f8717122',fill:true},
-      {label:'Ingresos',data:dates.map(d=>filtered.filter(m=>m.tipo==='INGRESO'&&fd(m.fecha)===d).reduce((a,x)=>a+(x.monto||0),0)),borderColor:'#34d399',backgroundColor:'#34d39922',fill:true}
-    ]);
+  } else if (type==='sankey') {
+    // Flujo: de dónde vino el dinero (ingresos) y a dónde se fue (categorías, ahorro, sobrante) de los
+    // movimientos que pasan los filtros actuales — mismo cálculo que la pestaña de Análisis gráfico.
+    const el = gxMount('mov-chart'); if (!el) return;
+    if (S.ch['mov-chart']) { S.ch['mov-chart'].destroy(); delete S.ch['mov-chart']; }
+    const lg = $('legend-mov-chart'); if (lg) lg.innerHTML = '';
+    const ing = filtered.filter(m => m.tipo === 'INGRESO'), gasAll = filtered.filter(m => m.tipo === 'GASTO');
+    const aho = gasAll.filter(gxEsAhorro), gas = gasAll.filter(m => !gxEsAhorro(m));
+    const tIng = _gxSum(ing), tGas = _gxSum(gas), tAho = _gxSum(aho), gastado = tGas + tAho;
+    if (!ing.length && !gasAll.length) { el.parentElement.style.height = ''; el.innerHTML = _gxEmpty('Sin movimientos con estos filtros'); return; }
+    const top = (arr, n, kf) => { const e = _gxGrp(arr, kf); const head = e.slice(0, n), rest = e.slice(n).reduce((a, x) => a + x[1], 0); return rest > 0 ? [...head, ['Otros', rest]] : head; };
+    const src = top(ing, 5, m => m.concepto || 'Ingreso').map(([name, value]) => ({ name, value, color: 'var(--gx-in)' }));
+    const dst = top(gas, 6, _gxCat).map(([name, value]) => ({ name, value, color: CAT_CLR[name] || 'var(--gx-neu)' }));
+    if (tAho > 0) dst.push({ name: 'Ahorro', value: tAho, color: '#d4af37' });
+    if (tIng > gastado) dst.push({ name: 'Sobrante', value: tIng - gastado, color: 'var(--gx-ac2)' });
+    if (gastado > tIng) src.push({ name: 'Saldo previo', value: gastado - tIng, color: 'var(--gx-neu)' });
+    gxDraw(el, w => gxSankey(w, src, dst, { hub: 'Flujo' }));
   }
 }
 
@@ -7662,9 +7709,9 @@ function rMovs() {
     return `<button class="f-pill${sel?' on':''}" onclick="toggleMovMedio('${key}')" style="font-size:10px">${med}</button>`;
   }).join('');
 
-  const chartPills=['doughnut:🍩 Dona','bar:📊 Barras','line:📈 Línea'].map(o=>{
+  const chartPills=['doughnut:🍩 Dona','bar:📊 Barras','sankey:🔀 Flujo'].map(o=>{
     const[v,l]=o.split(':');
-    return `<button class="f-pill${f.chartType===v?' on':''}" onclick="setMovChart('${v}')">${l}</button>`;
+    return `<button class="f-pill${(f.chartType==='line'?'sankey':f.chartType)===v?' on':''}" onclick="setMovChart('${v}')">${l}</button>`;
   }).join('');
 
   const host = $('movs-section') || $('tab-movimientos');
@@ -7739,8 +7786,35 @@ ${dsgPanelHTML('mov-dsg','mov')}
 // distinta. mkTable() se sigue llamando en _updateMovsTable para registrar
 // la tabla (Excel export la lee de ahí), pero su HTML ya no se pinta: esta
 // lista es la vista real que ve el usuario, tabla y móvil por igual.
+// Tarjeta de un movimiento (lista agrupada por día y lista ordenada por monto)
+function _movCardHTML(m, conFecha) {
+  S._movData[m.id] = m;
+  const isGasto = m.tipo === 'GASTO';
+  const dot = m.revisado ? '' : `<button class="dot-btn" title="Marcar revisado" onclick="event.stopPropagation();markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
+  const sub = [conFecha ? fmtDate(m.fecha) : '', m.categoria, m.medio_pago].filter(Boolean).join(' · ');
+  const coment = (m.comentarios || '').trim().replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  return `<div class="mov-card">
+        ${catIcHTML(m.categoria, m)}
+        <div class="mov-card-mid">
+          <div class="mov-card-title">${dot}${m.concepto || '<em style="color:var(--text-3);font-style:normal">—</em>'}</div>
+          <div class="mov-card-sub">${sub || '—'}</div>
+          ${coment ? `<div class="mov-card-note"><i class="ti ti-message-2"></i> ${coment}</div>` : ''}
+        </div>
+        <div class="mov-card-val ${isGasto ? 'red' : 'green'}">${isGasto ? '−' : '+'}${fmt(m.monto)}</div>
+        <div class="mov-card-acts">
+          <button class="edit-pill-btn" title="Editar" onclick="eMov(S._movData[${m.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+          <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMov(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
+        </div>
+      </div>`;
+}
+// Orden por monto (mismo botón que Gastos esta quincena): mayor → menor → sin orden (agrupado por día).
+function ciclarOrdenMov() { S._movSort = { '': 'desc', desc: 'asc', asc: '' }[S._movSort || '']; _updateMovsTable(getMovFiltradas()); }
 function _movCardsHTML(rows) {
   if (!rows.length) return `<div class="tdc-cards-empty">Sin movimientos en el período seleccionado</div>`;
+  if (S._movSort) {
+    const ord = [...rows].sort((a, b) => S._movSort === 'asc' ? (a.monto || 0) - (b.monto || 0) : (b.monto || 0) - (a.monto || 0));
+    return `<div class="mov-cards">${ord.map(m => _movCardHTML(m, true)).join('')}</div>`;
+  }
   const todayStr = toISO(new Date());
   const groups = [], byDate = {};
   rows.forEach(m => {
@@ -7760,27 +7834,7 @@ function _movCardsHTML(rows) {
       <span><i class="ti ti-chevron-${collapsed?'right':'down'} mov-day-chev"></i>${lbl}</span>
       <span class="${neto>=0?'green':'red'}">${neto>=0?'+':'−'}${fmt(Math.abs(neto))}</span>
     </div>
-    <div class="mov-day-group" id="mov-day-${d}" style="display:${collapsed?'none':''}">${ms.map(m => {
-      S._movData[m.id]=m;
-      const cClr = CAT_CLR[m.categoria]||'#94a3b8';
-      const isGasto = m.tipo==='GASTO';
-      const dot = m.revisado ? '' : `<button class="dot-btn" title="Marcar revisado" onclick="event.stopPropagation();markReviewed(${m.id})"><span class="unread-dot"></span></button>`;
-      const sub = [m.categoria, m.medio_pago].filter(Boolean).join(' · ');
-      const coment = (m.comentarios||'').trim().replace(/&/g,'&amp;').replace(/</g,'&lt;');
-      return `<div class="mov-card">
-        ${catIcHTML(m.categoria, m)}
-        <div class="mov-card-mid">
-          <div class="mov-card-title">${dot}${m.concepto||'<em style="color:var(--text-3);font-style:normal">—</em>'}</div>
-          <div class="mov-card-sub">${sub||'—'}</div>
-          ${coment?`<div class="mov-card-note"><i class="ti ti-message-2"></i> ${coment}</div>`:''}
-        </div>
-        <div class="mov-card-val ${isGasto?'red':'green'}">${isGasto?'−':'+'}${fmt(m.monto)}</div>
-        <div class="mov-card-acts">
-          <button class="edit-pill-btn" title="Editar" onclick="eMov(S._movData[${m.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-          <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMov(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
-        </div>
-      </div>`;
-    }).join('')}</div>`;
+    <div class="mov-day-group" id="mov-day-${d}" style="display:${collapsed?'none':''}">${ms.map(m => _movCardHTML(m, false)).join('')}</div>`;
   }).join('')}</div>`;
 }
 
@@ -7840,7 +7894,10 @@ function _updateMovsTable(filtered) {
   const _movList = _movCardsHTML(rows);
 
   if (_tHost) {
-    _tHost.innerHTML = `<div class="ico-bar">
+    const _sIco = { '': 'arrows-sort', desc: 'sort-descending-numbers', asc: 'sort-ascending-numbers' }[S._movSort || ''];
+    const _sLbl = { '': 'Ordenar por monto', desc: 'Mayor a menor · toca para menor a mayor', asc: 'Menor a mayor · toca para quitar el orden' }[S._movSort || ''];
+    _tHost.innerHTML = `<div class="ico-bar ico-bar-c">
+      <button class="ico-btn${S._movSort ? ' on' : ''}" onclick="ciclarOrdenMov()" title="${_sLbl}" aria-label="${_sLbl}"><i class="ti ti-${_sIco}"></i></button>
       <button class="ico-btn" onclick="exportTableToExcel('tbl-movs')" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
       <button class="ico-btn" onclick="toggleMovsCollapsed()" title="${lbl}" aria-label="${lbl}" aria-expanded="${S._movsCollapsed?'false':'true'}"><i class="ti ti-chevron-${icon}"></i></button>
     </div>${S._movsCollapsed ? '' : _movList}`;
@@ -8633,6 +8690,10 @@ function _despEditorHTML(x) {
     <div><label>Artículo</label><input value="${v('nombre')}" maxlength="120" onchange="if(this.value.trim())updateDespensaField(${x.id},'nombre',this.value.trim())"></div>
     <div><label>Nombre oficial <small>(para buscar precios)</small></label><input value="${v('nombre_oficial')}" placeholder="Ej: Leche Lala Entera 1L" onchange="updateDespensaField(${x.id},'nombre_oficial',this.value.trim()||null)"></div>
     <div class="desp-edit-2">
+      <div><label>Precio Walmart <small>(vacío = quitar)</small></label><input type="number" min="0" step="0.01" inputmode="decimal" value="${typeof x.precio_walmart === 'number' || x.precio_walmart ? x.precio_walmart : ''}" placeholder="—" onchange="updateDespensaField(${x.id},'precio_walmart',this.value===''?null:(parseFloat(this.value)||null))"></div>
+      <div><label>Precio Amazon <small>(vacío = quitar)</small></label><input type="number" min="0" step="0.01" inputmode="decimal" value="${typeof x.precio_amazon === 'number' || x.precio_amazon ? x.precio_amazon : ''}" placeholder="—" onchange="updateDespensaField(${x.id},'precio_amazon',this.value===''?null:(parseFloat(this.value)||null))"></div>
+    </div>
+    <div class="desp-edit-2">
       <div><label>Cantidad</label><input value="${v('cantidad')}" placeholder="2 L, 1 kg…" onchange="updateDespensaField(${x.id},'cantidad',this.value.trim())"></div>
       <div><label>Precio estimado</label><input type="number" min="0" step="0.01" inputmode="decimal" value="${x.precio_est > 0 ? x.precio_est : ''}" placeholder="0" onchange="updateDespensaField(${x.id},'precio_est',parseFloat(this.value)||0)"></div>
     </div>
@@ -8658,7 +8719,7 @@ function _despCardHTML(x) {
       <div class="mov-card-title">${_despEsc(x.nombre)}</div>
       <div class="mov-card-sub">${sub}</div>
     </div>
-    <div class="mov-card-val">${best ? fmt(best.precio) : '—'}${best ? `<div class="desp-best">${best.tienda === 'estimado' ? 'estimado' : 'mejor: ' + best.tienda}</div>` : ''}</div>
+    <div class="mov-card-val desp-precio" role="button" tabindex="0" title="Tocar para editar precios" onclick="despEditar(${x.id})">${best ? fmt(best.precio) : '—'}${best ? `<div class="desp-best">${best.tienda === 'estimado' ? 'estimado' : 'mejor: ' + best.tienda}</div>` : ''}</div>
     <div class="q-card-foot">
       <div class="desp-tiendas">${tiendas}</div>
       <div class="mov-card-acts">
