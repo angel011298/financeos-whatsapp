@@ -2035,6 +2035,81 @@ body.sheet-locked{overflow:hidden}
 .desp-card .q-card-foot{justify-content:center}
 .desp-card .desp-tiendas{justify-content:center}
 .desp-precio{cursor:pointer}
+
+/* ═══════════════════════════════════════════════════════ v24 — Chat de pareja */
+.chat-top{display:flex;align-items:center;gap:10px;padding:6px 0 8px;flex-shrink:0}
+.chat-back{display:none!important}
+@media(max-width:899px){.chat-mode .chat-back{display:flex!important}}
+.chat-seg{flex:1;display:flex;gap:4px;background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);padding:3px;max-width:440px;margin:0 auto;min-width:0}
+.chat-seg button{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;border:none;background:none;border-radius:var(--radius-pill);padding:8px 10px;
+  font-family:inherit;font-size:13px;font-weight:800;color:var(--text-2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-seg button.on{background:var(--bg-surface);color:var(--text-1);box-shadow:var(--shadow-sm)}
+.chat-badge{min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;flex-shrink:0}
+.chat-badge[hidden]{display:none}
+.chat-pane{flex:1;min-height:0;display:flex;flex-direction:column}
+.par-hdr{display:flex;align-items:center;gap:10px;padding:6px 2px 8px;border-bottom:1px solid var(--border-default);flex-shrink:0}
+.par-av{width:40px;height:40px;border-radius:50%;flex-shrink:0;background:var(--par-acc,#ec4899);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px;overflow:hidden}
+.par-av img{width:100%;height:100%;object-fit:cover;display:block}
+.par-av.grande{width:64px;height:64px;font-size:26px}
+.par-info{flex:1;min-width:0;display:flex;flex-direction:column}
+.par-info b{font-size:15px;font-weight:900;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.par-info small{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.par-hdr .ico-btn{flex:0 0 38px;width:38px;height:38px;font-size:17px}
+.par-hdr .ico-btn.on{border-color:var(--par-acc,#ec4899)}
+.par-msgs{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 8px 12px;display:flex;flex-direction:column;gap:4px}
+.par-vacio{margin:auto;text-align:center;color:var(--text-2);font-size:14px;padding:20px;line-height:1.6}
+.par-vacio small{color:var(--text-3);font-size:12px}
+.par-mas{align-self:center;margin:2px 0 8px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-2);border-radius:var(--radius-pill);padding:5px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.pm-dia{align-self:center;margin:10px 0 6px}
+.pm-dia span{font-size:11px;font-weight:800;color:var(--text-2);background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);padding:3px 10px}
+.pm{position:relative;max-width:min(78%,520px);padding:8px 12px 5px;border-radius:18px;font-size:14.5px;line-height:1.45;word-break:break-word;animation:fadeIn .15s ease;flex-shrink:0}
+.pm.yo{align-self:flex-end;background:var(--par-acc,#ec4899);color:#fff;border-bottom-right-radius:6px}
+.pm.el{align-self:flex-start;background:var(--bg-surface);border:1px solid var(--border-default);color:var(--text-1);border-bottom-left-radius:6px}
+.pm.yo a{color:#fff}
+.pm-txt{white-space:normal}
+.pm-hora{font-size:10.5px;opacity:.72;text-align:right;margin-top:2px;white-space:nowrap}
+.pm-check{font-weight:800;letter-spacing:-2px;margin-left:2px}
+.pm-check.leido{color:#bae6fd;opacity:1}
+.pm.el .pm-check.leido{color:#0ea5e9}
+.pm-img{display:block;max-width:240px;max-height:300px;width:100%;border-radius:13px;object-fit:cover;margin-bottom:3px;background:rgba(0,0,0,.08)}
+.pm.solo-img{padding:4px 4px 3px}
+.pm.solo-img .pm-hora{padding-right:6px}
+.pm-file{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;padding:4px 2px;min-width:0}
+.pm-file span{font-size:26px;flex-shrink:0}
+.pm-file b{display:block;font-size:13px;font-weight:800;word-break:break-all}
+.pm-file small{font-size:11px;opacity:.78}
+.pm-card{display:flex;align-items:center;gap:10px;width:100%;min-width:200px;text-align:left;border:none;border-radius:12px;padding:8px 10px;margin:2px 0 4px;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.2);color:inherit}
+.pm.el .pm-card{background:var(--bg-surface-2)}
+.pm-card span{font-size:24px;flex-shrink:0}
+.pm-card b{display:block;font-size:14px;font-weight:800}
+.pm-card small{font-size:11.5px;opacity:.82}
+.pm-del{position:absolute;left:-34px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--color-expense);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:13px}
+@media(hover:hover){.pm.yo:hover .pm-del{display:flex}}
+.par-escr{font-size:12px;color:var(--text-3);padding:0 10px 4px;font-style:italic;flex-shrink:0}
+.par-escr[hidden]{display:none}
+.par-bar .round-btn{background:var(--bg-surface-2);color:var(--text-2);border:1px solid var(--border-default)}
+.par-bar .send-btn{background:var(--par-acc,#ec4899);color:#fff;border:none}
+.par-clip{cursor:pointer}
+.chat-bar textarea#par-input{flex:1;min-width:0;resize:none;border-radius:22px;padding:11px 16px;font-size:16px;line-height:1.35;max-height:140px;background:var(--bg-surface);border:1px solid var(--border-default);color:var(--text-1);font-family:inherit;outline:none}
+.chat-bar textarea#par-input:focus{border-color:var(--par-acc,#ec4899)}
+.fondo-liso{background:transparent}
+.fondo-puntos{background-image:radial-gradient(var(--border-default) 1.2px,transparent 1.2px);background-size:18px 18px}
+.fondo-rosa{background:linear-gradient(180deg,rgba(236,72,153,.13),rgba(139,92,246,.10))}
+.fondo-cielo{background:linear-gradient(180deg,rgba(14,165,233,.14),rgba(16,185,129,.08))}
+.fondo-noche{background:linear-gradient(180deg,#0b1024,#241a4d)}
+.fondo-papel{background:repeating-linear-gradient(0deg,transparent 0 27px,rgba(148,163,184,.16) 27px 28px)}
+.fondo-corazones{background-color:rgba(236,72,153,.05);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M24 34s-9-5.6-9-11.2A4.8 4.8 0 0 1 24 20a4.8 4.8 0 0 1 9 2.8C33 28.4 24 34 24 34z' fill='%23ec4899' fill-opacity='.12'/%3E%3C/svg%3E");background-size:48px 48px}
+.par-msgs.fondo-noche,.par-msgs.fondo-rosa,.par-msgs.fondo-cielo,.par-msgs.fondo-papel,.par-msgs.fondo-corazones,.par-msgs.fondo-puntos{border-radius:14px;margin-top:6px}
+.par-colores{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.par-colores button{width:34px;height:34px;border-radius:50%;border:3px solid var(--bg-surface);box-shadow:0 0 0 1px var(--border-default);cursor:pointer}
+.par-colores button.on{box-shadow:0 0 0 2px var(--text-1)}
+.par-fondos{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.par-fondos button{height:58px;border-radius:12px;border:2px solid var(--border-default);cursor:pointer;display:flex;align-items:flex-end;justify-content:center;padding:4px;font-family:inherit;font-size:11px;font-weight:800;color:var(--text-1);background-color:var(--bg-surface)}
+.par-fondos button span{background:var(--bg-surface);border-radius:8px;padding:1px 6px}
+.par-fondos button.on{border-color:var(--accent-primary)}
+.par-foto-row{display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap}
+#mn-chat,#n-chat,#rl-chat{position:relative}
+.nav-badge{position:absolute;top:2px;right:calc(50% - 22px);min-width:16px;height:16px;border-radius:8px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;pointer-events:none;line-height:1}
 </style>
 </head>
 <body>
@@ -2574,7 +2649,13 @@ function _startLivePoll() {
     finally { _livePollBusy = false; }
   }, 2000);
   // Lo que comparte la pareja: punto en 🎁 aunque no tengas la Wishlist abierta
-  setTimeout(wlPrefetch, 2500);   // deja la Wishlist lista antes de abrirla (y pinta el punto de lo compartido)
+  setTimeout(wlPrefetch, 2500);
+  setTimeout(parNoLeidos, 3000);
+  setInterval(parNoLeidos, 15000);   // contador de mensajes nuevos de la pareja
+  if (new URLSearchParams(location.search).get('chat') === 'pareja') {
+    history.replaceState(null, '', location.pathname);
+    setTimeout(() => { S._chatVista = 'par'; go('chat'); }, 600);
+  }   // deja la Wishlist lista antes de abrirla (y pinta el punto de lo compartido)
   setInterval(() => { if (document.visibilityState === 'visible') wlBadgePar(); }, 20000);
 }
 
@@ -9576,41 +9657,375 @@ async function negDelInversion(proyId, id) {
 // ── CHAT IA (PWA) ─────────────────────────────────────────────────────────────
 let _mediaRec = null, _audioChunks = [], _recording = false, _recTimer = null, _recognition = null;
 
+// ── CHAT IA + CHAT DE PAREJA (pestaña Chat con dos vistas) ─────────────────────
+const _parNombreGuess = () => ((((S.data || {}).user || {}).role) === 'ADMIN_A') ? 'Alicia' : 'Ángel';
 function rChat() {
-  const tab  = $('tab-chat');
-  const msgs = $('chat-msgs');
-  // Si el teléfono cambió (ghost mode) o el chat no existe, re-inicializar
-  if (!msgs || msgs.dataset.phone !== S.phone) {
+  const tab = $('tab-chat');
+  if (!tab.querySelector('#chat-wrap') || tab.dataset.phone !== S.phone) {
+    tab.dataset.phone = S.phone;
+    S._par = null;
     tab.innerHTML = `
-<div class="chat-wrap">
-  <div class="chat-nav-back">
-    <button class="round-btn" onclick="go('dashboard')" style="background:var(--bg-surface-2)" title="Inicio"><i class="ti ti-arrow-left"></i></button>
-    <span class="chat-ttl">✨ Asistente IA</span>
+<div class="chat-wrap" id="chat-wrap">
+  <div class="chat-top">
+    <button class="round-btn chat-back" onclick="go('dashboard')" style="background:var(--bg-surface-2)" title="Inicio" aria-label="Volver a Inicio"><i class="ti ti-arrow-left"></i></button>
+    <div class="chat-seg" role="tablist" aria-label="Chats">
+      <button role="tab" id="seg-par" onclick="chatVista('par')"><span aria-hidden="true">💬</span> <span id="seg-par-n">${_parNombreGuess()}</span><span class="chat-badge" id="par-badge" hidden></span></button>
+      <button role="tab" id="seg-ia" onclick="chatVista('ia')"><span aria-hidden="true">✨</span> Asistente IA</button>
+    </div>
   </div>
-  <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"></div></div>
-  <div class="chat-sug" id="chat-sug">${CHAT_SUG.map(t => `<button type="button" onclick="chatSug(this.textContent)">${t}</button>`).join('')}</div>
-  <form class="chat-bar" onsubmit="event.preventDefault();sendChat()">
-    <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio">
-      <i class="ti ti-microphone" id="mic-icon"></i>
-    </button>
-    <button type="button" class="round-btn" id="foto-btn" style="background:var(--bg-surface-2)"
-      onclick="document.getElementById('foto-input').click()" title="Foto de un ticket">
-      <i class="ti ti-camera" id="foto-icon"></i>
-    </button>
-    <input type="file" id="foto-input" accept="image/*" capture="environment"
-      style="display:none" onchange="enviarFotoTicket(this)">
-    <textarea id="chat-input" rows="1" placeholder="Escribe un mensaje…"
-      autocomplete="off"
-      oninput="autoGrowChat(this)"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!_chatEsMovil()){event.preventDefault();sendChat()}"></textarea>
-    <button type="submit" class="round-btn send-btn" title="Enviar">
-      <i class="ti ti-send"></i>
-    </button>
-  </form>
+  <div class="chat-pane" id="pane-ia">
+    <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"></div></div>
+    <div class="chat-sug" id="chat-sug">${CHAT_SUG.map(t => `<button type="button" onclick="chatSug(this.textContent)">${t}</button>`).join('')}</div>
+    <form class="chat-bar" onsubmit="event.preventDefault();sendChat()">
+      <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio"><i class="ti ti-microphone" id="mic-icon"></i></button>
+      <button type="button" class="round-btn" id="foto-btn" style="background:var(--bg-surface-2)" onclick="document.getElementById('foto-input').click()" title="Foto de un ticket"><i class="ti ti-camera" id="foto-icon"></i></button>
+      <input type="file" id="foto-input" accept="image/*" capture="environment" style="display:none" onchange="enviarFotoTicket(this)">
+      <textarea id="chat-input" rows="1" placeholder="Escribe un mensaje…" autocomplete="off" oninput="autoGrowChat(this)"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!_chatEsMovil()){event.preventDefault();sendChat()}"></textarea>
+      <button type="submit" class="round-btn send-btn" title="Enviar"><i class="ti ti-send"></i></button>
+    </form>
+  </div>
+  <div class="chat-pane par" id="pane-par">${_parPaneHTML()}</div>
 </div>`;
     _loadChatHistory();
   }
-  _scrollChat();
+  chatVista(S._chatVista || 'par');
+}
+function chatVista(v) {
+  S._chatVista = v;
+  const ia = $('pane-ia'), par = $('pane-par'); if (!ia || !par) return;
+  ia.style.display = v === 'ia' ? '' : 'none';
+  par.style.display = v === 'par' ? '' : 'none';
+  $('seg-ia')?.classList.toggle('on', v === 'ia'); $('seg-par')?.classList.toggle('on', v === 'par');
+  $('seg-ia')?.setAttribute('aria-selected', v === 'ia'); $('seg-par')?.setAttribute('aria-selected', v === 'par');
+  if (v === 'ia') _scrollChat(); else parAbrir();
+}
+
+// ── Chat de pareja ───────────────────────────────────────────────────────────
+const PAR_COLORES = ['#ec4899', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
+const PAR_FONDOS  = [['liso', 'Liso'], ['puntos', 'Puntos'], ['rosa', 'Rosa'], ['cielo', 'Cielo'], ['noche', 'Noche'], ['papel', 'Papel'], ['corazones', 'Corazones']];
+const _parUrl = id => `/api/pareja/archivo/${id}?phone=${encodeURIComponent(S.phone)}`;
+const _parEsc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const _parTam = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+function _parPaneHTML() {
+  return `<div class="par-hdr">
+    <div class="par-av" id="par-av" aria-hidden="true">${_parNombreGuess()[0]}</div>
+    <div class="par-info"><b id="par-nom">${_parNombreGuess()}</b><small id="par-est">🔒 Chat privado y cifrado</small></div>
+    <button class="ico-btn" id="par-push" onclick="parPush()" title="Avisos de mensajes nuevos" aria-label="Avisos de mensajes nuevos">🔔</button>
+    <button class="ico-btn" onclick="parAjustes()" title="Personalizar chat" aria-label="Personalizar chat">🎨</button>
+  </div>
+  <div class="par-msgs" id="par-msgs"><div class="par-vacio">Cargando…</div></div>
+  <div class="par-escr" id="par-escr" hidden>escribiendo…</div>
+  <form class="chat-bar par-bar" onsubmit="event.preventDefault();parEnviar()">
+    <label class="round-btn par-clip" title="Adjuntar archivo (máx. 25 MB)" aria-label="Adjuntar archivo"><i class="ti ti-paperclip"></i><input type="file" id="par-file" multiple hidden onchange="parArchivo(this)"></label>
+    <button type="button" class="round-btn par-plus" onclick="parAgendar()" title="Agendar en Nidito o Wishlist" aria-label="Agendar en Nidito o Wishlist"><i class="ti ti-calendar-plus"></i></button>
+    <textarea id="par-input" rows="1" placeholder="Mensaje…" title="Tip: /nidito Viaje 8000 o /wishlist Audífonos 1200 lo agenda directo" autocomplete="off" oninput="autoGrowChat(this);parTecleo()"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!_chatEsMovil()){event.preventDefault();parEnviar()}"></textarea>
+    <button type="submit" class="round-btn send-btn" title="Enviar" aria-label="Enviar"><i class="ti ti-send"></i></button>
+  </form>`;
+}
+function _parSt() { return S._par || (S._par = { msgs: [], ultimoId: 0, ultimoLeido: 0, info: null, yo: {}, listo: false, hayMas: false }); }
+const _parVisible = () => S.tab === 'chat' && S._chatVista === 'par' && document.visibilityState === 'visible' && !!$('pane-par');
+async function parAbrir() {
+  const st = _parSt();
+  if (!st.listo) await _parCargar();
+  else _parPintar(true);
+  _parPushEstado();
+  clearInterval(S._parT);
+  S._parT = setInterval(() => { if (_parVisible()) _parTick(); else if (S.tab !== 'chat') clearInterval(S._parT); }, 2500);
+  _parBadge(0);
+}
+async function _parCargar() {
+  const st = _parSt();
+  try {
+    const r = await api('GET', `/api/pareja/chat?phone=${encodeURIComponent(S.phone)}&visto=${_parVisible() ? 1 : 0}`);
+    _parAplicar(r, true);
+    st.listo = true; st.hayMas = (r.mensajes || []).length >= 80;
+  } catch (e) {
+    const box = $('par-msgs'); if (box) box.innerHTML = `<div class="par-vacio">${/solo para la pareja/i.test(e.message) ? '💞 Este chat es solo para Ángel y Alicia.' : 'No se pudo cargar el chat: ' + _parEsc(e.message)}</div>`;
+  }
+}
+async function _parTick() {
+  const st = _parSt(); if (st._busy || !st.listo) return;
+  st._busy = true;
+  try { _parAplicar(await api('GET', `/api/pareja/chat?phone=${encodeURIComponent(S.phone)}&desde=${st.ultimoId}&visto=1`), false); }
+  catch { /* se reintenta */ } finally { st._busy = false; }
+}
+function _parAplicar(r, inicial) {
+  const st = _parSt();
+  let cambio = inicial;
+  const prevInfo = JSON.stringify(st.info);
+  st.info = r.par; st.yo = r.yo || {};
+  if (JSON.stringify(st.info) !== prevInfo) _parHeader();
+  const ids = new Set(st.msgs.map(m => m.id));
+  (r.mensajes || []).forEach(m => { if (!ids.has(m.id)) { st.msgs.push(m); cambio = true; } });
+  if ((r.borrados || []).length) { const b = new Set(r.borrados); const n = st.msgs.length; st.msgs = st.msgs.filter(m => !b.has(m.id)); if (st.msgs.length !== n) cambio = true; }
+  st.msgs.sort((a, b) => (typeof a.id === 'number' ? a.id : 1e15) - (typeof b.id === 'number' ? b.id : 1e15));
+  st.ultimoId = st.msgs.reduce((a, m) => (typeof m.id === 'number' && m.id > a ? m.id : a), st.ultimoId);
+  if (r.ultimoLeido !== st.ultimoLeido) { st.ultimoLeido = r.ultimoLeido; cambio = true; }
+  _parTema();
+  if (cambio) _parPintar(inicial);
+}
+function _parHeader() {
+  const i = _parSt().info; if (!i) return;
+  $('par-nom') && ($('par-nom').textContent = i.nombre);
+  $('seg-par-n') && ($('seg-par-n').textContent = i.nombre);
+  const av = $('par-av');
+  if (av) av.innerHTML = i.foto_v ? `<img src="/api/pareja/foto?phone=${encodeURIComponent(S.phone)}&de=par&v=${i.foto_v}" alt="">` : _parEsc((i.nombre || '?')[0]);
+  const est = $('par-est');
+  if (est) est.textContent = i.escribiendo ? 'escribiendo…' : i.en_linea ? 'en línea' : i.last_seen ? 'últ. vez ' + _parCuando(i.last_seen) : '🔒 Chat privado y cifrado';
+  $('par-escr') && ($('par-escr').hidden = !i.escribiendo);
+}
+function _parCuando(iso) {
+  const d = new Date(iso), h = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  const hoy = new Date(), ay = new Date(); ay.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === hoy.toDateString()) return `hoy a las ${h}`;
+  if (d.toDateString() === ay.toDateString()) return `ayer a las ${h}`;
+  return `el ${d.getDate()} ${MESES_CORTO[d.getMonth()]} a las ${h}`;
+}
+function _parTema() {
+  const yo = _parSt().yo || {}, w = $('pane-par'); if (!w) return;
+  w.style.setProperty('--par-acc', yo.color || '#ec4899');
+  const box = $('par-msgs'); if (box) box.className = 'par-msgs fondo-' + (yo.fondo || 'liso');
+}
+function _parTexto(t) {
+  return _parEsc(t).replace(/(https?:\/\/[^\s<]+)/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`).replace(/\n/g, '<br>');
+}
+function _parMsgHTML(m, st) {
+  const hora = m.at ? new Date(m.at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '…';
+  const leido = m.mio && typeof m.id === 'number' && m.id <= st.ultimoLeido;
+  let cuerpo = '';
+  if (m.archivo) {
+    const url = _parUrl(m.id), mime = m.archivo.mime || '';
+    if (typeof m.id !== 'number') cuerpo = `<div class="pm-file">⏳ ${_parEsc(m.archivo.nombre)}</div>`;
+    else if (/^image\/(png|jpe?g|gif|webp|avif)$/i.test(mime)) cuerpo = `<a href="${url}" target="_blank" rel="noopener"><img class="pm-img" src="${url}" alt="${_parEsc(m.archivo.nombre)}" loading="lazy"></a>`;
+    else cuerpo = `<a class="pm-file" href="${url}${/pdf|audio|video/.test(mime) ? '' : '&dl=1'}" target="_blank" rel="noopener"><span>${/pdf/.test(mime) ? '📕' : /word|document/.test(mime) ? '📘' : /sheet|excel|csv/.test(mime) ? '📗' : /audio/.test(mime) ? '🎵' : /video/.test(mime) ? '🎬' : /zip|rar|7z/.test(mime) ? '🗜️' : '📄'}</span><div><b>${_parEsc(m.archivo.nombre)}</b><small>${_parTam(m.archivo.tamano || 0)} · ${typeof m.id === 'number' ? 'toca para abrir' : 'enviando…'}</small></div></a>`;
+  }
+  if (m.meta) {
+    const k = m.meta;
+    cuerpo += `<button type="button" class="pm-card" onclick="parAbrirTarjeta('${k.kind}','${_parEsc(k.id)}',${!!m.mio})"><span>${_parEsc(k.emoji || (k.kind === 'nidito' ? '💞' : '🎁'))}</span>
+      <div><b>${_parEsc(k.titulo)}</b><small>${k.kind === 'nidito' ? 'Nidito' : 'Wishlist'}${k.detalle ? ' · ' + _parEsc(k.detalle) : ''}${k.monto ? ' · ' + fmt(k.monto) : ''}</small></div></button>`;
+  }
+  if (m.texto) cuerpo += `<div class="pm-txt">${_parTexto(m.texto)}</div>`;
+  const borrar = m.mio && typeof m.id === 'number'
+    ? `<div class="sw-src" hidden><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="parBorrar(${m.id})"></button></div><button type="button" class="pm-del" onclick="parBorrar(${m.id})" title="Eliminar" aria-label="Eliminar mensaje"><i class="ti ti-trash"></i></button>` : '';
+  return `<div class="pm ${m.mio ? 'yo' : 'el'}${m.archivo && !m.texto && !m.meta && /^image\//.test(m.archivo.mime || '') ? ' solo-img' : ''}" data-id="${m.id}">${borrar}${cuerpo}
+    <div class="pm-hora">${hora}${m.mio ? ` <span class="pm-check${leido ? ' leido' : ''}" title="${leido ? 'Leído' : 'Enviado'}">${leido ? '✓✓' : '✓'}</span>` : ''}</div></div>`;
+}
+function _parDia(iso) {
+  const d = new Date(iso), hoy = new Date(), ay = new Date(); ay.setDate(hoy.getDate() - 1);
+  if (d.toDateString() === hoy.toDateString()) return 'Hoy';
+  if (d.toDateString() === ay.toDateString()) return 'Ayer';
+  return `${d.getDate()} ${MESES_CORTO[d.getMonth()]}${d.getFullYear() !== hoy.getFullYear() ? ' ' + d.getFullYear() : ''}`;
+}
+function _parPintar(alFondo) {
+  const box = $('par-msgs'), st = _parSt(); if (!box) return;
+  const cerca = alFondo || box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+  let dia = '', html = st.hayMas ? `<button class="par-mas" onclick="parAnteriores()">Ver mensajes anteriores</button>` : '';
+  if (!st.msgs.length) html += `<div class="par-vacio">💞 Escríbele a ${_parEsc(st.info?.nombre || _parNombreGuess())}.<br><small>Solo ustedes dos pueden ver este chat. Puedes mandar fotos, PDFs, Word y cualquier archivo, o agendar algo en el Nidito o la Wishlist con el botón 📅.</small></div>`;
+  st.msgs.forEach(m => {
+    const d = m.at ? _parDia(m.at) : 'Hoy';
+    if (d !== dia) { dia = d; html += `<div class="pm-dia"><span>${d}</span></div>`; }
+    html += _parMsgHTML(m, st);
+  });
+  box.innerHTML = html;
+  if (cerca) requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; setTimeout(() => { box.scrollTop = box.scrollHeight; }, 150); });
+}
+async function parAnteriores() {
+  const st = _parSt(), primero = st.msgs.find(m => typeof m.id === 'number'); if (!primero) return;
+  const box = $('par-msgs'), h0 = box.scrollHeight;
+  try {
+    const r = await api('GET', `/api/pareja/chat?phone=${encodeURIComponent(S.phone)}&antes=${primero.id}`);
+    const ids = new Set(st.msgs.map(m => m.id));
+    st.msgs = [...(r.mensajes || []).filter(m => !ids.has(m.id)), ...st.msgs];
+    st.hayMas = (r.mensajes || []).length >= 60;
+    _parPintar(false);
+    box.scrollTop = box.scrollHeight - h0;
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+async function _parMandar(texto, meta) {
+  const st = _parSt(), tmp = { id: 'tmp' + Date.now(), mio: true, texto, meta, at: new Date().toISOString() };
+  st.msgs.push(tmp); _parPintar(true);
+  try {
+    const r = await api('POST', '/api/pareja/mensaje', { phone: S.phone, texto, meta });
+    st.msgs = st.msgs.filter(m => m !== tmp && m.id !== r.data.id); st.msgs.push(r.data);
+    st.ultimoId = Math.max(st.ultimoId, r.data.id);
+  } catch (e) { st.msgs = st.msgs.filter(m => m !== tmp); toast('No se envió: ' + e.message, 'error'); }
+  _parPintar(true);
+}
+async function parEnviar() {
+  const i = $('par-input'), t = (i?.value || '').trim(); if (!t) return;
+  i.value = ''; i.style.height = 'auto';
+  const cmd = t.match(/^\/(nidito|wishlist)\s+(.+)$/i);
+  if (cmd) return _parComando(cmd[1].toLowerCase(), cmd[2]);
+  _parMandar(t, null);
+}
+// "/nidito Viaje a Oaxaca 8000" o "/wishlist Audífonos $1,200": el número es el monto; lo demás, el nombre.
+async function _parComando(kind, resto) {
+  const num = resto.match(/\$?\s*([\d][\d,]*(?:\.\d+)?)\s*$/), monto = num ? parseFloat(num[1].replace(/,/g, '')) || 0 : 0;
+  const titulo = (num ? resto.slice(0, num.index) : resto).trim();
+  if (!titulo) { toast('Escribe un nombre después del comando', 'warn'); return; }
+  try { kind === 'nidito' ? await _parCrearNidito('PROYECTO', titulo, monto, '') : await _parCrearDeseo(titulo, monto, 'media'); }
+  catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+async function _parCrearNidito(tipo, titulo, monto, fin) {
+  const r = await api('POST', '/api/nidito/items', { user_phone: S.phone, titulo, tipo, presupuesto_total: Number(monto) || 0, fecha_fin: fin || null,
+    emoji: ND_EMO[tipo], estado: 'ACTIVO', fecha_inicio: toISO(new Date()) });
+  const id = r?.data?.id; if (!id) throw new Error(r?.error || 'No se pudo crear');
+  S._niditoItems = null;
+  await _parMandar('', { kind: 'nidito', id, titulo, monto: Number(monto) || 0, emoji: ND_EMO[tipo], detalle: ND_CORTO[tipo] });
+  toast(`${ND_EMO[tipo]} Agregado al Nidito ✓`);
+}
+async function _parCrearDeseo(nombre, precio, prioridad) {
+  const r = await api('POST', '/api/wishlist', { user_phone: S.phone, nombre, precio: Number(precio) || 0, prioridad, compartido: true });
+  const id = r?.data?.id; if (!id) throw new Error(r?.error || 'No se pudo guardar');
+  if (S._wl) { S._wl.items.unshift(_wlNorm(r.data)); _wlCacheSave(); }
+  await _parMandar('', { kind: 'wishlist', id, titulo: nombre, monto: Number(precio) || 0, emoji: '🎁', detalle: 'compartido' });
+  toast('🎁 Agregado a tu Wishlist y compartido ✓');
+}
+function parAgendar(kind) {
+  S._parAg = { kind: kind || S._parAg?.kind || 'nidito', tipo: S._parAg?.tipo || 'PROYECTO', prio: 'media' };
+  const a = S._parAg, nd = a.kind === 'nidito';
+  abrirPop('📅 Agendar desde el chat', `<div class="pr-pop">
+    <div class="din-scope"><button class="${nd ? 'on' : ''}" onclick="parAgendar('nidito')">💞 Nidito</button><button class="${nd ? '' : 'on'}" onclick="parAgendar('wishlist')">🎁 Wishlist</button></div>
+    ${nd ? `<div class="nd-wiz-tipos" style="margin-top:12px">${ND_TIPOS.map(t => `<button class="nd-wiz-tipo${a.tipo === t ? ' on' : ''}" onclick="_ngPick('tipo','${t}',this);S._parAg.tipo='${t}'"><span>${ND_EMO[t]}</span>${ND_CORTO[t]}</button>`).join('')}</div>` : ''}
+    <input id="pa-nom" class="inp" style="margin-top:12px" placeholder="${nd ? 'Nombre (ej. Viaje a Oaxaca)' : '¿Qué desean?'}" maxlength="100" onkeydown="if(event.key==='Enter')$('pa-monto').focus()">
+    <div class="nd-wiz-monto" style="margin-top:12px"><span>$</span><input id="pa-monto" type="number" min="0" step="100" inputmode="decimal" placeholder="0" onkeydown="if(event.key==='Enter')parAgGuardar()"></div>
+    ${nd ? `<div class="nd-wiz-lbl">¿Para cuándo? (opcional)</div><input type="date" id="pa-fin" class="nd-wiz-fecha">`
+         : `<div class="nd-wiz-lbl">Prioridad</div><div class="q-desp-chips nd-wiz-center">${[['alta', '🔴 Alta'], ['media', '🟡 Media'], ['baja', '🟢 Baja']].map(([k, l]) => `<button class="q-desp-chip${k === 'media' ? ' on' : ''}" onclick="_ngChipOn(this);S._parAg.prio='${k}'">${l}</button>`).join('')}</div>`}
+    <div class="pr-hint" style="margin-top:10px">${nd ? 'Se crea en el Nidito de los dos y aparece aquí como tarjeta.' : 'Se agrega a tu Wishlist ya compartido, y aparece aquí como tarjeta.'}</div>
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="parAgGuardar()"><i class="ti ti-check"></i> Agendar</button></div></div>`, 'md');
+  setTimeout(() => $('pa-nom')?.focus(), 60);
+}
+async function parAgGuardar() {
+  const a = S._parAg, nom = ($('pa-nom')?.value || '').trim(), monto = parseFloat($('pa-monto')?.value) || 0;
+  if (!nom) { toast('Ponle un nombre', 'warn'); $('pa-nom')?.focus(); return; }
+  const fin = $('pa-fin')?.value || '';
+  try {
+    cerrarPop();
+    a.kind === 'nidito' ? await _parCrearNidito(a.tipo, nom, monto, fin) : await _parCrearDeseo(nom, monto, a.prio);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+function parAbrirTarjeta(kind, id, mio) {
+  if (kind === 'nidito') {
+    const it = (S._niditoItems || []).find(x => String(x.id) === String(id));
+    if (it) { S._ndTab = it.tipo; (S._ndOpen || (S._ndOpen = new Set())).add(it.id); }
+    go('nidito');
+    setTimeout(() => document.getElementById('nditem-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 600);
+  } else { wlAbrir(); if (!mio) { S._wl.vista = 'pareja'; setTimeout(() => wlRender(), 50); } }
+}
+async function parArchivo(input) {
+  const files = [...(input.files || [])]; input.value = '';
+  for (const f of files) {
+    if (f.size > 25 * 1024 * 1024) { toast(`${f.name} pesa más de 25 MB`, 'error'); continue; }
+    const st = _parSt(), tmp = { id: 'tmp' + Date.now() + Math.random(), mio: true, archivo: { nombre: f.name, mime: f.type, tamano: f.size }, at: new Date().toISOString() };
+    st.msgs.push(tmp); _parPintar(true);
+    try {
+      const r = await fetch('/api/pareja/archivo', { method: 'POST', body: f,
+        headers: { 'Content-Type': 'application/octet-stream', 'x-phone': S.phone, 'x-nombre': encodeURIComponent(f.name), 'x-mime': f.type || 'application/octet-stream' } });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.success) throw new Error(j.error || 'Error ' + r.status);
+      st.msgs = st.msgs.filter(m => m !== tmp && m.id !== j.data.id); st.msgs.push(j.data);
+      st.ultimoId = Math.max(st.ultimoId, j.data.id);
+    } catch (e) { st.msgs = st.msgs.filter(m => m !== tmp); toast(`No se envió ${f.name}: ${e.message}`, 'error'); }
+    _parPintar(true);
+  }
+}
+async function parBorrar(id) {
+  if (!confirm('¿Eliminar este mensaje para los dos?')) return;
+  try {
+    await api('DELETE', `/api/pareja/mensaje/${id}`, { phone: S.phone });
+    const st = _parSt(); st.msgs = st.msgs.filter(m => m.id !== id); _parPintar(false);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+function parTecleo() {
+  const t = Date.now(); if (t - (S._parTec || 0) < 3000) return;
+  S._parTec = t;
+  api('POST', '/api/pareja/escribiendo', { phone: S.phone }).catch(() => {});
+}
+
+// Personalización (color y fondo: cómo lo ves tú; foto: la ve tu pareja)
+function parAjustes() {
+  const yo = _parSt().yo || {};
+  abrirPop('🎨 Personalizar chat', `<div class="pr-pop">
+    <div class="nd-wiz-lbl">Tu foto de perfil</div>
+    <div class="par-foto-row"><div class="par-av grande" id="pa-av">${yo.foto_v ? `<img src="/api/pareja/foto?phone=${encodeURIComponent(S.phone)}&de=yo&v=${yo.foto_v}" alt="">` : _parEsc((((S.data || {}).user || {}).nombre || 'Yo')[0])}</div>
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer"><i class="ti ti-photo"></i> Elegir foto<input type="file" accept="image/*" hidden onchange="parFoto(this)"></label>
+      ${yo.foto_v ? `<button class="btn btn-ghost btn-sm" onclick="parPerfil({foto:null})">Quitar</button>` : ''}</div>
+    <div class="nd-wiz-lbl">Color de tus mensajes</div>
+    <div class="par-colores">${PAR_COLORES.map(c => `<button style="background:${c}" class="${(yo.color || '#ec4899') === c ? 'on' : ''}" onclick="parPerfil({color:'${c}'})" aria-label="Color ${c}"></button>`).join('')}</div>
+    <div class="nd-wiz-lbl">Fondo</div>
+    <div class="par-fondos">${PAR_FONDOS.map(([k, l]) => `<button class="fondo-${k}${(yo.fondo || 'liso') === k ? ' on' : ''}" onclick="parPerfil({fondo:'${k}'})"><span>${l}</span></button>`).join('')}</div>
+    <div class="pr-hint" style="margin-top:12px">El color y el fondo solo cambian cómo ves tú el chat.</div></div>`, 'md');
+}
+async function parPerfil(p) {
+  try {
+    const r = await api('POST', '/api/pareja/perfil', { phone: S.phone, perfil: p });
+    _parSt().yo = { ..._parSt().yo, ...r.perfil };
+    _parTema(); parAjustes(); toast('Listo ✓');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+function parFoto(input) {
+  const f = input.files?.[0]; input.value = ''; if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {
+    const lado = 256, c = document.createElement('canvas'); c.width = c.height = lado;
+    const s = Math.min(img.width, img.height), x = (img.width - s) / 2, y = (img.height - s) / 2;
+    c.getContext('2d').drawImage(img, x, y, s, s, 0, 0, lado, lado);
+    URL.revokeObjectURL(url);
+    parPerfil({ foto: c.toDataURL('image/jpeg', 0.82) });
+  };
+  img.onerror = () => toast('No se pudo leer la imagen', 'error');
+  img.src = url;
+}
+
+// Avisos push (en iPhone: solo con la app instalada en la pantalla de inicio, iOS 16.4+)
+function _b64u(s) { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...b].map(c => c.charCodeAt(0))); }
+async function _parPushEstado() {
+  const b = $('par-push'); if (!b) return;
+  const ok = 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
+  let sub = null;
+  if (ok && Notification.permission === 'granted') {
+    try { const reg = await navigator.serviceWorker.ready; sub = await reg.pushManager.getSubscription(); } catch {}
+    if (sub) api('POST', '/api/push/suscribir', { phone: S.phone, sub: sub.toJSON() }).catch(() => {});   // mantiene la suscripción al día
+  }
+  b.textContent = sub ? '🔔' : '🔕';
+  b.classList.toggle('on', !!sub);
+  b.title = sub ? 'Avisos activados en este dispositivo' : 'Activar avisos de mensajes nuevos';
+}
+async function parPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+    toast('En iPhone, instala la app en tu pantalla de inicio (Compartir → Agregar a inicio) para recibir avisos', 'warn'); return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const ya = await reg.pushManager.getSubscription();
+    if (ya) { await api('POST', '/api/push/baja', { endpoint: ya.endpoint }); await ya.unsubscribe(); toast('Avisos desactivados en este dispositivo'); return _parPushEstado(); }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Sin permiso para avisos: actívalo en los ajustes del navegador', 'warn'); return; }
+    const { key } = await api('GET', '/api/push/vapid');
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _b64u(key) });
+    await api('POST', '/api/push/suscribir', { phone: S.phone, sub: sub.toJSON() });
+    toast('🔔 Avisos activados');
+  } catch (e) { toast('No se pudieron activar los avisos: ' + e.message, 'error'); }
+  _parPushEstado();
+}
+
+// Contador de no leídos (ícono Chat y la pestaña de la pareja) cuando no estás viendo el chat
+function _parBadge(n) {
+  S._parNoLeidos = n;
+  ['mn-chat', 'n-chat', 'rl-chat'].forEach(id => {
+    const a = $(id); if (!a) return;
+    let d = a.querySelector('.nav-badge');
+    if (!n) { d?.remove(); return; }
+    if (!d) { d = document.createElement('span'); d.className = 'nav-badge'; a.appendChild(d); }
+    d.textContent = n > 9 ? '9+' : n;
+  });
+  const pb = $('par-badge'); if (pb) { pb.hidden = !n || S._chatVista === 'par'; pb.textContent = n; }
+}
+async function parNoLeidos() {
+  if (!S.phone || document.visibilityState !== 'visible' || _parVisible()) return;
+  try { const r = await api('GET', `/api/pareja/no-leidos?phone=${encodeURIComponent(S.phone)}`); if (r.n !== S._parNoLeidos) _parBadge(r.n); } catch {}
 }
 
 function _chatKey() { return 'fos_chat_' + S.phone; }
@@ -10041,6 +10456,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
 
     // Escuchar mensaje SW_UPDATED del service worker (activado en nuevo deploy)
     navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'ABRIR_CHAT_PAREJA') { S._chatVista = 'par'; go('chat'); return; }
       if (e.data?.type === 'SW_UPDATED' && _hadController && !_swRefreshing) {
         _swRefreshing = true;
         _safeReload();
@@ -10201,7 +10617,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
 // lógica. En pantallas táctiles esos botones chicos se ocultan (ver CSS .sw-*), en escritorio todo sigue igual.
 (function () {
   if (!('ontouchstart' in window)) return;
-  const BTN = '.edit-pill-btn, .wl-act.edit-sw, .wl-act.del', CONOCIDA = '.mov-card, .pr-goal, .ni-card, .wl-card, .q-item-row, .nd-card, .tdc-card';
+  const BTN = '.edit-pill-btn, .wl-act.edit-sw, .wl-act.del', CONOCIDA = '.mov-card, .pr-goal, .ni-card, .wl-card, .q-item-row, .nd-card, .tdc-card, .pm.yo';
   const SKIP = 'input,textarea,select,[contenteditable="true"],.sw-panel,.tbl-scroll,.gx-tabs,.chat-sug,svg,canvas';
   let st = null, abierta = null;
 

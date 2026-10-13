@@ -59,3 +59,22 @@ self.addEventListener('fetch', e => {
   // El servidor inyecta _BUILD_TS y headers Surrogate-Control: no-store.
   e.respondWith(fetch(e.request, { cache: 'no-store' }).catch(() => caches.match('/')));
 });
+
+// ── AVISOS PUSH (chat de pareja) ─────────────────────────────────────────────
+// El aviso nunca trae el contenido del mensaje: solo quién escribió.
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Us', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Us', {
+    body: d.body || 'Nuevo mensaje', tag: d.tag || 'us', renotify: true,
+    icon: '/icon.svg', badge: '/icon.svg', data: { url: d.url || '/?chat=pareja' },
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/?chat=pareja';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    for (const c of cs) { if ('focus' in c) { c.postMessage({ type: 'ABRIR_CHAT_PAREJA' }); return c.focus(); } }
+    return self.clients.openWindow(url);
+  }));
+});

@@ -2485,6 +2485,7 @@ async function callIA(user, sysBlocks, text, phone, direct = false) {
 app.get('/api/dashboard/:phone', async (req, res) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
+    tocarPresencia(phone, false).catch(() => {});   // "últ. vez" del chat de pareja = última vez con la app abierta
     // Auto-create usuario si accede por primera vez desde la web
     const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', phone).maybeSingle();
     if (!existing) {
@@ -5648,6 +5649,267 @@ app.post('/api/update-refs', async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
+});
+
+// ── CHAT DE PAREJA (Ángel ↔ Alicia) ──────────────────────────────────────────────────────────────
+// Solo la pareja registrada (parejaDe) puede leer o escribir. Texto y archivos se cifran con AES-256-GCM
+// antes de guardarse; la llave se deriva de un secreto del entorno (CHAT_KEY o SHARE_SECRET) y NO está en
+// la base de datos. Ojo: si ese secreto cambia, lo guardado antes ya no se puede leer.
+// Avisos push (Web Push/VAPID): el aviso solo dice "Nuevo mensaje de …", nunca el contenido.
+const webpush = (() => { try { return require('web-push'); } catch (e) { console.error('web-push no instalado:', e.message); return null; } })();
+const _chatSecreto = process.env.CHAT_KEY || SHARE_SECRET;
+const CHAT_KEY = crypto.createHash('sha256').update('pareja-chat:' + _chatSecreto).digest();
+const PAREJA_BUCKET = 'pareja-chat', PAREJA_MAX = 25 * 1024 * 1024;
+function _cifrar(buf) {
+  const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', CHAT_KEY, iv);
+  const d = Buffer.concat([c.update(buf), c.final()]);
+  return { iv, tag: c.getAuthTag(), d };
+}
+const cifrarTxt = t => { const { iv, tag, d } = _cifrar(Buffer.from(String(t), 'utf8')); return `v1.${iv.toString('base64')}.${tag.toString('base64')}.${d.toString('base64')}`; };
+function descifrarTxt(s) {
+  try {
+    const [, iv, tag, d] = String(s).split('.');
+    const c = crypto.createDecipheriv('aes-256-gcm', CHAT_KEY, Buffer.from(iv, 'base64'));
+    c.setAuthTag(Buffer.from(tag, 'base64'));
+    return Buffer.concat([c.update(Buffer.from(d, 'base64')), c.final()]).toString('utf8');
+  } catch { return '🔒 Mensaje que no se pudo descifrar'; }
+}
+const cifrarBuf = b => { const { iv, tag, d } = _cifrar(b); return Buffer.concat([Buffer.from('FOS1'), iv, tag, d]); };
+function descifrarBuf(b) {
+  const c = crypto.createDecipheriv('aes-256-gcm', CHAT_KEY, b.subarray(4, 16));
+  c.setAuthTag(b.subarray(16, 32));
+  return Buffer.concat([c.update(b.subarray(32)), c.final()]);
+}
+// Llaves VAPID deterministas (derivadas del mismo secreto): no hay que guardarlas en ningún lado.
+const VAPID = (() => {
+  try {
+    const priv = crypto.createHash('sha256').update('vapid:' + _chatSecreto).digest();
+    const e = crypto.createECDH('prime256v1'); e.setPrivateKey(priv);
+    return { pub: e.getPublicKey().toString('base64url'), priv: priv.toString('base64url') };
+  } catch (e) { console.error('VAPID:', e.message); return null; }
+})();
+if (webpush && VAPID) webpush.setVapidDetails('mailto:avisos@us-finanzas.app', VAPID.pub, VAPID.priv);
+
+const PAREJA_COLORES = ['#ec4899', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
+const PAREJA_FONDOS  = ['liso', 'puntos', 'rosa', 'cielo', 'noche', 'papel', 'corazones'];
+const _iso = () => new Date().toISOString();
+async function _parejaO403(phone, res) {
+  if (!phone) { res.status(400).json({ success: false, error: 'phone requerido' }); return null; }
+  const par = await parejaDe(phone);
+  if (!par) { res.status(403).json({ success: false, error: 'Este chat es solo para la pareja registrada' }); return null; }
+  return par;
+}
+const _presW = new Map();
+async function tocarPresencia(phone, enChat) {
+  const t = Date.now();
+  if (!enChat && t - (_presW.get(phone) || 0) < 20000) return;   // sin escribir a la base en cada sondeo
+  _presW.set(phone, t);
+  const row = { phone, last_seen: new Date(t).toISOString() };
+  if (enChat) row.en_chat_hasta = new Date(t + 9000).toISOString();
+  await sb.from('pareja_presencia').upsert(row, { onConflict: 'phone' });
+}
+async function _perfiles(phones) {
+  const { data } = await sb.from('usuarios').select('telefono, nombre, external_refs').in('telefono', phones);
+  const out = {};
+  (data || []).forEach(u => { const p = (u.external_refs || {}).chat_perfil || {}; out[u.telefono] = { nombre: u.nombre || '', color: p.color || '', fondo: p.fondo || '', foto_v: p.foto ? (p.foto_v || 1) : 0 }; });
+  return out;
+}
+// El nombre del archivo también va cifrado ("v1.…"); los mensajes viejos sin cifrar se leen tal cual.
+const _nombreArch = a => /^v1./.test(a?.nombre || '') ? descifrarTxt(a.nombre) : (a?.nombre || 'archivo');
+function _msgOut(m, phone) {
+  return { id: m.id, mio: m.de === phone, tipo: m.tipo, texto: m.cuerpo ? descifrarTxt(m.cuerpo) : '',
+           archivo: m.archivo ? { nombre: _nombreArch(m.archivo), mime: m.archivo.mime, tamano: m.archivo.tamano } : null,
+           meta: m.meta || null, at: m.created_at, leido: !!m.leido_at };
+}
+async function pushA(phone, payload) {
+  if (!webpush || !VAPID) return;
+  const { data: pres } = await sb.from('pareja_presencia').select('en_chat_hasta').eq('phone', phone).maybeSingle();
+  if (pres?.en_chat_hasta && new Date(pres.en_chat_hasta) > new Date()) return;   // ya está viendo el chat
+  const { data: subs } = await sb.from('push_subs').select('*').eq('phone', phone);
+  await Promise.all((subs || []).map(s => webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(payload), { TTL: 86400 })
+    .catch(async err => { if (err.statusCode === 404 || err.statusCode === 410) await sb.from('push_subs').delete().eq('endpoint', s.endpoint); })));
+}
+async function _avisarPar(de, par) {
+  const { data: u } = await sb.from('usuarios').select('nombre').eq('telefono', de).maybeSingle();
+  const nombre = /^angel$/i.test((u?.nombre || '').trim()) ? 'Ángel' : (u?.nombre || 'Tu pareja');
+  pushA(par.telefono, { title: `💬 ${nombre}`, body: 'Nuevo mensaje', tag: 'pareja-chat', url: '/?chat=pareja' }).catch(() => {});
+}
+
+// Mensajes (los últimos 80, o los nuevos desde ?desde=id, o anteriores con ?antes=id) + presencia de la pareja
+app.get('/api/pareja/chat', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const desde = parseInt(req.query.desde) || 0, antes = parseInt(req.query.antes) || 0, visto = req.query.visto === '1';
+    const pares = [phone, par.telefono];
+    let q = sb.from('pareja_mensajes').select('*').in('de', pares).in('para', pares).is('deleted_at', null);
+    if (desde) q = q.gt('id', desde).order('id', { ascending: true }).limit(200);
+    else if (antes) q = q.lt('id', antes).order('id', { ascending: false }).limit(60);
+    else q = q.order('id', { ascending: false }).limit(80);
+    if (visto) await sb.from('pareja_mensajes').update({ leido_at: _iso() }).eq('para', phone).eq('de', par.telefono).is('leido_at', null);
+    const [{ data, error }, { data: pres }, perf, { data: ul }, { data: borr }] = await Promise.all([
+      q,
+      sb.from('pareja_presencia').select('*').eq('phone', par.telefono).maybeSingle(),
+      _perfiles(pares),
+      sb.from('pareja_mensajes').select('id').eq('de', phone).eq('para', par.telefono).not('leido_at', 'is', null).order('id', { ascending: false }).limit(1),
+      desde ? sb.from('pareja_mensajes').select('id').in('de', pares).in('para', pares).not('deleted_at', 'is', null).gte('deleted_at', new Date(Date.now() - 120000).toISOString()) : Promise.resolve({ data: [] }),
+    ]);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    tocarPresencia(phone, visto).catch(() => {});
+    const ahora = Date.now(), ls = pres?.last_seen ? new Date(pres.last_seen).getTime() : 0;
+    const rows = (data || []).sort((a, b) => a.id - b.id).map(m => _msgOut(m, phone));
+    const pp = perf[par.telefono] || {};
+    res.json({ success: true,
+      par: { nombre: /^angel$/i.test((par.nombre || '').trim()) ? 'Ángel' : (par.nombre || 'Tu pareja'), last_seen: pres?.last_seen || null,
+             en_linea: ahora - ls < 45000, escribiendo: !!(pres?.escribiendo_hasta && new Date(pres.escribiendo_hasta).getTime() > ahora), foto_v: pp.foto_v || 0 },
+      yo: perf[phone] || {}, mensajes: rows, ultimoLeido: ul?.[0]?.id || 0, borrados: (borr || []).map(b => b.id) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/pareja/no-leidos', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    const par = phone ? await parejaDe(phone) : null;
+    if (!par) return res.json({ success: true, n: 0 });
+    const { count } = await sb.from('pareja_mensajes').select('id', { count: 'exact', head: true })
+      .eq('para', phone).eq('de', par.telefono).is('leido_at', null).is('deleted_at', null);
+    res.json({ success: true, n: count || 0 });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/pareja/mensaje', async (req, res) => {
+  try {
+    const { phone, texto, meta } = req.body || {};
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const t = String(texto || '').trim().slice(0, 4000);
+    let m = null;
+    if (meta && typeof meta === 'object' && ['nidito', 'wishlist'].includes(meta.kind)) {
+      m = { kind: meta.kind, id: String(meta.id || '').slice(0, 64), titulo: String(meta.titulo || '').slice(0, 120),
+            monto: Number(meta.monto) || 0, emoji: String(meta.emoji || '').slice(0, 8), detalle: String(meta.detalle || '').slice(0, 120) };
+    }
+    if (!t && !m) return res.status(400).json({ success: false, error: 'Mensaje vacío' });
+    const { data, error } = await sb.from('pareja_mensajes').insert({ de: phone, para: par.telefono, tipo: m ? 'tarjeta' : 'texto', cuerpo: t ? cifrarTxt(t) : null, meta: m }).select().single();
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    tocarPresencia(phone, true).catch(() => {});
+    sb.from('pareja_presencia').update({ escribiendo_hasta: null }).eq('phone', phone).then(() => {}, () => {});
+    _avisarPar(phone, par);
+    res.json({ success: true, data: _msgOut(data, phone) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Archivo de cualquier tipo (máx. 25 MB): llega crudo, se cifra y se guarda en un bucket privado
+app.post('/api/pareja/archivo', express.raw({ type: () => true, limit: '26mb' }), async (req, res) => {
+  try {
+    const phone = String(req.headers['x-phone'] || '');
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const buf = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!buf || !buf.length) return res.status(400).json({ success: false, error: 'Archivo vacío' });
+    if (buf.length > PAREJA_MAX) return res.status(413).json({ success: false, error: 'El archivo pesa más de 25 MB' });
+    const nombre = decodeURIComponent(String(req.headers['x-nombre'] || 'archivo')).replace(/[\\/\r\n]/g, '_').slice(0, 160) || 'archivo';
+    const mime = String(req.headers['x-mime'] || 'application/octet-stream').split(';')[0].slice(0, 100);   // el cuerpo llega como octet-stream (así express.json no lo intercepta)
+    const texto = decodeURIComponent(String(req.headers['x-texto'] || '')).trim().slice(0, 1000);
+    const path = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    const up = await sb.storage.from(PAREJA_BUCKET).upload(path, cifrarBuf(buf), { contentType: 'application/octet-stream', upsert: false });
+    if (up.error) return res.status(400).json({ success: false, error: up.error.message });
+    const { data, error } = await sb.from('pareja_mensajes').insert({ de: phone, para: par.telefono, tipo: 'archivo', cuerpo: texto ? cifrarTxt(texto) : null,
+      archivo: { path, nombre: cifrarTxt(nombre), mime, tamano: buf.length } }).select().single();
+    if (error) { await sb.storage.from(PAREJA_BUCKET).remove([path]); return res.status(400).json({ success: false, error: error.message }); }
+    tocarPresencia(phone, true).catch(() => {});
+    _avisarPar(phone, par);
+    res.json({ success: true, data: _msgOut(data, phone) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Descarga: solo quien envió o recibió el mensaje. Solo imágenes/PDF/audio/video se muestran en línea;
+// lo demás siempre se descarga (un HTML subido nunca se ejecuta dentro de la app).
+const _MIME_INLINE = /^(image\/(png|jpe?g|gif|webp|heic|heif|avif)|application\/pdf|audio\/|video\/)/i;
+app.get('/api/pareja/archivo/:id', async (req, res) => {
+  try {
+    const phone = String(req.query.phone || '');
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const { data: m } = await sb.from('pareja_mensajes').select('de, para, archivo, deleted_at').eq('id', req.params.id).maybeSingle();
+    if (!m || m.deleted_at || !m.archivo || ![m.de, m.para].includes(phone) || ![m.de, m.para].includes(par.telefono)) return res.status(404).send('No encontrado');
+    const dl = await sb.storage.from(PAREJA_BUCKET).download(m.archivo.path);
+    if (dl.error) return res.status(404).send('No encontrado');
+    const plano = descifrarBuf(Buffer.from(await dl.data.arrayBuffer()));
+    const inline = !req.query.dl && _MIME_INLINE.test(m.archivo.mime || '');
+    res.set({ 'Content-Type': inline ? m.archivo.mime : (m.archivo.mime || 'application/octet-stream'), 'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox",
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(_nombreArch(m.archivo))}`,
+      'Cache-Control': 'private, max-age=86400' });
+    res.send(plano);
+  } catch (e) { res.status(500).send('Error'); }
+});
+
+app.delete('/api/pareja/mensaje/:id', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const { data: m } = await sb.from('pareja_mensajes').select('de, archivo').eq('id', req.params.id).maybeSingle();
+    if (!m || m.de !== phone) return res.status(403).json({ success: false, error: 'Solo puedes borrar tus mensajes' });
+    await sb.from('pareja_mensajes').update({ deleted_at: _iso(), cuerpo: null }).eq('id', req.params.id);
+    if (m.archivo?.path) await sb.storage.from(PAREJA_BUCKET).remove([m.archivo.path]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/pareja/escribiendo', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    const par = await _parejaO403(phone, res); if (!par) return;
+    await sb.from('pareja_presencia').upsert({ phone, last_seen: _iso(), escribiendo_hasta: new Date(Date.now() + 5000).toISOString() }, { onConflict: 'phone' });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Personalización: color y fondo (cómo lo ve cada quien) y foto de perfil (la ve la pareja)
+app.post('/api/pareja/perfil', async (req, res) => {
+  try {
+    const { phone, perfil } = req.body || {};
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const refs = { ...(u?.external_refs || {}) }, cur = { ...(refs.chat_perfil || {}) };
+    if (perfil?.color !== undefined) cur.color = PAREJA_COLORES.includes(perfil.color) ? perfil.color : '';
+    if (perfil?.fondo !== undefined) cur.fondo = PAREJA_FONDOS.includes(perfil.fondo) ? perfil.fondo : '';
+    if (perfil?.foto !== undefined) {
+      if (perfil.foto === null) { delete cur.foto; cur.foto_v = Date.now(); }
+      else if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(perfil.foto) && perfil.foto.length < 400000) { cur.foto = perfil.foto; cur.foto_v = Date.now(); }
+      else return res.status(400).json({ success: false, error: 'Foto inválida (usa JPG, PNG o WebP)' });
+    }
+    refs.chat_perfil = cur;
+    const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, perfil: { color: cur.color || '', fondo: cur.fondo || '', foto_v: cur.foto ? cur.foto_v : 0 } });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+app.get('/api/pareja/foto', async (req, res) => {
+  try {
+    const phone = String(req.query.phone || '');
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const de = req.query.de === 'yo' ? phone : par.telefono;
+    const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', de).maybeSingle();
+    const m = String(u?.external_refs?.chat_perfil?.foto || '').match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!m) return res.status(404).send('Sin foto');
+    res.set({ 'Content-Type': m[1], 'Cache-Control': 'private, max-age=604800', 'X-Content-Type-Options': 'nosniff' });
+    res.send(Buffer.from(m[2], 'base64'));
+  } catch (e) { res.status(500).send('Error'); }
+});
+
+// Avisos push
+app.get('/api/push/vapid', (_req, res) => res.json({ success: !!(webpush && VAPID), key: VAPID?.pub || '' }));
+app.post('/api/push/suscribir', async (req, res) => {
+  try {
+    const { phone, sub } = req.body || {};
+    if (!phone || !sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return res.status(400).json({ success: false, error: 'Suscripción inválida' });
+    if (!/^https:\/\//.test(sub.endpoint)) return res.status(400).json({ success: false, error: 'Endpoint inválido' });
+    const { error } = await sb.from('push_subs').upsert({ endpoint: sub.endpoint, phone, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }, { onConflict: 'endpoint' });
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+app.post('/api/push/baja', async (req, res) => {
+  try { const { endpoint } = req.body || {}; if (endpoint) await sb.from('push_subs').delete().eq('endpoint', endpoint); res.json({ success: true }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // ── SEED ADMIN AL STARTUP ──────────────────────────────────────────────────
