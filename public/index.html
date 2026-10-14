@@ -2110,6 +2110,55 @@ body.sheet-locked{overflow:hidden}
 .par-foto-row{display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap}
 #mn-chat,#n-chat,#rl-chat{position:relative}
 .nav-badge{position:absolute;top:2px;right:calc(50% - 22px);min-width:16px;height:16px;border-radius:8px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;pointer-events:none;line-height:1}
+
+/* ═══════════════════════════════════════════════════════ v25 — barra de periodo fija, agenda, filtro, Alicia */
+/* La barra de temporalidad se queda arriba al hacer scroll (Inicio, Movimientos, Presupuesto, Calendario, Nidito).
+   En la app de pantalla completa el área del reloj/batería queda tapada para que nada pase por debajo. */
+.ds-panel{--sticky-top:0px;--sticky-bg:var(--bg-surface)}
+.mini-topbar,.periodo-wrap,#tab-presupuesto>.cal-nav2,#cal-month-wrap>.cal-nav2,.nd-hero{
+  position:sticky;top:var(--sticky-top,var(--sticky-main,-24px));z-index:30;
+  box-shadow:0 0 0 100vmax var(--sticky-bg,var(--bg-app));clip-path:inset(0 -100vmax)}
+.mini-topbar,#tab-presupuesto>.cal-nav2,#cal-month-wrap>.cal-nav2,.nd-hero{background:var(--sticky-bg,var(--bg-app))}
+#tab-presupuesto>.cal-nav2,#cal-month-wrap>.cal-nav2{padding:6px 0}
+.nd-hero{padding:4px 0 6px;margin-bottom:10px}
+/* top negativo = el padding superior de <main> (el sticky se mide desde su caja de contenido): así la barra
+   queda pegada al borde de arriba sin dejar una franja por donde se asome lo que pasa por debajo. */
+@media(min-width:900px){:root{--sticky-main:-32px}}
+@media(max-width:899px){
+  :root{--sticky-main:-16px}
+  body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg-app);z-index:90;pointer-events:none}
+}
+/* Wishlist: agendar viendo las próximas quincenas */
+.wl-sug{font-size:12.5px;color:var(--text-1);background:rgba(250,204,21,.10);border:1px solid rgba(250,204,21,.35);border-radius:12px;padding:8px 10px;line-height:1.45}
+.wl-ag{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.wl-ag-c{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;padding:9px 10px;border-radius:14px;border:1.5px solid var(--border-default);
+  background:var(--bg-surface-2);color:var(--text-1);font-family:inherit;cursor:pointer;min-width:0}
+.wl-ag-c b{font-size:13.5px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wl-ag-c.sug{border-color:rgba(250,204,21,.55)}
+.wl-ag-c.on{border-color:var(--accent-primary);box-shadow:0 0 0 2px var(--accent-primary) inset}
+.wl-ag-l{font-size:12.5px;font-weight:900;margin-bottom:3px;white-space:nowrap}
+.wl-ag-k{font-size:9.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.wl-ag-bar{display:block;width:100%;height:4px;border-radius:2px;background:var(--bg-surface-3,var(--border-default));margin-top:6px;overflow:hidden}
+.wl-ag-bar span{display:block;height:100%;background:var(--color-income);border-radius:2px}
+.wl-ag-c.neg .wl-ag-bar span{background:var(--color-expense)}
+.wl-ag-mas{align-self:center}
+/* Movimientos: filtro por categoría */
+.mvf-list{display:flex;flex-direction:column;gap:6px}
+.mvf-row{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:14px;border:1px solid var(--border-default);background:var(--bg-surface-2);
+  color:var(--text-1);font-family:inherit;cursor:pointer;text-align:left}
+.mvf-row.on{border-color:var(--accent-primary);box-shadow:0 0 0 1px var(--accent-primary) inset}
+.mvf-row b{flex:1;min-width:0;font-size:14px;font-weight:800;display:flex;flex-direction:column}
+.mvf-row b small{font-size:11px;font-weight:600;color:var(--text-3)}
+.mvf-v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mvf-res{display:flex;align-items:center;gap:12px;max-width:720px;margin:0 auto 12px;padding:10px 14px;border-radius:18px;border:1px solid var(--border-default);background:var(--bg-surface)}
+.mvf-res-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.mvf-res-t small{font-size:11.5px;color:var(--text-3);font-weight:600}
+.mvf-res-t b{font-size:22px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.15}
+/* Dinerito: desglose con Alicia */
+.q-din-sec{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:var(--text-2);margin:2px 2px 8px}
+.q-din-sec b{font-variant-numeric:tabular-nums}
+.q-desp-exp .mov-cards+.q-din-sec{margin-top:12px}
+.q-din-tot{text-align:center;font-size:13px;color:var(--text-2);margin-top:12px}
 </style>
 </head>
 <body>
@@ -3928,41 +3977,55 @@ function _wlEditor(it) {
   </div>`;
 }
 
+// Agendar un deseo viendo las próximas quincenas (o semanas): cuánto queda libre en cada una y cuánto quedaría
+// después de agendarlo. US sugiere la primera que lo aguanta dejando un colchón (10 % del ingreso, mín. $300).
+function _wlCorto(qi) {
+  const d = new Date(qi.from + 'T12:00:00'), y = d.getFullYear() !== new Date().getFullYear() ? ` ${String(d.getFullYear()).slice(2)}` : '';
+  return qi.w ? `Sem ${d.getDate()} ${MESES_CORTO[d.getMonth()]}${y}` : `${qi.q === 2 ? '2ª' : '1ª'} ${MESES_CORTO[qi.month]}${y}`;
+}
+function _wlPlan(off, it) {
+  const refs = (S.data.user || {}).external_refs || {}, qi = getQuincenaInfo(off), qKey = getQKey(qi);
+  const ing = calcIngresosEsperadosPeriodo(refs, qi.from, qi.to);
+  const yaAqui = it.estado === 'agendado' && it.quincena_key === qKey ? (it.precio || 0) : 0;   // al moverlo, no se cuenta dos veces
+  const gas = getGastosEsperados(refs, qKey).filter(g => !esTransporteFijo(g)).reduce((a, g) => a + (g.monto || 0), 0)
+    + getDinerito(qKey) + (compromisoNiditoItem(qi)?.monto || 0) + (transporteItem(qi)?.monto || 0) - yaAqui;
+  const libre = Math.round((ing - gas) * 100) / 100;
+  return { qi, qKey, ing, gas, libre, despues: Math.round((libre - (it.precio || 0)) * 100) / 100 };
+}
+function _wlAgendaHTML(it) {
+  const st = S._wl, n = st.agMas ? 24 : 6, planes = [];
+  for (let o = 0; o < n; o++) planes.push(_wlPlan(o, it));
+  const colchon = p => Math.max(300, p.ing * 0.1);
+  const sug = planes.find(p => p.despues >= colchon(p)) || planes.reduce((a, p) => (p.despues > a.despues ? p : a), planes[0]);
+  if (!st.agSel || !planes.some(p => p.qKey === st.agSel))
+    st.agSel = it.estado === 'agendado' && planes.some(p => p.qKey === it.quincena_key) ? it.quincena_key : sug.qKey;
+  const elegido = planes.find(p => p.qKey === st.agSel) || sug, u = _uTxt();
+  return `<div class="wl-panel">
+    <div class="wl-panel-t">Agendar en una ${u} · ${fmt(it.precio)}</div>
+    <div class="wl-sug">💡 US sugiere <b>${_wlCorto(sug.qi)}</b>: ${sug.despues >= 0 ? `te quedarían <b>${fmt(sug.despues)}</b> libres.` : 'es la que mejor lo aguanta, aunque quedarías en negativo.'}</div>
+    <div class="wl-ag" role="radiogroup" aria-label="Elige la ${u}">${planes.map(p => {
+      const pct = p.ing > 0 ? Math.max(0, Math.min(100, Math.round(p.despues / p.ing * 100))) : 0;
+      return `<button type="button" class="wl-ag-c${st.agSel === p.qKey ? ' on' : ''}${p.qKey === sug.qKey ? ' sug' : ''}${p.despues < 0 ? ' neg' : ''}" role="radio" aria-checked="${st.agSel === p.qKey}" onclick="wlAgSel('${p.qKey}')">
+        <span class="wl-ag-l">${_wlCorto(p.qi)}${p.qKey === sug.qKey ? ' 💡' : ''}</span>
+        <span class="wl-ag-k">Libre</span><b class="${p.libre >= 0 ? 'green' : 'red'}">${fmt(p.libre)}</b>
+        <span class="wl-ag-k">Después</span><b class="${p.despues >= 0 ? 'green' : 'red'}">${fmt(p.despues)}</b>
+        <span class="wl-ag-bar"><span style="width:${pct}%"></span></span></button>`;
+    }).join('')}</div>
+    ${st.agMas ? '' : `<button type="button" class="wl-act wl-ag-mas" onclick="wlAgMas()"><i class="ti ti-calendar-plus"></i> Ver más ${u === 'semana' ? 'semanas' : 'quincenas'}</button>`}
+    <div class="wl-hint">Libre = ingresos esperados − gastos ya planeados de esa ${u}. Quedará en “Gastos esta ${u}”; cuando lo marques pagado ahí, el deseo pasa a comprado solo.</div>
+    <div class="wl-acts" style="margin:0">
+      <button class="wl-act pri" onclick="wlConfirmarAgenda('${it.id}')"><i class="ti ti-check"></i> ${it.estado === 'agendado' ? 'Mover a' : 'Agendar en'} ${_wlCorto(elegido.qi)}</button>
+      ${it.estado === 'agendado' ? `<button class="wl-act" onclick="wlQuitarAgenda('${it.id}')">Quitar de agenda</button>` : ''}
+      <button class="wl-act" onclick="wlCerrarPanel()">Cancelar</button>
+    </div>
+  </div>`;
+}
+function wlAgSel(k) { S._wl.agSel = k; wlRender(); }
+function wlAgMas() { S._wl.agMas = true; wlRender(); }
+
 function _wlPanel(it) {
   const pn = S._wl.panel;
-  if (pn.tipo === 'agendar' && _unidad() === 'semana') {
-    const sw = _semanaDeKey(it.quincena_key), dflt = sw ? sw.from : _semanaInfo(1).from;
-    return `<div class="wl-panel">
-      <div class="wl-panel-t">Agendar en una semana</div>
-      <div class="wl-q-row"><input type="date" id="wl-qd" value="${dflt}" aria-label="Cualquier día de la semana"></div>
-      <div class="wl-hint">Elige cualquier día: queda en esa semana (lunes a domingo) dentro de “Gastos esta semana”. Cuando lo marques como pagado ahí, el deseo pasa a comprado solo.</div>
-      <div class="wl-acts" style="margin:0">
-        <button class="wl-act pri" onclick="wlConfirmarAgenda('${it.id}')"><i class="ti ti-check"></i> ${it.estado==='agendado'?'Mover':'Agendar'}</button>
-        ${it.estado === 'agendado' ? `<button class="wl-act" onclick="wlQuitarAgenda('${it.id}')">Quitar de agenda</button>` : ''}
-        <button class="wl-act" onclick="wlCerrarPanel()">Cancelar</button>
-      </div>
-    </div>`;
-  }
-  if (pn.tipo === 'agendar') {
-    const k  = (/^\d{4}-\d{2}-[AB]$/.test(it.quincena_key || '') && it.quincena_key) || getQKey(_qInfoQuincena(1));
-    const m  = k.match(/^(\d{4})-(\d{2})-([AB])$/);
-    const y0 = new Date().getFullYear();
-    const ys = []; for (let y = Math.min(y0, +m[1]); y <= y0 + 5; y++) ys.push(y);
-    return `<div class="wl-panel">
-      <div class="wl-panel-t">Agendar en una quincena</div>
-      <div class="wl-q-row">
-        <select id="wl-qy">${ys.map(y => `<option${y===+m[1]?' selected':''}>${y}</option>`).join('')}</select>
-        <select id="wl-qm">${MESES.map((n, i) => `<option value="${String(i+1).padStart(2,'0')}"${i+1===+m[2]?' selected':''}>${n[0]+n.slice(1).toLowerCase()}</option>`).join('')}</select>
-        <select id="wl-qq"><option value="A"${m[3]==='A'?' selected':''}>1ª (10–24)</option><option value="B"${m[3]==='B'?' selected':''}>2ª (25–9)</option></select>
-      </div>
-      <div class="wl-hint">Quedará como gasto presupuestado de esa quincena en “Gastos esta quincena”. Cuando lo marques como pagado ahí, el deseo pasa a comprado solo.</div>
-      <div class="wl-acts" style="margin:0">
-        <button class="wl-act pri" onclick="wlConfirmarAgenda('${it.id}')"><i class="ti ti-check"></i> ${it.estado==='agendado'?'Mover':'Agendar'}</button>
-        ${it.estado === 'agendado' ? `<button class="wl-act" onclick="wlQuitarAgenda('${it.id}')">Quitar de agenda</button>` : ''}
-        <button class="wl-act" onclick="wlCerrarPanel()">Cancelar</button>
-      </div>
-    </div>`;
-  }
+  if (pn.tipo === 'agendar') return _wlAgendaHTML(it);
   return `<div class="wl-panel">
     <div class="wl-panel-t">Marcar como comprado</div>
     <div><label>Medio de pago</label><select id="wl-mp">${MEDIOS.map(x => `<option${x===(WL_FP_MEDIO[it.forma_pago]||'efectivo')?' selected':''}>${x}</option>`).join('')}</select></div>
@@ -4053,6 +4116,7 @@ function wlEditar(id) { S._wl.editando = S._wl.editando === id ? null : id; S._w
 function wlPanel(id, tipo) {
   const same = S._wl.panel?.id === id && S._wl.panel.tipo === tipo;
   S._wl.panel = same ? null : { id, tipo };
+  S._wl.agSel = null; S._wl.agMas = false;
   wlRender();
 }
 
@@ -4133,7 +4197,8 @@ async function _wlAccion(id, fn, okMsg) {
 }
 
 function wlConfirmarAgenda(id) {
-  const qKey = $('wl-qd') ? _semanaInfo(_semanaOffset($('wl-qd').value)).key : `${$('wl-qy').value}-${$('wl-qm').value}-${$('wl-qq').value}`;
+  const qKey = S._wl.agSel; if (!qKey) return;
+  S._wl.agSel = null;
   return _wlAccion(id, () => api('POST', `/api/wishlist/${id}/agendar`, { user_phone: S.phone, qKey }), `Agendado en la ${_wlQLabel(qKey)} ✓`);
 }
 function wlQuitarAgenda(id) {
@@ -4417,10 +4482,13 @@ function compromisoNiditoItem(qi) {
   return tot > 0 ? { _id: NIDITO_COMP_ID, descripcion: 'Compromiso al Nidito', monto: tot, categoria: 'Ocio', _isNiditoComp: true, _items: l } : null;
 }
 // Mismo criterio que la tarjeta del Nidito: gastos de la quincena que mencionan a Alicia.
+// Un gasto "con Alicia": de su categoría o que la menciona en el concepto/comentarios.
+const _conAlicia = m => m.categoria === 'Alicia' || /alicia/i.test(`${m.concepto || ''} ${m.comentarios || ''} ${m.descripcion || ''}`);
 function getDineritoGastado(from, to) {
-  return (S.data?.movs || []).filter(m => !m.deleted_at && m.tipo === 'GASTO' && (m.fecha || '') >= from && (m.fecha || '') <= to
-    && /alicia/i.test(`${m.concepto || ''} ${m.comentarios || ''} ${m.descripcion || ''}`)).reduce((a, m) => a + (m.monto || 0), 0);
+  return (S.data?.movs || []).filter(m => !m.deleted_at && m.tipo === 'GASTO' && (m.fecha || '') >= from && (m.fecha || '') <= to && _conAlicia(m))
+    .reduce((a, m) => a + (m.monto || 0), 0);
 }
+function toggleQDin() { S._qDinOpen = !S._qDinOpen; refreshQuincenaPanel(); }
 // Abre Nidito parado en la quincena del renglón. Se fija S._niditoQ/_ndDin ANTES de navegar para que
 // la carga inicial de rNidito use la misma quincena y no pise el monto con el de otra.
 function ndIrADinerito(qKey, destino) {
@@ -4971,14 +5039,33 @@ function rQuincenaPanel(ctx) {
         </div>`;
         }
         if (g._isDinerito) {
-          // Solo lectura: se edita en Nidito. Sin casilla de "pagado" (el gasto real son los movimientos
-          // con Alicia; marcarlo crearía un movimiento duplicado por el monto completo).
+          // Sin casilla de "pagado" (el gasto real son los movimientos con Alicia; marcarlo crearía un movimiento
+          // duplicado por el monto completo). Tocarla despliega TODO lo de esta quincena con Alicia: movimientos
+          // ya hechos (categoría Alicia o que la mencionan) y los otros gastos planeados con ella aún sin pagar.
           const gastado = getDineritoGastado(qi.from, qi.to), rest = g.monto - gastado;
           const pct = g.monto > 0 ? Math.min(100, Math.round(gastado / g.monto * 100)) : 0;
+          const abierto = !!S._qDinOpen;
+          let exp = '';
+          if (abierto) {
+            const movsA = qMovs.filter(m => !m.deleted_at && m.tipo === 'GASTO' && _conAlicia(m)).sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+            const pend  = gasEsp.filter(x => !x._isDinerito && !x._isNiditoComp && (x.categoria === 'Alicia' || /alicia/i.test(`${x.descripcion || ''} ${x.comentarios || ''}`))
+              && !qMovs.some(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + x.descripcion));
+            const sMov = movsA.reduce((a, m) => a + (m.monto || 0), 0), sPend = pend.reduce((a, x) => a + (x.monto || 0), 0);
+            exp = `<div class="q-desp-exp" onclick="event.stopPropagation()">
+              <div class="q-din-sec"><span>💸 Gastado con Alicia</span><b class="red">${fmt(sMov)}</b></div>
+              <div class="mov-cards">${movsA.map(m => _movCardHTML(m, true)).join('') || '<div class="desp-empty">Aún no hay gastos con Alicia en esta quincena.</div>'}</div>
+              ${pend.length ? `<div class="q-din-sec"><span>📋 Otros gastos con Alicia por pagar</span><b class="red">${fmt(sPend)}</b></div>
+              <div class="mov-cards">${pend.map(x => `<div class="mov-card">${catIcHTML(x.categoria || 'Alicia', x)}
+                <div class="mov-card-mid"><div class="mov-card-title">${gxEsc(x.descripcion || '—')}</div><div class="mov-card-sub">Planeado en Gastos esta ${_uTxt()}${x.forma_pago ? ' · ' + gxEsc(x.forma_pago.replace('_', ' ')) : ''}</div></div>
+                <div class="mov-card-val red">${fmt(x.monto)}</div></div>`).join('')}</div>` : ''}
+              <div class="q-din-tot">Total con Alicia esta ${_uTxt()}: <b>${fmt(sMov + sPend)}</b></div>
+            </div>`;
+          }
           return `<div class="mov-card q-card">
           ${catIcHTML('Alicia', null, '💕')}
-          <div class="mov-card-mid">
-            <div class="mov-card-title">Dinerito de novios</div>
+          <div class="mov-card-mid q-card-tap" onclick="toggleQDin()" role="button" tabindex="0" aria-expanded="${abierto}" title="${abierto ? 'Ocultar gastos con Alicia' : 'Ver gastos con Alicia'}"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+            <div class="mov-card-title">Dinerito de novios<i class="ti ti-chevron-${abierto ? 'up' : 'down'}"></i></div>
             <div class="mov-card-sub">Nidito · ${rest >= 0 ? 'restan ' + fmt(rest) : 'excedido ' + fmt(-rest)}</div>
             <div class="mov-card-sub">Gastado con Alicia: ${fmt(gastado)}</div>
             <div class="q-din-bar${rest < 0 ? ' over' : ''}"><span style="width:${pct}%"></span></div>
@@ -4987,6 +5074,7 @@ function rQuincenaPanel(ctx) {
           <div class="q-card-foot"><div class="mov-card-acts">
             <button class="edit-pill-btn" title="Cambiar el monto" onclick="dinPop('${qKey}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
           </div></div>
+          ${exp}
         </div>`;
         }
         if (g._isDespensa) {
@@ -6450,8 +6538,7 @@ function _ndPaint() {
   const { angelPh, aliciaPh } = _ndPhones();
   // Gastos de esta quincena que mencionan a Alicia (mismo criterio que Gastos esta quincena)
   const qMovsAlicia = (S.data?.movs || []).filter(m => !m.deleted_at && m.tipo === 'GASTO'
-    && (m.fecha || '') >= q.inicio && (m.fecha || '') <= q.fin
-    && /alicia/i.test(`${m.concepto || ''} ${m.comentarios || ''} ${m.descripcion || ''}`));
+    && (m.fecha || '') >= q.inicio && (m.fecha || '') <= q.fin && _conAlicia(m));
   const gastado  = qMovsAlicia.reduce((a, m) => a + (m.monto || 0), 0);
   const restante = din - gastado;
   const pctDin   = din > 0 ? Math.min(100, Math.round(gastado / din * 100)) : (gastado > 0 ? 100 : 0);
@@ -7931,6 +8018,31 @@ ${dsgPanelHTML('mov-dsg','mov')}
 // distinta. mkTable() se sigue llamando en _updateMovsTable para registrar
 // la tabla (Excel export la lee de ahí), pero su HTML ya no se pinta: esta
 // lista es la vista real que ve el usuario, tabla y móvil por igual.
+// Filtro rápido por categoría (botón junto a Descargar): elige una categoría y ve cuánto se gastó en ella.
+function movFiltroCat() {
+  initMovF();
+  const cats0 = S.movF.cats; S.movF.cats = [];
+  const base = getMovFiltradas(); S.movF.cats = cats0;
+  const tot = {};
+  base.filter(m => m.tipo === 'GASTO').forEach(m => { const k = m.categoria || 'OTROS'; (tot[k] = tot[k] || { s: 0, n: 0 }); tot[k].s += m.monto || 0; tot[k].n++; });
+  const cats = Object.entries(tot).sort((a, b) => b[1].s - a[1].s), sel = cats0.length === 1 ? cats0[0] : null;
+  abrirPop('Filtrar por categoría', `<div class="pr-pop">
+    <div class="mvf-list">
+      <button class="mvf-row${!cats0.length ? ' on' : ''}" onclick="movFiltroSet(null)"><div class="mov-card-ic emo" aria-hidden="true">🗂️</div><b>Todas</b><span class="mvf-v">${fmt(cats.reduce((a, [, v]) => a + v.s, 0))}</span></button>
+      ${cats.map(([c, v]) => `<button class="mvf-row${sel === c ? ' on' : ''}" data-c="${_ndEsc(c)}" onclick="movFiltroSet(this.dataset.c)">${catIcHTML(c)}<b>${_ndEsc(c)}<small>${v.n} movimiento${v.n !== 1 ? 's' : ''}</small></b><span class="mvf-v red">${fmt(v.s)}</span></button>`).join('')}
+    </div>
+    ${cats.length ? '' : '<div class="pr-hint">Sin egresos con los filtros actuales.</div>'}</div>`);
+}
+function movFiltroSet(c) { initMovF(); S.movF.cats = c ? [c] : []; cerrarPop(); rMovs(); }
+function _movFiltroResumen(rows) {
+  const f = S.movF; if (!f || !f.cats.length) return '';
+  const gas = rows.filter(m => m.tipo === 'GASTO'), s = gas.reduce((a, m) => a + (m.monto || 0), 0);
+  const nombre = f.cats.length === 1 ? f.cats[0] : `${f.cats.length} categorías`;
+  return `<div class="mvf-res">${f.cats.length === 1 ? catIcHTML(f.cats[0]) : '<div class="mov-card-ic emo" aria-hidden="true">🗂️</div>'}
+    <div class="mvf-res-t"><small>Gastado en ${_ndEsc(nombre)}</small><b class="red">${fmt(s)}</b><small>${gas.length} movimiento${gas.length !== 1 ? 's' : ''}</small></div>
+    <button class="ico-btn" onclick="movFiltroSet(null)" title="Quitar filtro" aria-label="Quitar filtro"><i class="ti ti-x"></i></button></div>`;
+}
+
 // Tarjeta de un movimiento (lista agrupada por día y lista ordenada por monto)
 function _movCardHTML(m, conFecha) {
   S._movData[m.id] = m;
@@ -8043,9 +8155,10 @@ function _updateMovsTable(filtered) {
     const _sLbl = { '': 'Ordenar por monto', desc: 'Mayor a menor · toca para menor a mayor', asc: 'Menor a mayor · toca para quitar el orden' }[S._movSort || ''];
     _tHost.innerHTML = `<div class="ico-bar ico-bar-c">
       <button class="ico-btn${S._movSort ? ' on' : ''}" onclick="ciclarOrdenMov()" title="${_sLbl}" aria-label="${_sLbl}"><i class="ti ti-${_sIco}"></i></button>
+      <button class="ico-btn${(S.movF?.cats || []).length ? ' on' : ''}" onclick="movFiltroCat()" title="Filtrar por categoría" aria-label="Filtrar por categoría"><i class="ti ti-filter"></i></button>
       <button class="ico-btn" onclick="exportTableToExcel('tbl-movs')" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
       <button class="ico-btn" onclick="toggleMovsCollapsed()" title="${lbl}" aria-label="${lbl}" aria-expanded="${S._movsCollapsed?'false':'true'}"><i class="ti ti-chevron-${icon}"></i></button>
-    </div>${S._movsCollapsed ? '' : _movList}`;
+    </div>${_movFiltroResumen(rows)}${S._movsCollapsed ? '' : _movList}`;
   } else if (!S._movsCollapsed) {
     const host = $('movs-section') || $('tab-movimientos');
     if (host) host.innerHTML += _movList;
