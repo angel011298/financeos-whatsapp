@@ -40,8 +40,8 @@
   /* Semantic — SOLO en montos (gasto/ingreso). AA sobre superficies en noche. */
   --color-income:#9be07a; --color-expense:#ff7a6b; --color-warning:#FCCC8E;
   /* Category colors — invariant (same in both modes) */
-  --cat-hogar:#60A5FA; --cat-comida:#fb923c; --cat-tdc:#f87171;
-  --cat-despensa:#4ade80; --cat-alicia:#f59e0b; --cat-ocio:#a78bfa;
+  --cat-hogar:#60A5FA; --cat-comida:#fb923c; --cat-tdc:#2dd4bf;
+  --cat-despensa:#4ade80; --cat-alicia:#d90429; --cat-ocio:#a78bfa;
   --cat-personales:#f472b6; --cat-platina:#22d3ee; --cat-transporte:#818cf8;
   --cat-otros:#94a3b8;
   /* TDC card colors */
@@ -2347,8 +2347,8 @@ body.sheet-locked{overflow:hidden}
 // ── CONSTANTES ──────────────────────────────────────────────────────────────
 const CATS   = ['Hogar','Comida','TDC','Despensa','Alicia','Ocio','Personales','Platina','Transporte','OTROS'];
 const MEDIOS = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut','Pluxee'];
-const CLR    = ['#818cf8','#34d399','#f87171','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
-const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#f87171','Despensa':'#4ade80','Alicia':'#f59e0b','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
+const CLR    = ['#818cf8','#34d399','#84cc16','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
+const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#2dd4bf','Despensa':'#4ade80','Alicia':'#d90429','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
 // Emoji por categoría: lo usan las tarjetas de Movimientos, Gastos esta quincena, Despensa y Nidito.
 const CAT_EMOJI = { Hogar:'🏠', Comida:'🍽️', TDC:'💳', Despensa:'🛒', Alicia:'🩵', Ocio:'🎉', Personales:'💆',
   Platina:'🚗', Transporte:'🚌', OTROS:'📦', Otros:'📦' };
@@ -3590,8 +3590,8 @@ function catGasto(desc) {
   return 'Otros';
 }
 const _CAT_COLORS = {
-  Hogar:'#60A5FA', Comida:'#fb923c', TDC:'#f87171', Despensa:'#4ade80',
-  Alicia:'#f59e0b', Ocio:'#a78bfa', Personales:'#f472b6', Platina:'#22d3ee',
+  Hogar:'#60A5FA', Comida:'#fb923c', TDC:'#2dd4bf', Despensa:'#4ade80',
+  Alicia:'#d90429', Ocio:'#a78bfa', Personales:'#f472b6', Platina:'#22d3ee',
   Transporte:'#818cf8', Otros:'#94a3b8'
 };
 function catBadge(cat) {
