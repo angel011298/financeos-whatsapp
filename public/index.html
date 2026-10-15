@@ -544,6 +544,12 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .mov-day-tot b{font-size:14px;font-weight:800}
 .mov-day-tot small{display:flex;gap:10px;font-size:11.5px;font-weight:700}
 .mov-day-tot small span{white-space:nowrap}
+.mov-day-tot .mdt-sum{display:flex;flex-direction:row;gap:12px;font-size:14px;font-weight:800;white-space:nowrap}
+.mov-day-hdr .mov-day-tot .mdt-sum span{font-size:14px;font-weight:800}
+.mov-day-hdr .mov-day-tot small span{font-size:11.5px;font-weight:700}
+.mov-day-tot .mdt-full{display:none;flex-direction:column;align-items:flex-end;gap:1px}
+.mov-day-hdr.open .mdt-sum{display:none}
+.mov-day-hdr.open .mdt-full{display:flex}
 .mov-day-chev{font-size:13px;margin-right:5px;vertical-align:-1px}
 .mov-card{display:flex;align-items:center;gap:12px;padding:12px 14px;
   background:var(--bg-surface);border:1px solid var(--border-default);
@@ -8399,9 +8405,12 @@ function _movCardsHTML(rows) {
     // Colapsado por defecto: solo se expande el día que el usuario abre explícitamente.
     const collapsed = S._movDayCollapsed[d] !== false;
     const dIng = ms.filter(m => m.tipo==='INGRESO').reduce((a,m) => a + (m.monto||0), 0), dEgr = ms.filter(m => m.tipo==='GASTO').reduce((a,m) => a + (m.monto||0), 0);
-    return `<div class="mov-day-hdr" onclick="toggleMovDay('${d}')">
+    // Sin ceros: si no hubo ingresos (o egresos) ese día no se pinta nada de ese lado
+    const _tIng = dIng ? `<span class="green" title="Ingresos del día">↗ ${fmt(dIng)}</span>` : '', _tEgr = dEgr ? `<span class="red" title="Egresos del día">↘ ${fmt(dEgr)}</span>` : '';
+    const _tNeto = neto && dIng && dEgr ? `<b class="${neto>=0?'green':'red'}">${neto>=0?'+':'−'}${fmt(Math.abs(neto))}</b>` : '';
+    return `<div class="mov-day-hdr${collapsed ? '' : ' open'}" onclick="toggleMovDay('${d}')">
       <span><i class="ti ti-chevron-${collapsed?'right':'down'} mov-day-chev"></i>${lbl}</span>
-      <span class="mov-day-tot"><b class="${neto>=0?'green':'red'}">${neto>=0?'+':'−'}${fmt(Math.abs(neto))}</b><small><span class="green" title="Ingresos del día">↗ ${fmt(dIng)}</span><span class="red" title="Egresos del día">↘ ${fmt(dEgr)}</span></small></span>
+      <span class="mov-day-tot"><span class="mdt-sum">${_tIng}${_tEgr}</span><span class="mdt-full">${_tNeto}<small>${_tIng}${_tEgr}</small></span></span>
     </div>
     <div class="mov-day-group" id="mov-day-${d}" style="display:${collapsed?'none':''}">${ms.map(m => _movCardHTML(m, false)).join('')}</div>`;
   }).join('')}</div>`;
@@ -8428,7 +8437,8 @@ function toggleMovDay(d) {
   S._movDayCollapsed[d] = collapsed;
   const group = document.getElementById('mov-day-' + d);
   if (group) group.style.display = collapsed ? 'none' : '';
-  const chev = group?.previousElementSibling?.querySelector('.mov-day-chev');
+  const hdr = group?.previousElementSibling, chev = hdr?.querySelector('.mov-day-chev');
+  if (hdr) hdr.classList.toggle('open', !collapsed);
   if (chev) chev.className = `ti ti-chevron-${collapsed?'right':'down'} mov-day-chev`;
 }
 
