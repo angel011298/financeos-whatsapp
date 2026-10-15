@@ -2511,7 +2511,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       sb.from('movimientos').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(2000),
       sb.from('metas').select('*').eq('user_phone', phone).is('deleted_at', null).order('id'),
       sb.from('usuarios').select('*').eq('telefono', phone).single(),
-      sb.from('calendario').select('*').eq('user_phone', phone).is('deleted_at', null).order('fecha').order('id'),
+      sb.from('calendario').select('*').or(`user_phone.eq.${phone},etiquetados.cs.{"${phone}"}`).is('deleted_at', null).order('fecha').order('id'),
       sb.from('patrones_ia').select('*').eq('user_phone', phone).order('contador', { ascending: false }).order('id'),
       sb.from('presupuesto').select('*').eq('user_phone', phone).order('categoria').order('mes'),
       sb.from('nidito_asignaciones')
@@ -2587,6 +2587,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     }
 
     res.json({ success: true, data: {
+      pareja: await parejaDe(phone).then(p => p ? { telefono: p.telefono, nombre: p.nombre || '', role: p.role || '' } : null).catch(() => null),
       tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data,
       calendario: cal.data, patrones: pat.data, presupuesto: presp.data,
       nidito: {
@@ -2761,20 +2762,53 @@ app.delete('/api/movimientos/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// Eventos compartidos: el dueño etiqueta a su pareja (columna etiquetados = teléfonos). La persona etiquetada lo ve
+// en su calendario y puede editarlo o borrarlo; solo el dueño cambia las etiquetas. Aviso push solo al etiquetar.
+const CAL_CAMPOS = ['titulo', 'descripcion', 'fecha', 'hora', 'recordatorio_fecha', 'tipo', 'completado', 'recurrente', 'notas'];
+async function _calAcceso(id, phone) {
+  const { data: ev } = await sb.from('calendario').select('*').eq('id', id).is('deleted_at', null).maybeSingle();
+  if (!ev) return { err: 404 };
+  if (ev.user_phone === phone) return { ev, dueno: true };
+  if ((ev.etiquetados || []).includes(phone)) return { ev, dueno: false };
+  return { err: 403 };
+}
+async function _etiquetasValidas(phone, arr) {
+  if (!Array.isArray(arr) || !arr.length) return [];
+  const par = await parejaDe(phone);
+  return par && arr.includes(par.telefono) ? [par.telefono] : [];
+}
+async function _avisarEtiqueta(phone, par) {
+  const { data: u } = await sb.from('usuarios').select('nombre').eq('telefono', phone).maybeSingle();
+  const nombre = /^angel$/i.test((u?.nombre || '').trim()) ? 'Ángel' : (u?.nombre || 'Tu pareja');
+  pushA(par, { title: '📅 Calendario', body: `${nombre} te etiquetó en un evento`, tag: 'cal', url: '/?ir=calendario' }, true).catch(() => {});
+}
+
 app.post('/api/calendario', async (req, res) => {
   try {
-    const { user_phone, ...d } = req.body;
-    const { data, error } = await sb.from('calendario').insert({ ...d, user_phone }).select().single();
+    const { user_phone, etiquetados, ...d } = req.body;
+    const et = await _etiquetasValidas(user_phone, etiquetados);
+    const { data, error } = await sb.from('calendario').insert({ ...d, user_phone, etiquetados: et, editor: user_phone }).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
+    if (et.length) _avisarEtiqueta(user_phone, et[0]);
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 app.put('/api/calendario/:id', async (req, res) => {
   try {
-    const { user_phone, ...d } = req.body;
-    const { data, error } = await sb.from('calendario').update(d).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
+    const { user_phone, etiquetados } = req.body;
+    const ac = await _calAcceso(req.params.id, user_phone);
+    if (ac.err) return res.status(ac.err).json({ success: false, error: ac.err === 404 ? 'El evento ya no existe' : 'No tienes acceso a este evento' });
+    const d = { updated_at: new Date().toISOString(), editor: user_phone };
+    CAL_CAMPOS.forEach(k => { if (req.body[k] !== undefined) d[k] = req.body[k]; });
+    let nuevaEtiqueta = null;
+    if (ac.dueno && etiquetados !== undefined) {
+      d.etiquetados = await _etiquetasValidas(user_phone, etiquetados);
+      nuevaEtiqueta = d.etiquetados.find(t => !(ac.ev.etiquetados || []).includes(t)) || null;
+    }
+    const { data, error } = await sb.from('calendario').update(d).eq('id', req.params.id).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
+    if (nuevaEtiqueta) _avisarEtiqueta(user_phone, nuevaEtiqueta);
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -2782,7 +2816,9 @@ app.put('/api/calendario/:id', async (req, res) => {
 app.delete('/api/calendario/:id', async (req, res) => {
   try {
     const { user_phone } = req.body;
-    const { error } = await sb.from('calendario').delete().eq('id', req.params.id).eq('user_phone', user_phone);
+    const ac = await _calAcceso(req.params.id, user_phone);
+    if (ac.err) return res.status(ac.err).json({ success: false, error: ac.err === 404 ? 'El evento ya no existe' : 'No tienes acceso a este evento' });
+    const { error } = await sb.from('calendario').delete().eq('id', req.params.id);
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -2835,6 +2871,7 @@ app.post('/api/nidito/items', async (req, res) => {
     const { data, error } = await sb.from('nidito_items').insert(d).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     await writeAuditLog(user_phone, 'nidito_items', 'crear', data.id, null, data, 'web');
+    parejaDe(user_phone).then(par => par && pushA(par.telefono, { title: '💞 Nidito', body: 'Agregaron algo nuevo al Nidito', tag: 'nidito', url: '/?ir=nidito' }, true)).catch(() => {});
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4441,13 +4478,32 @@ app.post('/api/nidito/upload-confirm', async (req, res) => {
 // ── NOTAS DE INICIO — notas ilimitadas con título e imágenes (solo Inicio;
 // las otras 5 pestañas conservan su nota única de texto libre en external_refs) ─
 const IMG_UPLOAD_ALLOWED = new Set(['image/jpeg','image/png','image/gif','image/webp']);
+// Edición conjunta: el servidor solo cuida el orden (bloqueo optimista por versión). Si alguien guardó antes, responde 409
+// con la versión actual y es el CLIENTE quien fusiona por bloques (ver niSave) y reintenta.
+async function _notaAcceso(id, phone) {
+  const { data: n } = await sb.from('notas_inicio').select('*').eq('id', id).is('deleted_at', null).maybeSingle();
+  if (!n) return { err: 404 };
+  if (n.user_phone === phone) return { n, dueno: true };
+  const par = await parejaDe(phone);
+  if (par && par.telefono === n.user_phone && n.compartida) return { n, dueno: false, par };
+  return { err: 403 };
+}
+const _editandoPor = (n, phone) => !!(n.editando_por && n.editando_por !== phone && n.editando_hasta && new Date(n.editando_hasta) > new Date());
+
 app.get('/api/notas-inicio', async (req, res) => {
   try {
     const { phone } = req.query;
     if (!phone) return res.status(400).json({ success: false, error: 'phone requerido' });
-    const { data, error } = await sb.from('notas_inicio').select('*')
-      .eq('user_phone', phone).is('deleted_at', null).order('updated_at', { ascending: false });
-    if (error) return res.status(400).json({ success: false, error: error.message });
+    const par = await parejaDe(phone);
+    const [mias, suyas] = await Promise.all([
+      sb.from('notas_inicio').select('*').eq('user_phone', phone).is('deleted_at', null),
+      par ? sb.from('notas_inicio').select('*').eq('user_phone', par.telefono).eq('compartida', true).is('deleted_at', null) : Promise.resolve({ data: [] }),
+    ]);
+    if (mias.error) return res.status(400).json({ success: false, error: mias.error.message });
+    const autor = /^angel$/i.test((par?.nombre || '').trim()) ? 'Ángel' : (par?.nombre || 'Tu pareja');
+    const data = [...(mias.data || []).map(n => ({ ...n, editando: _editandoPor(n, phone) })),
+                  ...(suyas.data || []).map(n => ({ ...n, de_pareja: true, autor, editando: _editandoPor(n, phone) }))]
+      .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4465,25 +4521,54 @@ app.post('/api/notas-inicio', async (req, res) => {
 
 app.put('/api/notas-inicio/:id', async (req, res) => {
   try {
-    const { user_phone, titulo, contenido, imagenes } = req.body;
+    const { user_phone, titulo, contenido, imagenes, compartida, base_version } = req.body;
     if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
-    const d = { updated_at: new Date().toISOString() };
-    if (titulo     !== undefined) d.titulo = titulo;
-    if (contenido  !== undefined) d.contenido = contenido;
-    if (imagenes   !== undefined) d.imagenes = imagenes;
-    const { data, error } = await sb.from('notas_inicio').update(d)
-      .eq('id', req.params.id).eq('user_phone', user_phone).select().single();
-    if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, data });
+    for (let intento = 0; intento < 3; intento++) {
+      const ac = await _notaAcceso(req.params.id, user_phone);
+      if (ac.err) return res.status(ac.err).json({ success: false, error: ac.err === 404 ? 'La nota ya no existe' : 'No tienes acceso a esta nota' });
+      const { n, dueno } = ac;
+      if ((contenido !== undefined || titulo !== undefined) && base_version !== undefined && Number(base_version) !== n.version)
+        return res.status(409).json({ success: false, conflict: true, error: 'La nota cambió', data: n });
+      const cont = contenido, tit = titulo;
+      const d = { updated_at: new Date().toISOString(), editor: user_phone, editando_por: user_phone, editando_hasta: new Date(Date.now() + 6000).toISOString() };
+      if (cont !== undefined) d.contenido = cont;
+      if (tit !== undefined) d.titulo = tit;
+      if (imagenes !== undefined && dueno) d.imagenes = imagenes;
+      if (dueno && compartida !== undefined) d.compartida = compartida === true;
+      if ((d.contenido !== undefined && d.contenido !== n.contenido) || (d.titulo !== undefined && d.titulo !== n.titulo) || d.compartida !== undefined) d.version = n.version + 1;
+      const { data, error } = await sb.from('notas_inicio').update(d).eq('id', n.id).eq('version', n.version).select().maybeSingle();
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      if (!data) continue;   // otra persona guardó en el mismo instante: se reintenta con lo último
+      if (dueno && d.compartida === true && !n.compartida) {
+        const par = await parejaDe(user_phone);
+        if (par) pushA(par.telefono, { title: '📝 Nota compartida', body: 'Te compartieron una nota para editar juntos', tag: 'nota', url: '/?ir=notas' }, true).catch(() => {});
+      }
+      return res.json({ success: true, data });
+    }
+    res.status(409).json({ success: false, error: 'La nota cambió muchas veces seguidas; intenta de nuevo' });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Latido mientras la nota está abierta: avisa "estoy editando" y trae lo nuevo si la versión cambió
+app.post('/api/notas-inicio/:id/ping', async (req, res) => {
+  try {
+    const { phone, v } = req.body || {};
+    const ac = await _notaAcceso(req.params.id, phone || '');
+    if (ac.err) return res.status(ac.err).json({ success: false, error: ac.err === 404 ? 'La nota ya no existe' : 'Esta nota dejó de estar compartida' });
+    const { n } = ac, otro = _editandoPor(n, phone);
+    if (n.compartida) sb.from('notas_inicio').update({ editando_por: phone, editando_hasta: new Date(Date.now() + 6000).toISOString() }).eq('id', n.id).then(() => {}, () => {});
+    const cambio = Number(v) !== n.version;
+    res.json({ success: true, version: n.version, cambio, editando: otro, compartida: n.compartida, ...(cambio ? { titulo: n.titulo, contenido: n.contenido, updated_at: n.updated_at } : {}) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 app.delete('/api/notas-inicio/:id', async (req, res) => {
   try {
     const { user_phone } = req.body;
-    const { error } = await sb.from('notas_inicio')
-      .update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id).eq('user_phone', user_phone);
+    const { data, error } = await sb.from('notas_inicio')
+      .update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id).eq('user_phone', user_phone).select('id');
     if (error) return res.status(400).json({ success: false, error: error.message });
+    if (!data?.length) return res.status(403).json({ success: false, error: 'Solo quien creó la nota puede eliminarla' });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -5721,10 +5806,12 @@ function _msgOut(m, phone) {
            archivo: m.archivo ? { nombre: _nombreArch(m.archivo), mime: m.archivo.mime, tamano: m.archivo.tamano } : null,
            meta: m.meta || null, at: m.created_at, leido: !!m.leido_at };
 }
-async function pushA(phone, payload) {
+async function pushA(phone, payload, siempre) {
   if (!webpush || !VAPID) return;
-  const { data: pres } = await sb.from('pareja_presencia').select('en_chat_hasta').eq('phone', phone).maybeSingle();
-  if (pres?.en_chat_hasta && new Date(pres.en_chat_hasta) > new Date()) return;   // ya está viendo el chat
+  if (!siempre) {   // aviso de chat: no se manda si ya está viendo el chat
+    const { data: pres } = await sb.from('pareja_presencia').select('en_chat_hasta').eq('phone', phone).maybeSingle();
+    if (pres?.en_chat_hasta && new Date(pres.en_chat_hasta) > new Date()) return;
+  }
   const { data: subs } = await sb.from('push_subs').select('*').eq('phone', phone);
   await Promise.all((subs || []).map(s => webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(payload), { TTL: 86400 })
     .catch(async err => { if (err.statusCode === 404 || err.statusCode === 410) await sb.from('push_subs').delete().eq('endpoint', s.endpoint); })));

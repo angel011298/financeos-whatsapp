@@ -74,7 +74,8 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || '/?chat=pareja';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-    for (const c of cs) { if ('focus' in c) { c.postMessage({ type: 'ABRIR_CHAT_PAREJA' }); return c.focus(); } }
+    const ir = new URL(url, self.location.origin).searchParams.get('ir');
+    for (const c of cs) { if ('focus' in c) { c.postMessage(ir ? { type: 'ABRIR_IR', ir } : { type: 'ABRIR_CHAT_PAREJA' }); return c.focus(); } }
     return self.clients.openWindow(url);
   }));
 });

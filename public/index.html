@@ -2165,6 +2165,19 @@ body.sheet-locked{overflow:hidden}
 .q-din-sec b{font-variant-numeric:tabular-nums}
 .q-desp-exp .mov-cards+.q-din-sec{margin-top:12px}
 .q-din-tot{text-align:center;font-size:13px;color:var(--text-2);margin-top:12px}
+
+/* ═══════════════════════════════════════════════════════ v26 — compartir notas y calendario */
+.cal-etq{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;color:var(--accent-couple);background:color-mix(in srgb,var(--accent-couple) 14%,transparent);
+  border-radius:var(--radius-pill);padding:1px 8px;margin-top:3px;white-space:nowrap}
+.cal-new-tag{display:flex;justify-content:center;margin:2px 0 4px}
+.cal-tagchk{display:flex!important;align-items:center;gap:8px;font-size:13px!important;color:var(--text-1)!important;text-transform:none!important}
+.cal-tagchk input{width:18px;height:18px;flex:0 0 18px;accent-color:var(--accent-couple)}
+.ni-share{flex:0 0 38px;width:38px;height:38px;font-size:17px}
+.ni-share.on{border-color:var(--accent-couple);box-shadow:0 0 0 1px var(--accent-couple) inset}
+.ni-quien{font-size:12px;font-weight:700;color:var(--text-3);margin:-2px 2px 8px;display:flex;align-items:center;flex-wrap:wrap;min-height:16px}
+.ni-quien.activa{color:var(--accent-couple)}
+.ni-quien .notas-status{margin-left:0}
+.ni-card-comp{color:var(--accent-couple);font-weight:800}
 </style>
 </head>
 <body>
@@ -2707,6 +2720,8 @@ function _startLivePoll() {
   setTimeout(wlPrefetch, 2500);
   setTimeout(parNoLeidos, 3000);
   setInterval(parNoLeidos, 15000);   // contador de mensajes nuevos de la pareja
+  const _ir = new URLSearchParams(location.search).get('ir');
+  if (_ir) { history.replaceState(null, '', location.pathname); setTimeout(() => _irA(_ir), 700); }
   if (new URLSearchParams(location.search).get('chat') === 'pareja') {
     history.replaceState(null, '', location.pathname);
     setTimeout(() => { S._chatVista = 'par'; go('chat'); }, 600);
@@ -4288,7 +4303,7 @@ async function wlBadgePar() {
 }
 
 // Refresco en vivo mientras la Wishlist está abierta (el sondeo general se pausa con ventanas abiertas)
-function _wlPollStart() { clearInterval(S._wlPollT); S._wlPollT = setInterval(_wlPoll, 6000); }
+function _wlPollStart() { clearInterval(S._wlPollT); S._wlPollT = setInterval(_wlPoll, 3000); }
 async function _wlPoll() {
   if (!$('wl-root')) { clearInterval(S._wlPollT); return; }
   const st = S._wl;
@@ -5883,6 +5898,7 @@ async function niLoad() {
   } catch (e) { S._notasInicio = []; }
   S._niCurrentId = null;
   niRenderList();
+  _niListPollStart();
 }
 
 function _niPreview(html) {
@@ -5907,9 +5923,9 @@ function _niCardsHTML() {
       <div class="ni-card-mid">
         <div class="ni-card-title">${(n.titulo || '').trim() ? _ngEsc(n.titulo) : '<em style="color:var(--text-3);font-style:normal">Sin título</em>'}</div>
         <div class="ni-card-prev">${_ngEsc(_niPreview(n.contenido))}</div>
-        <div class="ni-card-date">${_niFecha(n.updated_at)}</div>
+        <div class="ni-card-date">${_niFecha(n.updated_at)}${n.de_pareja ? ` · <span class="ni-card-comp">💞 de ${_ngEsc(n.autor || 'tu pareja')}</span>` : n.compartida ? ' · <span class="ni-card-comp">💞 compartida</span>' : ''}${n.editando ? ' · ✍️ editando…' : ''}</div>
       </div>
-      <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="event.stopPropagation();niDelete('${n.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+      ${n.de_pareja ? '' : `<button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="event.stopPropagation();niDelete('${n.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>`}
     </div>`).join('')}</div>`;
 }
 function niRenderList() {
@@ -5935,7 +5951,8 @@ async function niNueva() {
 }
 
 async function niDelete(id) {
-  if (!confirm('¿Eliminar esta nota?')) return;
+  const _nn = (S._notasInicio || []).find(x => x.id === id);
+  if (!confirm(_nn?.compartida ? '¿Eliminar esta nota? También se borra para tu pareja.' : '¿Eliminar esta nota?')) return;
   try {
     await api('DELETE', `/api/notas-inicio/${id}`, { user_phone: S.phone });
     S._notasInicio = (S._notasInicio||[]).filter(n => n.id !== id);
@@ -5944,16 +5961,99 @@ async function niDelete(id) {
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
+// ── Notas compartidas: edición conjunta ──────────────────────────────────────────────────────
+// Una nota compartida la ven y editan los dos. Mientras está abierta, un latido cada ~2.5 s trae lo que el otro
+// haya guardado; si los dos escriben a la vez, la fusión se hace aquí por BLOQUE (párrafo/línea) contra la
+// versión base que ambos tenían: lo que cambió cada quien se conserva y, si tocaron el mismo bloque con textos
+// distintos, se quedan los dos. Los tres textos se normalizan con el mismo navegador para que compararlos sea fiable.
+const _VOID_HTML = new Set(['br', 'img', 'hr', 'input', 'meta', 'link']);
+function bloquesHtml(h) {
+  const out = []; let cur = '', depth = 0, m;
+  const re = /<!--[\s\S]*?-->|<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>|[^<]+|</g, src = String(h || '');
+  while ((m = re.exec(src)) !== null) {
+    const tok = m[0], tag = m[1] ? m[1].toLowerCase() : null;
+    if (!tag) { cur += tok; continue; }
+    const cierre = tok.startsWith('</'), vacio = _VOID_HTML.has(tag) || /\/>$/.test(tok);
+    if (!cierre && !vacio && depth === 0 && cur.trim()) { out.push(cur); cur = ''; }
+    cur += tok;
+    if (cierre) depth = Math.max(0, depth - 1); else if (!vacio) depth++;
+    if (depth === 0 && (cierre || tag === 'br')) { out.push(cur); cur = ''; }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+function _lcsPares(a, b) {
+  const n = a.length, m = b.length;
+  if (!n || !m || n * m > 4e6) return [];
+  const w = m + 1, dp = new Uint16Array((n + 1) * w);
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+    dp[i * w + j] = a[i] === b[j] ? dp[(i + 1) * w + j + 1] + 1 : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+  const out = []; let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { out.push([i, j]); i++; j++; }
+    else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) i++; else j++;
+  }
+  return out;
+}
+function fusion3(base, mine, theirs) {
+  const mo = new Map(_lcsPares(base, mine)), mt = new Map(_lcsPares(base, theirs)), out = [];
+  let pi = -1, pm = -1, pt = -1;
+  const igual = (x, y) => x.length === y.length && x.every((v, k) => v === y[k]);
+  const region = (iEnd, mEnd, tEnd) => {
+    const B = base.slice(pi + 1, iEnd), M = mine.slice(pm + 1, mEnd), T = theirs.slice(pt + 1, tEnd);
+    if (igual(M, B)) out.push(...T);
+    else if (igual(T, B) || igual(M, T)) out.push(...M);
+    else if (B.length === M.length && B.length === T.length) {   // mismas líneas editadas por cada quien: línea por línea
+      B.forEach((b, k) => { if (M[k] === b) out.push(T[k]); else if (T[k] === b || T[k] === M[k]) out.push(M[k]); else { out.push(T[k]); out.push(M[k]); } });
+    }
+    else {   // los dos tocaron la misma zona: se conserva lo nuevo de cada quien y lo que ambos dejaron intacto
+      const sB = new Set(B), sM = new Set(M), sT = new Set(T);
+      T.forEach(x => { if (!sB.has(x) || sM.has(x)) out.push(x); });
+      M.forEach(x => { if (!sB.has(x) && !sT.has(x)) out.push(x); });
+    }
+  };
+  for (let i = 0; i < base.length; i++) {
+    if (mo.has(i) && mt.has(i)) { region(i, mo.get(i), mt.get(i)); out.push(base[i]); pi = i; pm = mo.get(i); pt = mt.get(i); }
+  }
+  region(base.length, mine.length, theirs.length);
+  return out;
+}
+const _niNorm = h => { const d = document.createElement('div'); d.innerHTML = _notaSanitize(h || ''); return d.innerHTML; };
+const _niMerge = (base, mine, theirs) => fusion3(bloquesHtml(_niNorm(base)), bloquesHtml(_niNorm(mine)), bloquesHtml(_niNorm(theirs))).join('');
+function _niCaret(ed) {
+  const s = getSelection(); if (!s.rangeCount || !ed.contains(s.anchorNode)) return null;
+  const pre = document.createRange(); pre.selectNodeContents(ed); pre.setEnd(s.getRangeAt(0).startContainer, s.getRangeAt(0).startOffset);
+  return pre.toString().length;
+}
+function _niSetCaret(ed, off) {
+  if (off == null) return;
+  const w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT); let n, c = 0;
+  while ((n = w.nextNode())) {
+    const l = n.nodeValue.length;
+    if (c + l >= off) { const r = document.createRange(); r.setStart(n, off - c); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return; }
+    c += l;
+  }
+}
+function _niPonerHtml(html) {
+  const ed = $('ni-ed'); if (!ed) return;
+  const foco = document.activeElement === ed, off = foco ? _niCaret(ed) : null, top = ed.scrollTop;
+  ed.innerHTML = _notaSanitize(html || '');
+  ed.scrollTop = top;
+  if (foco) { ed.focus(); _niSetCaret(ed, off); }
+}
 function niOpen(id) {
   const n = (S._notasInicio||[]).find(x => x.id === id); if (!n) return;
-  S._niCurrentId = id;
+  S._niCurrentId = id; S._niDirty = false; S._niSaving = false;
+  S._niBase = { version: n.version || 1, raw: n.contenido || '', titulo: n.titulo || '' };
   const root = $('ni-root'); if (!root) return;
+  const suya = !!n.de_pareja, par = S.data?.pareja?.nombre ? (/^angel$/i.test(S.data.pareja.nombre.trim()) ? 'Ángel' : S.data.pareja.nombre) : 'tu pareja';
   root.innerHTML = `
   <div class="ni-editor-hdr">
     <button class="edit-pill-btn" onclick="niVolver()" title="Volver"><i class="ti ti-arrow-left"></i></button>
     <input id="ni-titulo" placeholder="Título" value="${(n.titulo||'').replace(/"/g,'&quot;')}" oninput="niTouch()">
-    <span class="notas-status" id="ni-status"></span>
+    ${suya ? '' : `<button class="ico-btn ni-share${n.compartida ? ' on' : ''}" id="ni-share" onclick="niCompartir()" title="${n.compartida ? 'Compartida con ' + par + ': toca para dejar de compartir' : 'Compartir con ' + par + ' para editar juntos'}" aria-label="Compartir con ${par}" aria-pressed="${!!n.compartida}">💞</button>`}
   </div>
+  <div class="ni-quien" id="ni-quien">${suya ? `💞 Nota de ${_ngEsc(n.autor || par)} · la editan juntos` : n.compartida ? `💞 Compartida con ${_ngEsc(par)} · la editan juntos` : ''}<span class="notas-status" id="ni-status"></span></div>
   <div class="notas-tools">
     <button type="button" class="nt-btn" title="Título" onmousedown="event.preventDefault()" onclick="niBlock('h2')" style="font-weight:700;font-size:12px">T</button>
     <button type="button" class="nt-btn" title="Encabezado" onmousedown="event.preventDefault()" onclick="niBlock('h3')" style="font-weight:600;font-size:11px">t</button>
@@ -5975,15 +6075,68 @@ function niOpen(id) {
        data-ph="Escribe tu nota… también puedes pegar imágenes"
        oninput="niTouch()" onpaste="niPaste(event)"></div>`;
   $('ni-ed').innerHTML = _notaSanitize(n.contenido || '');
+  _niSyncStart();
 }
-
 function niVolver() {
   // Fuerza el guardado pendiente antes de volver, para no perder la última letra.
   if (S._niT) { clearTimeout(S._niT); niSave(); }
+  clearInterval(S._niSyncT);
   S._niCurrentId = null;
   niRenderList();
+  _niListPollStart();
 }
-
+async function niCompartir() {
+  const id = S._niCurrentId, n = (S._notasInicio || []).find(x => x.id === id); if (!n || n.de_pareja) return;
+  const nuevo = !n.compartida;
+  try {
+    if (S._niT) { clearTimeout(S._niT); await niSave(); }
+    const r = await api('PUT', `/api/notas-inicio/${id}`, { user_phone: S.phone, compartida: nuevo });
+    n.compartida = nuevo; if (r.data) { n.version = r.data.version; S._niBase.version = r.data.version; }
+    niOpen(id);
+    toast(nuevo ? '💞 Nota compartida: la pueden editar juntos' : 'Dejaste de compartir la nota');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+// Latido de la nota abierta (solo si es compartida): trae lo nuevo y muestra "… está editando"
+function _niSyncStart() {
+  clearInterval(S._niSyncT);
+  const n = (S._notasInicio || []).find(x => x.id === S._niCurrentId);
+  if (!n || !(n.compartida || n.de_pareja)) return;
+  S._niSyncT = setInterval(niSync, 2500);
+}
+async function niSync() {
+  const id = S._niCurrentId;
+  if (!id || !$('ni-ed') || document.visibilityState !== 'visible' || S._niSaving) { if (!id || !$('ni-ed')) clearInterval(S._niSyncT); return; }
+  try {
+    const r = await api('POST', `/api/notas-inicio/${id}/ping`, { phone: S.phone, v: S._niBase.version });
+    if (id !== S._niCurrentId) return;
+    const q = $('ni-quien'), par = S.data?.pareja?.nombre ? (/^angel$/i.test(S.data.pareja.nombre.trim()) ? 'Ángel' : S.data.pareja.nombre) : 'Tu pareja';
+    if (q) q.classList.toggle('activa', !!r.editando);
+    const st = $('ni-status'); if (st && !S._niDirty && !S._niT) st.textContent = r.editando ? ` · ✍️ ${par} está editando…` : '';
+    if (r.cambio) {
+      if (S._niDirty || S._niT) { niSave(); return; }   // yo también escribí: se fusiona al guardar
+      const n = (S._notasInicio || []).find(x => x.id === id);
+      _niPonerHtml(r.contenido);
+      const ti = $('ni-titulo'); if (ti && document.activeElement !== ti) ti.value = r.titulo || '';
+      S._niBase = { version: r.version, raw: r.contenido || '', titulo: r.titulo || '' };
+      if (n) { n.version = r.version; n.contenido = r.contenido; n.titulo = r.titulo; }
+    }
+  } catch (e) {
+    if (/dejó de estar compartida|ya no existe/i.test(e.message)) { toast(e.message, 'warn'); clearInterval(S._niSyncT); S._niCurrentId = null; niLoad(); }
+  }
+}
+// Lista de notas al día mientras está abierta (notas nuevas compartidas, quién edita, versiones)
+function _niListPollStart() {
+  clearInterval(S._niListT);
+  S._niListT = setInterval(async () => {
+    if (!$('ni-root') || S._niCurrentId || document.visibilityState !== 'visible' || !$('dash-sheet')?.classList.contains('open')) { if (!$('ni-root')) clearInterval(S._niListT); return; }
+    if (document.activeElement?.id === 'ni-q') return;
+    try {
+      const r = await api('GET', `/api/notas-inicio?phone=${encodeURIComponent(S.phone)}`);
+      const sig = x => JSON.stringify((x || []).map(n => [n.id, n.version, n.compartida, n.de_pareja, n.editando, n.titulo]));
+      if (sig(r.data) !== sig(S._notasInicio)) { S._notasInicio = r.data || []; niRenderList(); }
+    } catch { /* se reintenta */ }
+  }, 4000);
+}
 function _niFocus() { const ed = $('ni-ed'); if (ed) ed.focus(); return ed; }
 function niCmd(cmd)   { _niFocus(); document.execCommand(cmd, false, null); niTouch(); }
 function niBlock(tag) { _niFocus(); document.execCommand('formatBlock', false, tag); niTouch(); }
@@ -6033,25 +6186,54 @@ async function _niUploadAndInsert(file) {
 }
 
 function niTouch() {
+  S._niDirty = true;
   clearTimeout(S._niT);
   const st = $('ni-status'); if (st) st.textContent = 'Escribiendo…';
   S._niT = setTimeout(niSave, 900);
 }
 
+// Guarda con bloqueo por versión. Si el otro guardó antes (409), se fusiona aquí y se reintenta; lo que cambió cada
+// quien se conserva. Al terminar, si la fusión trajo cambios del otro, se muestran en el editor sin mover el cursor.
 async function niSave() {
   const id = S._niCurrentId; if (!id) return;
+  if (S._niSaving) { S._niAgain = true; return; }
   const ed = $('ni-ed'); if (!ed) return;
-  clearTimeout(S._niT);
-  const titulo = $('ni-titulo')?.value || '';
-  const contenido = ed.innerHTML;
+  clearTimeout(S._niT); S._niT = null; S._niSaving = true;
   const st = $('ni-status');
+  const put = async body => {
+    const r = await fetch(`/api/notas-inicio/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return { status: r.status, j: await r.json().catch(() => ({})) };
+  };
   try {
-    const r = await api('PUT', `/api/notas-inicio/${id}`, { user_phone: S.phone, titulo, contenido });
-    if (!r.success) throw new Error(r.error || 'Error al guardar');
-    const n = (S._notasInicio||[]).find(x => x.id === id);
-    if (n) { n.titulo = titulo; n.contenido = contenido; n.updated_at = r.data?.updated_at || new Date().toISOString(); }
-    if (st) { st.textContent = 'Guardado ✓'; setTimeout(() => { if (st.textContent === 'Guardado ✓') st.textContent = ''; }, 1800); }
+    let titulo = $('ni-titulo')?.value || '', mio = ed.innerHTML, base = S._niBase, enviado = mio, mezclado = null;
+    for (let intento = 0; intento < 4; intento++) {
+      const { status, j } = await put({ user_phone: S.phone, titulo, contenido: mio, base_version: base.version });
+      if (status === 409 && j.conflict) {
+        const actual = j.data;   // lo que el otro guardó mientras yo escribía
+        mio = _niMerge(base.raw, mio, actual.contenido);
+        if (titulo === base.titulo) titulo = actual.titulo || '';
+        base = { version: actual.version, raw: actual.contenido || '', titulo: actual.titulo || '' };
+        mezclado = mio;
+        continue;
+      }
+      if (!j.success) throw new Error(j.error || 'Error al guardar');
+      const guardado = j.data;
+      S._niBase = { version: guardado.version, raw: guardado.contenido || '', titulo: guardado.titulo || '' };
+      const n = (S._notasInicio || []).find(x => x.id === id);
+      if (n) { n.titulo = guardado.titulo; n.contenido = guardado.contenido; n.version = guardado.version; n.updated_at = guardado.updated_at; }
+      if (mezclado !== null) {   // la fusión trajo cosas del otro: ponerlas en el editor (más lo que escribí mientras tanto)
+        const ahora = ed.innerHTML;
+        const fin = ahora === enviado ? mezclado : _niMerge(enviado, ahora, mezclado);
+        _niPonerHtml(fin);
+        const ti = $('ni-titulo'); if (ti && document.activeElement !== ti) ti.value = guardado.titulo || '';
+        if (fin !== mezclado) S._niDirty = true, S._niT = setTimeout(niSave, 600);
+        else S._niDirty = false;
+      } else S._niDirty = ed.innerHTML !== enviado;
+      if (st) { st.textContent = 'Guardado ✓'; setTimeout(() => { if (st.textContent === 'Guardado ✓') st.textContent = ''; }, 1800); }
+      break;
+    }
   } catch (e) { if (st) st.textContent = '⚠️ No se pudo guardar'; }
+  finally { S._niSaving = false; if (S._niAgain) { S._niAgain = false; niTouch(); } }
 }
 
 // ── Análisis gráfico: panel GX con las 6 gráficas ───────────────────────────
@@ -6474,15 +6656,48 @@ function _ndQR(fin) {
   const d=Math.ceil((new Date(fin+'T00:00:00')-new Date())/86400000);
   return d<=0?0:Math.ceil(d/15);
 }
-function _ndNombre(phone) {
-  const ap=S.adminPhone||localStorage.getItem('fos_phone_A');
-  return (ap&&phone===ap)?'Ángel':'Alicia';
-}
 function _ndPct(asig, pres) {
   const total=asig.reduce((a,x)=>a+(x.monto_total_asignado||0),0);
   const pct=pres>0?Math.min(100,Math.round(total/pres*100)):0;
   return {total,pct,cls:pct>=100?'dng':pct>=80?'warn':''};
 }
+
+// ── Nidito en tiempo real entre los dos ──────────────────────────────────────────────────────────
+// Proyectos, metas, aportaciones y comentarios son compartidos (una sola fila para los dos); aquí se refrescan cada
+// ~3 s mientras Nidito está a la vista. No se repinta si estás escribiendo o tienes un formulario abierto.
+const _ndSig = items => JSON.stringify((items || []).map(i => [i.id, i.updated_at, i.titulo, i.descripcion, i.estado, i.presupuesto_total, i.fecha_inicio, i.fecha_fin, i.emoji, i.tipo, i.comentarios_count,
+  (i.asignaciones || []).map(a => [a.user_phone, a.monto_total_asignado, a.monto_quincenal, a.updated_at])]));
+function _ndPollStart() { if (!S._ndPollT) S._ndPollT = setInterval(_ndPoll, 3000); }
+async function _ndPoll() {
+  if (!(S.tab === 'nidito' || S._modalTab === 'nidito') || document.visibilityState !== 'visible') return;
+  if (S._ndPollBusy || !S._niditoItems) return;
+  const f = document.activeElement;
+  if (f && f.closest?.('#tab-nidito') && /INPUT|TEXTAREA|SELECT/.test(f.tagName)) return;
+  if ($('ovl')?.classList.contains('open') || $('pop')?.classList.contains('open') || S._ndDinEdit || Object.values(S._ndStaged || {}).some(a => a && a.length)) return;
+  S._ndPollBusy = true;
+  try {
+    const qKey = (S._niditoQ || _ndQ()).key;
+    const [ri, rd] = await Promise.all([
+      api('GET', `/api/nidito/items?phone=${encodeURIComponent(S.phone)}`),
+      api('GET', `/api/nidito/dinerito?phone=${encodeURIComponent(S.phone)}&quincena=${qKey}`)]);
+    const nuevos = ri.data || [], din = _ndDinMonto(rd.data), prev = S._niditoItems;
+    if (_ndSig(nuevos) !== _ndSig(prev) || din !== S._ndDin) {
+      S._niditoItems = nuevos; S._ndDin = din;
+      _ndPaint();
+      nuevos.forEach(it => { const p = prev.find(x => x.id === it.id); if (S._ndOpen?.has(it.id) && p && p.comentarios_count !== it.comentarios_count) ndLoadCmts(it.id); });   // después de repintar: así el listado nuevo recibe los comentarios
+    }
+  } catch { /* se reintenta en el siguiente ciclo */ }
+  finally { S._ndPollBusy = false; }
+}
+// Quién es Ángel y quién Alicia, vistos desde cualquiera de las dos cuentas (también en "Ver Alicia")
+function _ndPhones() {
+  const par = S.data?.pareja, yoAdmin = ((S.data?.user || {}).role) === 'ADMIN_A';
+  if (par?.telefono) return yoAdmin ? { angelPh: S.phone, aliciaPh: par.telefono } : { angelPh: par.telefono, aliciaPh: S.phone };
+  const angelPh  = S.adminPhone || localStorage.getItem('fos_phone_A') || S.phone;
+  const aliciaPh = localStorage.getItem('fos_phone_B') || (S.phone !== angelPh ? S.phone : null);
+  return { angelPh, aliciaPh };
+}
+function _ndNombre(phone) { return phone === _ndPhones().angelPh ? 'Ángel' : 'Alicia'; }
 
 async function rNidito() {
   const el=$('tab-nidito'); if(!el) return;
@@ -6496,6 +6711,7 @@ async function rNidito() {
     await _ndFetch();
   }
   _ndPaint();
+  _ndPollStart();
 }
 
 // /api/nidito/dinerito devuelve un objeto con ?phone= y una lista sin él: acepta ambos.
@@ -6528,12 +6744,6 @@ const ND_SUG   = [['✈️','Viaje'],['🏖️','Vacaciones'],['🏠','Casa'],['
 const ND_EMOJIS = ['💞','🗂️','⚡','⏳','🌟','✈️','🏖️','🏠','🛋️','💍','🚗','🐶','🎓','💻','🎁','🛟','🎉','🍽️','📸','🎸','🌱','🧳','👶','💰'];
 const _ndEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function _ndEmo(it) { return it.emoji || ND_EMO[it.tipo] || '💞'; }
-function _ndPhones() {
-  const angelPh  = S.adminPhone || localStorage.getItem('fos_phone_A') || S.phone;
-  const aliciaPh = localStorage.getItem('fos_phone_B') || (S.phone !== angelPh ? S.phone : null);
-  return { angelPh, aliciaPh };
-}
-
 function _ndPaint() {
   const el = $('tab-nidito'); if (!el) return;
   const items = S._niditoItems || [];
@@ -6978,8 +7188,7 @@ async function ndPatchF(itemId, field, val) {
     const it=S._niditoItems?.find(x=>x.id===itemId);
     if (it) { it[field]=val||null; }
     const b=$('ndb-'+itemId);
-    const ap=S.adminPhone||localStorage.getItem('fos_phone_A')||S.phone;
-    const alic=localStorage.getItem('fos_phone_B')||(S.phone!==ap?S.phone:null);
+    const { angelPh: ap, aliciaPh: alic } = _ndPhones();
     if (b&&it) b.innerHTML=_ndAccBody(it,ap,alic);
   } catch(e) { toast('Error: '+e.message,'error'); }
 }
@@ -8346,6 +8555,10 @@ function _calEvProximos(evts) {
     : (o === 'desc' ? -1 : 1) * ((fd(a.fecha) || '').localeCompare(fd(b.fecha) || '') || (a.hora || '').localeCompare(b.hora || '')));
   return l.slice(0, 100);
 }
+// Etiquetar a la pareja: el evento lo ven y editan los dos
+const _parNom = () => { const n = S.data?.pareja?.nombre || ''; return /^angel$/i.test(n.trim()) ? 'Ángel' : (n || 'tu pareja'); };
+const _calEtq = e => (e.etiquetados || []).length > 0;
+const _calChip = e => !_calEtq(e) ? '' : `<div><span class="cal-etq">💞 ${e.user_phone === S.phone ? 'Con ' : 'De '}${_wlEsc(_parNom())}</span></div>`;
 function _calEvCard(e) {
   const ds = fd(e.fecha), dif = _calDias(ds), fer = feriadoDe(ds);
   const sub = [_calFechaLarga(ds), _calHora(e.hora), e.recurrente && e.recurrente !== 'no' ? '🔁 ' + e.recurrente : ''].filter(Boolean).join(' · ');
@@ -8353,7 +8566,7 @@ function _calEvCard(e) {
     <div class="mov-card-ic emo" style="background:var(--bg-surface-2)" aria-hidden="true">${_calEmo(e)}</div>
     <div class="mov-card-mid"><div class="mov-card-title">${_wlEsc(e.titulo)}</div>
       <div class="mov-card-sub">${_wlEsc(sub)}${fer ? ` · ${fer.emoji} ${_wlEsc(fer.nombre)}` : ''}</div>
-      ${e.descripcion ? `<div class="mov-card-note">${_wlEsc(e.descripcion)}</div>` : ''}</div>
+      ${e.descripcion ? `<div class="mov-card-note">${_wlEsc(e.descripcion)}</div>` : ''}${_calChip(e)}</div>
     <span class="cal-fer-chip${dif <= 1 ? ' hoy' : ''}">${_calCuando(dif)}</span>
     <div class="q-card-foot"><div class="mov-card-acts">
       <button class="edit-pill-btn" title="Editar" onclick="eEvt(S._calData[${e.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
@@ -8397,9 +8610,11 @@ function _calNuevoHTML() {
     <div class="cal-new-tipos" role="radiogroup" aria-label="Tipo">${CAL_TIPOS.map(([k, e]) => `<button type="button" class="q-desp-chip${k === t ? ' on' : ''}" role="radio" aria-checked="${k === t}" onclick="calNuevoTipo('${k}',this)">${e} ${k}</button>`).join('')}</div>
     <div class="cal-new-row"><select id="cn-rec" aria-label="Se repite">${['no', 'diario', 'semanal', 'mensual', 'anual'].map(r => `<option value="${r}">${r === 'no' ? 'No se repite' : '🔁 ' + r}</option>`).join('')}</select></div>
     <textarea id="cn-desc" rows="2" maxlength="500" placeholder="Detalles (opcional)"></textarea>
+    ${S.data?.pareja ? `<div class="cal-new-tag"><button type="button" class="q-desp-chip${S._calNewTag ? ' on' : ''}" id="cn-tag" onclick="calNuevoTag()" aria-pressed="${!!S._calNewTag}">💞 Etiquetar a ${_wlEsc(_parNom())}</button></div>` : ''}
     <div class="cal-new-acts"><button class="btn btn-ghost" onclick="calPanel(null)">Cancelar</button><button class="btn btn-accent" onclick="calGuardarNuevo()"><i class="ti ti-check"></i> Guardar</button></div>
   </div>`;
 }
+function calNuevoTag() { S._calNewTag = !S._calNewTag; const b = $('cn-tag'); if (b) { b.classList.toggle('on', S._calNewTag); b.setAttribute('aria-pressed', S._calNewTag); } }
 function calNuevoTipo(t, btn) {
   S._calNewTipo = t;
   btn.parentElement.querySelectorAll('.q-desp-chip').forEach(b => { const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
@@ -8409,13 +8624,14 @@ async function calGuardarNuevo() {
   const titulo = ($('cn-titulo')?.value || '').trim();
   if (!titulo) { toast('Ponle un título', 'error'); $('cn-titulo')?.focus(); return; }
   const datos = { user_phone: S.phone, titulo, fecha: $('cn-fecha')?.value || toISO(new Date()), hora: $('cn-hora')?.value || null,
-    tipo: S._calNewTipo || 'evento', recurrente: $('cn-rec')?.value || 'no', descripcion: ($('cn-desc')?.value || '').trim() };
+    tipo: S._calNewTipo || 'evento', recurrente: $('cn-rec')?.value || 'no', descripcion: ($('cn-desc')?.value || '').trim(),
+    etiquetados: S._calNewTag && S.data?.pareja ? [S.data.pareja.telefono] : [] };
   try {
     const r = await api('POST', '/api/calendario', datos);
     if (r?.success === false) throw new Error(r.error || 'No se pudo guardar');
-    S._calPanel = null; S._calNewFecha = null; S._calNewTipo = null;
+    S._calPanel = null; S._calNewFecha = null; S._calNewTipo = null; S._calNewTag = false;
     await load();
-    toast(`${CAL_TIPO_EMO[datos.tipo]} Evento guardado`);
+    toast(datos.etiquetados.length ? `💞 Evento guardado y etiquetado a ${_parNom()}` : `${CAL_TIPO_EMO[datos.tipo]} Evento guardado`);
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 function calNuevoEn(ds) { closeCalDay(); S._calNewFecha = ds; S._calPanel = 'new'; _calPanelsPaint(); $('cn-titulo')?.focus(); }
@@ -8470,7 +8686,7 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
       const cls=e._type==='nidito'?'cev-nidito':'cev-event';
       const lbl=(e.titulo||'').replace(/"/g,'&quot;');
       const act=e._type==='nidito'?`calDay('${ds}')`:`eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})`;
-      return `<span class="cev-bar ${cls}" onclick="event.stopPropagation();${act}" title="${lbl}">${e.titulo||''}</span>`;
+      return `<span class="cev-bar ${cls}" onclick="event.stopPropagation();${act}" title="${lbl}">${_calEtq(e)?'💞 ':''}${e.titulo||''}</span>`;
     }).join('');
     const more=de.length>MAX?`<span class="cev-more">+${de.length-MAX}</span>`:'';
     // Cobro en día inhábil (fin de semana o feriado): el depósito suele adelantarse al día hábil anterior
@@ -8560,6 +8776,7 @@ function calDay(ds) {
   dayEvts.forEach(e=>{
     html+=`<div style="background:var(--accent-primary);color:var(--on-accent);border-radius:var(--radius-md);padding:9px 12px;margin-bottom:8px">
   <div style="font-weight:600;font-size:13px">${e.titulo}</div>
+  ${_calEtq(e)?`<div style="font-size:11px;font-weight:700;margin-top:3px">💞 ${e.user_phone===S.phone?'Con ':'De '}${_wlEsc(_parNom())}</div>`:''}
   ${e.hora?`<div style="opacity:.75;font-size:11px;margin-top:2px"><i class="ti ti-clock" style="font-size:10px"></i> ${e.hora}</div>`:''}
   ${e.descripcion?`<div style="opacity:.8;font-size:11px;margin-top:3px">${e.descripcion}</div>`:''}
   <div style="margin-top:8px;display:flex;gap:5px">
@@ -8723,7 +8940,10 @@ function oEvt(rec=null) {
   <div class="fr"><label>Tipo</label><select id="f-tipo">${['evento','recordatorio','cumpleaños','cita','tarea','otro'].map(t=>`<option${(rec?.tipo||'evento')===t?' selected':''}>${t}</option>`).join('')}</select></div>
   <div class="fr"><label>Recurrente</label><select id="f-rec">${['no','diario','semanal','mensual','anual'].map(t=>`<option${(rec?.recurrente||'no')===t?' selected':''}>${t}</option>`).join('')}</select></div>
 </div>
-<div class="fr"><label>Descripción</label><textarea id="f-desc">${rec?.descripcion||''}</textarea></div>`;
+<div class="fr"><label>Descripción</label><textarea id="f-desc">${rec?.descripcion||''}</textarea></div>
+${!S.data?.pareja ? '' : (!rec || rec.user_phone===S.phone)
+  ? `<div class="fr"><label class="cal-tagchk"><input type="checkbox" id="f-etq" ${rec && _calEtq(rec) ? 'checked' : ''}> 💞 Etiquetar a ${_wlEsc(_parNom())} (lo ve y edita contigo)</label></div>`
+  : `<div class="cal-etq">💞 Evento de ${_wlEsc(_parNom())}: lo editan juntos</div>`}`;
   $('ovl').classList.add('open');
 }
 function eEvt(rec) { oEvt(rec); }
@@ -8861,6 +9081,7 @@ async function saveM() {
   } else if (ctx.tabla==='calendario') {
     datos={ titulo:$('f-titulo').value, fecha:$('f-fecha').value, hora:$('f-hora').value||null,
             tipo:$('f-tipo').value, recurrente:$('f-rec').value, descripcion:$('f-desc').value };
+    if ($('f-etq')) datos.etiquetados = $('f-etq').checked && S.data?.pareja ? [S.data.pareja.telefono] : [];
     if (!datos.titulo) { alert('Ingresa un título'); return; }
   } else {
     datos={ nombre:$('f-nombre').value, meta:parseFloat($('f-meta').value)||0,
@@ -9317,7 +9538,7 @@ async function marcarGastoQ(itemId, pagadoId) {
     await load();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
-async function dEvt(id)  { if(!confirm('¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
+async function dEvt(id)  { const _ev=(S._calData||{})[id]; if(!confirm(_ev && _calEtq(_ev) ? '¿Eliminar este evento para los dos?' : '¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
 async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/metas/${id}`,{user_phone:S.phone}); await load(); }
 
 // ── NEGOCIOS Y PROYECTOS (fase 3) ─────────────────────────────────────────────
@@ -10148,6 +10369,11 @@ async function parNoLeidos() {
   try { const r = await api('GET', `/api/pareja/no-leidos?phone=${encodeURIComponent(S.phone)}`); if (r.n !== S._parNoLeidos) _parBadge(r.n); } catch {}
 }
 
+function _irA(ir) {
+  if (ir === 'nidito') go('nidito');
+  else if (ir === 'calendario') go('calendario');
+  else if (ir === 'notas') { go('dashboard'); setTimeout(() => dashEmoji('notas'), 250); }
+}
 function _chatKey() { return 'fos_chat_' + S.phone; }
 
 async function _loadChatHistory() {
@@ -10577,6 +10803,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     // Escuchar mensaje SW_UPDATED del service worker (activado en nuevo deploy)
     navigator.serviceWorker.addEventListener('message', e => {
       if (e.data?.type === 'ABRIR_CHAT_PAREJA') { S._chatVista = 'par'; go('chat'); return; }
+      if (e.data?.type === 'ABRIR_IR') { _irA(e.data.ir); return; }
       if (e.data?.type === 'SW_UPDATED' && _hadController && !_swRefreshing) {
         _swRefreshing = true;
         _safeReload();
