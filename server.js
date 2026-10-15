@@ -523,6 +523,7 @@ app.post('/cron/:tipo', async (req, res) => {
   if (req.headers['x-cron-token'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'No autorizado' });
   }
+  if (!RECORDATORIOS_WA) return res.status(200).json({ ok: true, desactivado: true });   // recordatorios por WhatsApp cancelados
   res.status(200).json({ ok: true });
 
   const tipo = req.params.tipo;
@@ -617,7 +618,9 @@ async function transcribeAudio(mediaBuf, contentType, phone = '') {
 }
 
 // ── PROACTIVE REMINDERS ────────────────────────────────────────────────────
+const RECORDATORIOS_WA = process.env.RECORDATORIOS_WA === '1';   // cancelados: recordatorios de eventos, resumen diario, TDC y vales
 async function checkAndSendReminders(phone) {
+  if (!RECORDATORIOS_WA) return;
   const _tm = new Date(hoy() + 'T12:00:00'); _tm.setDate(_tm.getDate() + 1);
   const tStr = _tm.toISOString().split('T')[0];
   const { data: evs } = await sb.from('calendario').select('*')
@@ -637,6 +640,16 @@ async function checkAndSendReminders(phone) {
 const TABLAS_VALIDAS = ['movimientos','metas','calendario','tdc','presupuesto','nidito','usuarios','neg_transacciones','despensa'];
 const TABLAS_SOFT_DELETE = ['movimientos','metas','calendario','nidito'];
 
+// Texto "MEDIOS PAGO" para los prompts de extracción, con las cuentas de esa persona
+function promptMedios(defs) {
+  const lista = mediosDe(defs || CUENTAS_BASE), vales = (defs || []).find(d => d.tipo === 'vales' && d.medio);
+  const bancos = (defs || []).filter(d => d.medio && d.tipo !== 'vales').map(d => '"' + d.medio + '"');
+  return 'MEDIOS PAGO: ' + lista.join(', ')
+    + (vales ? ' ("' + vales.medio + '" es la tarjeta de VALES DE DESPENSA: úsalo SIEMPRE que el usuario mencione ' + vales.medio + ', vales o vales de despensa — en gastos Y en ingresos, p.ej. "llegaron los vales" es un INGRESO con medio "' + vales.medio + '")' : '')
+    + (bancos.length ? '; usa ' + bancos.join('/') + ' SOLO si el usuario nombra esa cuenta explícitamente' : '')
+    + '; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito"';
+}
+
 // ── GASTOS PROGRAMADOS → PRESUPUESTO (no movimientos) ────────────────────────
 // Un gasto futuro o explícitamente "programado" NO es un movimiento ya hecho:
 // se guarda en external_refs.budget_q[quincena].gastos para que aparezca en
@@ -651,31 +664,65 @@ function medioToFormaPago(medio) {
 }
 
 // ── SALDOS DE CUENTAS (monitoreo) ─────────────────────────────────────────────
-// Cuentas monitoreadas en external_refs.cuentas. Un movimiento cuyo medio de pago
-// corresponde a una de ellas ajusta AUTOMÁTICAMENTE su saldo, ADEMÁS de registrarse
+// Cada persona tiene SUS cuentas (Ángel y Alicia no usan los mismos bancos): external_refs.cuentas_def es la lista
+// [{key,label,tipo,color,medio,match}], external_refs.cuentas los saldos por key y cuentas_tasa el rendimiento anual.
+// Sin lista guardada se usan los valores de origen: las 5 cuentas históricas de Ángel, y solo Efectivo para el resto.
+// Un movimiento cuyo medio de pago corresponde a una cuenta ajusta AUTOMÁTICAMENTE su saldo, ADEMÁS de registrarse
 // como gasto/ingreso normal — el saldo es solo un espejo de "cuánto dinero real queda ahí".
-const CUENTAS_LABEL = {
-  efectivo:       'Efectivo',
-  banamex:        'Banamex · Débito',
-  revolut_debito: 'Revolut · Débito',
-  revolut:        'Revolut · Ahorro',
-  pluxee:         'Pluxee · Vales de despensa',
-};
+// tipo: efectivo | debito | ahorro | vales | otro. Solo las de ahorro reciben las "transferencias a ahorro".
+const CUENTAS_ANGEL = [
+  { key: 'efectivo',       label: 'Efectivo',         tipo: 'efectivo', color: '#22c55e' },
+  { key: 'banamex',        label: 'Banamex · Débito', tipo: 'debito',   color: '#0ea5e9', medio: 'Débito Banamex', match: ['banamex'] },
+  { key: 'revolut_debito', label: 'Revolut · Débito', tipo: 'debito',   color: '#14b8a6', medio: 'Débito Revolut', match: ['revolut'] },
+  { key: 'revolut',        label: 'Revolut · Ahorro', tipo: 'ahorro',   color: '#8b5cf6' },
+  { key: 'pluxee',         label: 'Pluxee · Vales',   tipo: 'vales',    color: '#f97316', medio: 'Pluxee', match: ['pluxee', 'vales'] },
+];
+const CUENTAS_BASE = [{ key: 'efectivo', label: 'Efectivo', tipo: 'efectivo', color: '#22c55e' }];
+const CUENTA_TIPOS = ['efectivo', 'debito', 'ahorro', 'vales', 'otro'];
+const CUENTA_COLORES = ['#0ea5e9', '#14b8a6', '#8b5cf6', '#f97316', '#ec4899', '#eab308', '#6366f1', '#10b981', '#f43f5e', '#06b6d4'];
+const _ctaNorm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+const _CTA_GENERICAS = new Set(['debito', 'ahorro', 'ahorros', 'tarjeta', 'cuenta', 'banco', 'vales', 'credito', 'nomina', 'inversion', 'para', 'del', 'las', 'los']);
+function tokensCuenta(label) { return [...new Set(_ctaNorm(label).split(/[^a-z0-9]+/).filter(w => w.length >= 2 && !_CTA_GENERICAS.has(w)))]; }
+function cuentasDefDe(refs, role) {
+  const l = refs && refs.cuentas_def;
+  if (Array.isArray(l)) return l;   // una lista vacía es válida: la persona quitó todas sus cuentas
+  return role === 'ADMIN_A' ? CUENTAS_ANGEL : CUENTAS_BASE;
+}
+async function cuentasDefPorTelefono(phone) {
+  try { const { data } = await sb.from('usuarios').select('external_refs, role').eq('telefono', phone).maybeSingle(); return cuentasDefDe(data?.external_refs || {}, data?.role); }
+  catch { return CUENTAS_BASE; }
+}
+const cuentasLabelDe = defs => Object.fromEntries(defs.map(d => [d.key, d.label]));
+const saldoPorTipo = (refs, defs, tipo) => defs.filter(d => d.tipo === tipo).reduce((a, d) => a + (Number((refs.cuentas || {})[d.key]) || 0), 0);
+const totalCuentas = (refs, defs) => defs.reduce((a, d) => a + (Number((refs.cuentas || {})[d.key]) || 0), 0);
+// Medios de pago que ofrece una persona: los básicos + el medio de cada una de sus cuentas
+const mediosDe = defs => [...new Set(['efectivo', 'transferencia', 'débito', ...defs.filter(d => d.key !== 'efectivo' && d.medio).map(d => d.medio)])];
+const _reCuenta = d => { const t = (d.match && d.match.length ? d.match : tokensCuenta(d.label)).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); return t.length ? new RegExp('\\b(' + t.join('|') + ')\\b') : null; };
 
-// Tolerante a variantes ("Débito Banamex", "banamex débito", "tarjeta de vales", etc.) — no
-// depende de que la IA (o el usuario) use el string exacto del enum de medios de pago.
-function medioPagoACuentaKey(medioPago) {
-  const m = (medioPago || '').toLowerCase().trim();
-  if (/\b(pluxee|vales)\b/.test(m)) return 'pluxee';
-  if (/\bbanamex\b/.test(m)) return 'banamex';
-  if (/\brevolut\b/.test(m)) return 'revolut_debito';   // gastar siempre pega a la cuenta de débito, nunca al ahorro
-  if (m === 'efectivo') return 'efectivo';
+// Tolerante a variantes ("Débito Banamex", "banamex débito", "tarjeta de vales", etc.) — no depende de que la IA
+// (o el usuario) use el string exacto del medio. Las cuentas de ahorro nunca se eligen por el medio de pago.
+function medioPagoACuentaKey(medioPago, defs) {
+  const m = _ctaNorm(medioPago);
+  if (!m) return null;
+  defs = defs || CUENTAS_ANGEL;
+  const ef = defs.find(d => d.key === 'efectivo');
+  if (m === 'efectivo') return ef ? ef.key : null;
+  for (const d of defs) { if (d.medio && _ctaNorm(d.medio) === m) return d.key; }
+  if (/\b(pluxee|vales)\b/.test(m)) { const v = defs.find(d => d.tipo === 'vales'); if (v) return v.key; }
+  for (const d of defs) {
+    if (d.key === 'efectivo' || d.tipo === 'ahorro' || d.tipo === 'efectivo') continue;
+    const re = _reCuenta(d); if (re && re.test(m)) return d.key;
+  }
   return null;
 }
-
-// Única cuenta de "ahorro" monitoreada hoy (Revolut · Ahorro). Si algún día hay más de una,
-// esto se vuelve una función que decida el destino por texto — por ahora solo hay una.
-const AHORRO_CUENTA_KEY = 'revolut';
+// Cuenta de ahorro destino de una transferencia: la que el texto nombre, o la primera de ahorro
+function cuentaAhorroKey(mov, defs) {
+  const aho = (defs || CUENTAS_ANGEL).filter(d => d.tipo === 'ahorro');
+  if (!aho.length) return null;
+  const txt = _ctaNorm(`${mov?.concepto || ''} ${mov?.comentarios || ''}`);
+  const hit = aho.find(d => { const re = _reCuenta(d); return re && re.test(txt); });
+  return (hit || aho[0]).key;
+}
 
 // Mismo criterio que el resaltado "Ahorro" de la gráfica de dona (frontend, esAhorro()): "ahorro"
 // en el concepto o los comentarios marca al GASTO como una TRANSFERENCIA a la cuenta de ahorro,
@@ -703,15 +750,15 @@ async function ajustarSaldoCuentaKey(phone, key, delta) {
 // - INGRESO: suma a la cuenta nombrada (p.ej. vales → Pluxee), EXCEPTO efectivo: el extractor
 //   usa "efectivo" como valor por defecto cuando el usuario no dice el medio, y sueldos o
 //   aguinaldos que llegan por banco terminarían inflando el efectivo con dinero que no existe.
-function impactoCuenta(mov) {
+function impactoCuenta(mov, defs) {
   if (!mov || (mov.tipo !== 'GASTO' && mov.tipo !== 'INGRESO')) return [];
   const monto = Number(mov.monto) || 0;
   if (!monto) return [];
-  const key = medioPagoACuentaKey(mov.medio_pago);
+  const key = medioPagoACuentaKey(mov.medio_pago, defs);
   if (mov.tipo === 'INGRESO') return key && key !== 'efectivo' ? [{ key, delta: +monto }] : [];
   const efectos = [];
   if (key) efectos.push({ key, delta: -monto });
-  if (esTransferenciaAhorro(mov)) efectos.push({ key: AHORRO_CUENTA_KEY, delta: +monto });
+  if (esTransferenciaAhorro(mov)) { const ak = cuentaAhorroKey(mov, defs); if (ak) efectos.push({ key: ak, delta: +monto }); }
   return efectos;
 }
 
@@ -721,15 +768,16 @@ function impactoCuenta(mov) {
 // Los movimientos creados ANTES de refs.cuentas_desde (momento en que se capturaron los saldos
 // reales) ya están reflejados en esos saldos: editarlos o borrarlos no debe moverlos.
 async function aplicarImpactoCuentas(phone, before, after) {
-  let desde = null;
+  let desde = null, defs = CUENTAS_BASE;
   try {
-    const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const { data: u } = await sb.from('usuarios').select('external_refs, role').eq('telefono', phone).maybeSingle();
     desde = u?.external_refs?.cuentas_desde || null;
+    defs = cuentasDefDe(u?.external_refs || {}, u?.role);
   } catch { /* sin línea base: se aplica todo, como antes */ }
   const cuenta = m => !(desde && m?.created_at && new Date(m.created_at) < new Date(desde));
   const efectos = [
-    ...(cuenta(before) ? impactoCuenta(before) : []).map(e => ({ key: e.key, delta: -e.delta })), // revertir lo anterior
-    ...(cuenta(after)  ? impactoCuenta(after)  : []),                                              // aplicar lo nuevo
+    ...(cuenta(before) ? impactoCuenta(before, defs) : []).map(e => ({ key: e.key, delta: -e.delta })), // revertir lo anterior
+    ...(cuenta(after)  ? impactoCuenta(after, defs)  : []),                                              // aplicar lo nuevo
   ];
   for (const e of efectos) await ajustarSaldoCuentaKey(phone, e.key, e.delta);
 }
@@ -1388,7 +1436,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Alicia, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut, Pluxee ("Pluxee" es la tarjeta de VALES DE DESPENSA: úsalo SIEMPRE que el usuario mencione Pluxee, vales o vales de despensa — en gastos Y en ingresos, p.ej. "llegaron los vales" es un INGRESO con medio "Pluxee"; usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
+MEDIOS_PAGO_LINEA
 Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
@@ -1434,6 +1482,7 @@ async function extractIntent(text, phone = '') {
       model:            'gemini-2.5-flash',
       generationConfig: { responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
       systemInstruction: _extractIntentStaticPrompt
+        .replace('MEDIOS_PAGO_LINEA', promptMedios(await cuentasDefPorTelefono(phone)))
         .replace(/FECHA_HOY/g, today)
         .replace(/FECHA_YEAR/g, today.slice(0, 4)),
     });
@@ -1523,7 +1572,7 @@ Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"C
 TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Alicia, Ocio, Personales, Platina, Transporte, OTROS
-MEDIOS PAGO: efectivo, transferencia, débito, Débito Banamex, Débito Revolut, Pluxee ("Pluxee" es la tarjeta de VALES DE DESPENSA: úsalo SIEMPRE que el usuario mencione Pluxee, vales o vales de despensa — en gastos Y en ingresos, p.ej. "llegaron los vales" es un INGRESO con medio "Pluxee"; usa "Débito Banamex"/"Débito Revolut" SOLO si el usuario nombra ese banco explícitamente; si solo dice "débito" sin banco, usa el genérico "débito". NO existen tarjetas de crédito como medio de pago: si el usuario menciona una TDC, usa "débito")
+MEDIOS_PAGO_LINEA
 Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
 
@@ -1566,7 +1615,10 @@ EJEMPLOS:
 "hola cómo estás" → {"intent":"CHARLA"}`;
 
 // Fast path for multi-line gasto lists:  "-112 helados con alicia (débito)\n-216 tacos (efectivo)"
-function tryParseBatch(text, today) {
+function tryParseBatch(text, today, defs) {
+  defs = defs || CUENTAS_ANGEL;
+  const _ctasMedio = defs.filter(d => d.key !== 'efectivo' && d.tipo !== 'ahorro' && d.medio).map(d => ({ medio: d.medio, re: _reCuenta(d) })).filter(x => x.re);
+  const _vales = defs.find(d => d.tipo === 'vales');
   const MESES_NUM = { enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
     julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12 };
   const CATS_KNOWN = ['Hogar','Comida','TDC','Despensa','Alicia','Ocio','Personales','Platina','Transporte'];
@@ -1576,9 +1628,9 @@ function tryParseBatch(text, today) {
     // Banco específico ANTES del genérico "débito" — si no, "débito banamex" caía
     // en la rama genérica y se perdía la mención del banco (y con ella, el ajuste
     // automático del saldo monitoreado de esa cuenta).
-    if (/\b(pluxee|vales)\b/.test(r)) return 'Pluxee';
-    if (/\bbanamex\b/.test(r)) return 'Débito Banamex';
-    if (/\brevolut\b/.test(r)) return 'Débito Revolut';
+    const _hit = _ctasMedio.find(x => x.re.test(_ctaNorm(r)));
+    if (_hit) return _hit.medio;   // una cuenta propia (BBVA, Nu, Banamex…) antes que el genérico "débito"
+    if (/\b(pluxee|vales)\b/.test(r) && _vales) return _vales.medio || 'Pluxee';
     if (/tarjeta\s+d[eé]bito|t\.?\s*d[eé]bito|d[eé]bito/.test(r)) return 'débito';
     if (/efectivo/.test(r))      return 'efectivo';
     if (/transferencia/.test(r)) return 'transferencia';
@@ -1735,7 +1787,7 @@ function tryParseBatch(text, today) {
       // Fecha en paréntesis: "(quincena 25 de junio)", "(10 de agosto)"
       const fp = parseFechaEnTexto(p);
       if (fp && /quincena|\d{1,2}\s+(?:de\s+)?[a-záéíóú]+/i.test(pLow)) { itemDate = fp; continue; }
-      if (/efectivo|d[eé]bito|transferencia|tdc|tarjeta|bbva|liverpool|amex|\bnu\b|rappi|palacio|\bhey\b/.test(pLow)) {
+      if (/efectivo|d[eé]bito|transferencia|tdc|tarjeta|bbva|liverpool|amex|\bnu\b|rappi|palacio|\bhey\b/.test(pLow) || _ctasMedio.some(x => x.re.test(_ctaNorm(pLow)))) {
         medio_pago = normMedio(p);
       } else {
         const c = normCat(p);
@@ -1773,8 +1825,9 @@ async function extractIntentBatch(text, phone = '') {
   const _yd = new Date(today + 'T12:00:00'); _yd.setDate(_yd.getDate() - 1);
   const yesterday = _yd.toISOString().split('T')[0];
 
+  const _defsU = await cuentasDefPorTelefono(phone);
   // Fast path: list of gastos — no Gemini needed
-  const fastBatch = tryParseBatch(text, today);
+  const fastBatch = tryParseBatch(text, today, _defsU);
   if (fastBatch) return fastBatch;
 
   // Fast path: single gasté / borrar — regex only, no Gemini
@@ -1794,6 +1847,7 @@ async function extractIntentBatch(text, phone = '') {
       model:            'gemini-2.5-flash',
       generationConfig: { responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
       systemInstruction: _batchIntentPrompt
+        .replace('MEDIOS_PAGO_LINEA', promptMedios(_defsU))
         .replace(/FECHA_HOY/g, today)
         .replace(/FECHA_AYER/g, yesterday)
         .replace(/FECHA_YEAR/g, currentYear),
@@ -2156,7 +2210,7 @@ CAMPOS OBLIGATORIOS para movimientos.crear (tipo GASTO):
   concepto: producto/servicio específico ("Uber", "McDonald's", "mínimo BBVA")
   comentarios: observaciones — puede estar vacío; usa "Alicia" cuando corresponda
   monto: número
-  medio_pago: uno de [${MEDIOS_PAGO.join(', ')}] — default "efectivo"
+  medio_pago: uno de [${mediosDe(cuentasDefDe(user.external_refs || {}, user.role)).join(', ')}] — default "efectivo"
   fecha: YYYY-MM-DD
   programado: true SOLO si es un gasto FUTURO/planeado (ver regla abajo)
 
@@ -2248,7 +2302,7 @@ INFO PERSONAL:
 ${infoLines}
 
 SALDOS DE CUENTAS (monitoreo; se actualizan solos con cada movimiento que use ese medio de pago):
-${Object.entries(CUENTAS_LABEL).map(([k, l]) => `  ${l}: ${fmt(Number((refs.cuentas || {})[k]) || 0)}`).join('\n')}
+${cuentasDefDe(refs, user.role).map(d => `  ${d.label}: ${fmt(Number((refs.cuentas || {})[d.key]) || 0)}`).join('\n') || '  (sin cuentas)'}
 
 DEUDAS TDC:
 ${tdcs.map(t=>`  [${t.id}] ${t.nombre} (${t.estado}): pago ${fmt(t.a_pagar)} saldo ${fmt(Math.max(0,(t.a_pagar||0)-(t.pagado||0)))}`).join('\n')||'  Sin TDC'}
@@ -4939,7 +4993,7 @@ app.post('/api/wishlist/:id/comprar', async (req, res) => {
     let mov = null;
     if (registrar) {
       if (!(Number(row.precio) > 0)) return res.status(400).json({ success: false, error: 'Ponle un precio para registrar el gasto' });
-      const medio = MEDIOS_PAGO.includes(medio_pago) ? medio_pago : 'efectivo';
+      const medio = mediosDe(await cuentasDefPorTelefono(user_phone)).includes(medio_pago) ? medio_pago : 'efectivo';
       const { data, error } = await conReintentos(() => sb.from('movimientos').insert({
         user_phone, tipo: 'GASTO', categoria: row.categoria, concepto: row.nombre, descripcion: '',
         monto: Number(row.precio), medio_pago: medio, fecha: hoy(), comentarios: 'Wishlist',
@@ -4997,9 +5051,10 @@ async function _asDatos(phone) {
   const [{ data: movs }, { data: u }] = await Promise.all([
     sb.from('movimientos').select('id,tipo,monto,categoria,concepto,comentarios,medio_pago,fecha,created_at')
       .eq('user_phone', phone).is('deleted_at', null).gte('fecha', _aiso(d)).lte('fecha', hoy()).limit(5000),
-    sb.from('usuarios').select('external_refs, nombre').eq('telefono', phone).maybeSingle(),
+    sb.from('usuarios').select('external_refs, nombre, role').eq('telefono', phone).maybeSingle(),
   ]);
-  return { movs: (movs || []).map(m => ({ ...m, monto: Number(m.monto) || 0 })), refs: u?.external_refs || {}, nombre: u?.nombre || '' };
+  const refs = u?.external_refs || {};
+  return { movs: (movs || []).map(m => ({ ...m, monto: Number(m.monto) || 0 })), refs, nombre: u?.nombre || '', defs: cuentasDefDe(refs, u?.role) };
 }
 const _asEsAhorro = m => /\bahorro\b/i.test(m.concepto || '') || /\bahorro\b/i.test(m.comentarios || '');
 const _asSum = a => a.reduce((s, m) => s + (m.monto || 0), 0);
@@ -5028,9 +5083,9 @@ function _asAyuda(sinIA) {
 }
 
 // Gastos/ingresos que se pueden registrar sin IA. Devuelve items de executeDbAction o null.
-function _asItemsRegistro(text) {
+function _asItemsRegistro(text, defs) {
   const hs = hoy();
-  const batch = tryParseBatch(text, hs);
+  const batch = tryParseBatch(text, hs, defs);
   if (batch?.items?.length) return batch.items;
   const t = text.trim();
   let m;
@@ -5150,9 +5205,11 @@ async function _asEstadistica(phone, t) {
   // Saldos de cuentas
   if (/\b(saldo|saldos|cuentas|cuanto tengo|efectivo|banamex|revolut|vales|pluxee)\b/.test(t) && !/\bgast/.test(t)) {
     const c = D.refs.cuentas || {};
-    const filtro = Object.entries(CUENTAS_LABEL).filter(([k, l]) => _anrm(l).split(/[ ·]+/).some(w => w.length > 3 && t.includes(w)) || (k === 'revolut' && /ahorro/.test(t)));
-    const lista = (filtro.length ? filtro : Object.entries(CUENTAS_LABEL)).map(([k, l]) => `  • ${l}: ${_amoney(Number(c[k]) || 0)}`);
-    const total = Object.keys(CUENTAS_LABEL).reduce((a, k) => a + (Number(c[k]) || 0), 0);
+    const todas = Object.entries(cuentasLabelDe(D.defs));
+    if (!todas.length) return '💳 Aún no tienes cuentas registradas. Agrégalas en Inicio → Cuentas.';
+    const filtro = todas.filter(([k, l]) => _anrm(l).split(/[ ·]+/).some(w => w.length > 3 && t.includes(w)) || (D.defs.find(d => d.key === k)?.tipo === 'ahorro' && /ahorro/.test(t)));
+    const lista = (filtro.length ? filtro : todas).map(([k, l]) => `  • ${l}: ${_amoney(Number(c[k]) || 0)}`);
+    const total = totalCuentas(D.refs, D.defs);
     return `💳 *Tus saldos*\n${lista.join('\n')}${filtro.length ? '' : `\n  Total: ${fmt(total)}`}`;
   }
   // ¿En qué gasto más?
@@ -5214,7 +5271,7 @@ async function _asConsejos(phone) {
     tips.push(tasa >= 20 ? `💚 Esta quincena apartaste el ${tasa.toFixed(0)}% de tus ingresos a ahorro. ¡Excelente ritmo!`
                          : `💡 Esta quincena apartaste el ${tasa.toFixed(0)}% de tus ingresos a ahorro. Apunta al 10–20% apenas cobres.`);
   }
-  const c = D.refs.cuentas || {}, dinero = Object.keys(CUENTAS_LABEL).reduce((a, k) => a + (Number(c[k]) || 0), 0);
+  const dinero = totalCuentas(D.refs, D.defs);
   const tres = [1, 2, 3].map(k => { const x = new Date(hoy() + 'T12:00:00'); x.setMonth(x.getMonth() - k, 1); const ini = _aiso(x).slice(0, 8) + '01'; const fin = _aiso(new Date(x.getFullYear(), x.getMonth() + 1, 0)); return _asSum(_asEn(D.movs, { from: ini, to: fin }).filter(m => m.tipo === 'GASTO' && !_asEsAhorro(m))); }).filter(v => v > 0);
   if (tres.length && dinero > 0) {
     const meses = dinero / (tres.reduce((a, v) => a + v, 0) / tres.length);
@@ -5347,7 +5404,7 @@ async function _fqPendientesData(phone, D) {
 async function _fqPendientes(phone, D) {
   const { q, items, total } = await _fqPendientesData(phone, D);
   if (!items.length) return `✅ No te falta pagar nada de lo planeado en la ${_fqQLbl(q.key)}.`;
-  const c = D.refs.cuentas || {}, FP = { efectivo: ['🏦 Efectivo', Number(c.efectivo) || 0], pluxee: ['🎫 Pluxee', Number(c.pluxee) || 0], tarjeta_debito: ['💳 Débito', (Number(c.banamex) || 0) + (Number(c.revolut_debito) || 0)] };
+  const c = D.refs.cuentas || {}, FP = { efectivo: ['🏦 Efectivo', Number(c.efectivo) || 0], pluxee: ['🎫 Pluxee', saldoPorTipo(D.refs, D.defs, 'vales')], tarjeta_debito: ['💳 Débito', saldoPorTipo(D.refs, D.defs, 'debito')] };
   const porFp = {}; items.filter(i => !i.din).forEach(i => { porFp[i.fp] = (porFp[i.fp] || 0) + i.monto; });
   const chequeo = Object.entries(porFp).filter(([k]) => FP[k]).map(([k, v]) => { const [l, s] = FP[k]; return `  ${l}: ${fmt(v)} · saldo ${fmt(s)} ${s >= v ? '✅' : `⚠️ faltan ${fmt(v - s)}`}`; });
   return `🧾 *Te falta pagar en la ${_fqQLbl(q.key)}: ${fmt(total)}*\n${items.sort((a, b) => b.monto - a.monto).map(i => `• ${i.desc}: ${fmt(i.monto)}${i.fp ? ` (${{ efectivo: 'efectivo', pluxee: 'Pluxee', tarjeta_debito: 'débito' }[i.fp] || i.fp})` : ''}`).join('\n')}`
@@ -5411,11 +5468,12 @@ function _fqAhorro(D) {
   for (let i = 5; i >= 0; i--) { const x = new Date(d.getFullYear(), d.getMonth() - i, 1); const k = _aiso(x).slice(0, 7); const r = { from: k + '-01', to: _aiso(new Date(x.getFullYear(), x.getMonth() + 1, 0)) };
     const ing = _asSum(_asEn(D.movs, r).filter(m => m.tipo === 'INGRESO')), a = en(r); if (a || ing) meses.push([_fqMesLbl(k), a, ing]); }
   const max = Math.max(0, ...meses.map(m => m[1]));
-  const saldo = Number((D.refs.cuentas || {}).revolut) || 0, tasa = Number((D.refs.cuentas_tasa || {}).revolut) || 0;
+  const ahoCtas = D.defs.filter(d => d.tipo === 'ahorro'), saldo = ahoCtas.reduce((a, d) => a + (Number((D.refs.cuentas || {})[d.key]) || 0), 0);
+  const tasa = Number(ahoCtas.map(d => Number((D.refs.cuentas_tasa || {})[d.key]) || 0).find(x => x > 0)) || 0;
   const ingMes = _asSum(_asEn(D.movs, { from: mesIni, to: hs }).filter(m => m.tipo === 'INGRESO')), ahoMes = en({ from: mesIni, to: hs });
   return `🐷 *Tu ahorro*\n• Esta quincena: ${fmt(en({ from: q.inicio, to: q.fin }))}\n• Este mes: *${fmt(ahoMes)}*${ingMes ? ` (${_fqPct(ahoMes, ingMes)}% de tus ingresos)` : ''}\n• En el año: ${fmt(en({ from: ano, to: hs }))}\n`
     + (meses.length ? `Por mes:\n${meses.map(([l, a, i]) => `  • ${l}: ${fmt(a)}${i ? ` (${_fqPct(a, i)}%)` : ''}${_fqBar(a, max)}`).join('\n')}\n` : '')
-    + `💜 Saldo en Revolut ahorro: *${fmt(saldo)}*${tasa ? ` · rinde ≈ ${fmt(saldo * tasa / 100 / 12)} al mes (${tasa}% anual)` : ''}\n`
+    + (ahoCtas.length ? `💜 Saldo en ${ahoCtas.map(d => d.label).join(' + ')}: *${fmt(saldo)}*${tasa ? ` · rinde ≈ ${fmt(saldo * tasa / 100 / 12)} al mes (${tasa}% anual)` : ''}\n` : '')
     + (ingMes && ahoMes / ingMes < 0.1 ? '💡 Lo sano es apartar 10–20% apenas cobras.' : ahoMes ? '💚 Buen ritmo de ahorro.' : '💡 Aparta aunque sea 10% apenas cobres: lo que no ves, no lo gastas.');
 }
 
@@ -5452,7 +5510,7 @@ function _fqHormiga(D, t) {
 }
 
 function _fqColchon(D) {
-  const c = D.refs.cuentas || {}, dinero = Object.keys(CUENTAS_LABEL).reduce((a, k) => a + (Number(c[k]) || 0), 0);
+  const dinero = totalCuentas(D.refs, D.defs);
   const tres = [1, 2, 3].map(k => { const x = new Date(hoy() + 'T12:00:00'); x.setMonth(x.getMonth() - k, 1); const r = { from: _aiso(x).slice(0, 8) + '01', to: _aiso(new Date(x.getFullYear(), x.getMonth() + 1, 0)) }; return _asSum(_asEn(D.movs, r).filter(m => m.tipo === 'GASTO' && !_asEsAhorro(m))); }).filter(v => v > 0);
   if (!tres.length) return 'Aún no tengo meses completos de gastos para calcular tu colchón.';
   const prom = tres.reduce((a, v) => a + v, 0) / tres.length, meses = dinero / prom;
@@ -5539,7 +5597,7 @@ async function asesorLocal(phone, text, opts = {}) {
   }
   if (/\b(consejo|consejos|recomienda|recomendacion|recomendaciones|tips?|como ahorro|ayudame a ahorrar|que me recomiendas)\b/.test(t)) return await _asConsejos(phone);
   if (!opts.soloConsulta) {
-    const items = _asItemsRegistro(text);
+    const items = _asItemsRegistro(text, await cuentasDefPorTelefono(phone));
     if (items) {
       const execs = [];
       for (const it of items) { const item = { ...it, texto_original: text }; execs.push({ item, result: await executeDbAction(phone, item, 'web') }); }
@@ -5632,11 +5690,41 @@ app.delete('/api/recurrentes/:id', async (req, res) => {
 app.post('/api/update-refs', async (req, res) => {
   try {
     const { phone, field, action, item, itemId } = req.body;
-    const { data: cur, error: selErr } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+    const { data: cur, error: selErr } = await sb.from('usuarios').select('external_refs, role').eq('telefono', phone).single();
     if (selErr && selErr.code !== 'PGRST116') return res.status(500).json({ success: false, error: selErr.message });
     const refs = { ...(cur?.external_refs || {}) };
+    const defs = cuentasDefDe(refs, cur?.role);
 
-    if (field === 'transporte_diario' && action === 'set') {
+    if (field === 'cuentas_def') {
+      const lista = defs.map(d => ({ ...d }));
+      const lim = (x, n) => String(x || '').trim().slice(0, n);
+      if (action === 'add') {
+        const it = item || {}, label = lim(it.label, 40);
+        if (!label) return res.status(400).json({ success: false, error: 'Ponle un nombre a la cuenta' });
+        if (lista.length >= 15) return res.status(400).json({ success: false, error: 'Máximo 15 cuentas' });
+        const tipo = CUENTA_TIPOS.includes(it.tipo) ? it.tipo : 'debito';
+        if (tipo === 'efectivo' && lista.some(d => d.key === 'efectivo')) return res.status(400).json({ success: false, error: 'Ya tienes la cuenta de efectivo' });
+        let base = tipo === 'efectivo' ? 'efectivo' : (_ctaNorm(label).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'cuenta'), key = base, n = 2;
+        while (lista.some(d => d.key === key)) key = base + '_' + (n++);
+        lista.push({ key, label, tipo, color: CUENTA_COLORES[lista.length % CUENTA_COLORES.length],
+          ...(tipo === 'efectivo' ? {} : { medio: label }) });
+        refs.cuentas_def = lista;
+        refs.cuentas = { ...(refs.cuentas || {}), [key]: Math.round((Number(it.saldo) || 0) * 100) / 100 };
+        if (Number(it.tasa) > 0) refs.cuentas_tasa = { ...(refs.cuentas_tasa || {}), [key]: Math.min(100, Number(it.tasa)) };
+      } else if (action === 'update') {
+        const d = lista.find(x => x.key === itemId), it = item || {};
+        if (!d) return res.status(404).json({ success: false, error: 'Esa cuenta ya no existe' });
+        if (it.label !== undefined) { const l = lim(it.label, 40); if (l) { d.label = l; if (d.key !== 'efectivo' && d.medio && !d.match) d.medio = l; } }
+        if (it.tipo !== undefined && CUENTA_TIPOS.includes(it.tipo) && d.key !== 'efectivo' && it.tipo !== 'efectivo') d.tipo = it.tipo;
+        refs.cuentas_def = lista;
+        if (it.tasa !== undefined) { const t = Math.max(0, Math.min(100, Number(it.tasa) || 0)); const ts = { ...(refs.cuentas_tasa || {}) }; if (t) ts[d.key] = t; else delete ts[d.key]; refs.cuentas_tasa = ts; }
+      } else if (action === 'remove') {
+        if (!lista.some(x => x.key === itemId)) return res.status(404).json({ success: false, error: 'Esa cuenta ya no existe' });
+        refs.cuentas_def = lista.filter(x => x.key !== itemId);
+        const c = { ...(refs.cuentas || {}) }; delete c[itemId]; refs.cuentas = c;
+        const ts = { ...(refs.cuentas_tasa || {}) }; delete ts[itemId]; refs.cuentas_tasa = ts;
+      } else return res.status(400).json({ success: false, error: 'Acción inválida' });
+    } else if (field === 'transporte_diario' && action === 'set') {
       const v = req.body.value || {}, num = x => Math.max(0, Math.min(10000, Number(x) || 0));
       refs.transporte_diario = { combi: num(v.combi), camion: num(v.camion), metro: num(v.metro) };
     } else if (field === 'hide_despensa_gastos') {
@@ -5645,12 +5733,15 @@ app.post('/api/update-refs', async (req, res) => {
       // Saldos de cuentas para MONITOREO (Banamex débito, Revolut ahorro).
       // No son movimientos: nunca entran en gastos/ingresos ni en ningún cálculo de balance.
       if (!refs.cuentas) refs.cuentas = {};
-      refs.cuentas[itemId] = Number(req.body.value) || 0;   // itemId = clave de CUENTAS_LABEL
+      if (!defs.some(d => d.key === itemId)) return res.status(404).json({ success: false, error: 'Esa cuenta ya no existe' });
+      refs.cuentas[itemId] = Number(req.body.value) || 0;   // itemId = clave de la cuenta
     } else if (field === 'cuentas' && action === 'retiro') {
       // Retiro de cajero: el dinero cambia de lugar (cuenta → efectivo), no es gasto. En una sola
       // escritura para que nunca quede restado de un lado sin haberse sumado al otro.
       const monto = Math.abs(Number(req.body.value) || 0);
-      if (!CUENTAS_LABEL[itemId] || itemId === 'efectivo' || itemId === 'pluxee' || !monto) return res.status(400).json({ success: false, error: 'Retiro inválido' });
+      const orig = defs.find(d => d.key === itemId);
+      if (!orig || orig.tipo === 'efectivo' || orig.tipo === 'vales' || !monto) return res.status(400).json({ success: false, error: 'Retiro inválido' });
+      if (!defs.some(d => d.key === 'efectivo')) return res.status(400).json({ success: false, error: 'Primero crea tu cuenta de efectivo' });
       const c = { ...(refs.cuentas || {}) };
       c[itemId]  = Math.round(((Number(c[itemId])  || 0) - monto) * 100) / 100;
       c.efectivo = Math.round(((Number(c.efectivo) || 0) + monto) * 100) / 100;

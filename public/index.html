@@ -2810,6 +2810,7 @@ function go(t) {
 
 
 function renderTab(t) {
+  _syncMedios();   // los medios de pago de los formularios siguen a las cuentas de cada quien
   _flushNotas();   // no perder lo que se esté escribiendo al re-renderizar
   // Movimientos vive dentro de Dashboard (rDash) y Objetivos dentro de Presupuesto (rPresp).
   ({ dashboard:rDash, movimientos:rMovimientos, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp,
@@ -3967,7 +3968,7 @@ function _wlHead(it) {
     <div class="wl-price">${fmt(it.precio)}</div>
   </div>
   <div class="wl-chips">${chips}</div>
-  ${hecho ? '' : `<div class="wl-fp" role="group" aria-label="Forma de pago">${WL_FP.map(([k, e, l, c]) =>
+  ${hecho ? '' : `<div class="wl-fp" role="group" aria-label="Forma de pago">${WL_FP.filter(f => f[0] !== 'pluxee' || _tieneVales()).map(([k, e, l, c]) =>
     `<button class="q-fp-pill${it.forma_pago === k ? ' on on-' + c : ''}" onclick="wlFP('${it.id}','${k}')" title="Pagar con ${l}">${e} ${l}</button>`).join('')}</div>`}
   <div class="wl-acts">
     ${hecho
@@ -4670,14 +4671,34 @@ function toggleMovChart() {
 // Saldos informativos de cuentas propias. NO son movimientos: nunca entran en
 // gastos, ingresos, balance ni en ningún otro cálculo del dashboard. El servidor los
 // ajusta solo cuando un movimiento usa ese medio de pago (ver medioPagoACuentaKey).
-// retiro:true → desde esa cuenta se puede sacar efectivo del cajero (pasa a "Efectivo").
-const CUENTAS_DEF = [
-  { key:'efectivo',       label:'Efectivo',         icon:'ti-cash',        color:'#22c55e' },
-  { key:'banamex',        label:'Banamex · Débito', icon:'ti-credit-card', color:'#0ea5e9', retiro:true },
-  { key:'revolut_debito', label:'Revolut · Débito', icon:'ti-credit-card', color:'#14b8a6', retiro:true },
-  { key:'revolut',        label:'Revolut · Ahorro', icon:'ti-pig-money',   color:'#8b5cf6', retiro:true },
-  { key:'pluxee',         label:'Pluxee · Vales',   icon:'ti-basket',      color:'#f97316' },
+// Cada persona arma SUS cuentas (external_refs.cuentas_def): Ángel y Alicia no usan los mismos bancos. Sin lista
+// guardada: las 5 cuentas históricas de Ángel, y solo Efectivo para los demás (ver cuentasDefDe en el servidor).
+// tipo: efectivo | debito | ahorro | vales | otro. "Retirar a efectivo" aplica a débito, ahorro y otro (si hay Efectivo).
+const CUENTAS_ANGEL = [
+  { key:'efectivo',       label:'Efectivo',         tipo:'efectivo', color:'#22c55e' },
+  { key:'banamex',        label:'Banamex · Débito', tipo:'debito',   color:'#0ea5e9', medio:'Débito Banamex' },
+  { key:'revolut_debito', label:'Revolut · Débito', tipo:'debito',   color:'#14b8a6', medio:'Débito Revolut' },
+  { key:'revolut',        label:'Revolut · Ahorro', tipo:'ahorro',   color:'#8b5cf6' },
+  { key:'pluxee',         label:'Pluxee · Vales',   tipo:'vales',    color:'#f97316', medio:'Pluxee' },
 ];
+const CUENTAS_BASE = [{ key:'efectivo', label:'Efectivo', tipo:'efectivo', color:'#22c55e' }];
+function cuentasDef() {
+  const u = (S.data || {}).user || {}, l = (u.external_refs || {}).cuentas_def;
+  if (Array.isArray(l)) return l;   // una lista vacía es válida: la persona quitó todas sus cuentas
+  return u.role === 'ADMIN_A' ? CUENTAS_ANGEL : CUENTAS_BASE;
+}
+const CUENTA_TIPOS = [['debito', '💳', 'Débito'], ['ahorro', '🐷', 'Ahorro'], ['vales', '🎫', 'Vales'], ['otro', '🏦', 'Otra'], ['efectivo', '💵', 'Efectivo']];
+const _ctaEmo = d => (CUENTA_TIPOS.find(t => t[0] === d.tipo) || [0, '💰'])[1];
+const _ctaRetiro = d => d.tipo !== 'efectivo' && d.tipo !== 'vales' && cuentasDef().some(x => x.key === 'efectivo');
+const CUENTA_SUG = ['BBVA', 'Nu', 'Banorte', 'Santander', 'HSBC', 'Hey Banco', 'Mercado Pago', 'Revolut', 'Klar', 'Pluxee'];
+// Los medios de pago que ofrecen los formularios salen de las cuentas de cada quien
+function _syncMedios() {
+  const m = ['efectivo', 'transferencia', 'débito', ...cuentasDef().filter(d => d.key !== 'efectivo' && d.medio).map(d => d.medio)];
+  const n = [...new Set(m)];
+  if (n.join('|') !== MEDIOS.join('|')) { MEDIOS.length = 0; MEDIOS.push(...n); }
+}
+const _tieneVales = () => cuentasDef().some(d => d.tipo === 'vales');
+const _saldoTipo = (c, tipo) => cuentasDef().filter(d => d.tipo === tipo).reduce((a, d) => a + (Number(c[d.key]) || 0), 0);
 
 // Rendimiento estimado al mes a partir de la tasa ANUAL (external_refs.cuentas_tasa) — solo
 // informativo, nunca se suma al saldo: el saldo real es el que reporta el banco.
@@ -4686,66 +4707,139 @@ function _rendimientoMensual(saldo, tasaAnual) {
   return saldo * (Math.pow(1 + tasaAnual / 100, 1 / 12) - 1);
 }
 
-const CUENTA_EMO = { efectivo:'💵', banamex:'🏦', revolut_debito:'💳', revolut:'🐷', pluxee:'🎫' };
-
-// Un solo vistazo: total arriba y una tarjeta por cuenta. Tocar la tarjeta abre UN pop-up para cambiar el saldo;
-// en las cuentas con "Retirar" el mismo pop-up cambia a retiro de cajero con un toque (sin segundo formulario).
+// Un solo vistazo: total arriba y una tarjeta por cuenta. Tocar la tarjeta abre UN pop-up (saldo · retirar · ajustes);
+// "＋" crea una cuenta nueva; en Ajustes se renombra, cambia de tipo o se elimina.
 function rCuentasWidget() {
   const refs  = (S.data.user || {}).external_refs || {};
   const c     = refs.cuentas || {};
   const tasas = refs.cuentas_tasa || {};
-  const total = CUENTAS_DEF.reduce((a, d) => a + (Number(c[d.key]) || 0), 0);
+  const defs  = cuentasDef();
+  const total = defs.reduce((a, d) => a + (Number(c[d.key]) || 0), 0);
   return `<div id="cu-root" class="cu-wrap">
+  <div class="ico-bar ico-bar-c"><button class="ico-btn acc" onclick="cuentaNueva()" title="Nueva cuenta" aria-label="Nueva cuenta"><i class="ti ti-plus"></i></button></div>
   <div class="pr-cover pr-cover-sm">
     <div class="pr-cover-main"><span>Total monitoreado</span><b>${fmt(total)}</b></div>
     <div class="pr-cover-foot" style="border:none;margin-top:6px;padding-top:0">Solo monitoreo: no cuenta como ingreso ni gasto</div>
   </div>
-  <div class="pr-grid">
-    ${CUENTAS_DEF.map(d => {
+  ${defs.length ? `<div class="pr-grid">
+    ${defs.map(d => {
       const saldo = Number(c[d.key]) || 0, tasa = Number(tasas[d.key]) || 0, rend = _rendimientoMensual(saldo, tasa);
       return `<div class="pr-card cu-card" role="button" tabindex="0" onclick="cuentaPop('${d.key}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
           title="Tocar para cambiar el saldo">
-        <div class="pr-card-top"><div class="mov-card-ic emo" style="background:${d.color}26" aria-hidden="true">${CUENTA_EMO[d.key] || '💰'}</div>
-          <div class="pr-card-name"><b>${d.label}</b><small>${tasa ? `${tasa}% anual · ≈ +${fmt(rend)}/mes` : 'Toca para cambiar el saldo'}</small></div></div>
+        <div class="pr-card-top"><div class="mov-card-ic emo" style="background:${d.color || '#818cf8'}26" aria-hidden="true">${_ctaEmo(d)}</div>
+          <div class="pr-card-name"><b>${_ndEsc(d.label)}</b><small>${tasa ? `${tasa}% anual · ≈ +${fmt(rend)}/mes` : 'Toca para cambiar el saldo'}</small></div></div>
         <div class="cu-val${saldo < 0 ? ' neg' : ''}">${fmt(saldo)}</div>
         ${saldo < 0 ? '<div class="pr-hint warn">⚠️ Saldo negativo: revísalo o corrígelo</div>' : ''}
-        ${d.retiro ? `<button type="button" class="btn btn-ghost btn-sm cu-ret" title="Retiro de cajero: pasa a Efectivo (no cuenta como gasto)" onclick="event.stopPropagation();cuentaPop('${d.key}','retiro')"><i class="ti ti-arrow-down-right"></i> Retirar a efectivo</button>` : ''}
+        ${_ctaRetiro(d) ? `<button type="button" class="btn btn-ghost btn-sm cu-ret" title="Retiro de cajero: pasa a Efectivo (no cuenta como gasto)" onclick="event.stopPropagation();cuentaPop('${d.key}','retiro')"><i class="ti ti-arrow-down-right"></i> Retirar a efectivo</button>` : ''}
       </div>`;
     }).join('')}
-  </div>
+  </div>` : `<div class="pr-empty"><div>🏦</div><b>Aún no tienes cuentas</b><p>Agrega tu efectivo, tu banco, tus vales o tu ahorro para ver cuánto tienes en total.</p><button class="btn btn-accent" onclick="cuentaNueva()"><i class="ti ti-plus"></i> Crear mi primera cuenta</button></div>`}
 </div>`;
 }
 function cuRepaint() { const r = $('cu-root'); if (r) r.outerHTML = rCuentasWidget(); }
 function oRetiro(key) { cuentaPop(key, 'retiro'); }
 
+async function _cuRefs(body) {
+  await api('POST', '/api/update-refs', { phone: S.phone, ...body });
+  await load(); cuRepaint();
+}
 function cuentaPop(key, modo) {
-  const d = CUENTAS_DEF.find(x => x.key === key); if (!d) return;
-  S._cuPop = { key, modo: (modo === 'retiro' && d.retiro) ? 'retiro' : 'saldo' };
+  const d = cuentasDef().find(x => x.key === key); if (!d) return;
+  S._cuPop = { key, modo: (modo === 'retiro' && _ctaRetiro(d)) ? 'retiro' : modo === 'ajustes' ? 'ajustes' : 'saldo', tipo: d.tipo };
   _cuPopPaint();
 }
 function cuModo(m) { if (S._cuPop) { S._cuPop.modo = m; _cuPopPaint(); } }
 function _cuPopPaint() {
   const p = S._cuPop; if (!p) return;
-  const d = CUENTAS_DEF.find(x => x.key === p.key), cur = Number((((S.data.user || {}).external_refs || {}).cuentas || {})[p.key]) || 0, ret = p.modo === 'retiro';
-  abrirPop(`${CUENTA_EMO[p.key] || '💰'} ${d.label}`, `<div class="pr-pop">
-    ${d.retiro ? `<div class="din-scope"><button class="${ret ? '' : 'on'}" onclick="cuModo('saldo')">Cambiar saldo</button><button class="${ret ? 'on' : ''}" onclick="cuModo('retiro')">Retirar a efectivo</button></div>` : ''}
-    <div class="nd-wiz-q" style="margin-top:${d.retiro ? 14 : 0}px">${ret ? '¿Cuánto retiraste del cajero?' : 'Saldo actual'}</div>
+  const refs = (S.data.user || {}).external_refs || {}, d = cuentasDef().find(x => x.key === p.key); if (!d) return cerrarPop();
+  const cur = Number((refs.cuentas || {})[p.key]) || 0, ret = p.modo === 'retiro', aj = p.modo === 'ajustes', ctaRet = _ctaRetiro(d);
+  const seg = `<div class="din-scope"><button class="${!ret && !aj ? 'on' : ''}" onclick="cuModo('saldo')">Saldo</button>${ctaRet ? `<button class="${ret ? 'on' : ''}" onclick="cuModo('retiro')">Retirar</button>` : ''}<button class="${aj ? 'on' : ''}" onclick="cuModo('ajustes')">⚙️ Ajustes</button></div>`;
+  let cuerpo;
+  if (aj) {
+    const esEf = d.key === 'efectivo', tasa = Number((refs.cuentas_tasa || {})[d.key]) || 0;
+    cuerpo = `<input id="cu-nom" class="inp" value="${_ndEsc(d.label)}" maxlength="40" placeholder="Nombre de la cuenta" onkeydown="if(event.key==='Enter')cuAjustesGuardar()">
+      ${esEf ? '' : `<div class="nd-wiz-lbl">Tipo</div><div class="q-desp-chips nd-wiz-center" id="cu-tipos">${CUENTA_TIPOS.filter(t => t[0] !== 'efectivo').map(([k, e, l]) => `<button class="q-desp-chip${p.tipo === k ? ' on' : ''}" onclick="cuTipo('${k}')">${e} ${l}</button>`).join('')}</div>`}
+      <div class="mt-ya" id="cu-tasa-row" style="${p.tipo === 'ahorro' ? '' : 'display:none'}"><label for="cu-tasa">Rendimiento anual</label><input id="cu-tasa" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="${tasa || ''}" placeholder="0"><span>%</span></div>
+      <div class="nd-wiz-nav"><button class="btn btn-ghost" style="color:var(--color-expense)" onclick="cuEliminar()"><i class="ti ti-trash"></i> Eliminar cuenta</button><button class="btn btn-accent" onclick="cuAjustesGuardar()"><i class="ti ti-check"></i> Guardar</button></div>`;
+  } else {
+    cuerpo = `<div class="nd-wiz-q" style="margin-top:14px">${ret ? '¿Cuánto retiraste del cajero?' : 'Saldo actual'}</div>
     <div class="nd-wiz-monto"><span>$</span><input id="cu-val" type="number" ${ret ? 'min="0"' : ''} step="any" inputmode="decimal" value="${ret ? '' : (cur || '')}" placeholder="0" onkeydown="if(event.key==='Enter')cuGuardar()"></div>
     ${ret ? `<div class="q-desp-chips nd-wiz-center">${[200, 500, 1000, 2000].map(v => `<button class="q-desp-chip" onclick="$('cu-val').value=(parseFloat($('cu-val').value)||0)+${v};$('cu-val').focus()">+ ${fmt(v).replace('.00', '')}</button>`).join('')}</div>
-      <div class="pr-hint" style="margin-top:10px">Se resta de ${d.label} y se suma a tu Efectivo. No es un gasto: el dinero sigue siendo tuyo.</div>`
-      : `<div class="pr-hint">Lo que reporta tu banco hoy. Se ajusta solo cuando registras un movimiento con esta cuenta.</div>`}
-    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="cuGuardar()"><i class="ti ti-check"></i> ${ret ? 'Retirar' : 'Guardar'}</button></div></div>`);
-  setTimeout(() => { const i = $('cu-val'); if (i) { i.focus(); i.select(); } }, 60);
+      <div class="pr-hint" style="margin-top:10px">Se resta de ${_ndEsc(d.label)} y se suma a tu Efectivo. No es un gasto: el dinero sigue siendo tuyo.</div>`
+      : `<div class="pr-hint">Lo que reporta tu banco hoy. Se ajusta solo cuando registras un movimiento con ${d.medio ? '“' + _ndEsc(d.medio) + '”' : 'esta cuenta'}.</div>`}
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="cuGuardar()"><i class="ti ti-check"></i> ${ret ? 'Retirar' : 'Guardar'}</button></div>`;
+  }
+  abrirPop(`${_ctaEmo(d)} ${d.label}`, `<div class="pr-pop">${seg}${cuerpo}</div>`);
+  setTimeout(() => { const i = $(aj ? 'cu-nom' : 'cu-val'); if (i) { i.focus(); i.select(); } }, 60);
+}
+function cuTipo(t) {
+  if (!S._cuPop) return; S._cuPop.tipo = t;
+  document.querySelectorAll('#cu-tipos .q-desp-chip').forEach(b => b.classList.toggle('on', b.textContent.includes((CUENTA_TIPOS.find(x => x[0] === t) || [0, 0, ''])[2])));
+  const r = $('cu-tasa-row'); if (r) r.style.display = t === 'ahorro' ? '' : 'none';
 }
 async function cuGuardar() {
   const p = S._cuPop; if (!p) return;
   const val = parseFloat($('cu-val')?.value), ret = p.modo === 'retiro';
   if (isNaN(val) || (ret && val <= 0)) { toast(ret ? 'Escribe cuánto retiraste' : 'Escribe el saldo', 'warn'); $('cu-val')?.focus(); return; }
   try {
-    await api('POST', '/api/update-refs', { phone: S.phone, field: 'cuentas', action: ret ? 'retiro' : 'set', itemId: p.key, value: val });
     cerrarPop(); S._cuPop = null;
-    await load(); cuRepaint();
+    await _cuRefs({ field: 'cuentas', action: ret ? 'retiro' : 'set', itemId: p.key, value: val });
     toast(ret ? `Retiro de ${fmt(val)} pasado a Efectivo ✓` : 'Saldo actualizado ✓');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+async function cuAjustesGuardar() {
+  const p = S._cuPop; if (!p) return;
+  const label = ($('cu-nom')?.value || '').trim();
+  if (!label) { toast('Ponle un nombre', 'warn'); $('cu-nom')?.focus(); return; }
+  try {
+    cerrarPop(); S._cuPop = null;
+    await _cuRefs({ field: 'cuentas_def', action: 'update', itemId: p.key, item: { label, tipo: p.tipo, tasa: p.tipo === 'ahorro' ? (parseFloat($('cu-tasa')?.value) || 0) : 0 } });
+    toast('Cuenta actualizada ✓');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+async function cuEliminar() {
+  const p = S._cuPop, d = p && cuentasDef().find(x => x.key === p.key); if (!d) return;
+  if (!confirm(`¿Eliminar la cuenta “${d.label}”?\nSe borra su saldo del monitoreo; tus movimientos no cambian.`)) return;
+  try {
+    cerrarPop(); S._cuPop = null;
+    await _cuRefs({ field: 'cuentas_def', action: 'remove', itemId: d.key });
+    toast('Cuenta eliminada');
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+// Nueva cuenta: un solo pop-up (nombre con ideas de un toque, tipo, saldo y, si es de ahorro, su rendimiento)
+function cuentaNueva() {
+  const tiene = cuentasDef().some(x => x.key === 'efectivo');
+  S._cuNew = { tipo: tiene ? 'debito' : 'efectivo' };
+  const sug = (tiene ? [] : ['Efectivo']).concat(CUENTA_SUG);
+  abrirPop('Nueva cuenta', `<div class="pr-pop">
+    <div class="nd-wiz-lbl">Ideas de un toque</div>
+    <div class="q-desp-chips nd-wiz-center">${sug.map(n => `<button class="q-desp-chip" data-n="${_ndEsc(n)}" onclick="cuSug(this.dataset.n)">${_ndEsc(n)}</button>`).join('')}</div>
+    <input id="cn-nom" class="inp" style="margin-top:10px" maxlength="40" placeholder="Nombre (ej. BBVA Nómina)" onkeydown="if(event.key==='Enter')$('cn-saldo').focus()">
+    <div class="nd-wiz-lbl">Tipo</div>
+    <div class="q-desp-chips nd-wiz-center" id="cn-tipos">${CUENTA_TIPOS.filter(t => t[0] !== 'efectivo' || !tiene).map(([k, e, l]) => `<button class="q-desp-chip${S._cuNew.tipo === k ? ' on' : ''}" data-t="${k}" onclick="cnTipo('${k}')">${e} ${l}</button>`).join('')}</div>
+    <div class="nd-wiz-monto" style="margin-top:14px"><span>$</span><input id="cn-saldo" type="number" step="any" inputmode="decimal" placeholder="0.00" onkeydown="if(event.key==='Enter')cuNuevaGuardar()"></div>
+    <div class="mt-ya" id="cn-tasa-row" style="display:none"><label for="cn-tasa">Rendimiento anual</label><input id="cn-tasa" type="number" min="0" max="100" step="0.1" inputmode="decimal" placeholder="0"><span>%</span></div>
+    <div class="pr-hint" style="margin-top:10px">Los movimientos que registres con el nombre de esta cuenta como medio de pago ajustan su saldo solos.</div>
+    <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="cuNuevaGuardar()"><i class="ti ti-check"></i> Crear cuenta</button></div></div>`, 'md');
+  setTimeout(() => $('cn-nom')?.focus(), 60);
+}
+function cuSug(n) {
+  $('cn-nom').value = n === 'Efectivo' ? 'Efectivo' : n; $('cn-nom').focus();
+  if (n === 'Efectivo') cnTipo('efectivo'); else if (n === 'Pluxee') cnTipo('vales');
+}
+function cnTipo(t) {
+  S._cuNew.tipo = t;
+  document.querySelectorAll('#cn-tipos .q-desp-chip').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  const r = $('cn-tasa-row'); if (r) r.style.display = t === 'ahorro' ? '' : 'none';
+}
+async function cuNuevaGuardar() {
+  const label = ($('cn-nom')?.value || '').trim(), tipo = S._cuNew?.tipo || 'debito';
+  if (!label) { toast('Ponle un nombre', 'warn'); $('cn-nom')?.focus(); return; }
+  try {
+    const item = { label, tipo, saldo: parseFloat($('cn-saldo')?.value) || 0, tasa: tipo === 'ahorro' ? (parseFloat($('cn-tasa')?.value) || 0) : 0 };
+    cerrarPop(); S._cuNew = null;
+    await _cuRefs({ field: 'cuentas_def', action: 'add', item });
+    toast(`${(CUENTA_TIPOS.find(t => t[0] === tipo) || [0, '💰'])[1]} Cuenta “${label}” creada`);
   } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -5012,9 +5106,11 @@ function rQuincenaPanel(ctx) {
       <div class="tarj-val">${p.n ? fmt(p.total) : '—'}</div>
       ${!p.n ? '<div class="tarj-sub">sin gastos</div>' : ''}
     </div>`;
-  const tarjHTML = tarjCol('🏦', 'Efectivo', _porMedio('efectivo'), Number(_cts.efectivo) || 0, `tarj-card-ef-${ctx}`, S._tarjOpen, 'efectivo')
-                 + tarjCol('🎫', 'Pluxee', _porMedio('pluxee'), Number(_cts.pluxee) || 0, `tarj-card-px-${ctx}`, S._tarjOpen, 'pluxee')
-                 + tarjCol('💳', 'Débito', _porMedio('tarjeta_debito'), (Number(_cts.banamex) || 0) + (Number(_cts.revolut_debito) || 0), `tarj-card-db-${ctx}`, S._tarjOpen, 'tarjeta_debito');
+  // Las formas de pago salen de las cuentas de cada quien: Pluxee solo si tiene cuenta de vales (o ya hay gastos con ella)
+  const _dq = cuentasDef(), _pxP = _porMedio('pluxee');
+  const tarjHTML = (_dq.some(d => d.key === 'efectivo') || _porMedio('efectivo').n ? tarjCol('🏦', 'Efectivo', _porMedio('efectivo'), Number(_cts.efectivo) || 0, `tarj-card-ef-${ctx}`, S._tarjOpen, 'efectivo') : '')
+                 + (_dq.some(d => d.tipo === 'vales') || _pxP.n ? tarjCol('🎫', 'Pluxee', _pxP, _saldoTipo(_cts, 'vales'), `tarj-card-px-${ctx}`, S._tarjOpen, 'pluxee') : '')
+                 + tarjCol('💳', 'Débito', _porMedio('tarjeta_debito'), _saldoTipo(_cts, 'debito'), `tarj-card-db-${ctx}`, S._tarjOpen, 'tarjeta_debito');
 
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
@@ -5141,7 +5237,7 @@ function rQuincenaPanel(ctx) {
             <div class="q-card-fp">
               <button class="q-fp-pill${fpEfect?' on on-ef':''}" onclick="setFormaPago('${nomSafe}','efectivo')" title="Marcar como efectivo"><i class="ti ti-cash"></i> Efectivo</button>
               <button class="q-fp-pill${fpDebit?' on on-db':''}" onclick="setFormaPago('${nomSafe}','tarjeta_debito')" title="Marcar como tarjeta de débito"><i class="ti ti-credit-card"></i> T. Débito</button>
-              <button class="q-fp-pill${fpPlux?' on on-px':''}" onclick="setFormaPago('${nomSafe}','pluxee')" title="Marcar como vales Pluxee"><i class="ti ti-basket"></i> Pluxee</button>
+              ${_tieneVales() || fpPlux ? `<button class="q-fp-pill${fpPlux?' on on-px':''}" onclick="setFormaPago('${nomSafe}','pluxee')" title="Marcar como vales Pluxee"><i class="ti ti-basket"></i> Pluxee</button>` : ''}
             </div>
             <div class="mov-card-acts">
               <button class="edit-pill-btn" title="${esTr ? 'Editar tarifas de transporte' : 'Editar'}" onclick="${esTr ? 'editarTransporte()' : `oEditExpItem('gastos','${_id}')`}"><i class="ti ti-pencil" style="font-size:12px"></i></button>
@@ -5311,7 +5407,7 @@ function _gastoFormBody(item) {
     <option value=""${!fp?' selected':''}>— Sin definir —</option>
     <option value="efectivo"${fp==='efectivo'?' selected':''}>Efectivo</option>
     <option value="tarjeta_debito"${fp==='tarjeta_debito'?' selected':''}>T. Débito</option>
-    <option value="pluxee"${fp==='pluxee'?' selected':''}>Pluxee (vales)</option>
+    ${_tieneVales() || fp === 'pluxee' ? `<option value="pluxee"${fp==='pluxee'?' selected':''}>Pluxee (vales)</option>` : ''}
   </select></div>
   <div class="fr"><label>Categoría</label><select id="ei-cat">
     <option value=""${!cat?' selected':''}>— Sin categoría —</option>
@@ -5756,7 +5852,7 @@ function desgloseHTML(key, scope) {
 
   if (key === 'cuentas') {
     const c = ((S.data.user || {}).external_refs || {}).cuentas || {};
-    const rows = CUENTAS_DEF.map(d => _dsgRow(d.label, Number(c[d.key]) || 0, d.color, null, ''));
+    const rows = cuentasDef().map(d => _dsgRow(d.label, Number(c[d.key]) || 0, d.color || '#818cf8', null, ''));
     return `<div class="dsg-inner">${rows.join('')}</div>`;
   }
 
@@ -6458,7 +6554,7 @@ function _gxSaldoTab() {
   let acc = base; const saldo = neto.map(n => (acc += n));
   const curM = _gxMeses(1)[0], cerrN = neto.filter((_, i) => meses[i] !== curM), pos = cerrN.filter(n => n > 0).length, ult = neto[neto.length - 1];
   const cuentas = (((S.data.user || {}).external_refs || {}).cuentas) || {};
-  const dinero = CUENTAS_DEF.reduce((a, d) => a + (Number(cuentas[d.key]) || 0), 0);
+  const dinero = cuentasDef().reduce((a, d) => a + (Number(cuentas[d.key]) || 0), 0);
   const recientes = pm.slice(-4, -1).filter(p => p.gas > 0), gProm = recientes.length ? recientes.reduce((a, p) => a + p.gas, 0) / recientes.length : (pm.length && pm[pm.length - 1].gas) || 0;
   const perm = gProm > 0 ? dinero / gProm : 0;
   const kpis = _gxKpi('Saldo acumulado', gxMoney(saldo[saldo.length - 1]), saldo[saldo.length - 1] >= 0 ? 'in' : 'out', 'ingresos − gastos desde ' + _gxMesLbl(meses[0]))
