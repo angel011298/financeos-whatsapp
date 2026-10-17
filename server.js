@@ -637,7 +637,7 @@ async function checkAndSendReminders(phone) {
 }
 
 // ── DB ACTION EXECUTOR ─────────────────────────────────────────────────────
-const TABLAS_VALIDAS = ['movimientos','metas','calendario','tdc','presupuesto','nidito','usuarios','neg_transacciones','despensa'];
+const TABLAS_VALIDAS = ['movimientos','metas','calendario','tdc','presupuesto','nidito','usuarios','neg_transacciones','despensa','gastos_fijos'];
 const TABLAS_SOFT_DELETE = ['movimientos','metas','calendario','nidito'];
 
 // Texto "MEDIOS PAGO" para los prompts de extracción, con las cuentas de esa persona
@@ -661,6 +661,291 @@ function medioToFormaPago(medio) {
   if (/\b(pluxee|vales)\b/.test(m)) return 'pluxee';
   if (m.includes('débito') || m.includes('debito')) return 'tarjeta_debito';
   return ''; // TDC / transferencia → no afecta el cálculo de retiro de efectivo
+}
+
+// ── GASTOS FIJOS (plantilla recurrente por quincena) ──────────────────────────────
+// external_refs.gastos_esperados = [{_id, descripcion, monto, categoria, forma_pago, dias?, desde?}]. Sin "dias" el gasto
+// aplica en TODAS las quincenas; con dias:[10] solo en la 1ª (10–24) y con dias:[25] solo en la 2ª (25–9). "desde" (clave
+// de quincena) evita que aparezca en quincenas anteriores. El chat IA lo maneja con tabla "gastos_fijos"
+// (crear / editar / eliminar) sin tener que reenviar la lista completa, y el Presupuesto lo pinta en cada quincena que toque.
+const GF_DIAS = { A: [10], B: [25] };
+const _gfNorm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+function gfAlcance(g) {   // 'todas' | 'A' | 'B'
+  if (!((g && g.dias) || []).length) return 'todas';
+  const a = _aplicaEnQuincena({ dias: g.dias }, 'A'), b = _aplicaEnQuincena({ dias: g.dias }, 'B');
+  return a && b ? 'todas' : (a ? 'A' : 'B');
+}
+const gfLetras = alc => (alc === 'todas' ? ['A', 'B'] : [alc]);
+// Acepta lo que mande la IA o el usuario: todas | ambas | primeras | 1ª | segundas | 2 | "1a y 2a"…
+function gfParseQuincenas(v) {
+  const t = _gfNorm(v);
+  if (!t) return null;
+  const hayA = t === 'a' || /(^|\s)(1|1as?|1ras?|1eras?|1ª|1°|uno|primer\w*)(\s|$)/.test(t);
+  const hayB = t === 'b' || /(^|\s)(2|2as?|2das?|2ª|2°|dos|segund\w*)(\s|$)/.test(t);
+  if (/\b(todas?|ambas|cada|siempre|las dos|los dos)\b/.test(t) || (hayA && hayB)) return 'todas';
+  return hayA ? 'A' : (hayB ? 'B' : null);
+}
+const gfPalabra = alc => (alc === 'A' ? 'primeras' : alc === 'B' ? 'segundas' : 'todas');
+function gfEtiqueta(g, semanal) {
+  const a = gfAlcance(g);
+  if (semanal) return a === 'todas' ? 'cada semana' : `la semana en que cae el día ${a === 'A' ? 10 : 25} de cada mes`;
+  return a === 'todas' ? 'cada quincena' : (a === 'A' ? 'la 1ª quincena de cada mes (días 10–24)' : 'la 2ª quincena de cada mes (días 25–9)');
+}
+const _gfSlug = s => _gfNorm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'gasto';
+const _gfDesc = d => String((d && (d.descripcion || d.concepto || d.nombre || d.titulo)) || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+const _gfCategoria = v => { const t = _gfNorm(v); return t ? (CATEGORIAS.find(c => _gfNorm(c) === t) || null) : null; };
+function _gfInferCat(desc) {
+  const t = String(desc || '').toLowerCase();
+  if (/\b(gasolina|aceite|afina|suspensi|verificaci|tenencia|seguro.?coche|seguro.?auto|llanta|freno|bater[ií]a|refacci|platina)/.test(t)) return 'Platina';
+  if (/\b(uber|didi|beat|lyft|cabify|metro\b|metrobus|metrobús|combi\b|cami[oó]n\b|taxi\b|caseta|transporte)/.test(t)) return 'Transporte';
+  if (/\b(taco|restaur|fonda|torta|burger|hambur|sushi|pizza|caf[eé]\b|starbucks|comida|desayuno|cena\b)/.test(t)) return 'Comida';
+  if (/\b(walmart|wally|chedraui|soriana|costco|oxxo|mercado\b|tianguis|abarrotes|super\b|súper\b|despensa|internet|cable)/.test(t)) return 'Despensa';
+  if (/\b(apple.?music|claude|chatgpt|icloud|psico|doctor|dentista|farmacia|gym\b|gimnasio|spa\b|barber|peluquer|ropa\b|lentes\b)/.test(t)) return 'Personales';
+  if (/\b(netflix|spotify|disney|hbo|prime.?video|apple.?tv|youtube|cine\b|concierto|videojuego|steam\b|playstation|xbox|viaje)/.test(t)) return 'Ocio';
+  if (/\b(renta\b|luz\b|agua\b|gas\b|predial|mantenimiento)/.test(t)) return 'Hogar';
+  if (/\b(m[ií]nimo|abono.?tdc|pago.?tarjeta|tdc\b)/.test(t)) return 'TDC';
+  if (/\balicia\b/.test(t)) return 'Alicia';
+  return 'OTROS';
+}
+// Perfil y lista de gastos fijos (lee también el formato antiguo gastos_fijos {nombre: monto})
+async function _gfLeer(phone) {
+  const { data: cur, error } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
+  if (error || !cur) return null;
+  const refs = { ...(cur.external_refs || {}) };
+  const lista = (Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length ? refs.gastos_esperados
+    : Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }))).map(g => ({ ...g }));
+  const semanal = /-W\d{2}$/.test(await claveUnidad(phone, hoy()).catch(() => ''));
+  return { before: cur.external_refs || {}, refs, lista, semanal };
+}
+// ¿La clave de quincena/semana es la actual o una futura? (lo ya pasado no se toca)
+function _gfVigente(key) {
+  const sr = semanaRango(key);
+  if (sr) return sr.to >= hoy();
+  return /^\d{4}-\d{2}-[AB]$/.test(key) && key >= getQuincena(hoy()).key;
+}
+// Un gasto agendado de la quincena en curso ya se pagó si existe su movimiento "[Ppto] nombre" de esta quincena
+async function _gfPagadoAhora(phone, desc) {
+  try {
+    const q = getQuincena(hoy());
+    const { data } = await sb.from('movimientos').select('concepto').eq('user_phone', phone).eq('tipo', 'GASTO').is('deleted_at', null)
+      .gte('fecha', q.inicio).lte('fecha', q.fin).ilike('concepto', '[Ppto] %');
+    return (data || []).some(m => _gfNorm(String(m.concepto).replace(/^\[Ppto\]\s*/i, '')) === _gfNorm(desc));
+  } catch { return false; }
+}
+const _gfRegistroAuditoria = (phone, antes, despues, origen, texto) =>
+  writeAuditLog(phone, 'usuarios', 'gasto_fijo', phone, antes, despues, origen, texto).catch(() => {});
+
+// Agenda (o actualiza) un gasto fijo. Devuelve el texto de confirmación, o un "❌ …" si no se guardó.
+async function gastoFijoGuardar(phone, datos, origen = 'web', texto = null) {
+  const d = datos || {}, desc = _gfDesc(d);
+  if (!desc) return '❌ ¿Cómo se llama el gasto fijo? (ej. "Netflix")';
+  const st = await _gfLeer(phone);
+  if (!st) return '❌ No pude leer tu perfil, intenta de nuevo.';
+  const { refs, lista, before, semanal } = st;
+  const k = _gfNorm(desc);
+  const idx = lista.findIndex(g => _gfNorm(g.descripcion) === k);
+  const monto = Math.round((parseFloat(String(d.monto == null ? '' : d.monto).replace(/[$,\s]/g, '')) || 0) * 100) / 100;
+  const alc = gfParseQuincenas(d.quincenas != null ? d.quincenas : (d.alcance != null ? d.alcance : d.quincena));
+  const cat = _gfCategoria(d.categoria);
+  const fpRaw = d.forma_pago || d.medio_pago || '';
+  const fp = fpRaw ? (['efectivo', 'tarjeta_debito', 'pluxee'].includes(fpRaw) ? fpRaw : medioToFormaPago(fpRaw)) : '';
+  let item, nuevo = false, propagadas = 0;
+  if (idx < 0) {
+    if (!(monto > 0)) return `❌ ¿De cuánto es el gasto fijo "${desc}"? Dime el monto.`;
+    let id = 'gf-' + _gfSlug(desc);
+    if (lista.some(g => g._id === id)) id += '-' + Date.now().toString(36).slice(-4);
+    item = { _id: id, descripcion: desc, monto, categoria: cat || _gfInferCat(desc), ...(fp ? { forma_pago: fp } : {}), desde: getQuincena(hoy()).key };
+    if (alc && alc !== 'todas') item.dias = GF_DIAS[alc];
+    lista.push(item); nuevo = true;
+  } else {
+    item = { ...lista[idx] };
+    if (monto > 0) item.monto = monto;
+    if (cat) item.categoria = cat;
+    if (fp) item.forma_pago = fp;
+    if (alc) { if (alc === 'todas') delete item.dias; else item.dias = GF_DIAS[alc]; }
+    if (!item._id) item._id = 'gf-' + _gfSlug(desc);
+    lista[idx] = item;
+    // Lo ya agendado (quincena en curso sin pagar y las siguientes) toma el cambio
+    const letras = gfLetras(gfAlcance(item)), bq = { ...(refs.budget_q || {}) }, keyAhora = getQuincena(hoy()).key;
+    const pagado = await _gfPagadoAhora(phone, item.descripcion);
+    for (const key of Object.keys(bq)) {
+      if (!_gfVigente(key)) continue;
+      const lt = (/^\d{4}-\d{2}-([AB])$/.exec(key) || [])[1];
+      if (lt && !letras.includes(lt)) continue;
+      const qb = bq[key];
+      if (!qb || !Array.isArray(qb.gastos)) continue;
+      let cambio = false;
+      const gs = qb.gastos.map(g => {
+        if (_gfNorm(g.descripcion) !== k || (key === keyAhora && pagado)) return g;
+        cambio = true; propagadas++;
+        return { ...g, monto: item.monto, ...(item.categoria ? { categoria: item.categoria } : {}), ...(item.forma_pago ? { forma_pago: item.forma_pago } : {}) };
+      });
+      if (cambio) bq[key] = { ...qb, gastos: gs };
+    }
+    if (propagadas) refs.budget_q = bq;
+  }
+  refs.gastos_esperados = lista;
+  const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+  if (error) return `❌ No se guardó el gasto fijo: ${error.message}`;
+  await _gfRegistroAuditoria(phone, before, refs, origen, texto);
+  const donde = gfEtiqueta(item, semanal);
+  return `✅ Gasto fijo ${nuevo ? 'agendado' : 'actualizado'}: ${item.descripcion} · ${fmt(item.monto)}${item.categoria ? ' · ' + item.categoria : ''} → ${donde}.`
+    + (nuevo ? ` Ya aparece en tu Presupuesto${item.desde && !semanal ? ' desde la ' + labelQuincena(item.desde) : ''}.` : (propagadas ? ` Lo ajusté también en ${propagadas} ${semanal ? 'semana' : 'quincena'}${propagadas !== 1 ? 's' : ''} ya agendada${propagadas !== 1 ? 's' : ''}.` : ''));
+}
+
+// Quita un gasto fijo de todas las quincenas, o solo de las primeras / segundas
+async function gastoFijoEliminar(phone, datos, origen = 'web', texto = null) {
+  const d = datos || {}, desc = _gfDesc(d);
+  if (!desc) return '❌ ¿Cuál gasto fijo quito? Dime su nombre (ej. "Netflix").';
+  const st = await _gfLeer(phone);
+  if (!st) return '❌ No pude leer tu perfil, intenta de nuevo.';
+  const { refs, lista, before, semanal } = st;
+  const alc = gfParseQuincenas(d.quincenas != null ? d.quincenas : (d.alcance != null ? d.alcance : d.quincena)) || 'todas';
+  const quitar = gfLetras(alc), k = _gfNorm(desc);
+  let hits = lista.filter(g => _gfNorm(g.descripcion) === k);
+  if (!hits.length) hits = lista.filter(g => { const n = _gfNorm(g.descripcion); return n && (n.includes(k) || k.includes(n)); });
+  if (hits.length > 1) return `❌ Hay varios gastos fijos que coinciden con "${desc}": ${hits.map(g => g.descripcion).join(', ')}. ¿Cuál quito?`;
+  const item = hits[0] || null, nombre = item ? item.descripcion : desc, nk = _gfNorm(nombre);
+  let plantilla = false, queda = [];
+  if (item) {
+    const tenia = gfLetras(gfAlcance(item));
+    queda = tenia.filter(l => !quitar.includes(l));
+    if (queda.length !== tenia.length) {
+      plantilla = true;
+      if (!queda.length) refs.gastos_esperados = lista.filter(g => g !== item);
+      else { item.dias = GF_DIAS[queda[0]]; refs.gastos_esperados = lista; }
+    }
+  }
+  // Lo ya agendado en Presupuesto (quincena en curso sin pagar y las siguientes)
+  const bq = { ...(refs.budget_q || {}) }, keyAhora = getQuincena(hoy()).key, pagado = await _gfPagadoAhora(phone, nombre);
+  let purgadas = 0;
+  for (const key of Object.keys(bq)) {
+    if (!_gfVigente(key)) continue;
+    const lt = (/^\d{4}-\d{2}-([AB])$/.exec(key) || [])[1];
+    if (lt && !quitar.includes(lt)) continue;
+    const qb = bq[key];
+    if (!qb || !Array.isArray(qb.gastos)) continue;
+    const gs = qb.gastos.filter(g => !(_gfNorm(g.descripcion) === nk && !(key === keyAhora && pagado)));
+    if (gs.length !== qb.gastos.length) { purgadas += qb.gastos.length - gs.length; bq[key] = { ...qb, gastos: gs }; }
+  }
+  if (purgadas) refs.budget_q = bq;
+  if (!plantilla && !purgadas) {
+    if (item) return `ℹ️ "${nombre}" no estaba agendado en ${alc === 'todas' ? 'ninguna quincena' : (alc === 'A' ? 'las 1ª quincenas' : 'las 2ª quincenas')}: aplica en ${gfEtiqueta(item, semanal)}.`;
+    const nombres = lista.map(g => g.descripcion).slice(0, 14).join(', ');
+    return `❌ No encontré un gasto fijo llamado "${desc}".${nombres ? ' Tus gastos fijos: ' + nombres + '.' : ''}`;
+  }
+  const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+  if (error) return `❌ No se quitó el gasto fijo: ${error.message}`;
+  await _gfRegistroAuditoria(phone, before, refs, origen, texto);
+  const de = alc === 'todas' ? (semanal ? 'todas las semanas' : 'todas las quincenas') : (alc === 'A' ? 'las 1ª quincenas' : 'las 2ª quincenas');
+  return `🗑️ Gasto fijo "${nombre}" quitado de ${de}.`
+    + (queda.length && plantilla ? ` Sigue en ${queda[0] === 'A' ? 'las 1ª quincenas' : 'las 2ª quincenas'}.` : '')
+    + (purgadas ? ` También lo saqué de ${purgadas} ${semanal ? 'semana' : 'quincena'}${purgadas !== 1 ? 's' : ''} ya agendada${purgadas !== 1 ? 's' : ''} en tu Presupuesto.` : '');
+}
+
+// Lista legible de los gastos fijos (para "¿cuáles son mis gastos fijos?")
+function gastosFijosTexto(refs, semanal) {
+  const l = (Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length ? refs.gastos_esperados
+    : Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ descripcion: k, monto: Number(v) || 0 })));
+  if (!l.length) return 'Aún no tienes gastos fijos. Dime, por ejemplo: "agrega gasto fijo Netflix $199 en las segundas quincenas".';
+  const linea = g => `  • ${g.descripcion} · ${fmt(g.monto)}${g.categoria ? ' (' + g.categoria + ')' : ''}`;
+  const por = { todas: [], A: [], B: [] };
+  l.forEach(g => por[gfAlcance(g)].push(g));
+  const sum = a => a.reduce((s, g) => s + (Number(g.monto) || 0), 0);
+  const out = ['📌 Tus gastos fijos:'];
+  if (por.todas.length) out.push(`${semanal ? 'Cada semana' : 'Cada quincena'}:`, ...por.todas.map(linea));
+  if (por.A.length) out.push(semanal ? 'Semana del día 10:' : '1ª quincena (días 10–24):', ...por.A.map(linea));
+  if (por.B.length) out.push(semanal ? 'Semana del día 25:' : '2ª quincena (días 25–9):', ...por.B.map(linea));
+  if (!semanal) out.push(`Total al mes: ${fmt(sum(por.todas) * 2 + sum(por.A) + sum(por.B))}`);
+  if (refs.transporte_auto === true || refs.transporte_diario) out.push('Aparte, el Transporte se calcula solo por días hábiles.');
+  return out.join('\n');
+}
+
+// Minúsculas sin acentos y de la MISMA longitud que el original, para recortar el texto original con los mismos índices
+const _gfAlinear = s => Array.from(String(s || '')).map(c => { const n = c.normalize('NFD').replace(/[̀-ͯ]/g, ''); return (n.length === 1 ? n : c).toLowerCase(); }).join('');
+// Reconoce "agrega/quita/sube el gasto fijo X $N en las primeras/segundas/todas las quincenas". Solo actúa si el mensaje dice
+// "gasto fijo" (así no confunde "borra el último gasto" con esto). Devuelve null | {listar} | {error} | {accion, datos}.
+function parseGastoFijoTexto(text) {
+  const orig = String(text || '').trim();
+  let a = _gfAlinear(orig), work = orig;
+  const dice = /\bgastos?\s+fij[oa]s?\b/.test(a);
+  // Sin decir "gasto fijo" basta una frase que solo tiene sentido para algo recurrente ("todas las quincenas", "las segundas quincenas", "cada quincena"…)
+  const recurrente = /\b(?:primer[ao]s|segund[ao]s|1(?:ras|eras|as)|2(?:das|as)|todas|ambas|cada)\s+(?:las\s+)?quincenas\b|\bcada\s+quincena\b|\bquincenas?\s+de\s+cada\s+mes\b|\b(?:primer[ao]|segund[ao]|1(?:ra|era|a|ª)?|2(?:da|a|ª)?)\s+quincena\s+de\s+cada\s+mes\b/.test(a);
+  if (!dice && !recurrente) return null;
+  const RE_DEL  = /\b(quita|quitar|quitame|elimina|eliminar|eliminame|borra|borrar|borrame|cancela|cancelar|saca|sacar|remueve|remover|ya no pago|ya no tengo|deja de|dejar de)\b/;
+  const RE_EDIT = /\b(sube|subir|baja|bajar|cambia|cambiar|actualiza|actualizar|edita|editar|modifica|modificar|ajusta|ajustar|aumenta|aumentar|reduce|reducir)\b/;
+  const RE_ADD  = /\b(agrega|agregar|agregame|anade|anadir|registra|registrar|registrame|pon|poner|ponme|crea|crear|programa|programar|agenda|agendar|guarda|guardar|apunta|apuntar|incluye|incluir|nuevo|nueva|suma|sumar)\b/;
+  const del = RE_DEL.test(a), edit = RE_EDIT.test(a), add = RE_ADD.test(a);
+  if (!del && !edit && !add) {
+    return dice && /\b(cuales|cuanto|cuantos|que|mis|lista|listar|muestra|muestrame|ver|dime|revisa|tengo)\b/.test(a) ? { listar: true } : null;
+  }
+  const blank = re => {
+    const m = re.exec(a); if (!m) return null;
+    const pad = ' '.repeat(m[0].length);
+    a = a.slice(0, m.index) + pad + a.slice(m.index + m[0].length);
+    work = work.slice(0, m.index) + pad + work.slice(m.index + m[0].length);
+    return m;
+  };
+  // En qué quincenas
+  const RE_TODAS = /\b(?:en\s+)?(?:todas|cada|ambas)\s+(?:las\s+)?quincenas?\b|\b(?:en\s+)?(?:las\s+)?dos\s+quincenas\b|\bambas\b/;
+  const RE_A = /\b(?:en\s+)?(?:las?\s+)?(?:primer[ao]s?|1(?:ras?|eras?|as?|ª|°)?)\s+quincenas?\b/;
+  const RE_B = /\b(?:en\s+)?(?:las?\s+)?(?:segund[ao]s?|2(?:das?|as?|ª|°)?)\s+quincenas?\b/;
+  const hTodas = !!blank(RE_TODAS), hA = !!blank(RE_A), hB = !!blank(RE_B);
+  const alc = hTodas || (hA && hB) ? 'todas' : (hA ? 'A' : (hB ? 'B' : null));
+  blank(/\b(?:de\s+)?cada\s+mes\b|\btodos\s+los\s+meses\b|\bal\s+mes\b|\bmensual(?:es)?\b/);
+  blank(/\bgastos?\s+fij[oa]s?\b/);
+  [RE_DEL, RE_EDIT, RE_ADD].forEach(re => blank(re));
+  // Monto: el que lleva "$", o el primer número
+  let monto = 0;
+  const RE_NUM = /(\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)/g;
+  let mm, mejor = null;
+  while ((mm = RE_NUM.exec(a))) { if (mm[1]) { mejor = mm; break; } if (!mejor) mejor = mm; }
+  if (mejor) {
+    monto = parseFloat(mejor[2].replace(/,/g, '')) || 0;
+    const pad = ' '.repeat(mejor[0].length);
+    a = a.slice(0, mejor.index) + pad + a.slice(mejor.index + mejor[0].length);
+    work = work.slice(0, mejor.index) + pad + work.slice(mejor.index + mejor[0].length);
+  }
+  blank(/\b(pesos|mxn|varos|lana)\b/);
+  // Medio de pago y categoría
+  let medio = '', categoria = null;
+  const mp = blank(/\b(?:con|en|por|pago\s+con|pagado\s+con)\s+(?:la\s+)?(?:tarjeta\s+(?:de\s+)?)?(debito|efectivo|pluxee|vales)\b/);
+  if (mp) medio = mp[1] === 'vales' ? 'pluxee' : mp[1];
+  let par;
+  while ((par = blank(/\(([^)]*)\)/))) {
+    const inner = par[1];
+    const c = _gfCategoria(inner);
+    if (c) categoria = c;
+    else if (/^(debito|efectivo|pluxee|vales)$/.test(inner.trim())) medio = inner.trim() === 'vales' ? 'pluxee' : inner.trim();
+  }
+  const cm = blank(/\bcategoria\s+([a-z]+)/);
+  if (cm) categoria = _gfCategoria(cm[1]) || categoria;
+  // Lo que queda es el nombre
+  const STOP = /^(?:de|del|el|la|los|las|un|una|unos|unas|mi|mis|tu|en|para|a|al|por|que|se|llama|llamado|llamada|con|y|o|esa|ese|eso|todas|todos|cada|ambas|nuevo|nueva|recurrente|fijo|fija)$/;
+  const words = work.replace(/[$,;:]/g, ' ').split(/\s+/).filter(Boolean);
+  while (words.length && STOP.test(_gfAlinear(words[0]))) words.shift();
+  while (words.length && STOP.test(_gfAlinear(words[words.length - 1]))) words.pop();
+  let desc = words.join(' ').replace(/^[\s."'“”-]+|[\s."'“”-]+$/g, '');
+  if (desc && desc === desc.toLowerCase()) desc = desc.charAt(0).toUpperCase() + desc.slice(1);   // "comida" → "Comida"
+  if (!desc) return { error: '❌ ¿Cuál gasto fijo? Dime su nombre (ej. "Netflix").' };
+  const accion = del ? 'eliminar' : (edit ? 'editar' : 'crear');
+  const datos = { descripcion: desc };
+  if (accion !== 'eliminar') {
+    if (monto > 0) datos.monto = monto;
+    if (categoria) datos.categoria = categoria;
+    if (medio) datos.medio_pago = medio === 'debito' ? 'débito' : medio;
+  }
+  if (alc) datos.quincenas = gfPalabra(alc);
+  else if (accion === 'crear') datos.quincenas = 'todas';
+  return { accion, datos };
+}
+// Punto de entrada del chat: texto (lista o error) | { arg } listo para ejecutar/proponer | null si el mensaje no trata de gastos fijos
+async function gastosFijosLocal(phone, text) {
+  const p = parseGastoFijoTexto(text);
+  if (!p) return null;
+  if (p.error) return p.error;
+  if (p.listar) { const st = await _gfLeer(phone); return st ? gastosFijosTexto(st.refs, st.semanal) : null; }
+  return { arg: { tabla: 'gastos_fijos', accion: p.accion, datos: p.datos, texto_original: text } };
 }
 
 // ── SALDOS DE CUENTAS (monitoreo) ─────────────────────────────────────────────
@@ -923,7 +1208,8 @@ function siguienteQuincena(q) {
   return getQuincena(d);
 }
 
-function _aplicaEnQuincena(item, letra) {
+function _aplicaEnQuincena(item, letra, qKey) {
+  if (item.desde && /^\d{4}-\d{2}-[AB]$/.test(qKey || '') && qKey < item.desde) return false;   // aún no empezaba
   const dias = item.dias || [];
   if (!dias.length) return true;
   return dias.some(d => letra === 'A' ? (d >= 10 && d <= 24) : (d >= 25 || d <= 9));
@@ -1002,7 +1288,7 @@ function _quincenaDeKey(qKey) {
 function _gastosEsperadosBase(refs, qKey) {
   const letra  = String(qKey || '').slice(-1);
   const global = (Array.isArray(refs.gastos_esperados) ? refs.gastos_esperados : [])
-    .filter(g => _aplicaEnQuincena(g, letra));
+    .filter(g => _aplicaEnQuincena(g, letra, qKey));
   const qb = (refs.budget_q || {})[qKey];
   if (!qb) return global;
   const qItems = Array.isArray(qb.gastos) ? qb.gastos : [];
@@ -1199,6 +1485,12 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
       return `❌ Tabla '${tabla}' no existe. Tablas válidas: ${TABLAS_VALIDAS.join(', ')}`;
     }
 
+    // ── gastos_fijos — plantilla recurrente por quincena (todas / primeras / segundas) ──
+    if (tabla === 'gastos_fijos') {
+      if (accion === 'eliminar') return await gastoFijoEliminar(phone, datos, origen, texto_original);
+      return await gastoFijoGuardar(phone, datos, origen, texto_original);   // crear | editar
+    }
+
     // Snapshot previo para editar/eliminar
     let snapshotBefore = null;
     if ((accion === 'editar' || accion === 'eliminar') && id) {
@@ -1282,7 +1574,18 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
     // ── usuarios — merge en external_refs ────────────────────────────────────
     if (tabla === 'usuarios') {
       const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
-      const refs = { ...(cur?.external_refs || {}), ...datos };
+      const nuevos = { ...(datos || {}) };
+      if (Array.isArray(nuevos.gastos_esperados)) {
+        // Se une por nombre con lo que ya existe: reenviar la lista incompleta no borra gastos fijos (para quitar uno: tabla gastos_fijos)
+        const prev = Array.isArray(cur?.external_refs?.gastos_esperados) ? cur.external_refs.gastos_esperados : [];
+        const uni = prev.map(g => ({ ...g }));
+        nuevos.gastos_esperados.forEach(g => {
+          const i = uni.findIndex(x => _gfNorm(x.descripcion) === _gfNorm(g.descripcion));
+          if (i >= 0) uni[i] = { ...uni[i], ...g }; else uni.push({ ...g, desde: g.desde || getQuincena(hoy()).key });
+        });
+        nuevos.gastos_esperados = uni;
+      }
+      const refs = { ...(cur?.external_refs || {}), ...nuevos };
       const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
       if (error) return `❌ Error: ${error.message}`;
       await writeAuditLog(phone, tabla, 'editar', phone, cur?.external_refs, refs, origen, texto_original);
@@ -1292,27 +1595,7 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
     // ── presupuesto — redirect si la IA usa campos de gasto en lugar de {categoria,limite,mes} ─
     // Ocurre cuando el modelo confunde "gastos fijos a todas las quincenas" con tabla presupuesto.
     if (tabla === 'presupuesto' && accion === 'crear' && (datos?.concepto || datos?.descripcion)) {
-      const { data: cur } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).single();
-      const refs = { ...(cur?.external_refs || {}) };
-      const existentes = Array.isArray(refs.gastos_esperados) ? [...refs.gastos_esperados]
-        : Object.entries(refs.gastos_fijos || {}).map(([k, v]) => ({ _id: 'lg-' + k, descripcion: k, monto: Number(v) || 0 }));
-      const desc  = datos.concepto || datos.descripcion || '';
-      const fp    = medioToFormaPago(datos.medio_pago);
-      const nuevo = {
-        _id:         'gf-' + Date.now(),
-        descripcion: desc,
-        monto:       Number(datos.monto) || 0,
-        ...(fp                ? { forma_pago: fp }             : {}),
-        ...(datos.categoria   ? { categoria: datos.categoria } : {}),
-      };
-      const idx = existentes.findIndex(g => (g.descripcion || '').toLowerCase() === desc.toLowerCase());
-      if (idx >= 0) existentes[idx] = { ...existentes[idx], ...nuevo };
-      else existentes.push(nuevo);
-      refs.gastos_esperados = existentes;
-      const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
-      if (error) return `❌ Error al guardar gasto fijo: ${error.message}`;
-      await writeAuditLog(phone, 'usuarios', 'gasto_fijo', phone, cur?.external_refs, refs, origen, texto_original);
-      return `✅ Gasto fijo "${desc}" (${fmt(Number(datos.monto) || 0)}) guardado para todas las quincenas.`;
+      return await gastoFijoGuardar(phone, { ...datos, medio_pago: datos.medio_pago || datos.forma_pago }, origen, texto_original);
     }
 
     if (accion === 'crear') {
@@ -1433,12 +1716,19 @@ INTENTS disponibles:
 Para REGISTRO/EDICION/ELIMINACION con datos suficientes: incluye tabla, accion, datos (y id si aplica).
 Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"CONSULTA"}.
 
-TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
+TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito | gastos_fijos
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Alicia, Ocio, Personales, Platina, Transporte, OTROS
 MEDIOS_PAGO_LINEA
 Tipo GASTO requiere: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
+
+GASTOS FIJOS (¡NO son movimientos!): un gasto FIJO se REPITE cada quincena o cada mes (renta, internet, Netflix, gasolina, psicólogo…). Señales: "gasto fijo", "cada quincena", "todas las quincenas", "las primeras/segundas quincenas", "cada mes", "suscripción mensual".
+→ Usa tabla:"gastos_fijos" (NUNCA "movimientos", "presupuesto" ni "usuarios" para esto):
+  · accion:"crear" agenda uno nuevo (si ya existe con ese nombre lo actualiza); accion:"editar" cambia monto/categoría/en qué quincenas; accion:"eliminar" lo quita.
+  · datos:{descripcion, monto, categoria, medio_pago, quincenas}. quincenas = "todas" (cada quincena; es el valor por defecto) | "primeras" (solo la 1ª quincena de cada mes, días 10-24) | "segundas" (solo la 2ª, días 25 al 9).
+  · eliminar: datos:{descripcion, quincenas} SIN id. "todas" lo quita por completo; "primeras"/"segundas" lo quita solo de esas (si estaba en todas, queda en las otras).
+  · Intent: crear → REGISTRO; editar/cambiar monto → EDICION; quitar/eliminar → ELIMINACION (siempre con tabla:"gastos_fijos").
 
 GASTO PROGRAMADO vs GASTO HECHO (¡MUY IMPORTANTE!):
 - Gasto YA HECHO (pasado/hoy): "gasté/pagué/compré 200 en tacos" → registro normal de movimiento.
@@ -1447,6 +1737,11 @@ GASTO PROGRAMADO vs GASTO HECHO (¡MUY IMPORTANTE!):
   → Usa la fecha del gasto. "quincena del 25 de junio" → fecha "FECHA_YEAR-06-25". "quincena del 10 de julio" → "FECHA_YEAR-07-10".
 
 EJEMPLOS:
+"agrega gasto fijo Netflix 199 en las segundas quincenas" → {"intent":"REGISTRO","tabla":"gastos_fijos","accion":"crear","datos":{"descripcion":"Netflix","monto":199,"categoria":"Ocio","quincenas":"segundas"}}
+"pon la comida como gasto fijo de 1500 todas las quincenas" → {"intent":"REGISTRO","tabla":"gastos_fijos","accion":"crear","datos":{"descripcion":"Comida","monto":1500,"categoria":"Comida","quincenas":"todas"}}
+"quita el gasto fijo de Claude de las segundas quincenas" → {"intent":"ELIMINACION","tabla":"gastos_fijos","accion":"eliminar","datos":{"descripcion":"Claude","quincenas":"segundas"}}
+"elimina el gasto fijo de Apple Music" → {"intent":"ELIMINACION","tabla":"gastos_fijos","accion":"eliminar","datos":{"descripcion":"Apple Music","quincenas":"todas"}}
+"sube el gasto fijo de gasolina a 500" → {"intent":"EDICION","tabla":"gastos_fijos","accion":"editar","datos":{"descripcion":"Gasolina","monto":500}}
 "50 tacos" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
 "gasté 350 con débito banamex en super" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Despensa","concepto":"super","monto":350,"medio_pago":"Débito Banamex","fecha":"FECHA_HOY"}}
 "programa airbnb 8000 para la quincena del 25 de junio" → {"intent":"REGISTRO","tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Ocio","concepto":"AIRBNB / HOTEL","monto":8000,"programado":true,"fecha":"FECHA_YEAR-06-25"}}
@@ -1569,12 +1864,19 @@ Si el intent es REGISTRO/EDICION/ELIMINACION incluye un array "items" con CADA o
 Si es CONSULTA o CHARLA devuelve solo {"intent":"CONSULTA"} o {"intent":"CHARLA"}.
 Si faltan datos críticos (ej: "gasté en el súper" sin monto) → {"intent":"CONSULTA"}.
 
-TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito
+TABLAS: movimientos | metas | calendario | tdc | presupuesto | nidito | gastos_fijos
 ACCIONES: crear | editar | eliminar
 CATEGORÍAS: Hogar, Comida, TDC, Despensa, Alicia, Ocio, Personales, Platina, Transporte, OTROS
 MEDIOS_PAGO_LINEA
 Tipo GASTO: tipo="GASTO", categoria, concepto, monto, comentarios (opcional, ej: "Alicia"), medio_pago (default "efectivo"), fecha (YYYY-MM-DD)
 Tipo INGRESO: tipo="INGRESO", categoria="OTROS", concepto, monto, fecha
+
+GASTOS FIJOS (¡NO son movimientos!): un gasto FIJO se REPITE cada quincena o cada mes (renta, internet, Netflix, gasolina, psicólogo…). Señales: "gasto fijo", "cada quincena", "todas las quincenas", "las primeras/segundas quincenas", "cada mes", "suscripción mensual".
+→ Usa tabla:"gastos_fijos" (NUNCA "movimientos", "presupuesto" ni "usuarios" para esto):
+  · accion:"crear" agenda uno nuevo (si ya existe con ese nombre lo actualiza); accion:"editar" cambia monto/categoría/en qué quincenas; accion:"eliminar" lo quita.
+  · datos:{descripcion, monto, categoria, medio_pago, quincenas}. quincenas = "todas" (cada quincena; es el valor por defecto) | "primeras" (solo la 1ª quincena de cada mes, días 10-24) | "segundas" (solo la 2ª, días 25 al 9).
+  · eliminar: datos:{descripcion, quincenas} SIN id. "todas" lo quita por completo; "primeras"/"segundas" lo quita solo de esas (si estaba en todas, queda en las otras).
+  · Intent: crear → REGISTRO; editar/cambiar monto → EDICION; quitar/eliminar → ELIMINACION (siempre con tabla:"gastos_fijos").
 
 GASTO PROGRAMADO vs GASTO HECHO (¡CRÍTICO — no confundir!):
 - Gasto YA HECHO (pasado/hoy): "gasté/pagué/compré/le saqué" → movimiento normal.
@@ -1610,6 +1912,23 @@ EJEMPLOS:
 "50 tacos" →
 {"intent":"REGISTRO","items":[
   {"tabla":"movimientos","accion":"crear","datos":{"tipo":"GASTO","categoria":"Comida","concepto":"tacos","monto":50,"medio_pago":"efectivo","fecha":"FECHA_HOY"}}
+]}
+"agrega gasto fijo Netflix 199 en las segundas quincenas" →
+{"intent":"REGISTRO","items":[
+  {"tabla":"gastos_fijos","accion":"crear","datos":{"descripcion":"Netflix","monto":199,"categoria":"Ocio","quincenas":"segundas"}}
+]}
+"gastos fijos: Internet 389 (Despensa) segundas quincenas y Apple Music 139 (Personales) primeras quincenas" →
+{"intent":"REGISTRO","items":[
+  {"tabla":"gastos_fijos","accion":"crear","datos":{"descripcion":"Internet","monto":389,"categoria":"Despensa","quincenas":"segundas"}},
+  {"tabla":"gastos_fijos","accion":"crear","datos":{"descripcion":"Apple Music","monto":139,"categoria":"Personales","quincenas":"primeras"}}
+]}
+"quita el gasto fijo de Claude de las segundas quincenas" →
+{"intent":"ELIMINACION","items":[
+  {"tabla":"gastos_fijos","accion":"eliminar","datos":{"descripcion":"Claude","quincenas":"segundas"}}
+]}
+"elimina el gasto fijo de Psico en todas las quincenas" →
+{"intent":"ELIMINACION","items":[
+  {"tabla":"gastos_fijos","accion":"eliminar","datos":{"descripcion":"Psico","quincenas":"todas"}}
 ]}
 "cuánto gasté este mes" → {"intent":"CONSULTA"}
 "hola cómo estás" → {"intent":"CHARLA"}`;
@@ -1971,7 +2290,13 @@ async function proposeDbAction(phone, arg, textoOriginal) {
 
   // Construir texto de propuesta según accion/tabla
   let propuesta;
-  if (accion === 'crear') {
+  if (tabla === 'gastos_fijos') {
+    const d = datos || {}, alc = gfParseQuincenas(d.quincenas), nom = _gfDesc(d) || '(sin nombre)';
+    const donde = alc === 'A' ? 'las 1ª quincenas' : alc === 'B' ? 'las 2ª quincenas' : 'todas las quincenas';
+    propuesta = accion === 'eliminar'
+      ? `¿Quitar el gasto fijo *${nom}* de ${donde}?\n\n*1* Sí · *3* No`
+      : `Voy a ${accion === 'editar' ? 'actualizar' : 'agendar'} este gasto fijo:\n📌 ${nom}${Number(d.monto) > 0 ? ' · ' + fmt(d.monto) : ''}${d.categoria ? ' · ' + d.categoria : ''} → ${donde}\n\n*1* Sí · *2* Editar · *3* No`;
+  } else if (accion === 'crear') {
     let resumen;
     const d = datos || {};
     if (tabla === 'movimientos' && programado) {
@@ -2232,11 +2557,11 @@ Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprad
 - tabla="movimientos" accion="editar" id=X datos={campo: nuevo_valor}: corrige un movimiento existente.
 - Sueldo quincenal: tabla="usuarios", datos={ ingreso_quincenal: X, dias_pago:[D1,D2], ingresos_esperados:[{descripcion:"Sueldo",monto:X,dias:[D1,D2]}] }
 - Ingreso recurrente extra: tabla="usuarios", datos={ ingresos_esperados:[...existentes, {descripcion:"X",monto:Y,dias:[dia]}] }
-- Gasto fijo / recurrente: tabla="usuarios", datos={ gastos_esperados:[...existentes, {_id:"gf-X",descripcion:"X",monto:Y,forma_pago:"efectivo",categoria:"Cat"}] }
-  · Por defecto aparece en TODAS las quincenas (1ª y 2ª) de cada mes.
-  · Si el usuario pide que aplique SOLO en la 1ª quincena (días 10-24) → agrega "dias":[10] al item. SOLO en la 2ª quincena (25 al 9) → "dias":[25].
-  · Para quitarle esa restricción y que vuelva a aplicar en ambas, edita el item con "dias":[] (arreglo vacío).
-  ⚠️ NUNCA usar tabla="presupuesto" para gastos fijos. Si son varios gastos, envíalos TODOS en un solo arreglo gastos_esperados en UNA llamada.
+- Gasto fijo / recurrente (se repite cada quincena o mes): tabla="gastos_fijos", datos={descripcion, monto, categoria, medio_pago, quincenas}. NO uses tabla="usuarios", "movimientos" ni "presupuesto" para esto.
+  · accion="crear" agenda uno nuevo (si ya existe con ese nombre lo actualiza); accion="editar" cambia monto, categoría o en qué quincenas aplica; accion="eliminar" lo quita con datos={descripcion, quincenas}, SIN id.
+  · quincenas: "todas" (por defecto: la 1ª y la 2ª de cada mes) | "primeras" (solo la 1ª quincena, días 10-24) | "segundas" (solo la 2ª quincena, días 25 al 9).
+  · Al eliminar con "primeras" o "segundas" solo se quita de esas; si estaba en todas, queda en las otras. Con "todas" desaparece por completo.
+  · Varios gastos fijos en un mensaje: UNA llamada por gasto fijo. Para mostrar los que tiene, usa la lista "Gastos fijos" de este contexto.
 - Presupuesto mensual por categoría (límite de gasto por categoría): tabla="presupuesto" datos={categoria:"Cat",limite:Y,mes:"YYYY-MM"} — UNA llamada por categoría. Solo para límites, NO para gastos individuales.`;
 
   // ── Bloque dinámico (por request) — datos del día ─────────────────────────
@@ -2265,7 +2590,7 @@ Para despensa.editar id=X datos={comprado:true}: marcar un producto como comprad
       ? `  Ingresos esperados:\n${refs.ingresos_esperados.map(i=>`    • ${i.descripcion}: ${fmt(i.monto)} días ${(i.dias||[]).join(',')}`).join('\n')}`
       : '',
     Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length
-      ? `  Gastos fijos:\n${refs.gastos_esperados.map(g=>`    • ${g.descripcion}: ${fmt(g.monto)}${(g.dias||[]).length?` (solo días ${g.dias.join(',')})`:' (todas las quincenas)'}`).join('\n')}`
+      ? `  Gastos fijos:\n${refs.gastos_esperados.map(g=>`    • ${g.descripcion}: ${fmt(g.monto)}${g.categoria?` · ${g.categoria}`:''} — ${gfEtiqueta(g)}`).join('\n')}`
       : refs.gastos_fijos
         ? `  Gastos fijos:\n${Object.entries(refs.gastos_fijos).map(([k,v])=>`    • ${k}: ${fmt(v)}`).join('\n')}`
         : '  Gastos fijos: no configurados.',
@@ -2374,20 +2699,20 @@ async function cmdCalendario(phone) {
 // ── TOOLS SCHEMA ───────────────────────────────────────────────────────────
 const toolsSchema = {
   name: "modificar_plataforma",
-  description: "Crea, edita o elimina registros en: movimientos (gastos/ingresos), metas, calendario, tdc, presupuesto, nidito (espacio compartido), neg_transacciones (ingresos/gastos de negocios), despensa (lista de compras).",
+  description: "Crea, edita o elimina registros en: movimientos (gastos/ingresos), metas, calendario, tdc, presupuesto, nidito (espacio compartido), neg_transacciones (ingresos/gastos de negocios), despensa (lista de compras), gastos_fijos (gastos que se repiten cada quincena o mes).",
   input_schema: {
     type: "object",
     properties: {
-      tabla:  { type: "string", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito","usuarios","neg_transacciones","despensa"] },
+      tabla:  { type: "string", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito","usuarios","neg_transacciones","despensa","gastos_fijos"] },
       accion: { type: "string", enum: ["crear","editar","eliminar"] },
       id:     { type: "string", description: "ID a editar/eliminar" },
-      datos:  { type: "object", description: "Campos según tabla. movimientos: tipo,categoria,concepto,comentarios,monto,medio_pago,fecha. calendario: titulo,fecha,hora,tipo,descripcion. nidito: titulo,descripcion,tipo,emoji,monto,completado,prioridad. neg_transacciones: proyecto_id,tipo(INGRESO/GASTO/INVERSION),concepto,monto,fecha,categoria,medio_pago,reflejo_personal(RETIRO/APORTE/null). despensa: nombre,cantidad,unidad,categoria,precio_estimado,prioridad." }
+      datos:  { type: "object", description: "Campos según tabla. movimientos: tipo,categoria,concepto,comentarios,monto,medio_pago,fecha. calendario: titulo,fecha,hora,tipo,descripcion. nidito: titulo,descripcion,tipo,emoji,monto,completado,prioridad. neg_transacciones: proyecto_id,tipo(INGRESO/GASTO/INVERSION),concepto,monto,fecha,categoria,medio_pago,reflejo_personal(RETIRO/APORTE/null). despensa: nombre,cantidad,unidad,categoria,precio_estimado,prioridad. gastos_fijos (gasto que se repite cada quincena/mes): descripcion,monto,categoria,medio_pago,quincenas('todas'|'primeras'|'segundas'); eliminar solo necesita descripcion y quincenas (sin id)." }
     },
     required: ["tabla","accion"]
   }
 };
 
-const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", description: "Crea, edita o elimina registros en la plataforma. Tablas disponibles: movimientos (gastos/ingresos personales), metas, calendario, tdc (tarjetas), presupuesto (límites por categoría), nidito (espacio compartido pareja), usuarios (configuración personal), neg_transacciones (transacciones de negocios/proyectos), despensa (lista de compras del súper).", parameters: { type: "OBJECT", properties: { tabla: { type: "STRING", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito","usuarios","neg_transacciones","despensa"], description: "Tabla destino. 'neg_transacciones' para registrar ingresos/gastos de un negocio; 'despensa' para agregar productos a la lista de compras." }, accion: { type: "STRING", enum: ["crear","editar","eliminar"] }, id: { type: "STRING", description: "ID del registro a editar o eliminar (omitir en crear)" }, datos: { type: "OBJECT", description: "Para 'movimientos': {monto, tipo, categoria, concepto, medio_pago, fecha, comentarios}. Para 'neg_transacciones': {proyecto_id, tipo(INGRESO/GASTO/INVERSION), concepto, monto, fecha, categoria, reflejo_personal(RETIRO/APORTE)}. Para 'despensa': {nombre, cantidad, unidad, categoria, precio_estimado}. Para 'presupuesto': {categoria, limite, mes}. Para 'usuarios': {ingreso_quincenal, dias_pago, ...}." } }, required: ["tabla","accion","datos"] } }] }];
+const geminiTools = [{ functionDeclarations: [{ name: "modificar_plataforma", description: "Crea, edita o elimina registros en la plataforma. Tablas disponibles: movimientos (gastos/ingresos personales), metas, calendario, tdc (tarjetas), presupuesto (límites por categoría), nidito (espacio compartido pareja), usuarios (configuración personal), neg_transacciones (transacciones de negocios/proyectos), despensa (lista de compras del súper), gastos_fijos (gastos que se repiten cada quincena o mes).", parameters: { type: "OBJECT", properties: { tabla: { type: "STRING", enum: ["movimientos","metas","calendario","tdc","presupuesto","nidito","usuarios","neg_transacciones","despensa","gastos_fijos"], description: "Tabla destino. 'neg_transacciones' para registrar ingresos/gastos de un negocio; 'despensa' para agregar productos a la lista de compras." }, accion: { type: "STRING", enum: ["crear","editar","eliminar"] }, id: { type: "STRING", description: "ID del registro a editar o eliminar (omitir en crear)" }, datos: { type: "OBJECT", description: "Para 'movimientos': {monto, tipo, categoria, concepto, medio_pago, fecha, comentarios}. Para 'neg_transacciones': {proyecto_id, tipo(INGRESO/GASTO/INVERSION), concepto, monto, fecha, categoria, reflejo_personal(RETIRO/APORTE)}. Para 'despensa': {nombre, cantidad, unidad, categoria, precio_estimado}. Para 'presupuesto': {categoria, limite, mes}. Para 'gastos_fijos' (gastos que se repiten cada quincena o mes): {descripcion, monto, categoria, medio_pago, quincenas: 'todas'|'primeras'|'segundas'}; para eliminar basta {descripcion, quincenas} sin id. Para 'usuarios': {ingreso_quincenal, dias_pago, ...}." } }, required: ["tabla","accion","datos"] } }] }];
 
 // ── LLM ENGINE ─────────────────────────────────────────────────────────────
 
@@ -4181,9 +4506,12 @@ app.post('/webhook', async (req, res) => {
           }
 
           // Preguntas frecuentes: respuesta exacta de la base, sin IA (solo lectura)
-          const faqWA = await faqFinanciero(From, Body || '').catch(() => null);
+          // Gastos fijos: se reconocen sin IA y se confirman con el menú 1/2/3 como cualquier registro
+          const gfWA = await gastosFijosLocal(From, Body || '').catch(() => null);
+          const faqWA = typeof gfWA === 'string' ? gfWA : (gfWA ? null : await faqFinanciero(From, Body || '').catch(() => null));
           // extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
-          const { intent, toolArgs } = faqWA ? { intent: 'CONSULTA', toolArgs: null } : await extractIntent(Body || '', From);
+          const { intent, toolArgs } = gfWA && gfWA.arg ? { intent: gfWA.arg.accion === 'eliminar' ? 'ELIMINACION' : 'REGISTRO', toolArgs: gfWA.arg }
+            : (faqWA ? { intent: 'CONSULTA', toolArgs: null } : await extractIntent(Body || '', From));
           if (faqWA) {
             await guardarMensaje(From, 'user', Body || '');
             reply = faqWA;
@@ -4339,6 +4667,15 @@ No expliques nada, devuelve solo esa línea.`
           _resolveInFlight(reply);
           return res.json({ reply, transcription: isAudio ? text : undefined });
         }
+      }
+
+      // Gastos fijos (agregar / quitar / cambiar / listar, en todas, primeras o segundas quincenas): determinista, sin IA
+      const gf = await gastosFijosLocal(phone, input).catch(e => { console.error('gastos fijos:', e.message); return null; });
+      if (gf) {
+        reply = typeof gf === 'string' ? gf : buildWebChatReply([{ item: gf.arg, result: await executeDbAction(phone, gf.arg, 'web') }]);
+        await guardarMensaje(phone, 'assistant', reply);
+        _resolveInFlight(reply);
+        return res.json({ reply, transcription: isAudio ? text : undefined });
       }
 
       // Preguntas frecuentes: respuesta exacta calculada de la base, sin IA (más rápida y sin inventar)
@@ -5589,6 +5926,11 @@ async function asesorLocal(phone, text, opts = {}) {
   const t = _anrm(text);
   if (!t) return null;
   if (/^(ayuda|help|menu|\?|que puedes hacer|comandos|como te uso)\b/.test(t)) return _asAyuda(opts.sinIA);
+  {   // antes que "borrar gasto": "quita el gasto fijo X" no debe borrar un movimiento
+    const gf = await gastosFijosLocal(phone, text);
+    if (typeof gf === 'string') return gf;
+    if (gf) return opts.soloConsulta ? 'Para agendar o quitar gastos fijos usa el chat de la app (aquí solo puedo consultarlos).' : buildWebChatReply([{ item: gf.arg, result: await executeDbAction(phone, gf.arg, 'web') }]);
+  }
   if (/wish\s*list|lista de deseos/.test(t) && !opts.soloConsulta) {
     const r = await _asWishlist(phone, text, t); if (r) return r;
   }
@@ -5766,7 +6108,7 @@ app.post('/api/update-refs', async (req, res) => {
         if (action === 'add') {
           // Auto-init from global template on first add
           if (arr.length === 0 && tipo === 'gastos' && Array.isArray(refs.gastos_esperados) && refs.gastos_esperados.length) {
-            arr = refs.gastos_esperados.map(g => ({ ...g }));
+            arr = refs.gastos_esperados.filter(g => _aplicaEnQuincena(g, String(qKey).slice(-1), qKey)).map(g => ({ ...g }));
           }
           if (arr.length === 0 && tipo === 'ingresos' && Array.isArray(refs.ingresos_esperados) && refs.ingresos_esperados.length) {
             arr = refs.ingresos_esperados.map(i => ({ ...i }));

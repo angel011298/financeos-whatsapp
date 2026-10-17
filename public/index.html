@@ -2145,6 +2145,9 @@ body.sheet-locked{overflow:hidden}
 .wl-ag-bar{display:block;width:100%;height:4px;border-radius:2px;background:var(--bg-surface-3,var(--border-default));margin-top:6px;overflow:hidden}
 .wl-ag-bar span{display:block;height:100%;background:var(--color-income);border-radius:2px}
 .wl-ag-c.neg .wl-ag-bar span{background:var(--color-expense)}
+.wl-ag-c.neg{background:rgba(239,68,68,.10);border-color:rgba(239,68,68,.40)}
+.wl-ag-c.neg.on{border-color:var(--accent-primary)}
+.wl-ag-c.neg.sug{border-color:rgba(239,68,68,.55)}
 .wl-ag-mas{align-self:center}
 /* Movimientos: filtro por categoría */
 .mvf-list{display:flex;flex-direction:column;gap:6px}
@@ -3571,6 +3574,7 @@ function getIngresosEsperados(refs, qKey) {
 // Con "dias" (ej. [10] o [25]) solo aplica a la quincena en que caiga alguno de esos días —
 // mismo mecanismo que ya usan ingresos_esperados vía dayInQuincena().
 function gastoAplicaQuincena(item, qKey) {
+  if (item.desde && /^\d{4}-\d{2}-[AB]$/.test(qKey || '') && qKey < item.desde) return false;   // aún no empezaba
   const dias = item.dias || [];
   if (!dias.length) return true;
   const sw = _semanaDeKey(qKey);   // semana: aplica si alguno de sus días cae en ella
@@ -4032,7 +4036,7 @@ function _wlAgendaHTML(it) {
         <span class="wl-ag-bar"><span style="width:${pct}%"></span></span></button>`;
     }).join('')}</div>
     ${st.agMas ? '' : `<button type="button" class="wl-act wl-ag-mas" onclick="wlAgMas()"><i class="ti ti-calendar-plus"></i> Ver más ${u === 'semana' ? 'semanas' : 'quincenas'}</button>`}
-    <div class="wl-hint">Libre = ingresos esperados − gastos ya planeados de esa ${u}. Quedará en “Gastos esta ${u}”; cuando lo marques pagado ahí, el deseo pasa a comprado solo.</div>
+    <div class="wl-hint">Libre = ingresos esperados − gastos ya planeados de esa ${u}.${planes.some(p => p.despues < 0) ? ' En rojo: no alcanza (quedarías en negativo).' : ''} Quedará en “Gastos esta ${u}”; cuando lo marques pagado ahí, el deseo pasa a comprado solo.</div>
     <div class="wl-acts" style="margin:0">
       <button class="wl-act pri" onclick="wlConfirmarAgenda('${it.id}')"><i class="ti ti-check"></i> ${it.estado === 'agendado' ? 'Mover a' : 'Agendar en'} ${_wlCorto(elegido.qi)}</button>
       ${it.estado === 'agendado' ? `<button class="wl-act" onclick="wlQuitarAgenda('${it.id}')">Quitar de agenda</button>` : ''}
