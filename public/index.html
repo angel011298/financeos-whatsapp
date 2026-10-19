@@ -2060,13 +2060,13 @@ body.sheet-locked{overflow:hidden}
 .par-info small{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .par-hdr .ico-btn{flex:0 0 38px;width:38px;height:38px;font-size:17px}
 .par-hdr .ico-btn.on{border-color:var(--par-acc,#ec4899)}
-.par-msgs{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 8px 12px;display:flex;flex-direction:column;gap:4px}
+.par-msgs{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 8px 12px;display:flex;flex-direction:column;gap:4px;position:relative;z-index:1;background:transparent}
 .par-vacio{margin:auto;text-align:center;color:var(--text-2);font-size:14px;padding:20px;line-height:1.6}
 .par-vacio small{color:var(--text-3);font-size:12px}
 .par-mas{align-self:center;margin:2px 0 8px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-2);border-radius:var(--radius-pill);padding:5px 12px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .pm-dia{align-self:center;margin:10px 0 6px}
 .pm-dia span{font-size:11px;font-weight:800;color:var(--text-2);background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:var(--radius-pill);padding:3px 10px}
-.pm{position:relative;max-width:min(78%,520px);padding:8px 12px 5px;border-radius:18px;font-size:14.5px;line-height:1.45;word-break:break-word;animation:fadeIn .15s ease;flex-shrink:0}
+.pm{position:relative;max-width:min(78%,520px);padding:8px 12px 5px;border-radius:18px;font-size:calc(14.5px * var(--par-fs,1));line-height:1.45;word-break:break-word;animation:fadeIn .15s ease;flex-shrink:0}
 .pm.yo{align-self:flex-end;background:var(--par-acc,#ec4899);color:#fff;border-bottom-right-radius:6px}
 .pm.el{align-self:flex-start;background:var(--bg-surface);border:1px solid var(--border-default);color:var(--text-1);border-bottom-left-radius:6px}
 .pm.yo a{color:#fff}
@@ -2103,7 +2103,36 @@ body.sheet-locked{overflow:hidden}
 .fondo-noche{background:linear-gradient(180deg,#0b1024,#241a4d)}
 .fondo-papel{background:repeating-linear-gradient(0deg,transparent 0 27px,rgba(148,163,184,.16) 27px 28px)}
 .fondo-corazones{background-color:rgba(236,72,153,.05);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M24 34s-9-5.6-9-11.2A4.8 4.8 0 0 1 24 20a4.8 4.8 0 0 1 9 2.8C33 28.4 24 34 24 34z' fill='%23ec4899' fill-opacity='.12'/%3E%3C/svg%3E");background-size:48px 48px}
-.par-msgs.fondo-noche,.par-msgs.fondo-rosa,.par-msgs.fondo-cielo,.par-msgs.fondo-papel,.par-msgs.fondo-corazones,.par-msgs.fondo-puntos{border-radius:14px;margin-top:6px}
+.fondo-atardecer{background:linear-gradient(180deg,rgba(251,146,60,.28),rgba(236,72,153,.22),rgba(99,102,241,.2))}
+.fondo-menta{background:linear-gradient(180deg,rgba(16,185,129,.18),rgba(6,182,212,.14))}
+.fondo-lavanda{background:linear-gradient(180deg,rgba(167,139,250,.24),rgba(244,114,182,.12))}
+.fondo-oceano{background:linear-gradient(180deg,rgba(14,165,233,.26),rgba(30,64,175,.3))}
+.fondo-grafito{background:linear-gradient(180deg,#1f2937,#111827)}
+/* Fondo del chat: capa propia detrás de los mensajes (foto / color / diseño) con atenuar y desenfocar, como en WhatsApp */
+.par-stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;border-radius:14px;margin-top:6px;overflow:hidden;isolation:isolate}
+.par-bg{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat;filter:blur(var(--par-blur,0px))}
+.par-bg.es-foto{inset:-14px}
+.par-bg::after{content:'';position:absolute;inset:0;background:#000;opacity:var(--par-dim,0);pointer-events:none}
+.par-stage.con-fondo .par-vacio{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:14px}
+/* Pop-up Personalizar chat */
+.par-prev{position:relative;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:12px;border-radius:14px;overflow:hidden;min-height:128px;isolation:isolate;border:1px solid var(--border-default)}
+.par-prev .pm{z-index:1;max-width:80%}
+.par-fuentes{display:flex;flex-wrap:wrap;gap:8px}
+.par-fb{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;border:2px solid var(--border-default);background:var(--bg-surface);color:var(--text-1);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.par-fb[hidden]{display:none}
+.par-fb.on{border-color:var(--accent-primary)}
+.par-mifoto span{width:22px;height:22px;border-radius:6px;background-size:cover;background-position:center;display:inline-block;background-color:var(--bg-surface-2)}
+.par-cfondo button{border-radius:10px}
+.par-slid{display:flex;flex-direction:column;gap:4px;margin-top:12px}
+.par-slid[hidden]{display:none}
+.par-slid label{font-size:12px;font-weight:700;color:var(--text-2);display:flex;justify-content:space-between}
+.par-slid input[type=range]{width:100%;accent-color:var(--par-acc,#ec4899)}
+.par-quitar{display:flex;justify-content:center;margin-top:10px}
+.par-quitar[hidden]{display:none}
+.par-fs{display:flex;gap:6px}
+.par-fs button{flex:1;padding:9px 6px;border-radius:12px;border:2px solid var(--border-default);background:var(--bg-surface);color:var(--text-1);font-family:inherit;font-weight:800;font-size:13px;cursor:pointer}
+.par-fs button.on{border-color:var(--accent-primary)}
+.par-pie{display:flex;justify-content:center;margin-top:14px}
 .par-colores{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
 .par-colores button{width:34px;height:34px;border-radius:50%;border:3px solid var(--bg-surface);box-shadow:0 0 0 1px var(--border-default);cursor:pointer}
 .par-colores button.on{box-shadow:0 0 0 2px var(--text-1)}
@@ -10143,7 +10172,7 @@ function chatVista(v) {
 
 // ── Chat de pareja ───────────────────────────────────────────────────────────
 const PAR_COLORES = ['#ec4899', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
-const PAR_FONDOS  = [['liso', 'Liso'], ['puntos', 'Puntos'], ['rosa', 'Rosa'], ['cielo', 'Cielo'], ['noche', 'Noche'], ['papel', 'Papel'], ['corazones', 'Corazones']];
+const PAR_FONDOS  = [['liso', 'Liso'], ['puntos', 'Puntos'], ['rosa', 'Rosa'], ['cielo', 'Cielo'], ['noche', 'Noche'], ['papel', 'Papel'], ['corazones', 'Corazones'], ['atardecer', 'Atardecer'], ['menta', 'Menta'], ['lavanda', 'Lavanda'], ['oceano', 'Océano'], ['grafito', 'Grafito']];
 const _parUrl = id => `/api/pareja/archivo/${id}?phone=${encodeURIComponent(S.phone)}`;
 const _parEsc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const _parTam = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
@@ -10154,7 +10183,8 @@ function _parPaneHTML() {
     <button class="ico-btn" id="par-push" onclick="parPush()" title="Avisos de mensajes nuevos" aria-label="Avisos de mensajes nuevos">🔔</button>
     <button class="ico-btn" onclick="parAjustes()" title="Personalizar chat" aria-label="Personalizar chat">🎨</button>
   </div>
-  <div class="par-msgs" id="par-msgs"><div class="par-vacio">Cargando…</div></div>
+  <div class="par-stage" id="par-stage"><div class="par-bg" id="par-bg"></div>
+    <div class="par-msgs" id="par-msgs"><div class="par-vacio">Cargando…</div></div></div>
   <div class="par-escr" id="par-escr" hidden>escribiendo…</div>
   <form class="chat-bar par-bar" onsubmit="event.preventDefault();parEnviar()">
     <label class="round-btn par-clip" title="Adjuntar archivo (máx. 25 MB)" aria-label="Adjuntar archivo"><i class="ti ti-paperclip"></i><input type="file" id="par-file" multiple hidden onchange="parArchivo(this)"></label>
@@ -10226,7 +10256,9 @@ function _parCuando(iso) {
 function _parTema() {
   const yo = _parSt().yo || {}, w = $('pane-par'); if (!w) return;
   w.style.setProperty('--par-acc', yo.color || '#ec4899');
-  const box = $('par-msgs'); if (box) box.className = 'par-msgs fondo-' + (yo.fondo || 'liso');
+  w.style.setProperty('--par-fs', PAR_FS[yo.fuente] || 1);
+  _parAplicarFondo($('par-bg'), yo);
+  $('par-stage')?.classList.toggle('con-fondo', _parFondoKey(yo) !== 'p:liso');
 }
 function _parTexto(t) {
   return _parEsc(t).replace(/(https?:\/\/[^\s<]+)/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`).replace(/\n/g, '<br>');
@@ -10384,26 +10416,108 @@ function parTecleo() {
   api('POST', '/api/pareja/escribiendo', { phone: S.phone }).catch(() => {});
 }
 
-// Personalización (color y fondo: cómo lo ves tú; foto: la ve tu pareja)
-function parAjustes() {
-  const yo = _parSt().yo || {};
-  abrirPop('🎨 Personalizar chat', `<div class="pr-pop">
-    <div class="nd-wiz-lbl">Tu foto de perfil</div>
-    <div class="par-foto-row"><div class="par-av grande" id="pa-av">${yo.foto_v ? `<img src="/api/pareja/foto?phone=${encodeURIComponent(S.phone)}&de=yo&v=${yo.foto_v}" alt="">` : _parEsc((((S.data || {}).user || {}).nombre || 'Yo')[0])}</div>
-      <label class="btn btn-ghost btn-sm" style="cursor:pointer"><i class="ti ti-photo"></i> Elegir foto<input type="file" accept="image/*" hidden onchange="parFoto(this)"></label>
-      ${yo.foto_v ? `<button class="btn btn-ghost btn-sm" onclick="parPerfil({foto:null})">Quitar</button>` : ''}</div>
-    <div class="nd-wiz-lbl">Color de tus mensajes</div>
-    <div class="par-colores">${PAR_COLORES.map(c => `<button style="background:${c}" class="${(yo.color || '#ec4899') === c ? 'on' : ''}" onclick="parPerfil({color:'${c}'})" aria-label="Color ${c}"></button>`).join('')}</div>
-    <div class="nd-wiz-lbl">Fondo</div>
-    <div class="par-fondos">${PAR_FONDOS.map(([k, l]) => `<button class="fondo-${k}${(yo.fondo || 'liso') === k ? ' on' : ''}" onclick="parPerfil({fondo:'${k}'})"><span>${l}</span></button>`).join('')}</div>
-    <div class="pr-hint" style="margin-top:12px">El color y el fondo solo cambian cómo ves tú el chat.</div></div>`, 'md');
+// Personalización del chat (como WhatsApp): fondo de pantalla (foto de la galería, color sólido o diseño), atenuar, desenfocar,
+// tamaño de letra y color de tus mensajes. Todo se guarda en tu perfil y solo cambia cómo ves TÚ el chat; tu foto de perfil sí la ve tu pareja.
+const PAR_FONDO_COLORES = ['#e5ddd5', '#d9fdd3', '#fdf4c7', '#ffe3e3', '#e3f2ff', '#ece3ff', '#d4f0e5', '#f5d9c8', '#cfd8dc', '#9e9e9e', '#2f4858', '#003049', '#0b141a', '#1f2c34', '#3a1d2e', '#14343b', '#233a2a', '#4b3b6b'];
+const PAR_FS = { s: 0.88, m: 1, l: 1.2 };
+const _parFondoUrl = v => `/api/pareja/fondo?phone=${encodeURIComponent(S.phone)}&v=${v}`;
+const _parFondoKey = p => (p.fondo === 'foto' && p.fondo_v) ? 'foto' : (p.fondo === 'color' && p.fondo_color) ? 'c:' + p.fondo_color : 'p:' + (PAR_FONDOS.some(f => f[0] === p.fondo) ? p.fondo : 'liso');
+function _parAplicarFondo(el, p) {
+  if (!el) return;
+  const f = _parFondoKey(p);
+  el.className = 'par-bg'; el.style.backgroundImage = ''; el.style.backgroundColor = '';
+  if (f === 'foto') { el.classList.add('es-foto'); el.style.backgroundImage = `url("${_parFondoUrl(p.fondo_v)}")`; }
+  else if (f[0] === 'c') el.style.backgroundColor = f.slice(2);
+  else el.classList.add('fondo-' + f.slice(2));
+  el.style.setProperty('--par-dim', (p.atenuar || 0) / 100);
+  el.style.setProperty('--par-blur', f === 'foto' ? (p.desenfocar || 0) + 'px' : '0px');
 }
+function parAjustes() {
+  const nomPar = _parEsc(_parSt().info?.nombre || 'tu pareja');
+  const dis = PAR_FONDOS.filter(([k]) => k !== 'liso').map(([k, l]) => `<button type="button" data-fk="p:${k}" class="fondo-${k}" onclick="parFondo('p:${k}')"><span>${l}</span></button>`).join('');
+  const cols = PAR_FONDO_COLORES.map(c => `<button type="button" data-fk="c:${c}" style="background:${c}" onclick="parFondo('c:${c}')" aria-label="Color ${c}"></button>`).join('');
+  abrirPop('🎨 Personalizar chat', `<div class="pr-pop par-aj" id="pa-root">
+    <div class="par-prev"><div class="par-bg" id="pa-prevbg"></div>
+      <div class="pm el"><div class="pm-txt">¿Ya saliste? 💞</div><div class="pm-hora">10:41</div></div>
+      <div class="pm yo"><div class="pm-txt">¡Sí! Voy en camino</div><div class="pm-hora">10:42 <span class="pm-check leido">✓✓</span></div></div></div>
+    <div class="nd-wiz-lbl">Fondo de pantalla</div>
+    <div class="par-fuentes">
+      <label class="par-fb"><i class="ti ti-photo"></i> Elegir de la galería<input type="file" accept="image/*" hidden onchange="parFondoFoto(this)"></label>
+      <button type="button" class="par-fb par-mifoto" id="pa-mifoto" data-fk="foto" hidden onclick="parFondo('foto')"><span id="pa-mifoto-i"></span> Mi foto</button>
+      <button type="button" class="par-fb" data-fk="p:liso" onclick="parFondo('p:liso')"><i class="ti ti-ban"></i> Sin fondo</button></div>
+    <div class="nd-wiz-lbl">Colores</div><div class="par-colores par-cfondo">${cols}</div>
+    <div class="nd-wiz-lbl">Diseños</div><div class="par-fondos">${dis}</div>
+    <div class="par-slid"><label for="pa-dim">Atenuar <b id="pa-dim-v"></b></label><input type="range" id="pa-dim" min="0" max="80" step="5" oninput="parSlider('atenuar',this.value)" onchange="parPerfil({atenuar:+this.value})"></div>
+    <div class="par-slid" id="pa-blur-w"><label for="pa-blur">Desenfocar <b id="pa-blur-v"></b></label><input type="range" id="pa-blur" min="0" max="12" step="1" oninput="parSlider('desenfocar',this.value)" onchange="parPerfil({desenfocar:+this.value})"></div>
+    <div class="par-quitar" id="pa-quitarfoto" hidden><button type="button" class="btn btn-ghost btn-sm" onclick="parPerfil({quitar_fondo_foto:true})"><i class="ti ti-trash"></i> Quitar mi foto de fondo</button></div>
+    <div class="nd-wiz-lbl">Tamaño de letra</div>
+    <div class="par-fs">${[['s', 'Pequeña'], ['m', 'Mediana'], ['l', 'Grande']].map(([k, l]) => `<button type="button" data-fs="${k}" onclick="parPerfil({fuente:'${k}'})">${l}</button>`).join('')}</div>
+    <div class="nd-wiz-lbl">Color de tus mensajes</div>
+    <div class="par-colores">${PAR_COLORES.map(c => `<button type="button" data-cm="${c}" style="background:${c}" onclick="parPerfil({color:'${c}'})" aria-label="Color ${c}"></button>`).join('')}</div>
+    <div class="nd-wiz-lbl">Tu foto de perfil</div>
+    <div class="par-foto-row"><div class="par-av grande" id="pa-av"></div>
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer"><i class="ti ti-photo"></i> Elegir foto<input type="file" accept="image/*" hidden onchange="parFoto(this)"></label>
+      <button type="button" class="btn btn-ghost btn-sm" id="pa-quitar-av" hidden onclick="parPerfil({foto:null})">Quitar</button></div>
+    <div class="par-pie"><button type="button" class="btn btn-ghost btn-sm" onclick="parPerfil({restablecer:true})"><i class="ti ti-restore"></i> Restablecer fondo y letra</button></div>
+    <div class="pr-hint" style="margin-top:12px">El fondo, los colores y la letra solo cambian cómo ves tú el chat. Tu foto de perfil sí la ve ${nomPar}.</div></div>`, 'md');
+  _parAjSync();
+}
+// Marca lo elegido y repinta la vista previa SIN rehacer el pop-up (así no se pierde el desplazamiento)
+function _parAjSync() {
+  const root = $('pa-root'); if (!root) return;
+  const yo = _parSt().yo || {}, key = _parFondoKey(yo);
+  root.style.setProperty('--par-acc', yo.color || '#ec4899');
+  root.style.setProperty('--par-fs', PAR_FS[yo.fuente] || 1);
+  _parAplicarFondo($('pa-prevbg'), yo);
+  root.querySelectorAll('[data-fk]').forEach(b => b.classList.toggle('on', b.dataset.fk === key));
+  root.querySelectorAll('[data-cm]').forEach(b => b.classList.toggle('on', b.dataset.cm === (yo.color || '#ec4899')));
+  root.querySelectorAll('[data-fs]').forEach(b => b.classList.toggle('on', b.dataset.fs === (yo.fuente || 'm')));
+  const hayFoto = !!yo.fondo_v;
+  $('pa-mifoto').hidden = !hayFoto; $('pa-quitarfoto').hidden = !hayFoto;
+  if (hayFoto) $('pa-mifoto-i').style.backgroundImage = `url("${_parFondoUrl(yo.fondo_v)}")`;
+  $('pa-dim').value = yo.atenuar || 0; $('pa-dim-v').textContent = (yo.atenuar || 0) + ' %';
+  $('pa-blur').value = yo.desenfocar || 0; $('pa-blur-v').textContent = (yo.desenfocar || 0) + ' px';
+  $('pa-blur-w').hidden = key !== 'foto';
+  const av = $('pa-av');
+  if (av) av.innerHTML = yo.foto_v ? `<img src="/api/pareja/foto?phone=${encodeURIComponent(S.phone)}&de=yo&v=${yo.foto_v}" alt="">` : _parEsc((((S.data || {}).user || {}).nombre || 'Yo')[0]);
+  $('pa-quitar-av').hidden = !yo.foto_v;
+}
+function parFondo(k) {
+  if (k === 'foto') return parPerfil({ fondo: 'foto' });
+  if (k[0] === 'c') return parPerfil({ fondo: 'color', fondo_color: k.slice(2) });
+  return parPerfil({ fondo: k.slice(2) });
+}
+// Mientras arrastras el control se ve al instante (vista previa y chat); al soltar se guarda
+function parSlider(campo, v) { const st = _parSt(); st.yo = { ...(st.yo || {}), [campo]: +v }; _parTema(); _parAjSync(); }
 async function parPerfil(p) {
   try {
     const r = await api('POST', '/api/pareja/perfil', { phone: S.phone, perfil: p });
     _parSt().yo = { ..._parSt().yo, ...r.perfil };
-    _parTema(); parAjustes(); toast('Listo ✓');
+    _parTema(); _parAjSync();
   } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+// Foto de fondo: se reduce y comprime aquí (JPEG, lado mayor 1400 px) antes de subirla cifrada
+function parFondoFoto(input) {
+  const f = input.files?.[0]; input.value = ''; if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {
+    const k = Math.min(1, 1400 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    c.toBlob(async blob => {
+      if (!blob) { toast('No se pudo procesar la imagen', 'error'); return; }
+      try {
+        const r = await fetch('/api/pareja/fondo', { method: 'POST', body: blob, headers: { 'Content-Type': 'application/octet-stream', 'x-phone': S.phone } });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.success) throw new Error(j.error || 'Error ' + r.status);
+        _parSt().yo = { ..._parSt().yo, ...j.perfil };
+        _parTema(); _parAjSync(); toast('Fondo actualizado ✓');
+      } catch (e) { toast('No se pudo guardar el fondo: ' + e.message, 'error'); }
+    }, 'image/jpeg', 0.82);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('No se pudo leer la imagen', 'error'); };
+  img.src = url;
 }
 function parFoto(input) {
   const f = input.files?.[0]; input.value = ''; if (!f) return;

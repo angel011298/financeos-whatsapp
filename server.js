@@ -6209,7 +6209,16 @@ const VAPID = (() => {
 if (webpush && VAPID) webpush.setVapidDetails('mailto:avisos@us-finanzas.app', VAPID.pub, VAPID.priv);
 
 const PAREJA_COLORES = ['#ec4899', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
-const PAREJA_FONDOS  = ['liso', 'puntos', 'rosa', 'cielo', 'noche', 'papel', 'corazones'];
+const PAREJA_FONDOS  = ['liso', 'puntos', 'rosa', 'cielo', 'noche', 'papel', 'corazones', 'atardecer', 'menta', 'lavanda', 'oceano', 'grafito', 'foto', 'color'];
+// Personalización del chat (como WhatsApp): fondo = diseño | color sólido | foto propia (cifrada en el bucket), atenuar, desenfocar y tamaño de letra
+const _perfilOut = p => ({
+  color: p.color || '', fondo: p.fondo || '', fondo_color: p.fondo_color || '', fondo_v: p.fondo_v || 0,
+  atenuar: Math.max(0, Math.min(80, Math.round(Number(p.atenuar) || 0))), desenfocar: Math.max(0, Math.min(12, Math.round(Number(p.desenfocar) || 0))),
+  fuente: ['s', 'm', 'l'].includes(p.fuente) ? p.fuente : 'm', foto_v: p.foto ? (p.foto_v || 1) : 0,
+});
+// Cada foto de fondo va en su propia ruta (con su versión): el almacenamiento guarda copias en caché y reutilizar la ruta serviría la foto vieja
+const _fondoPath = (phone, v) => 'fondos/' + crypto.createHash('sha256').update('fondo:' + phone).digest('hex').slice(0, 32) + '-' + v;
+const _quitarFondoArchivo = (phone, v) => (v ? sb.storage.from(PAREJA_BUCKET).remove([_fondoPath(phone, v)]).catch(() => {}) : Promise.resolve());
 const _iso = () => new Date().toISOString();
 async function _parejaO403(phone, res) {
   if (!phone) { res.status(400).json({ success: false, error: 'phone requerido' }); return null; }
@@ -6229,7 +6238,7 @@ async function tocarPresencia(phone, enChat) {
 async function _perfiles(phones) {
   const { data } = await sb.from('usuarios').select('telefono, nombre, external_refs').in('telefono', phones);
   const out = {};
-  (data || []).forEach(u => { const p = (u.external_refs || {}).chat_perfil || {}; out[u.telefono] = { nombre: u.nombre || '', color: p.color || '', fondo: p.fondo || '', foto_v: p.foto ? (p.foto_v || 1) : 0 }; });
+  (data || []).forEach(u => { const p = (u.external_refs || {}).chat_perfil || {}; out[u.telefono] = { nombre: u.nombre || '', ..._perfilOut(p) }; });
   return out;
 }
 // El nombre del archivo también va cifrado ("v1.…"); los mensajes viejos sin cifrar se leen tal cual.
@@ -6389,8 +6398,21 @@ app.post('/api/pareja/perfil', async (req, res) => {
     const par = await _parejaO403(phone, res); if (!par) return;
     const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
     const refs = { ...(u?.external_refs || {}) }, cur = { ...(refs.chat_perfil || {}) };
+    if (perfil?.quitar_fondo_foto === true) {
+      await _quitarFondoArchivo(phone, cur.fondo_v);
+      delete cur.fondo_v; if (cur.fondo === 'foto') cur.fondo = '';
+    }
+    if (perfil?.restablecer === true) { cur.fondo = ''; cur.fondo_color = ''; cur.atenuar = 0; cur.desenfocar = 0; cur.fuente = 'm'; }
     if (perfil?.color !== undefined) cur.color = PAREJA_COLORES.includes(perfil.color) ? perfil.color : '';
-    if (perfil?.fondo !== undefined) cur.fondo = PAREJA_FONDOS.includes(perfil.fondo) ? perfil.fondo : '';
+    if (perfil?.fondo !== undefined) {
+      const f = PAREJA_FONDOS.includes(perfil.fondo) ? perfil.fondo : '';
+      if (f === 'foto' && !cur.fondo_v) return res.status(400).json({ success: false, error: 'Primero elige una foto de la galería' });
+      cur.fondo = f;
+    }
+    if (perfil?.fondo_color !== undefined) cur.fondo_color = /^#[0-9a-f]{6}$/i.test(String(perfil.fondo_color)) ? String(perfil.fondo_color).toLowerCase() : '';
+    if (perfil?.atenuar !== undefined) cur.atenuar = Math.max(0, Math.min(80, Math.round(Number(perfil.atenuar) || 0)));
+    if (perfil?.desenfocar !== undefined) cur.desenfocar = Math.max(0, Math.min(12, Math.round(Number(perfil.desenfocar) || 0)));
+    if (perfil?.fuente !== undefined) cur.fuente = ['s', 'm', 'l'].includes(perfil.fuente) ? perfil.fuente : 'm';
     if (perfil?.foto !== undefined) {
       if (perfil.foto === null) { delete cur.foto; cur.foto_v = Date.now(); }
       else if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(perfil.foto) && perfil.foto.length < 400000) { cur.foto = perfil.foto; cur.foto_v = Date.now(); }
@@ -6399,8 +6421,45 @@ app.post('/api/pareja/perfil', async (req, res) => {
     refs.chat_perfil = cur;
     const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
     if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, perfil: { color: cur.color || '', fondo: cur.fondo || '', foto_v: cur.foto ? cur.foto_v : 0 } });
+    res.json({ success: true, perfil: _perfilOut(cur) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Foto de fondo del chat: llega ya recortada/comprimida como JPEG, se cifra y se guarda en el bucket privado. Solo la ve su dueño.
+app.post('/api/pareja/fondo', express.raw({ type: () => true, limit: '3mb' }), async (req, res) => {
+  try {
+    const phone = String(req.headers['x-phone'] || '');
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const buf = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!buf || buf.length < 200) return res.status(400).json({ success: false, error: 'Imagen vacía' });
+    if (buf.length > 2.5 * 1024 * 1024) return res.status(413).json({ success: false, error: 'La imagen pesa demasiado' });
+    if (!(buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF)) return res.status(400).json({ success: false, error: 'Formato no válido (usa una foto JPG)' });
+    const nuevaV = Date.now();
+    const up = await sb.storage.from(PAREJA_BUCKET).upload(_fondoPath(phone, nuevaV), cifrarBuf(buf), { contentType: 'application/octet-stream', upsert: true });
+    if (up.error) return res.status(400).json({ success: false, error: up.error.message });
+    const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const refs = { ...(u?.external_refs || {}) }, cur = { ...(refs.chat_perfil || {}) }, vieja = cur.fondo_v;
+    cur.fondo_v = nuevaV; cur.fondo = 'foto';
+    refs.chat_perfil = cur;
+    const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+    if (error) { await _quitarFondoArchivo(phone, nuevaV); return res.status(400).json({ success: false, error: error.message }); }
+    if (vieja && vieja !== nuevaV) await _quitarFondoArchivo(phone, vieja);   // la foto anterior ya no se usa
+    res.json({ success: true, perfil: _perfilOut(cur) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+app.get('/api/pareja/fondo', async (req, res) => {
+  try {
+    const phone = String(req.query.phone || '');
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const v = u?.external_refs?.chat_perfil?.fondo_v;
+    if (!v) return res.status(404).send('Sin fondo');
+    const dl = await sb.storage.from(PAREJA_BUCKET).download(_fondoPath(phone, v));
+    if (dl.error) return res.status(404).send('Sin fondo');
+    res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=604800', 'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; sandbox" });
+    res.send(descifrarBuf(Buffer.from(await dl.data.arrayBuffer())));
+  } catch (e) { res.status(500).send('Error'); }
 });
 app.get('/api/pareja/foto', async (req, res) => {
   try {
