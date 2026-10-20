@@ -2899,7 +2899,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         .is('nidito_items.deleted_at', null),
       sb.from('nidito_dinerito').select('quincena_key, monto').eq('user_phone', phone),
       sb.from('neg_proyectos')
-        .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden')
+        .select('id, nombre, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden, compartido')
         .eq('user_phone', phone).is('deleted_at', null).order('orden').order('id'),
     ]);
     if (user.data && user.data.role === 'ADMIN_A') user.data.external_refs = await sembrarIngresosPred(phone, user.data.external_refs || {});
@@ -2965,9 +2965,25 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       negEventos.sort((a, b2) => (a.fecha || '').localeCompare(b2.fecha || ''));
     }
 
+    // Lo que la pareja compartió para trabajar juntos (sus metas y negocios compartidos): va aparte para no mezclarse con tus totales
+    let metasPar = [], proysPar = [];
+    try {
+      const _par = await parejaDe(phone);
+      if (_par) {
+        const _nom = _nombreCorto(_par);
+        const [mp, pp] = await Promise.all([
+          sb.from('metas').select('*').eq('user_phone', _par.telefono).eq('compartida', true).is('deleted_at', null).order('id'),
+          sb.from('neg_proyectos').select('id, nombre, descripcion, tipo, estado, color, icono, monto_meta, capital_inicial, fecha_inicio, fecha_vencimiento, orden, compartido')
+            .eq('user_phone', _par.telefono).eq('compartido', true).is('deleted_at', null).order('orden').order('id'),
+        ]);
+        metasPar = (mp.data || []).map(m => ({ ...m, _dueno: _nom, _par: true }));
+        proysPar = (pp.data || []).map(p => ({ ...p, _dueno: _nom, _par: true }));
+      }
+    } catch (e) { console.error('compartidos dashboard:', e.message); }
+
     res.json({ success: true, data: {
       pareja: await parejaDe(phone).then(p => p ? { telefono: p.telefono, nombre: p.nombre || '', role: p.role || '' } : null).catch(() => null),
-      tdc: tdc.data, movs: movs.data, metas: metas.data, user: user.data,
+      tdc: tdc.data, movs: movs.data, metas: metas.data, metas_pareja: metasPar, user: user.data,
       calendario: cal.data, patrones: pat.data, presupuesto: presp.data,
       nidito: {
         compromiso_quincenal: nidito_compromiso,
@@ -2980,6 +2996,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       nidito_dinerito_all: dineritoAll,   // { 'YYYY-MM-A|B': monto } — se refleja en Gastos esta quincena
       negocios: {
         proyectos:        negProys.data || [],
+        proyectos_pareja: proysPar,
         retiros_quincena: retiros_q,
         aportes_quincena: aportes_q,
         neto_personal:    retiros_q - aportes_q,
@@ -3440,8 +3457,13 @@ app.post('/api/metas', async (req, res) => {
 
 app.put('/api/metas/:id', async (req, res) => {
   try {
-    const { user_phone, ...d } = req.body;
-    const { data, error } = await sb.from('metas').update(d).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
+    const { user_phone, abono } = req.body || {};
+    const ac = await _metaAcceso(req.params.id, user_phone);
+    if (ac.err) return res.status(ac.err).json({ success: false, error: ac.err === 404 ? 'La meta ya no existe' : 'No tienes acceso a esta meta' });
+    const d = { updated_at: new Date().toISOString() };
+    ['nombre', 'tipo', 'meta', 'actual', 'fecha_objetivo', 'tipo_meta'].forEach(k => { if (req.body[k] !== undefined) d[k] = req.body[k]; });
+    if (abono !== undefined) d.actual = Math.max(0, Math.round(((Number(ac.m.actual) || 0) + (Number(abono) || 0)) * 100) / 100);
+    const { data, error } = await sb.from('metas').update(d).eq('id', req.params.id).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -3450,8 +3472,9 @@ app.put('/api/metas/:id', async (req, res) => {
 app.delete('/api/metas/:id', async (req, res) => {
   try {
     const { user_phone } = req.body;
-    const { error } = await sb.from('metas').delete().eq('id', req.params.id).eq('user_phone', user_phone);
+    const { data, error } = await sb.from('metas').delete().eq('id', req.params.id).eq('user_phone', user_phone).select('id');
     if (error) return res.status(400).json({ success: false, error: error.message });
+    if (!(data || []).length) return res.status(403).json({ success: false, error: 'Solo quien creó la meta puede eliminarla' });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -4007,8 +4030,9 @@ app.get('/api/negocios/proyecto/:id', async (req, res) => {
 
 app.put('/api/negocios/proyecto/:id', async (req, res) => {
   try {
+    const { compartido: _c, user_phone: _u, id: _i, ...cambios } = req.body || {};   // "compartido" solo cambia con /api/compartir
     const { data, error } = await sb.from('neg_proyectos')
-      .update({ ...req.body, updated_at: new Date().toISOString() })
+      .update({ ...cambios, updated_at: new Date().toISOString() })
       .eq('id', req.params.id).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data });
@@ -4017,6 +4041,8 @@ app.put('/api/negocios/proyecto/:id', async (req, res) => {
 
 app.delete('/api/negocios/proyecto/:id', async (req, res) => {
   try {
+    const { data: p0 } = await sb.from('neg_proyectos').select('user_phone, compartido').eq('id', req.params.id).maybeSingle();
+    if (p0?.compartido && (req.body || {}).user_phone !== p0.user_phone) return res.status(403).json({ success: false, error: 'Solo quien creó el negocio puede eliminarlo' });
     const { error } = await sb.from('neg_proyectos')
       .update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
     if (error) return res.status(400).json({ success: false, error: error.message });
@@ -6472,6 +6498,151 @@ app.get('/api/pareja/foto', async (req, res) => {
     res.set({ 'Content-Type': m[1], 'Cache-Control': 'private, max-age=604800', 'X-Content-Type-Options': 'nosniff' });
     res.send(Buffer.from(m[2], 'base64'));
   } catch (e) { res.status(500).send('Error'); }
+});
+
+// ── COMPARTIR CON LA PAREJA (movimientos, gastos de la quincena, metas y negocios) ─────────────────────────────
+// Cada quien decide qué comparte con su pareja (parejaDe: Ángel ↔ Alicia). Según la sección:
+//  · metas y negocios se comparten para TRABAJAR JUNTOS (los dos ven y editan; solo quien los creó los elimina o deja de compartirlos);
+//  · movimientos y gastos de la quincena se comparten para VER (la pareja los ve sin editar y puede copiarlos a lo suyo).
+// Al compartir, la pareja recibe un aviso push. El calendario ya usa "etiquetados" y el Nidito comparte tarjeta por el chat.
+const _nombreCorto = u => /^angel$/i.test(String(u?.nombre || '').trim()) ? 'Ángel' : (u?.nombre || 'Tu pareja');
+async function _avisarCompartido(phone, par, titulo, cuerpo, ir) {
+  try {
+    const { data: u } = await sb.from('usuarios').select('nombre').eq('telefono', phone).maybeSingle();
+    pushA(par.telefono, { title: titulo, body: cuerpo.replace('{n}', _nombreCorto(u)), tag: 'compartido-' + ir, url: '/?ir=' + ir }, true).catch(() => {});
+  } catch { /* el aviso es opcional */ }
+}
+// Acceso a una meta: la dueña, o su pareja si la compartió
+async function _metaAcceso(id, phone) {
+  const { data: m } = await sb.from('metas').select('*').eq('id', id).is('deleted_at', null).maybeSingle();
+  if (!m) return { err: 404 };
+  if (m.user_phone === phone) return { m, dueno: true };
+  if (m.compartida) { const par = await parejaDe(phone); if (par && par.telefono === m.user_phone) return { m, dueno: false }; }
+  return { err: 403 };
+}
+const _gastoId = g => String(g._id || g.id || g.descripcion || '');
+
+// Compartir / dejar de compartir. body: { phone, tipo: movimiento|meta|negocio|gasto, id, compartido, qKey?, origen?: 'q'|'plantilla' }
+app.post('/api/compartir', async (req, res) => {
+  try {
+    const { phone, tipo, id, compartido, qKey, origen } = req.body || {};
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const val = compartido === true;
+    let titulo = '', cuerpo = '', ir = '';
+    if (tipo === 'movimiento') {
+      const { data, error } = await sb.from('movimientos').update({ compartido: val }).eq('id', id).eq('user_phone', phone).is('deleted_at', null).select('id').maybeSingle();
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      if (!data) return res.status(404).json({ success: false, error: 'Ese movimiento ya no existe' });
+      titulo = '💞 Movimiento compartido'; cuerpo = '{n} compartió un movimiento contigo'; ir = 'movimientos';
+    } else if (tipo === 'meta') {
+      const { data, error } = await sb.from('metas').update({ compartida: val, updated_at: new Date().toISOString() }).eq('id', id).eq('user_phone', phone).is('deleted_at', null).select('id, nombre').maybeSingle();
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      if (!data) return res.status(404).json({ success: false, error: 'Esa meta ya no existe' });
+      titulo = '🎯 Meta compartida'; cuerpo = `{n} compartió la meta «${String(data.nombre || '').slice(0, 60)}» para lograrla juntos`; ir = 'metas';
+    } else if (tipo === 'negocio') {
+      const { data, error } = await sb.from('neg_proyectos').update({ compartido: val, updated_at: new Date().toISOString() }).eq('id', id).eq('user_phone', phone).is('deleted_at', null).select('id, nombre').maybeSingle();
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      if (!data) return res.status(404).json({ success: false, error: 'Ese negocio ya no existe' });
+      titulo = '💼 Negocio compartido'; cuerpo = `{n} compartió el negocio «${String(data.nombre || '').slice(0, 60)}» para llevarlo juntos`; ir = 'negocios';
+    } else if (tipo === 'gasto') {
+      const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+      const refs = { ...(u?.external_refs || {}) };
+      let lista = origen === 'plantilla' ? refs.gastos_esperados : (refs.budget_q || {})[qKey]?.gastos;
+      if (!Array.isArray(lista)) return res.status(404).json({ success: false, error: 'Ese gasto ya no está en tu lista' });
+      const i = lista.findIndex(g => _gastoId(g) === String(id));
+      if (i < 0) return res.status(404).json({ success: false, error: 'Ese gasto ya no está en tu lista' });
+      const g = { ...lista[i] }; if (val) g.compartido = true; else delete g.compartido;
+      lista = [...lista]; lista[i] = g;
+      if (origen === 'plantilla') refs.gastos_esperados = lista; else refs.budget_q = { ...(refs.budget_q || {}), [qKey]: { ...refs.budget_q[qKey], gastos: lista } };
+      const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      titulo = '💸 Gasto compartido'; cuerpo = `{n} compartió un gasto de su ${/-W/.test(String(qKey || '')) ? 'semana' : 'quincena'} contigo`; ir = 'quincena';
+    } else return res.status(400).json({ success: false, error: 'Tipo no válido' });
+    if (val) _avisarCompartido(phone, par, titulo, cuerpo, ir);
+    res.json({ success: true, compartido: val });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Movimientos que la pareja compartió (solo lectura, sin medio de pago ni comentarios) y copia a los propios
+app.get('/api/compartidos/movimientos', async (req, res) => {
+  try {
+    const phone = String(req.query.phone || '');
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const f = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
+    const hasta = f(req.query.hasta) || hoy(), desde = f(req.query.desde) || new Date(new Date(hasta + 'T12:00:00').getTime() - 60 * 864e5).toISOString().slice(0, 10);
+    const [{ data: rows, error }, { data: mias }] = await Promise.all([
+      sb.from('movimientos').select('id, fecha, tipo, concepto, categoria, monto').eq('user_phone', par.telefono).eq('compartido', true).is('deleted_at', null)
+        .gte('fecha', desde).lte('fecha', hasta).order('fecha', { ascending: false }).order('id', { ascending: false }).limit(300),
+      sb.from('movimientos').select('origen_compartido').eq('user_phone', phone).like('origen_compartido', par.telefono + ':%').is('deleted_at', null),
+    ]);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    const copiados = new Set((mias || []).map(m => m.origen_compartido));
+    res.json({ success: true, nombre: _nombreCorto(par), data: (rows || []).map(r => ({ ...r, copiado: copiados.has(par.telefono + ':' + r.id) })) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+app.post('/api/compartidos/movimientos/copiar', async (req, res) => {
+  try {
+    const { phone, id, medio_pago } = req.body || {};
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const { data: m } = await sb.from('movimientos').select('tipo, categoria, concepto, monto, fecha').eq('id', id).eq('user_phone', par.telefono).eq('compartido', true).is('deleted_at', null).maybeSingle();
+    if (!m) return res.status(404).json({ success: false, error: 'Ese movimiento ya no está compartido' });
+    const medio = mediosDe(await cuentasDefPorTelefono(phone)).includes(medio_pago) ? medio_pago : 'efectivo';
+    const { data, error } = await sb.from('movimientos').insert({ user_phone: phone, tipo: m.tipo, categoria: m.categoria, concepto: m.concepto, monto: m.monto, fecha: m.fecha,
+      medio_pago: medio, comentarios: 'Compartido por ' + _nombreCorto(par), origen_compartido: par.telefono + ':' + id }).select().single();
+    if (error) return res.status(/duplicate|unique/i.test(error.message) ? 409 : 400).json({ success: false, error: /duplicate|unique/i.test(error.message) ? 'Ya lo agregaste a tus movimientos' : error.message });
+    await aplicarImpactoCuentas(phone, null, data);
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Gastos de la quincena (o semana) que la pareja compartió, en el rango pedido, y copia a la propia
+async function _clavesRango(phone, from, to) {
+  const keys = [], d = new Date(from + 'T12:00:00'), fin = new Date(to + 'T12:00:00');
+  for (let n = 0; d <= fin && n < 62; d.setDate(d.getDate() + 1), n++) { const k = await claveUnidad(phone, d.toISOString().slice(0, 10)); if (!keys.includes(k)) keys.push(k); }
+  return keys;
+}
+app.get('/api/compartidos/gastos', async (req, res) => {
+  try {
+    const phone = String(req.query.phone || '');
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const f = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : hoy();
+    const from = f(req.query.from), to = f(req.query.to);
+    const [{ data: up }, { data: yo }] = await Promise.all([
+      sb.from('usuarios').select('external_refs').eq('telefono', par.telefono).maybeSingle(),
+      sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle(),
+    ]);
+    const refsPar = up?.external_refs || {};
+    const mios = new Set(Object.values((yo?.external_refs || {}).budget_q || {}).flatMap(q => (q.gastos || []).map(g => g.compartido_de).filter(Boolean)));
+    const out = [];
+    for (const key of await _clavesRango(par.telefono, from, to)) {
+      gastosEsperadosQuincena(refsPar, key).filter(g => g.compartido === true && !String(g._id || '').startsWith('_')).forEach(g => {
+        const cid = `${par.telefono}:${key}:${_gastoId(g)}`;
+        out.push({ key, label: labelQuincena(key), id: _gastoId(g), descripcion: g.descripcion, monto: Number(g.monto) || 0, categoria: g.categoria || '', forma_pago: g.forma_pago || '', copiado: mios.has(cid) });
+      });
+    }
+    res.json({ success: true, nombre: _nombreCorto(par), data: out });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+app.post('/api/compartidos/gastos/copiar', async (req, res) => {
+  try {
+    const { phone, qKey, id, qKeyDestino } = req.body || {};
+    const par = await _parejaO403(phone, res); if (!par) return;
+    const { data: up } = await sb.from('usuarios').select('external_refs').eq('telefono', par.telefono).maybeSingle();
+    const it = gastosEsperadosQuincena(up?.external_refs || {}, qKey).find(g => g.compartido === true && _gastoId(g) === String(id));
+    if (!it) return res.status(404).json({ success: false, error: 'Ese gasto ya no está compartido' });
+    const dest = /^\d{4}-(\d{2}-[AB]|W\d{2})$/.test(String(qKeyDestino || '')) ? qKeyDestino : await claveUnidad(phone, hoy());
+    const { data: yo } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    const refs = { ...(yo?.external_refs || {}) }, bq = { ...(refs.budget_q || {}) }, cid = `${par.telefono}:${qKey}:${_gastoId(it)}`;
+    if (Object.values(bq).some(q => (q.gastos || []).some(g => g.compartido_de === cid))) return res.status(409).json({ success: false, error: 'Ya lo agregaste a tus gastos' });
+    const q = bq[dest] || { gastos: [], ingresos: [] };
+    const nuevo = { _id: 'cp-' + Date.now().toString(36), descripcion: it.descripcion, monto: Number(it.monto) || 0, ...(it.categoria ? { categoria: it.categoria } : {}),
+      ...(it.forma_pago ? { forma_pago: it.forma_pago } : {}), comentarios: 'Compartido por ' + _nombreCorto(par), compartido_de: cid };
+    bq[dest] = { ...q, gastos: [...(Array.isArray(q.gastos) ? q.gastos : []), nuevo] };
+    refs.budget_q = bq;
+    const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    res.json({ success: true, data: nuevo });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // Avisos push

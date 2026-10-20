@@ -2031,6 +2031,14 @@ body.sheet-locked{overflow:hidden}
 .sw-btn.edit{background:#3b82f6}
 .sw-btn.warn{background:#d97706}
 .sw-btn.del{background:#dc2626}
+.sw-btn.share{background:#ec4899}
+/* Compartir con la pareja */
+.edit-pill-btn.sh i{color:var(--text-3)}
+.edit-pill-btn.sh.on i{color:var(--accent-couple,#ec4899)}
+.sh-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;color:var(--accent-couple,#ec4899);background:color-mix(in srgb,var(--accent-couple,#ec4899) 14%,transparent);border-radius:var(--radius-pill);padding:1px 8px;white-space:nowrap}
+.sh-list{display:flex;flex-direction:column;gap:6px}
+.sh-empty{text-align:center;color:var(--text-3);padding:18px 8px;font-size:13px;line-height:1.6}
+.ico-btn.sh.on{border-color:var(--accent-couple,#ec4899);color:var(--accent-couple,#ec4899)}
 @media (hover:none) and (pointer:coarse){
   /* en el teléfono los botoncitos de la tarjeta se reemplazan por el deslizar */
   .mov-card .edit-pill-btn,.pr-goal .edit-pill-btn,.ni-card .edit-pill-btn,.q-item-row .edit-pill-btn,.tdc-card .edit-pill-btn,.wl-card .wl-act.del{display:none!important}
@@ -5253,7 +5261,7 @@ function rQuincenaPanel(ctx) {
         const fpPlux  = fp === 'pluxee';
         const catG    = g.categoria || '';
         const cClrG   = CAT_CLR[catG] || '#94a3b8';
-        const sub     = [catG, g.comentarios].filter(Boolean).join(' · ') || '—';
+        const sub     = ([catG, g.comentarios].filter(Boolean).join(' · ') || '—') + (g.compartido ? ' · 💞 compartido' : '');
         const esDesp  = /^despensa$/i.test((g.descripcion || '').trim());   // Despensa guardada en el presupuesto
         const esTr    = !!g._isTransporte;
         return `<div class="mov-card q-card${pagadoId?' pagado':''}">
@@ -5271,6 +5279,7 @@ function rQuincenaPanel(ctx) {
               ${_tieneVales() || fpPlux ? `<button class="q-fp-pill${fpPlux?' on on-px':''}" onclick="setFormaPago('${nomSafe}','pluxee')" title="Marcar como vales Pluxee"><i class="ti ti-basket"></i> Pluxee</button>` : ''}
             </div>
             <div class="mov-card-acts">
+              ${!esTr && _hayPareja() ? _shBtn(g.compartido, `compartirGasto('${_id}')`, _shTit(true, 'este gasto'), _shTit(false, 'este gasto')) : ''}
               <button class="edit-pill-btn" title="${esTr ? 'Editar tarifas de transporte' : 'Editar'}" onclick="${esTr ? 'editarTransporte()' : `oEditExpItem('gastos','${_id}')`}"><i class="ti ti-pencil" style="font-size:12px"></i></button>
               ${esTr ? '' : `<button class="edit-pill-btn" title="Posponer a la siguiente ${_uTxt()}" onclick="posponerGasto('${_id}')"><i class="ti ti-arrow-forward" style="font-size:12px"></i></button>
               <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('gastos_esperados','${_id}')"><i class="ti ti-x" style="font-size:12px"></i></button>`}
@@ -5361,7 +5370,7 @@ function rQuincenaPanel(ctx) {
       <button class="btn btn-accent" style="padding:11px 22px;font-size:15px;font-weight:700;gap:8px" onclick="oAddProxGasto()"><i class="ti ti-plus" style="font-size:17px"></i> Registrar Próximo Gasto</button>
     </div>
     ${gasEsp.length ? `
-    ${tglBtn('tbl-gastos-q-'+ctx, "exportGastosQuincena('"+ctx+"')", { centrado: true, antes: sortBtn })}
+    ${tglBtn('tbl-gastos-q-'+ctx, "exportGastosQuincena('"+ctx+"')", { centrado: true, antes: sortBtn + (_hayPareja() ? `<button class="ico-btn" onclick="gastosDePareja()" title="Gastos que compartió ${_ndEsc(_parNom())}" aria-label="Gastos que compartió ${_ndEsc(_parNom())}"><i class="ti ti-heart-handshake"></i></button>` : '') })}
     <div class="mov-cards" id="tbl-gastos-q-${ctx}-body">
       ${gasVista.map(cardHTML).join('')}
     </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Aún no hay gastos registrados esta ${_uTxt()}. Usa el botón <strong>Registrar Próximo Gasto</strong> de arriba.</div>`}
@@ -6938,7 +6947,7 @@ function _ndCard(it, angelPh, aliciaPh) {
   const cuando = !it.fecha_fin ? '📅 Sin fecha'
     : `📅 ${fmtDate(it.fecha_fin)}${dias < 0 ? ' · vencida' : dias === 0 ? ' · hoy' : qr ? ` · ${qr} quinc.` : ''}`;
   return `<div class="nd-card${abierto ? ' nd-open' : ''}${it.estado === 'PAUSADO' ? ' paused' : ''}" id="nditem-${it.id}">
-    <div class="sw-src" hidden><button class="edit-pill-btn" title="Editar" onclick="ndEditItem('${it.id}')"></button><button class="edit-pill-btn" title="${it.estado === 'PAUSADO' ? 'Reanudar' : 'Pausar'}" onclick="ndEstado('${it.id}','${it.estado === 'PAUSADO' ? 'ACTIVO' : 'PAUSADO'}')"></button><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="ndDelItem('${it.id}')"></button></div>
+    <div class="sw-src" hidden>${_hayPareja() ? `<button class="edit-pill-btn" title="Compartir con ${_ndEsc(_parNom())} en el chat" onclick="ndCompartir('${it.id}')"><i class="ti ti-heart-handshake"></i></button>` : ''}<button class="edit-pill-btn" title="Editar" onclick="ndEditItem('${it.id}')"></button><button class="edit-pill-btn" title="${it.estado === 'PAUSADO' ? 'Reanudar' : 'Pausar'}" onclick="ndEstado('${it.id}','${it.estado === 'PAUSADO' ? 'ACTIVO' : 'PAUSADO'}')"></button><button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="ndDelItem('${it.id}')"></button></div>
     <div class="nd-card-top" id="ndh-${it.id}" onclick="ndToggle('${it.id}')" role="button" tabindex="0" aria-expanded="${abierto}"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div class="nd-emo" aria-hidden="true">${_ndEmo(it)}</div>
@@ -7155,6 +7164,7 @@ function _ndAccBody(item, angelPh, aliciaPh) {
   return `
 <div class="nd-acts">
   <button class="btn btn-sm btn-ghost" onclick="ndWizard(null,'${item.id}')"><i class="ti ti-pencil"></i> Editar</button>
+  ${_hayPareja() ? `<button class="btn btn-sm btn-ghost" onclick="ndCompartir('${item.id}')" title="Mandarle esta tarjeta a ${_ndEsc(_parNom())} por el chat"><i class="ti ti-heart-handshake"></i> Compartir</button>` : ''}
   <button class="btn btn-sm btn-ghost" onclick="ndEstado('${item.id}','${pausado?'ACTIVO':'PAUSADO'}')">${pausado?'▶️ Reanudar':'⏸️ Pausar'}</button>
   <button class="btn btn-sm btn-ghost" onclick="ndEstado('${item.id}','COMPLETADO')">✅ Completar</button>
   <button class="btn btn-sm btn-ghost" style="color:var(--color-expense)" onclick="ndDelItem('${item.id}')"><i class="ti ti-trash"></i></button>
@@ -7761,7 +7771,8 @@ function mtOrden() {
 
 function rObjs() {
   const metas = S.data.metas || [], now = new Date();
-  S._metaData = {}; metas.forEach(m => { S._metaData[m.id] = m; });
+  const metasPar = S.data.metas_pareja || [];   // las que tu pareja compartió: se editan y abonan juntos (no suman a tus totales)
+  S._metaData = {}; metas.forEach(m => { S._metaData[m.id] = m; }); metasPar.forEach(m => { S._metaData[m.id] = m; });
   const { qi, dispQ, ahorroQ } = _prCapacidad();
   const totalObj = metas.reduce((a, m) => a + (m.meta || 0), 0), totalAct = metas.reduce((a, m) => a + (m.actual || 0), 0);
   if (!S.metaSort) S.metaSort = 'pct';
@@ -7775,7 +7786,7 @@ function rObjs() {
   const sorted = [...metas].sort(sortFns[S.metaSort] || sortFns.pct);
   S._metasRows = sorted;
 
-  const cards = sorted.map(m => {
+  const cardMeta = (m, par) => {
     const actual = m.actual || 0, objetivo = m.meta || 0, falta = Math.max(0, objetivo - actual);
     const pct = objetivo > 0 ? Math.min(100, Math.round(actual / objetivo * 100)) : 0, done = pct >= 100;
     const qr = m.fecha_objetivo ? _ndQR(m.fecha_objetivo) : null;
@@ -7787,7 +7798,7 @@ function rObjs() {
     return `<div class="pr-goal${done ? ' done' : ''}">
       <div class="pr-goal-top">
         <div class="mov-card-ic emo" style="background:${done ? 'rgba(74,222,128,.16)' : 'rgba(129,140,248,.16)'}" aria-hidden="true">${_mtEmoji(m.nombre, m.tipo)}</div>
-        <div class="pr-card-name"><b>${_ndEsc(m.nombre)}</b><small>${m.tipo === 'compra' ? 'Compra' : 'Ahorro'}${m.fecha_objetivo ? ` · hasta ${fmtDate(m.fecha_objetivo)}` : ''}</small></div>
+        <div class="pr-card-name"><b>${_ndEsc(m.nombre)}</b><small>${m.tipo === 'compra' ? 'Compra' : 'Ahorro'}${m.fecha_objetivo ? ` · hasta ${fmtDate(m.fecha_objetivo)}` : ''}${par ? ' · 💞 De ' + _ndEsc(m._dueno || _parNom()) : m.compartida ? ' · 💞 Con ' + _ndEsc(_parNom()) : ''}</small></div>
         <span class="pr-pill ${done ? '' : 'neu'}">${done ? '✓ Lograda' : pct + '%'}</span>
       </div>
       <div class="bpbar"><div class="bpfill${done ? '' : ''}" style="width:${pct}%;${done ? 'background:var(--color-income)' : ''}"></div></div>
@@ -7800,11 +7811,14 @@ function rObjs() {
       <div class="pr-goal-foot">
         ${done ? '<span></span>' : `<button class="btn btn-accent btn-sm" onclick="abonarMeta(${m.id},${actual})"><i class="ti ti-circle-plus"></i> Abonar</button>`}
         <span class="pr-goal-acts">
+          ${!par && _hayPareja() ? _shBtn(m.compartida, `compartirItem('meta',${m.id},${!m.compartida})`, _shTit(true, 'esta meta'), _shTit(false, 'esta meta')) : ''}
           <button class="edit-pill-btn" title="Editar" onclick="eMeta(S._metaData[${m.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-          <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMeta(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
+          ${par ? '' : `<button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMeta(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>`}
         </span>
       </div></div>`;
-  }).join('');
+  };
+  const cards = sorted.map(m => cardMeta(m, false)).join('');
+  const parSec = metasPar.length ? `<div class="pr-sec" style="margin-top:18px"><h3><span aria-hidden="true">💞</span> Metas de ${_ndEsc(_parNom())} · las llevan juntos</h3></div><div class="pr-grid">${metasPar.map(m => cardMeta(m, true)).join('')}</div>` : '';
 
   const host = $('objs-section') || $('tab-objetivos'); if (!host) return;
   host.innerHTML = `
@@ -7827,7 +7841,7 @@ ${S._prAn ? `<div class="cbox" style="margin-top:14px">
   <h3>Progreso de metas</h3>${ctBtns('c-meta', [['Horiz.', 'bar-h'], ['Barras', 'bar'], ['Dona', 'doughnut'], ['Polar', 'polarArea']], 'bar-h')}
   <div class="cwrap"><canvas id="c-meta"></canvas></div><div id="legend-c-meta" class="chart-legend"></div></div>` : ''}`
 : `<div class="pr-empty"><div>🐷</div><b>Aún no tienes metas</b><p>Una moto, un viaje, un fondo de emergencias… Te ayudo a calcular cuánto ahorrar por quincena.</p>
-  <button class="btn btn-accent" onclick="oMeta()"><i class="ti ti-plus"></i> Crear mi primera meta</button></div>`}`;
+  <button class="btn btn-accent" onclick="oMeta()"><i class="ti ti-plus"></i> Crear mi primera meta</button></div>`}${parSec}`;
   if (metas.length && S._prAn) {
     const mc = metas.map((_, i) => CLR[i % CLR.length]);
     mkC('c-meta', S.ct['c-meta'] || 'bar-h', metas.map(m => m.nombre), [
@@ -7840,7 +7854,7 @@ ${S._prAn ? `<div class="cbox" style="margin-top:14px">
 // Paso 1 qué es (tipo + idea de un toque + nombre) · Paso 2 cuánto, cuánto ya tienes y para cuándo ·
 // Paso 3 resumen con lo que tocaría ahorrar por quincena frente a tu ahorro sugerido.
 function metaWizard(editId) {
-  const m = editId ? (S.data.metas || []).find(x => x.id === editId) : null;
+  const m = editId ? ((S.data.metas || []).find(x => x.id === editId) || (S.data.metas_pareja || []).find(x => x.id === editId)) : null;
   S._mtWiz = m
     ? { step: 1, editId, tipo: m.tipo === 'compra' ? 'compra' : 'ahorro', nombre: m.nombre || '', meta: Number(m.meta) || 0, actual: Number(m.actual) || 0, fin: m.fecha_objetivo ? String(m.fecha_objetivo).slice(0, 10) : '' }
     : { step: 1, tipo: 'ahorro', nombre: '', meta: 0, actual: 0, fin: '' };
@@ -7949,7 +7963,7 @@ async function abonoGuardar() {
   if (isNaN(abono) || abono <= 0) { toast('Escribe un monto', 'error'); $('ab-monto')?.focus(); return; }
   const nuevo = a.actual + abono;
   try {
-    await api('PUT', `/api/metas/${a.id}`, { user_phone: S.phone, actual: nuevo });
+    await api('PUT', `/api/metas/${a.id}`, { user_phone: S.phone, abono });   // el servidor suma: dos abonos a la vez no se pisan
     cerrarPop(); S._abono = null;
     await load();
     toast(`¡Abono de ${fmt(abono)} registrado! Total: ${fmt(nuevo)} 🎉`);
@@ -8396,11 +8410,12 @@ function _movCardHTML(m, conFecha) {
         ${catIcHTML(m.categoria, m)}
         <div class="mov-card-mid">
           <div class="mov-card-title">${dot}${m.concepto || '<em style="color:var(--text-3);font-style:normal">—</em>'}</div>
-          <div class="mov-card-sub">${sub || '—'}</div>
+          <div class="mov-card-sub">${sub || '—'}${m.compartido ? ` <span class="sh-badge">💞 Compartido</span>` : ''}</div>
           ${coment ? `<div class="mov-card-note"><i class="ti ti-message-2"></i> ${coment}</div>` : ''}
         </div>
         <div class="mov-card-val ${isGasto ? 'red' : 'green'}">${isGasto ? '−' : '+'}${fmt(m.monto)}</div>
         <div class="mov-card-acts">
+          ${_hayPareja() ? _shBtn(m.compartido, `compartirItem('movimiento',${m.id},${!m.compartido})`, _shTit(true, 'este movimiento'), _shTit(false, 'este movimiento')) : ''}
           <button class="edit-pill-btn" title="Editar" onclick="eMov(S._movData[${m.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
           <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dMov(${m.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
         </div>
@@ -8500,6 +8515,7 @@ function _updateMovsTable(filtered) {
     _tHost.innerHTML = `<div class="ico-bar ico-bar-c">
       <button class="ico-btn${S._movSort ? ' on' : ''}" onclick="ciclarOrdenMov()" title="${_sLbl}" aria-label="${_sLbl}"><i class="ti ti-${_sIco}"></i></button>
       <button class="ico-btn${(S.movF?.cats || []).length ? ' on' : ''}" onclick="movFiltroCat()" title="Filtrar por categoría" aria-label="Filtrar por categoría"><i class="ti ti-filter"></i></button>
+      ${_hayPareja() ? `<button class="ico-btn" onclick="movsDePareja()" title="Movimientos que compartió ${_ndEsc(_parNom())}" aria-label="Movimientos que compartió ${_ndEsc(_parNom())}"><i class="ti ti-heart-handshake"></i></button>` : ''}
       <button class="ico-btn" onclick="exportTableToExcel('tbl-movs')" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>
       <button class="ico-btn" onclick="toggleMovsCollapsed()" title="${lbl}" aria-label="${lbl}" aria-expanded="${S._movsCollapsed?'false':'true'}"><i class="ti ti-chevron-${icon}"></i></button>
     </div>${_movFiltroResumen(rows)}${S._movsCollapsed ? '' : _movList}`;
@@ -8697,6 +8713,7 @@ function _calEvCard(e) {
       ${e.descripcion ? `<div class="mov-card-note">${_wlEsc(e.descripcion)}</div>` : ''}${_calChip(e)}</div>
     <span class="cal-fer-chip${dif <= 1 ? ' hoy' : ''}">${_calCuando(dif)}</span>
     <div class="q-card-foot"><div class="mov-card-acts">
+      ${e.user_phone === S.phone && _hayPareja() ? _shBtn(_calEtq(e), `calCompartir(${e.id})`, _shTit(true, 'este evento'), _shTit(false, 'este evento')) : ''}
       <button class="edit-pill-btn" title="Editar" onclick="eEvt(S._calData[${e.id}])"><i class="ti ti-pencil" style="font-size:12px"></i></button>
       <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="dEvt(${e.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
     </div></div>
@@ -8909,6 +8926,7 @@ function calDay(ds) {
   ${e.descripcion?`<div style="opacity:.8;font-size:11px;margin-top:3px">${e.descripcion}</div>`:''}
   <div style="margin-top:8px;display:flex;gap:5px">
     <button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-accent) 20%,transparent);color:var(--on-accent);border:none;padding:4px 10px;font-size:11px" onclick="closeCalDay();eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})"><i class="ti ti-pencil"></i> Editar</button>
+    ${e.user_phone === S.phone && _hayPareja() ? `<button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-accent) 15%,transparent);color:var(--on-accent);border:none;padding:4px 8px;font-size:11px" onclick="calCompartir(${e.id})" title="${_ndEsc(_shTit(_calEtq(e), 'este evento'))}"><i class="ti ti-heart-handshake"></i></button>` : ''}
     <button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-accent) 15%,transparent);color:var(--on-accent);border:none;padding:4px 8px;font-size:11px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
   </div>
 </div>`;
@@ -9689,12 +9707,25 @@ async function rNegocios() {
   else await _negRenderDetalle(el, S._negProyId, true);
 }
 function _negLista() { return S.data?.negocios?.proyectos || []; }
+// Negocios compartidos: los de tu pareja salen aparte (los dos los llevan juntos) y no se mezclan con tus totales
+const _negListaPar = () => S.data?.negocios?.proyectos_pareja || [];
+const _negTodos = () => [..._negLista(), ..._negListaPar()];
+const _negEsMio = id => !_negListaPar().some(p => p.id === id);
+function _negCardHTML(p) {
+  const [eEst, cEst] = NG_EST[p.estado] || NG_EST.ACTIVO;
+  return `<button class="pr-card" onclick="negAbrirDetalle('${p.id}')">
+      <div class="pr-card-top">${_ngIcHTML(p)}<div class="pr-card-name"><b>${_ngEsc(p.nombre)}</b><small>${(NG_TIPOS[p.tipo] || ['', p.tipo])[1]} · 💞 De ${_ngEsc(p._dueno || _parNom())}</small></div><span class="pr-pill ${cEst}">${eEst}</span></div>
+      <div class="pr-nums two"><div><span>Meta</span><b>${p.monto_meta > 0 ? fmt(p.monto_meta) : '—'}</b></div><div><span>Capital</span><b>${p.capital_inicial > 0 ? fmt(p.capital_inicial) : '—'}</b></div></div>
+      ${p.fecha_vencimiento ? `<div class="pr-hint">📅 Vence ${fmtDate(p.fecha_vencimiento)}</div>` : ''}</button>`;
+}
+
 function _ngRefrescar(proyId) { if (proyId) S._negProyId = proyId; S._ngCache = null; return load(); }
 function ngToggle(k) { S[k] = !S[k]; rNegocios(); }
 
 // ── Portada ──────────────────────────────────────────────────────────────────
 function _negRenderLista(el) {
-  const proys = _negLista(), neg = S.data?.negocios || {}, neto = neg.neto_personal || 0;
+  const proys = _negLista(), neg = S.data?.negocios || {}, neto = neg.neto_personal || 0, pp = _negListaPar();
+  const parSec = pp.length ? `<div class="pr-sec" style="margin-top:18px"><h3><span aria-hidden="true">💞</span> Negocios de ${_ngEsc(_parNom())} · los llevan juntos</h3></div><div class="pr-grid">${pp.map(_negCardHTML).join('')}</div>` : '';
   const hoy = toISO(new Date()), lim = toISO(new Date(Date.now() + 30 * 864e5));
   const eventos = (neg.eventos || []).filter(e => e.fecha && e.fecha >= hoy && e.fecha <= lim).sort((a, b) => a.fecha.localeCompare(b.fecha));
   const activos = proys.filter(p => p.estado === 'ACTIVO').length;
@@ -9719,12 +9750,12 @@ ${proys.length ? `<div class="pr-cover pr-cover-sm"><div class="pr-cover-nums">
 <div class="pr-grid">${proys.map(p => {
     const [eEst, cEst] = NG_EST[p.estado] || NG_EST.ACTIVO;
     return `<button class="pr-card" onclick="negAbrirDetalle('${p.id}')">
-      <div class="pr-card-top">${_ngIcHTML(p)}<div class="pr-card-name"><b>${_ngEsc(p.nombre)}</b><small>${(NG_TIPOS[p.tipo] || ['', p.tipo])[1]}</small></div><span class="pr-pill ${cEst}">${eEst}</span></div>
+      <div class="pr-card-top">${_ngIcHTML(p)}<div class="pr-card-name"><b>${_ngEsc(p.nombre)}</b><small>${(NG_TIPOS[p.tipo] || ['', p.tipo])[1]}${p.compartido ? ' · 💞 Con ' + _ngEsc(_parNom()) : ''}</small></div><span class="pr-pill ${cEst}">${eEst}</span></div>
       <div class="pr-nums two"><div><span>Meta</span><b>${p.monto_meta > 0 ? fmt(p.monto_meta) : '—'}</b></div><div><span>Capital</span><b>${p.capital_inicial > 0 ? fmt(p.capital_inicial) : '—'}</b></div></div>
       ${p.fecha_vencimiento ? `<div class="pr-hint">📅 Vence ${fmtDate(p.fecha_vencimiento)}</div>` : ''}</button>`;
   }).join('')}</div>`
   : `<div class="pr-empty"><div>💼</div><b>Aún no tienes proyectos</b><p>Un negocio, un freelance, una inversión… Registra lo que entra y lo que sale, lo que te deben y lo que debes.</p>
-      <button class="btn btn-accent" onclick="negNuevoProyecto()"><i class="ti ti-plus"></i> Crear mi primer proyecto</button></div>`}`;
+      <button class="btn btn-accent" onclick="negNuevoProyecto()"><i class="ti ti-plus"></i> Crear mi primer proyecto</button></div>`}${parSec}`;
 }
 
 async function negAbrirDetalle(id) {
@@ -9791,7 +9822,7 @@ function _ngTx(t) {
 
 async function _negRenderDetalle(el, id, usarCache) {
   if (!el) return;
-  const p = _negLista().find(x => x.id === id);
+  const p = _negTodos().find(x => x.id === id);
   if (!p) { S._negProyId = null; _negRenderLista(el); return; }
   if (!usarCache) S._ngCache = null;
   const d = await _negCargar(id);
@@ -9808,11 +9839,12 @@ async function _negRenderDetalle(el, id, usarCache) {
 <button class="ng-back" onclick="negVolverLista()"><i class="ti ti-arrow-left"></i> Todos los proyectos</button>
 <div class="cal-hero">
   <div class="cal-hero-ttl"><span aria-hidden="true">${_ngEmo(p)}</span> ${_ngEsc(p.nombre)}</div>
-  <div class="cal-hero-sub">${(NG_TIPOS[p.tipo] || ['', p.tipo])[1]} · <span class="pr-pill ${cEst}">${eEst}</span>${p.fecha_vencimiento ? ` · 📅 ${fmtDate(String(p.fecha_vencimiento).slice(0, 10))}` : ''}</div>
+  <div class="cal-hero-sub">${(NG_TIPOS[p.tipo] || ['', p.tipo])[1]} · <span class="pr-pill ${cEst}">${eEst}</span>${p._par ? ` · <span class="sh-badge">💞 De ${_ngEsc(p._dueno || _parNom())} · lo llevan juntos</span>` : p.compartido ? ` · <span class="sh-badge">💞 Con ${_ngEsc(_parNom())}</span>` : ''}${p.fecha_vencimiento ? ` · 📅 ${fmtDate(String(p.fecha_vencimiento).slice(0, 10))}` : ''}</div>
 </div>
 <div class="ico-bar ico-bar-c">
+  ${!p._par && _hayPareja() ? `<button class="ico-btn sh${p.compartido ? ' on' : ''}" onclick="compartirItem('negocio','${id}',${!p.compartido})" title="${_ndEsc(_shTit(!!p.compartido, 'este negocio'))}" aria-label="${_ndEsc(_shTit(!!p.compartido, 'este negocio'))}"><i class="ti ti-heart-handshake"></i></button>` : ''}
   <button class="ico-btn" onclick="negEditarProyecto('${id}')" title="Editar proyecto" aria-label="Editar proyecto"><i class="ti ti-pencil"></i></button>
-  <button class="ico-btn" onclick="negEliminarProyecto('${id}')" title="Eliminar proyecto" aria-label="Eliminar proyecto" style="color:var(--red)"><i class="ti ti-trash"></i></button>
+  ${p._par ? '' : `<button class="ico-btn" onclick="negEliminarProyecto('${id}')" title="Eliminar proyecto" aria-label="Eliminar proyecto" style="color:var(--red)"><i class="ti ti-trash"></i></button>`}
 </div>
 <div class="pr-cover ${util < 0 ? 'dng' : ''}">
   <div class="pr-cover-main"><span>Utilidad</span><b class="${util >= 0 ? 'green' : 'red'}">${util < 0 ? '−' : ''}${fmt(Math.abs(util))}</b></div>
@@ -9942,7 +9974,7 @@ async function negGuardarBloque() {
 function negNuevoProyecto() { _negWizard(); }
 function negEditarProyecto(id) { _negWizard(id); }
 function _negWizard(editId) {
-  const p = editId ? _negLista().find(x => x.id === editId) : null;
+  const p = editId ? _negTodos().find(x => x.id === editId) : null;
   S._ngWiz = p ? { step: 1, editId, tipo: p.tipo, nombre: p.nombre || '', meta: Number(p.monto_meta) || 0, cap: Number(p.capital_inicial) || 0, fin: p.fecha_vencimiento ? String(p.fecha_vencimiento).slice(0, 10) : '', estado: p.estado || 'ACTIVO', desc: p.descripcion || '' }
              : { step: 1, tipo: 'NEGOCIO', nombre: '', meta: 0, cap: 0, fin: '', estado: 'ACTIVO', desc: '' };
   abrirPop(p ? 'Editar proyecto' : 'Nuevo proyecto', '<div id="ng-wiz" class="nd-wiz"></div>', 'md');
@@ -10005,7 +10037,7 @@ async function ngWizGuardar() {
 }
 async function negEliminarProyecto(id) {
   if (!confirm('¿Eliminar este proyecto y todos sus datos?')) return;
-  try { await api('DELETE', `/api/negocios/proyecto/${id}`); S._negProyId = null; S._ngCache = null; await load(); toast('Proyecto eliminado'); }
+  try { await api('DELETE', `/api/negocios/proyecto/${id}`, { user_phone: S.phone }); S._negProyId = null; S._ngCache = null; await load(); toast('Proyecto eliminado'); }
   catch (e) { toast(e.message, 'error'); }
 }
 
@@ -10026,8 +10058,9 @@ function negTransPop(proyId, tipo) {
     <div class="nd-wiz-lbl">Fecha</div>${_ngFechaChips('nt-fecha', toISO(new Date()))}
     <div class="nd-wiz-lbl">Pagado con</div>
     <div class="q-desp-chips nd-wiz-center">${['Efectivo', 'Transferencia', 'Tarjeta'].map(m => `<button class="q-desp-chip" onclick="_ngPick('metodo',S._ngPk.metodo==='${m}'?'':'${m}',this)">${m}</button>`).join('')}</div>
-    <div class="nd-wiz-lbl">¿Mueve tu dinero personal?</div>
+    ${_negEsMio(proyId) ? `    <div class="nd-wiz-lbl">¿Mueve tu dinero personal?</div>
     <div class="q-desp-chips nd-wiz-center"><button class="q-desp-chip on" onclick="_ngPick('reflejo','',this)">No</button><button class="q-desp-chip" onclick="_ngPick('reflejo','RETIRO',this)">👤 Me retiro</button><button class="q-desp-chip" onclick="_ngPick('reflejo','APORTE',this)">💼 Aporto</button></div>
+` : ''}
     <input id="nt-cat" class="inp" placeholder="Categoría (opcional)" list="nt-cats" style="margin-top:12px"><datalist id="nt-cats">${recientes('categoria').map(c => `<option value="${_ngEsc(c)}">`).join('')}</datalist>
     <div class="nd-wiz-nav"><span></span><button class="btn btn-accent" onclick="negGuardarTrans()"><i class="ti ti-check"></i> Registrar</button></div></div>`, 'md');
   setTimeout(() => $('nt-monto')?.focus(), 60);
@@ -10036,7 +10069,7 @@ async function negGuardarTrans() {
   const pk = S._ngPk || {}, monto = parseFloat($('nt-monto')?.value) || 0, proyId = S._ngTxProy;
   if (!(monto > 0)) { toast('Escribe el monto', 'warn'); $('nt-monto')?.focus(); return; }
   const body = { tipo: pk.tipo, monto, concepto: ($('nt-conc')?.value || '').trim() || null, fecha: $('nt-fecha')?.value || toISO(new Date()), categoria: ($('nt-cat')?.value || '').trim() || null,
-    metodo_pago: pk.metodo || null, reflejo_personal: pk.reflejo || null, reflejo_user_phone: pk.reflejo ? S.phone : null };
+    metodo_pago: pk.metodo || null, reflejo_personal: _negEsMio(proyId) ? (pk.reflejo || null) : null, reflejo_user_phone: _negEsMio(proyId) && pk.reflejo ? S.phone : null };
   try { await api('POST', `/api/negocios/proyecto/${proyId}/transacciones`, body); cerrarPop(); await _ngRefrescar(proyId); toast(`${pk.tipo === 'INGRESO' ? '💰' : pk.tipo === 'GASTO' ? '💸' : '📈'} Registrado: ${fmt(monto)}`); }
   catch (e) { toast(e.message, 'error'); }
 }
@@ -10582,9 +10615,102 @@ async function parNoLeidos() {
   try { const r = await api('GET', `/api/pareja/no-leidos?phone=${encodeURIComponent(S.phone)}`); if (r.n !== S._parNoLeidos) _parBadge(r.n); } catch {}
 }
 
+// ── Compartir con la pareja ──────────────────────────────────────────────────────────────────────
+// Metas y negocios se comparten para llevarlos juntos (los dos ven y editan); movimientos y gastos de la quincena se comparten
+// para verlos (solo lectura, con opción de copiarlos a lo propio). Calendario = etiquetar; Nidito = tarjeta en el chat.
+const _hayPareja = () => !!S.data?.pareja;
+const _shBtn = (on, onclick, tOn, tOff) => `<button class="edit-pill-btn sh${on ? ' on' : ''}" title="${_ndEsc(on ? tOn : tOff)}" aria-label="${_ndEsc(on ? tOn : tOff)}" onclick="event.stopPropagation();${onclick}"><i class="ti ti-heart-handshake" style="font-size:12px"></i></button>`;
+const _shTit = (on, que) => on ? `Dejar de compartir ${que} con ${_parNom()}` : `Compartir ${que} con ${_parNom()}`;
+async function compartirItem(tipo, id, valor, extra) {
+  try {
+    await api('POST', '/api/compartir', { phone: S.phone, tipo, id, compartido: valor, ...(extra || {}) });
+    toast(valor ? `💞 Compartido con ${_parNom()}` : 'Ya no se comparte');
+    await load();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+// Gasto de "Gastos esta quincena": vive en la quincena (budget_q) o en la plantilla de gastos fijos
+function compartirGasto(id) {
+  const g = (S._expItemData || {})[id]; if (!g) return;
+  compartirItem('gasto', id, !g.compartido, g._qKey ? { qKey: g._qKey, origen: 'q' } : { origen: 'plantilla' });
+}
+// Movimientos que compartió tu pareja (solo lectura) del periodo que estás viendo
+async function movsDePareja() {
+  const r0 = getPeriodoRange();
+  abrirPop(`💞 Movimientos de ${_parNom()}`, '<div class="pr-pop"><div class="sh-empty">Cargando…</div></div>', 'md');
+  try {
+    const r = await api('GET', `/api/compartidos/movimientos?phone=${encodeURIComponent(S.phone)}&desde=${r0.from}&hasta=${r0.to}`);
+    S._shMov = r.data || [];
+    const filas = S._shMov.map(m => `<div class="mov-card q-card">${catIcHTML(m.categoria, m)}
+      <div class="mov-card-mid"><div class="mov-card-title">${_ndEsc(m.concepto || '—')}</div><div class="mov-card-sub">${fmtDate(m.fecha)} · ${_ndEsc(m.categoria || '')}</div></div>
+      <div class="mov-card-val ${m.tipo === 'GASTO' ? 'red' : 'green'}">${m.tipo === 'GASTO' ? '−' : '+'}${fmt(m.monto)}</div>
+      <div class="q-card-foot">${m.copiado ? '<span class="sh-badge">✓ Ya agregado</span>' : `<button class="btn btn-ghost btn-sm" onclick="movCopiar(${m.id})"><i class="ti ti-copy"></i> Agregar a mis movimientos</button>`}</div></div>`).join('');
+    $('pop-body').innerHTML = `<div class="pr-pop"><div class="nd-wiz-q">Compartidos por ${_ndEsc(r.nombre || _parNom())} · ${_ndEsc(r0.label || '')}</div>
+      <div class="sh-list">${filas || `<div class="sh-empty">${_ndEsc(r.nombre || _parNom())} no compartió movimientos en este periodo.<br><small>Cambia el periodo arriba para ver otros.</small></div>`}</div></div>`;
+  } catch (e) { $('pop-body').innerHTML = `<div class="pr-pop"><div class="sh-empty">${_ndEsc(e.message)}</div></div>`; }
+}
+function movCopiar(id) {
+  const m = (S._shMov || []).find(x => x.id === id); if (!m) return;
+  abrirPop('Agregar a mis movimientos', `<div class="pr-pop">
+    <div class="nd-wiz-q">${_ndEsc(m.concepto || '—')} · ${fmt(m.monto)}</div>
+    <div class="nd-wiz-lbl">Medio de pago</div>
+    <select id="shm-medio" class="inp">${MEDIOS.map(x => `<option>${_ndEsc(x)}</option>`).join('')}</select>
+    <div class="pr-hint" style="margin-top:8px">Se agrega con la misma fecha y categoría, como un movimiento tuyo.</div>
+    <div class="nd-wiz-nav"><button class="btn btn-ghost" onclick="movsDePareja()">Atrás</button><button class="btn btn-accent" onclick="movCopiarOk(${id})"><i class="ti ti-check"></i> Agregar</button></div></div>`);
+}
+async function movCopiarOk(id) {
+  try {
+    await api('POST', '/api/compartidos/movimientos/copiar', { phone: S.phone, id, medio_pago: $('shm-medio')?.value || 'efectivo' });
+    toast('Agregado a tus movimientos ✓'); await load(); movsDePareja();
+  } catch (e) { toast(e.message, 'error'); }
+}
+// Gastos de la quincena (o semana) que compartió tu pareja
+async function gastosDePareja() {
+  const qi = getQuincenaInfo(S.qOffset || 0);
+  abrirPop(`💞 Gastos de ${_parNom()}`, '<div class="pr-pop"><div class="sh-empty">Cargando…</div></div>', 'md');
+  try {
+    const r = await api('GET', `/api/compartidos/gastos?phone=${encodeURIComponent(S.phone)}&from=${qi.from}&to=${qi.to}`);
+    S._shGas = r.data || [];
+    const filas = S._shGas.map((g, i) => `<div class="mov-card q-card">${catIcHTML(g.categoria || 'OTROS', g)}
+      <div class="mov-card-mid"><div class="mov-card-title">${_ndEsc(g.descripcion)}</div><div class="mov-card-sub">${_ndEsc([g.categoria, g.label || formatQuincena(g.key)].filter(Boolean).join(' · '))}</div></div>
+      <div class="mov-card-val red">${fmt(g.monto)}</div>
+      <div class="q-card-foot">${g.copiado ? '<span class="sh-badge">✓ Ya agregado</span>' : `<button class="btn btn-ghost btn-sm" onclick="gastoCopiar(${i})"><i class="ti ti-copy"></i> Agregar a mi ${_uTxt()}</button>`}</div></div>`).join('');
+    $('pop-body').innerHTML = `<div class="pr-pop"><div class="nd-wiz-q">Compartidos por ${_ndEsc(r.nombre || _parNom())} · ${_ndEsc(qi.label)}</div>
+      <div class="sh-list">${filas || `<div class="sh-empty">${_ndEsc(r.nombre || _parNom())} no compartió gastos de esta ${_uTxt()}.</div>`}</div></div>`;
+  } catch (e) { $('pop-body').innerHTML = `<div class="pr-pop"><div class="sh-empty">${_ndEsc(e.message)}</div></div>`; }
+}
+async function gastoCopiar(i) {
+  const g = (S._shGas || [])[i]; if (!g) return;
+  try {
+    await api('POST', '/api/compartidos/gastos/copiar', { phone: S.phone, qKey: g.key, id: g.id, qKeyDestino: getQKey(getQuincenaInfo(S.qOffset || 0)) });
+    toast('Agregado a tus gastos ✓'); await load(); gastosDePareja();
+  } catch (e) { toast(e.message, 'error'); }
+}
+// Calendario: compartir = etiquetar a tu pareja (lo ve y lo edita contigo)
+async function calCompartir(id) {
+  const ev = (S._calData || {})[id];
+  if (!ev || ev.user_phone !== S.phone || !_hayPareja()) return;
+  const on = _calEtq(ev);
+  try {
+    await api('PUT', `/api/calendario/${id}`, { user_phone: S.phone, etiquetados: on ? [] : [S.data.pareja.telefono] });
+    toast(on ? 'Ya no se comparte' : `💞 Etiquetado a ${_parNom()}`); await load();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+// Nidito: ya es de los dos; compartir manda la tarjeta al chat de pareja (con su aviso) para abrirla de un toque
+async function ndCompartir(id) {
+  const it = (S._niditoItems || []).find(x => String(x.id) === String(id)); if (!it) return;
+  try {
+    await api('POST', '/api/pareja/mensaje', { phone: S.phone, texto: '', meta: { kind: 'nidito', id: String(it.id), titulo: it.titulo || '', monto: Number(it.presupuesto_total) || 0, emoji: _ndEmo(it), detalle: 'Compartido desde el Nidito' } });
+    toast(`💞 Se lo mandé a ${_parNom()} por el chat`);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
 function _irA(ir) {
   if (ir === 'nidito') go('nidito');
   else if (ir === 'calendario') go('calendario');
+  else if (ir === 'movimientos') go('movimientos');
+  else if (ir === 'metas') go('presupuesto');
+  else if (ir === 'negocios') go('negocios');
+  else if (ir === 'quincena') { go('dashboard'); setTimeout(() => dashEmoji('gastQuinc'), 250); }
   else if (ir === 'notas') { go('dashboard'); setTimeout(() => dashEmoji('notas'), 250); }
 }
 function _chatKey() { return 'fos_chat_' + S.phone; }
@@ -11196,6 +11322,8 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
   }
   const etiqueta = b => {
     const t = (b.getAttribute('title') || b.getAttribute('aria-label') || '').trim();
+    if (/dejar de compartir/i.test(t)) return ['Ya no', 'warn'];
+    if (/compartir/i.test(t)) return ['Compartir', 'share'];
     if (/posponer/i.test(t)) return ['Posponer', 'warn'];
     if (/pausar|reanudar/i.test(t)) return [/reanudar/i.test(t) ? 'Reanudar' : 'Pausar', 'warn'];
     if (/elimin|quitar|borr/i.test(t) || /--red|color-expense/.test(b.getAttribute('style') || '') || b.classList.contains('del')) return [/quitar/i.test(t) ? 'Quitar' : 'Eliminar', 'del'];
