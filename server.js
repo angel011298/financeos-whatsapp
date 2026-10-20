@@ -186,6 +186,13 @@ app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModifi
 const genAI   = gemini;      // alias — código legacy usa genAI
 const mes     = mesActual;   // alias — código legacy usa mes()
 const CATEGORIAS  = ['Hogar','Comida','TDC','Despensa','Alicia','Ocio','Personales','Platina','Transporte','OTROS'];
+const _catKeySrv = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+function canonCategoria(c) {
+  const t = String(c == null ? '' : c).trim();
+  if (!t) return 'OTROS';
+  const k = _catKeySrv(t);
+  return k === 'pasajes' ? 'Transporte' : (CATEGORIAS.find(x => _catKeySrv(x) === k) || t);
+}
 const MEDIOS_PAGO = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut','Pluxee'];
 
 // Corre `promise` pero si tarda más de `ms` devuelve `fallback` en lugar de colgar.
@@ -1601,6 +1608,7 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
     if (accion === 'crear') {
       // ── Reglas deterministas de categorización (palabras clave) ────────────
       if (tabla === 'movimientos') aplicarReglasCategoria(datos, texto_original);
+      if (tabla === 'movimientos' && datos && datos.categoria !== undefined) datos.categoria = canonCategoria(datos.categoria);
       // ── Gasto programado/futuro → Presupuesto, NO movimiento real ──────────
       if (tabla === 'movimientos' && esGastoProgramado(datos, hoy())) {
         const r = await addGastoProgramado(phone, datos, origen, texto_original);
@@ -3113,6 +3121,7 @@ app.get('/api/whoami/:phone', async (req, res) => {
 app.post('/api/movimientos', async (req, res) => {
   try {
     const { user_phone, ...d } = req.body;
+    if (d.categoria !== undefined) d.categoria = canonCategoria(d.categoria);
     const { data, error } = await conReintentos(() =>
       sb.from('movimientos').insert({ ...d, user_phone }).select().single()
     );
@@ -3126,6 +3135,7 @@ app.post('/api/movimientos', async (req, res) => {
 app.put('/api/movimientos/:id', async (req, res) => {
   try {
     const { user_phone, ...d } = req.body;
+    if (d.categoria !== undefined) d.categoria = canonCategoria(d.categoria);
     const { data: before } = await sb.from('movimientos').select('*').eq('id', req.params.id).eq('user_phone', user_phone).maybeSingle();
     const { data, error } = await sb.from('movimientos').update(d).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
@@ -3141,6 +3151,7 @@ app.patch('/api/movimientos/:id', async (req, res) => {
     const allowed = ['revisado', 'categoria'];
     const update = Object.fromEntries(Object.entries(fields).filter(([k]) => allowed.includes(k)));
     if (!Object.keys(update).length) return res.status(400).json({ success: false, error: 'Sin campos válidos' });
+    if (update.categoria !== undefined) update.categoria = canonCategoria(update.categoria);
     const { data, error } = await sb.from('movimientos').update(update).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data });

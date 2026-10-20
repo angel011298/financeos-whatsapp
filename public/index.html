@@ -2454,6 +2454,19 @@ body.sheet-locked{overflow:hidden}
 const CATS   = ['Hogar','Comida','TDC','Despensa','Alicia','Ocio','Personales','Platina','Transporte','OTROS'];
 const MEDIOS = ['efectivo','transferencia','débito','Débito Banamex','Débito Revolut','Pluxee'];
 const CLR    = ['#818cf8','#34d399','#84cc16','#fbbf24','#60a5fa','#a78bfa','#fb923c','#4ade80','#f472b6','#22d3ee'];
+// ── CATEGORÍA ÚNICA PARA TODA LA APP ─────────────────────────────────────────
+// Una sola forma de nombrar la categoría de un movimiento, para que gráficas, filtros, listas y desgloses coincidan:
+// "otros"/"Otros"/vacío → OTROS, "Pasajes" → Transporte (mismo criterio en todos lados).
+// Las transferencias a ahorro (la palabra "ahorro" en concepto o comentarios) cuentan como categoría propia "Ahorro".
+const _catKey = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+const _CAT_CANON = Object.fromEntries(CATS.map(c => [_catKey(c), c]));
+function catCanon(c) {
+  const t = String(c == null ? '' : c).trim();
+  if (!t) return 'OTROS';
+  const k = _catKey(t);
+  return k === 'pasajes' ? 'Transporte' : (_CAT_CANON[k] || t);
+}
+const _catF = m => (m.tipo === 'GASTO' && gxEsAhorro(m)) ? 'Ahorro' : catCanon(m.categoria);
 const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#2dd4bf','Despensa':'#4ade80','Alicia':'#d90429','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
 // Emoji por categoría: lo usan las tarjetas de Movimientos, Gastos esta quincena, Despensa y Nidito.
 const CAT_EMOJI = { Hogar:'🏠', Comida:'🍽️', TDC:'💳', Despensa:'🛒', Alicia:'🩵', Ocio:'🎉', Personales:'💆',
@@ -3416,7 +3429,7 @@ function _colRzStart(e, id, colidx) {
 
 // ── HELPERS DE DATOS ─────────────────────────────────────────────────────────
 function byKey(arr, k) {
-  return arr.reduce((a,m) => { const x=m[k]||'OTROS'; a[x]=(a[x]||0)+(m.monto||0); return a; }, {});
+  return arr.reduce((a,m) => { const x=k==='categoria' ? catCanon(m[k]) : (m[k]||'OTROS'); a[x]=(a[x]||0)+(m.monto||0); return a; }, {});
 }
 function last6() {
   const m=[], d=new Date();
@@ -3684,7 +3697,7 @@ function navPeriodo(dir, mode) { if (mode==='reset') S.periodo.offset=0; else S.
 
 // ── CATEGORÍA CLASSIFIER ─────────────────────────────────────────────────────
 function catGasto(desc) {
-  if (!desc) return 'Otros';
+  if (!desc) return 'OTROS';
   const d = desc;
   if (/alicia/i.test(d))                                   return 'Alicia';
   if (/platina|gasolina|verificac|afinac|mecán/i.test(d)) return 'Platina';
@@ -3697,7 +3710,7 @@ function catGasto(desc) {
   if (/golosina/i.test(d))                                 return 'Ocio';
   if (/café|snack|antojo/i.test(d))                        return 'Comida';
   if (/ocio|entretenimiento|netflix|spotify|cine|suscri/i.test(d)) return 'Ocio';
-  return 'Otros';
+  return 'OTROS';
 }
 const _CAT_COLORS = {
   Hogar:'#60A5FA', Comida:'#fb923c', TDC:'#2dd4bf', Despensa:'#4ade80',
@@ -4553,9 +4566,9 @@ function toggleQDin() { S._qDinOpen = !S._qDinOpen; refreshQuincenaPanel(); }
 // Abre Nidito parado en la quincena del renglón. Se fija S._niditoQ/_ndDin ANTES de navegar para que
 // la carga inicial de rNidito use la misma quincena y no pise el monto con el de otra.
 function ndIrADinerito(qKey, destino) {
+  cerrarHoja();   // primero: cerrar un módulo restablece su estado (incluida la quincena del Nidito)
   const m = String(qKey).match(/^(\d{4})-(\d{2})-([AB])$/);
   if (m) { S._niditoQ = _ndQ(new Date(+m[1], +m[2] - 1, m[3] === 'A' ? 15 : 28)); S._ndDin = getDinerito(qKey); }
-  cerrarHoja();
   go('nidito');
   setTimeout(() => document.querySelector(destino === 'proyectos' ? '.nd-sec-hdr' : '.nd-din-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
 }
@@ -4565,9 +4578,47 @@ function ndIrADinerito(qKey, destino) {
 // misma ventana central que usan las hojas: el contenedor #tab-x se mueve a la ventana mientras está
 // abierta y vuelve a <main> al cerrarla. Mientras tanto S.tab apunta al módulo, así cualquier
 // renderTab(S.tab)/load() que dispare el propio módulo lo repinta ahí mismo.
+// ── Al cerrar un módulo o widget, todo vuelve a como estaba al abrirlo ────────────────────────────
+// Filtros, búsquedas, orden, secciones desplegadas y cambios de periodo hechos DENTRO del módulo se descartan, así cada vez que
+// lo abres empiezas limpio. (Lo que estaba elegido en Inicio antes de abrirlo, incluido el periodo, se conserva.)
+const _borrarEstado = (...ks) => ks.forEach(k => { delete S[k]; });
+const _tblReset = (...ids) => ids.forEach(id => { if (S._tblState) delete S._tblState[id]; if (S._tblCollapsed) delete S._tblCollapsed[id]; });
+const _MOD_RESET = {
+  movimientos: () => {
+    S.movF = null;   // categoría, medio, búsqueda, "sin revisar" y tipo de gráfica vuelven a su valor inicial
+    _borrarEstado('_movSort', '_movDayCollapsed', '_movsCollapsed', '_movChartCollapsed', '_movSearchOpen', '_movFiltersOpen', '_shMov', '_openCatPicker');
+    if (S._dsgOpen) S._dsgOpen['mov-dsg'] = null;
+    _tblReset('tbl-movs');
+  },
+  nidito: () => _borrarEstado('_ndTab', '_ndOpen', '_ndDinList', '_niditoQ', '_ndDin'),
+  calendario: () => {
+    _borrarEstado('_calQ', '_calSearchOpen', '_calSort', '_calPanel', '_calSel', '_calNewFecha', '_calNewTipo', '_calNewTag');
+    const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
+  },
+  presupuesto: () => _borrarEstado('_prOff', '_prSin', '_prAn', 'metaSort'),
+  deudas: () => _borrarEstado('_tdcQ', '_tdcSearchOpen'),
+  gastQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen', '_shGas'); _tblReset('tbl-gastos-q-sheet'); },
+  ingQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen'); _tblReset('tbl-gastos-q-sheet'); },
+  analisis: () => _borrarEstado('_gx'),
+  despensa: () => _borrarEstado('_despQ', '_despSearchOpen', '_despEdit'),
+  notas: () => _borrarEstado('_niQ', '_niBuscando'),
+  wishlist: () => { if (S._wl) Object.assign(S._wl, { filtro: 'todos', orden: 'prioridad', vista: 'mia', soloComp: false, panel: null, editando: null, eleg: null, agSel: null, agMas: false }); },
+};
+// Restablece lo del módulo que se cierra y devuelve true si además tuvo que regresar el periodo que había en Inicio
+function _cerrarEstadoHoja() {
+  const k = S._hojaKey, snap = S._hojaSnap;
+  S._hojaKey = null; S._hojaSnap = null;
+  if (k && _MOD_RESET[k]) { try { _MOD_RESET[k](); } catch (e) { console.error('restablecer módulo:', e); } }
+  let cambio = false;
+  if (snap) {
+    if (JSON.stringify(snap.periodo) !== JSON.stringify(S.periodo)) { S.periodo = snap.periodo; cambio = true; }
+    if ((snap.qOffset || 0) !== (S.qOffset || 0)) { S.qOffset = snap.qOffset; cambio = true; }
+  }
+  return cambio;
+}
 function abrirModulo(t, titulo) {
   const el = $('tab-' + t); if (!el) return;
-  abrirHoja(titulo, '', null, { size: 'lg' });
+  abrirHoja(titulo, '', null, { size: 'lg', key: t });
   $('dash-sheet-body').appendChild(el);
   el.classList.add('active', 'in-modal');
   S._modalTab = t; S.tab = t;
@@ -5834,12 +5885,12 @@ function desgloseHTML(key, scope) {
       // Los egresos se agrupan por categoría (suelen ser decenas de movimientos).
       const porCat = {};
       list.forEach(m => {
-        const c = m.categoria || 'OTROS';
+        const c = _catF(m);
         porCat[c] = porCat[c] || { monto: 0, n: 0 };
         porCat[c].monto += m.monto || 0; porCat[c].n++;
       });
       const rows = Object.entries(porCat).sort((a, b) => b[1].monto - a[1].monto)
-        .map(([cat, d]) => _dsgRow(cat, d.monto, CAT_CLR[cat] || 'var(--text-2)',
+        .map(([cat, d]) => _dsgRow(cat, d.monto, CAT_CLR[cat] || (cat === 'Ahorro' ? '#d4af37' : 'var(--text-2)'),
               Math.round(d.monto / total * 100), `${d.n} mov · ${Math.round(d.monto / total * 100)}%`));
       return `<div class="dsg-inner">${rows.join('')}${_dsgTotal('Total egresos', total, 'var(--color-expense)')}
         ${scope === 'mov' ? '' : `<div class="dsg-foot"><button class="dsg-act" onclick="event.stopPropagation();abrirModulo('movimientos','Movimientos')"><i class="ti ti-list"></i> Ver movimientos</button></div>`}</div>`;
@@ -5920,6 +5971,9 @@ ${periodoSelectorHTML()}
 function abrirHoja(titulo, html, post, opts = {}) {
   const sheet = $('dash-sheet');
   if (!sheet) return;
+  const _key = opts.key || S._hojaKeyNext || null; S._hojaKeyNext = null;
+  if (S._hojaKey && S._hojaKey !== _key) _cerrarEstadoHoja();   // otro módulo ocupaba la ventana: se restablece antes de abrir éste
+  if (S._hojaKey !== _key || !S._hojaSnap) { S._hojaKey = _key; S._hojaSnap = { periodo: { ...S.periodo }, qOffset: S.qOffset || 0 }; }
   if (_restoreModalTab()) S.tab = 'dashboard';   // otro módulo ocupaba la ventana: devolverlo antes de reemplazar
   $('dash-sheet-title').textContent = titulo;
   $('dash-sheet-body').innerHTML = html;
@@ -5944,7 +5998,9 @@ function cerrarHoja() {
   document.body.classList.remove('sheet-locked');
   setTimeout(() => { sheet.style.display = 'none'; if ($('dash-sheet-body')) $('dash-sheet-body').innerHTML = ''; }, 260);
   _hojaFocusTrapOff();
+  const periodoCambio = _cerrarEstadoHoja();   // filtros, búsquedas y orden del módulo vuelven a su valor inicial
   if (eraModulo) { S.tab = 'dashboard'; renderTab('dashboard'); }
+  else if (periodoCambio) renderTab(S.tab);   // el módulo había cambiado el periodo: Inicio vuelve al que tenía
 }
 
 // Atrapa el foco (Tab/Shift+Tab) dentro de la hoja mientras está abierta, y lo
@@ -5978,6 +6034,10 @@ function _hojaFocusTrapOff() {
 
 // Despacha cada emoji a su hoja o a su navegación (conserva la navegación existente).
 function dashEmoji(key) {
+  S._hojaKeyNext = key;   // abrirHoja lo toma para saber qué módulo restablecer al cerrarse
+  try { _dashEmoji(key); } finally { S._hojaKeyNext = null; }
+}
+function _dashEmoji(key) {
   switch (key) {
     case 'cuentas':  abrirHoja('Mis cuentas', rCuentasWidget()); break;
     case 'retiro':   abrirHoja('Retiro de efectivo', rCuentasWidget()); break;   // (a) los botones "Retirar" del widget
@@ -6379,9 +6439,9 @@ async function niSave() {
 const GX_TABS = [['sankey', 'Esta quincena'], ['flujo', 'Mes a mes'], ['dia', 'Día a día'], ['nuevos', 'Nuevos'], ['conc', 'Concentración'], ['saldo', 'Saldo']];
 const _gxSankeyLbl = () => S.periodo.tipo === 'semana' ? 'Esta semana' : 'Esta quincena';
 const gxEsAhorro = m => /\bahorro\b/i.test(m.concepto || '') || /\bahorro\b/i.test(m.comentarios || '');
-const _gxMovs   = () => { const hoy = toISO(new Date()); return (S.data.movs || []).filter(m => !m.deleted_at && m.fecha && m.fecha <= hoy); };
+const _gxMovs   = () => (S.data.movs || []).filter(m => !m.deleted_at && m.fecha);
 const _gxSum    = a => a.reduce((s, m) => s + (m.monto || 0), 0);
-const _gxCat    = m => (m.categoria === 'Pasajes' ? 'Transporte' : (m.categoria || 'OTROS'));
+const _gxCat    = m => catCanon(m.categoria);
 const _gxNorm   = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/^\[ppto\]\s*/, '').replace(/\s+/g, ' ').trim();
 const _gxGrp    = (arr, kf) => { const o = {}; arr.forEach(m => { const k = kf(m); o[k] = (o[k] || 0) + (m.monto || 0); }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
 const _gxFix    = (res, h) => Object.assign(res, { h });
@@ -6437,7 +6497,7 @@ function _gxSankeyTab() {
   const kpis = _gxKpi('Ingresos', gxMoney(tIng), 'in') + _gxKpi('Egresos sin ahorro', gxMoney(tGas), 'out')
     + _gxKpi('Ahorrado', gxMoney(tAho), 'pay') + _gxKpi(tIng - tGas - tAho >= 0 ? 'Sobra' : 'Falta', gxMoney(Math.abs(tIng - tGas - tAho)), tIng - tGas - tAho >= 0 ? 'in' : 'out');
   if (!ing.length && !gasAll.length) return { html: _gxCard(_gxSankeyLbl(), r.label, kpis, '', _gxEmpty('Sin movimientos en este período')) };
-  const top = (arr, n, kf) => { const e = _gxGrp(arr, kf); const head = e.slice(0, n), rest = e.slice(n).reduce((a, x) => a + x[1], 0); return rest > 0 ? [...head, ['Otros', rest]] : head; };
+  const top = (arr, n, kf) => _gxGrp(arr, kf);   // sin cubeta "Otros" inventada: cada nodo es algo real que se puede buscar o filtrar
   const src = top(ing, 5, m => m.concepto || 'Ingreso').map(([name, value]) => ({ name, value, color: 'var(--gx-in)' }));
   const dst = top(gas, 6, _gxCat).map(([name, value]) => ({ name, value, color: CAT_CLR[name] || 'var(--gx-neu)' }));
   if (tAho > 0) dst.push({ name: 'Ahorro', value: tAho, color: '#d4af37' });   // oro: ninguna categoría lo usa
@@ -6565,7 +6625,7 @@ function _gxConcTab() {
   const kpis = _gxKpi('Mayor', `${sh[0].toFixed(0)}%`, '', gxTrunc(porCat ? ent[0][0] : nom[ent[0][0]], 110)) + _gxKpi('Top 3', `${cumPct(3).toFixed(0)}%`, '', 'del gasto') + _gxKpi('Top 5', `${cumPct(5).toFixed(0)}%`, '', 'del gasto')
     + _gxKpi('Concentración', nivel, nivel === 'Alta' ? 'out' : nivel === 'Media' ? 'pay' : 'in', `índice HHI ${Math.round(hhi)}`);
   const top = ent.slice(0, 10), rest = ent.slice(10).reduce((a, e) => a + e[1], 0);
-  const labels = top.map(e => porCat ? e[0] : nom[e[0]]).concat(rest > 0 ? [`Otros (${ent.length - 10})`] : []);
+  const labels = top.map(e => porCat ? e[0] : nom[e[0]]).concat(rest > 0 ? [`Resto (${ent.length - 10})`] : []);
   const data = top.map(e => e[1]).concat(rest > 0 ? [rest] : []);
   const colors = top.map(e => porCat ? (CAT_CLR[e[0]] || 'var(--gx-neu)') : 'var(--gx-ac)').concat(rest > 0 ? ['var(--gx-neu)'] : []);
   let acc = 0; const cum = data.map(v => (acc += v) / tot * 100);
@@ -8043,6 +8103,7 @@ function applyMovSearch() {
 function setMovChart(type) {
   initMovF();
   S.movF.chartType=type;
+  document.querySelectorAll('.f-pill[data-ct]').forEach(b => b.classList.toggle('on', b.dataset.ct === type));
   renderMovChart(getMovFiltradas());
 }
 
@@ -8052,7 +8113,7 @@ function getMovFiltradas() {
   let mv=S.data.movs||[];
   if (f.desde) mv=mv.filter(m=>fd(m.fecha)>=f.desde);
   if (f.hasta) mv=mv.filter(m=>fd(m.fecha)<=f.hasta);
-  if (f.cats.length)  mv=mv.filter(m=>f.cats.includes(m.categoria));
+  if (f.cats.length)  mv=mv.filter(m=>m.tipo==='GASTO' && f.cats.includes(_catF(m)));
   if (f.medios.length) mv=mv.filter(m=>f.medios.includes(m.medio_pago));
   if (f.search) {
     const q=f.search.toLowerCase();
@@ -8071,35 +8132,14 @@ function renderMovChart(filtered) {
   if (!canvas) return;
 
   if (type==='doughnut') {
-    const bC=byKey(gastos,'categoria');
-    // Separar Ocio en "resto" y "con Alicia" (mismo criterio determinista que el resto de la app:
-    // \balicia\b en comentarios) para resaltar dentro del propio segmento de Ocio cuánto es con ella.
-
-    // Separar Personales en "resto" y "Ahorro" (transferencias a cuentas de ahorro, ej. "ahorro
-    // revolut" en concepto o comentarios) para verlo aparte con un color propio — no es un gasto
-    // real, es dinero que sigue siendo tuyo, así que debe distinguirse a simple vista del resto.
-    const AHORRO_CLR    = '#10b981';
-    const esAhorro       = m => /\bahorro\b/i.test(m.concepto||'') || /\bahorro\b/i.test(m.comentarios||'');
-    const personalesTot    = bC['Personales'] || 0;
-    const personalesAhorro = personalesTot > 0
-      ? gastos.filter(m => m.categoria==='Personales' && esAhorro(m)).reduce((a,m)=>a+(m.monto||0),0)
-      : 0;
-    const personalesResto  = Math.max(0, personalesTot - personalesAhorro);
-
-    // Alicia ya es una categoría propia (antes era una rebanada dentro de Ocio).
-    const order = Object.keys(bC).filter(k=>k!=='Personales')
-      .concat(personalesTot>0?['Personales']:[])
-      .sort((a,b)=>(b==='Personales'?personalesTot:bC[b])-(a==='Personales'?personalesTot:bC[a]));
-
-    const keys=[], vals=[], bgs=[], bds=[], offs=[];
-    order.forEach(k => {
-      if (k==='Personales') {
-        if (personalesResto>0)  { keys.push('Personales');          vals.push(personalesResto);  bgs.push((CAT_CLR.Personales)+'bb'); bds.push(CAT_CLR.Personales); offs.push(0); }
-        if (personalesAhorro>0) { keys.push('Personales · Ahorro'); vals.push(personalesAhorro); bgs.push(AHORRO_CLR+'ee');           bds.push(AHORRO_CLR);         offs.push(14); }
-      } else {
-        keys.push(k); vals.push(bC[k]); bgs.push((CAT_CLR[k]||'#94a3b8')+'bb'); bds.push(CAT_CLR[k]||'#94a3b8'); offs.push(0);
-      }
-    });
+    // Las transferencias a ahorro (la palabra "ahorro" en concepto o comentarios) no son un gasto real: es dinero que sigue siendo
+    // tuyo. Salen aparte como "Ahorro" (de la categoría que sea), igual que en el Flujo y en el filtro por categoría.
+    const AHORRO_CLR = '#10b981';
+    const bC = byKey(gastos.filter(m => !gxEsAhorro(m)), 'categoria');
+    const ahorroTot = gastos.filter(gxEsAhorro).reduce((a, m) => a + (m.monto || 0), 0);
+    const keys = [], vals = [], bgs = [], bds = [], offs = [];
+    Object.keys(bC).sort((a, b) => bC[b] - bC[a]).forEach(k => { keys.push(k); vals.push(bC[k]); bgs.push((CAT_CLR[k] || '#94a3b8') + 'bb'); bds.push(CAT_CLR[k] || '#94a3b8'); offs.push(0); });
+    if (ahorroTot > 0) { keys.push('Ahorro'); vals.push(ahorroTot); bgs.push(AHORRO_CLR + 'ee'); bds.push(AHORRO_CLR); offs.push(14); }
     if (!keys.length) { emptyChart('mov-chart','Sin egresos en este periodo'); return; }
     mkC('mov-chart','doughnut',keys,[{data:vals,label:'$',
       backgroundColor:bgs, borderColor:bds, borderWidth:2, offset:offs}], { center: 'Egresos' });
@@ -8120,7 +8160,7 @@ function renderMovChart(filtered) {
     const aho = gasAll.filter(gxEsAhorro), gas = gasAll.filter(m => !gxEsAhorro(m));
     const tIng = _gxSum(ing), tGas = _gxSum(gas), tAho = _gxSum(aho), gastado = tGas + tAho;
     if (!ing.length && !gasAll.length) { el.parentElement.style.height = ''; el.innerHTML = _gxEmpty('Sin movimientos con estos filtros'); return; }
-    const top = (arr, n, kf) => { const e = _gxGrp(arr, kf); const head = e.slice(0, n), rest = e.slice(n).reduce((a, x) => a + x[1], 0); return rest > 0 ? [...head, ['Otros', rest]] : head; };
+    const top = (arr, n, kf) => _gxGrp(arr, kf);   // sin cubeta "Otros" inventada: cada nodo es algo real que se puede buscar o filtrar
     const src = top(ing, 5, m => m.concepto || 'Ingreso').map(([name, value]) => ({ name, value, color: 'var(--gx-in)' }));
     const dst = top(gas, 6, _gxCat).map(([name, value]) => ({ name, value, color: CAT_CLR[name] || 'var(--gx-neu)' }));
     if (tAho > 0) dst.push({ name: 'Ahorro', value: tAho, color: '#d4af37' });
@@ -8299,7 +8339,7 @@ function rMovs() {
 
   const chartPills=['doughnut:🍩 Dona','bar:📊 Barras','sankey:🔀 Flujo'].map(o=>{
     const[v,l]=o.split(':');
-    return `<button class="f-pill${(f.chartType==='line'?'sankey':f.chartType)===v?' on':''}" onclick="setMovChart('${v}')">${l}</button>`;
+    return `<button class="f-pill${(f.chartType==='line'?'sankey':f.chartType)===v?' on':''}" data-ct="${v}" onclick="setMovChart('${v}')">${l}</button>`;
   }).join('');
 
   const host = $('movs-section') || $('tab-movimientos');
@@ -8380,12 +8420,12 @@ function movFiltroCat() {
   const cats0 = S.movF.cats; S.movF.cats = [];
   const base = getMovFiltradas(); S.movF.cats = cats0;
   const tot = {};
-  base.filter(m => m.tipo === 'GASTO').forEach(m => { const k = m.categoria || 'OTROS'; (tot[k] = tot[k] || { s: 0, n: 0 }); tot[k].s += m.monto || 0; tot[k].n++; });
+  base.filter(m => m.tipo === 'GASTO').forEach(m => { const k = _catF(m); (tot[k] = tot[k] || { s: 0, n: 0 }); tot[k].s += m.monto || 0; tot[k].n++; });
   const cats = Object.entries(tot).sort((a, b) => b[1].s - a[1].s), sel = cats0.length === 1 ? cats0[0] : null;
   abrirPop('Filtrar por categoría', `<div class="pr-pop">
     <div class="mvf-list">
       <button class="mvf-row${!cats0.length ? ' on' : ''}" onclick="movFiltroSet(null)"><div class="mov-card-ic emo" aria-hidden="true">🗂️</div><b>Todas</b><span class="mvf-v">${fmt(cats.reduce((a, [, v]) => a + v.s, 0))}</span></button>
-      ${cats.map(([c, v]) => `<button class="mvf-row${sel === c ? ' on' : ''}" data-c="${_ndEsc(c)}" onclick="movFiltroSet(this.dataset.c)">${catIcHTML(c)}<b>${_ndEsc(c)}<small>${v.n} movimiento${v.n !== 1 ? 's' : ''}</small></b><span class="mvf-v red">${fmt(v.s)}</span></button>`).join('')}
+      ${cats.map(([c, v]) => `<button class="mvf-row${sel === c ? ' on' : ''}" data-c="${_ndEsc(c)}" onclick="movFiltroSet(this.dataset.c)">${catIcHTML(c, null, c === 'Ahorro' ? '🐷' : undefined)}<b>${_ndEsc(c)}<small>${v.n} movimiento${v.n !== 1 ? 's' : ''}</small></b><span class="mvf-v red">${fmt(v.s)}</span></button>`).join('')}
     </div>
     ${cats.length ? '' : '<div class="pr-hint">Sin egresos con los filtros actuales.</div>'}</div>`);
 }
@@ -8394,7 +8434,7 @@ function _movFiltroResumen(rows) {
   const f = S.movF; if (!f || !f.cats.length) return '';
   const gas = rows.filter(m => m.tipo === 'GASTO'), s = gas.reduce((a, m) => a + (m.monto || 0), 0);
   const nombre = f.cats.length === 1 ? f.cats[0] : `${f.cats.length} categorías`;
-  return `<div class="mvf-res">${f.cats.length === 1 ? catIcHTML(f.cats[0]) : '<div class="mov-card-ic emo" aria-hidden="true">🗂️</div>'}
+  return `<div class="mvf-res">${f.cats.length === 1 ? catIcHTML(f.cats[0], null, f.cats[0] === 'Ahorro' ? '🐷' : undefined) : '<div class="mov-card-ic emo" aria-hidden="true">🗂️</div>'}
     <div class="mvf-res-t"><small>Gastado en ${_ndEsc(nombre)}</small><b class="red">${fmt(s)}</b><small>${gas.length} movimiento${gas.length !== 1 ? 's' : ''}</small></div>
     <button class="ico-btn" onclick="movFiltroSet(null)" title="Quitar filtro" aria-label="Quitar filtro"><i class="ti ti-x"></i></button></div>`;
 }
@@ -9218,7 +9258,7 @@ async function saveM() {
                 concepto, medio_pago:$('f-medio')?.value||'transferencia',
                 fecha:$('f-fecha')?.value, comentarios:$('f-com')?.value||'' };
     } else {
-      datos={ tipo:'GASTO', categoria:$('f-cat')?.value||'Otros', monto:parseFloat($('f-monto')?.value)||0,
+      datos={ tipo:'GASTO', categoria:$('f-cat')?.value||'OTROS', monto:parseFloat($('f-monto')?.value)||0,
               concepto:$('f-cpto')?.value||'', medio_pago:$('f-medio')?.value||'efectivo',
               fecha:$('f-fecha')?.value, comentarios:$('f-com')?.value||'' };
       ctx._repetir = $('f-repetir')?.value || '';
