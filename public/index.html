@@ -638,12 +638,12 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-nav{display:flex;align-items:center;gap:6px}
 .q-nav-lbl{font-size:var(--text-sm);font-weight:600;min-width:186px;text-align:center;color:var(--text-1)}
 .q-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:8px;margin-bottom:16px}
-.qstat{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:12px;text-align:center;border:1px solid var(--border-default)}
+.qstat{background:var(--bg-surface-2);border-radius:var(--radius-md);padding:12px 8px;text-align:center;border:1px solid var(--border-default);container-type:inline-size;min-width:0}
 .qstat-lbl{font-size:var(--text-xs);color:var(--text-2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
 .qstat-val{
   font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
   font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:'zero' 1;
-  font-size:1.3rem;font-weight:700;letter-spacing:-0.02em;
+  font-size:clamp(.8rem,12cqi,1.3rem);font-weight:700;letter-spacing:-0.02em;white-space:nowrap;
 }
 .qstat-sub{font-size:var(--text-xs);margin-top:3px;color:var(--text-3)}
 .q-section-lbl{font-size:13px;color:var(--text-2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:4px}
@@ -1054,7 +1054,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   /* ── Quincena panel */
   .q-panel{padding:14px}
   .q-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .qstat-val{font-size:1.1rem}
+  .qstat-val{font-size:clamp(.8rem,12cqi,1.1rem)}
   .q-item-row{flex-wrap:wrap;gap:6px;padding:8px 10px}
   /* ── Modal → bottom sheet */
   .ovl{align-items:flex-end}
@@ -2467,6 +2467,7 @@ function catCanon(c) {
   return k === 'pasajes' ? 'Transporte' : (_CAT_CANON[k] || t);
 }
 const _catF = m => (m.tipo === 'GASTO' && gxEsAhorro(m)) ? 'Ahorro' : catCanon(m.categoria);
+const gastoEsAhorro = g => /\bahorro\b/i.test(g.descripcion || '') || /\bahorro\b/i.test(g.comentarios || '');
 const CAT_CLR = {'Hogar':'#60a5fa','Comida':'#fb923c','TDC':'#2dd4bf','Despensa':'#4ade80','Alicia':'#d90429','Ocio':'#a78bfa','Personales':'#f472b6','Platina':'#22d3ee','Transporte':'#818cf8','OTROS':'#94a3b8'};
 // Emoji por categoría: lo usan las tarjetas de Movimientos, Gastos esta quincena, Despensa y Nidito.
 const CAT_EMOJI = { Hogar:'🏠', Comida:'🍽️', TDC:'💳', Despensa:'🛒', Alicia:'🩵', Ocio:'🎉', Personales:'💆',
@@ -4597,8 +4598,8 @@ const _MOD_RESET = {
   },
   presupuesto: () => _borrarEstado('_prOff', '_prSin', '_prAn', 'metaSort'),
   deudas: () => _borrarEstado('_tdcQ', '_tdcSearchOpen'),
-  gastQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen', '_shGas'); _tblReset('tbl-gastos-q-sheet'); },
-  ingQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen'); _tblReset('tbl-gastos-q-sheet'); },
+  gastQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen', '_shGas', '_qChartType', '_qChartCollapsed'); _tblReset('tbl-gastos-q-sheet'); },
+  ingQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen', '_qChartType', '_qChartCollapsed'); _tblReset('tbl-gastos-q-sheet'); },
   analisis: () => _borrarEstado('_gx'),
   despensa: () => _borrarEstado('_despQ', '_despSearchOpen', '_despEdit'),
   notas: () => _borrarEstado('_niQ', '_niBuscando'),
@@ -5204,18 +5205,47 @@ function rQuincenaPanel(ctx) {
 
   const qChId  = `qch-${ctx}`;
   const qAiId  = `qai-${ctx}`;
-  // Gráfica: distribución por categoría de los gastos planeados de la quincena.
-  const _porCat = {};
-  gasEsp.forEach(g => { const c = g._isDespensa ? 'Despensa' : (g.categoria || 'OTROS'); _porCat[c] = (_porCat[c] || 0) + (Number(g.monto) || 0); });
-  const _cats = Object.keys(_porCat).filter(c => _porCat[c] > 0).sort((a, b) => _porCat[b] - _porCat[a]);
-  setTimeout(() => {
-    if (!_cats.length) { emptyChart(qChId, 'Sin gastos planeados'); return; }
-    mkC(qChId, S.ct[qChId] || 'doughnut', _cats.map(c => `${CAT_EMOJI[c] || '📦'} ${c}`), [{
-      label: 'Planeado', data: _cats.map(c => _porCat[c]),
-      backgroundColor: _cats.map(c => (CAT_CLR[c] || '#94a3b8') + 'bb'),
-      borderColor:     _cats.map(c => CAT_CLR[c] || '#94a3b8')
-    }], { center: 'Planeado' });
-  }, 20);
+  // Gráfica "Análisis visual": MISMO formato que la de Movimientos (Dona · Barras · Flujo) pero con lo PLANEADO de la quincena.
+  // Las partidas de ahorro (la palabra "ahorro" en su nombre o comentario) salen aparte como "Ahorro", igual que allá, y las
+  // categorías usan el mismo nombre (catCanon) para que todo coincida con Movimientos.
+  const _plan = {}; let _planAho = 0;
+  gasEsp.forEach(g => { const m = Number(g.monto) || 0; if (!(m > 0)) return; if (gastoEsAhorro(g)) { _planAho += m; return; } const c = g._isDespensa ? 'Despensa' : catCanon(g.categoria); _plan[c] = (_plan[c] || 0) + m; });
+  const _cats = Object.keys(_plan).filter(c => _plan[c] > 0).sort((a, b) => _plan[b] - _plan[a]);
+  const _real = {}; let _realAho = 0;
+  qMovs.filter(m => m.tipo === 'GASTO').forEach(m => { const mm = m.monto || 0; if (gxEsAhorro(m)) { _realAho += mm; return; } const c = catCanon(m.categoria); _real[c] = (_real[c] || 0) + mm; });
+  const _qDibujar = () => {
+    const tipo = S._qChartType || 'doughnut';
+    if (!_cats.length && !(_planAho > 0)) { emptyChart(qChId, 'Sin gastos planeados'); return; }
+    if (tipo === 'doughnut') {
+      const keys = _cats.slice(), vals = _cats.map(c => _plan[c]), bgs = _cats.map(c => (CAT_CLR[c] || '#94a3b8') + 'bb'), bds = _cats.map(c => CAT_CLR[c] || '#94a3b8'), offs = _cats.map(() => 0);
+      if (_planAho > 0) { keys.push('Ahorro'); vals.push(_planAho); bgs.push('#10b981ee'); bds.push('#10b981'); offs.push(14); }
+      mkC(qChId, 'doughnut', keys, [{ data: vals, label: '$', backgroundColor: bgs, borderColor: bds, borderWidth: 2, offset: offs }], { center: 'Planeado' });
+    } else if (tipo === 'bar') {
+      // Presupuestado vs lo que ya se gastó de verdad en la quincena, por categoría (y Ahorro aparte)
+      const cats = _cats.concat(Object.keys(_real).filter(c => !_cats.includes(c) && _real[c] > 0));
+      const labels = cats.slice(), plan = cats.map(c => _plan[c] || 0), real = cats.map(c => _real[c] || 0);
+      if (_planAho > 0 || _realAho > 0) { labels.push('Ahorro'); plan.push(_planAho); real.push(_realAho); }
+      const cols = labels.map(c => CAT_CLR[c] || (c === 'Ahorro' ? '#10b981' : '#94a3b8'));
+      mkC(qChId, 'bar-h', labels, [{ label: 'Presupuestado', data: plan, borderColor: cols }, { label: 'Real', data: real, borderColor: cols }]);
+    } else {
+      // Flujo: ingresos esperados (y remanente) → la quincena → categorías planeadas, Ahorro y lo que sobra
+      const el = gxMount(qChId); if (!el) return;
+      if (S.ch[qChId]) { S.ch[qChId].destroy(); delete S.ch[qChId]; }
+      const lg = $('legend-' + qChId); if (lg) lg.innerHTML = '';
+      const grp = {}; ingEspQ.forEach(i => { const k = i.descripcion || 'Ingreso'; grp[k] = (grp[k] || 0) + (i.monto || 0); });
+      if (remanente > 0) grp['Remanente'] = (grp['Remanente'] || 0) + remanente;
+      const src = Object.entries(grp).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value, color: 'var(--gx-in)' }));
+      const dst = _cats.map(c => ({ name: c, value: _plan[c], color: CAT_CLR[c] || 'var(--gx-neu)' }));
+      const tIng = src.reduce((a, n) => a + n.value, 0), gastado = _cats.reduce((a, c) => a + _plan[c], 0) + _planAho;
+      if (_planAho > 0) dst.push({ name: 'Ahorro', value: _planAho, color: '#d4af37' });
+      if (tIng > gastado) dst.push({ name: 'Sobrante', value: tIng - gastado, color: 'var(--gx-ac2)' });
+      if (gastado > tIng) src.push({ name: 'Saldo previo', value: gastado - tIng, color: 'var(--gx-neu)' });
+      gxDraw(el, w => gxSankey(w, src, dst, { hub: 'Plan' }));
+    }
+  };
+  (S._qChartFn || (S._qChartFn = {}))[ctx] = _qDibujar;
+  const _qPills = ['doughnut:🍩 Dona', 'bar:📊 Barras', 'sankey:🔀 Flujo'].map(o => { const [v, l] = o.split(':'); return `<button class="f-pill${(S._qChartType || 'doughnut') === v ? ' on' : ''}" data-qct="${v}" onclick="setQChart('${ctx}','${v}')">${l}</button>`; }).join('');
+  setTimeout(() => { if (!S._qChartCollapsed) _qDibujar(); }, 20);
 
   // Orden por monto: solo cambia la vista (lo guardado conserva su orden).
   const gasVista = S._qSort ? [...gasEsp].sort((a, b) => S._qSort === 'asc' ? (a.monto || 0) - (b.monto || 0) : (b.monto || 0) - (a.monto || 0)) : gasEsp;
@@ -5425,10 +5455,15 @@ function rQuincenaPanel(ctx) {
     <div class="mov-cards" id="tbl-gastos-q-${ctx}-body">
       ${gasVista.map(cardHTML).join('')}
     </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Aún no hay gastos registrados esta ${_uTxt()}. Usa el botón <strong>Registrar Próximo Gasto</strong> de arriba.</div>`}
-    <div style="margin-top:10px;background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;border:1px solid var(--border-default)">
-      <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">🧩 Gastos planeados por categoría${ctBtns(qChId,[['Dona','doughnut'],['Barras','bar-h']],'doughnut')}</div>
-      <div class="cwrap"><canvas id="${qChId}"></canvas></div>
-      <div id="legend-${qChId}" class="chart-legend"></div>
+    <div class="mov-cbox${S._qChartCollapsed ? ' collapsed' : ''}" id="q-cbox-${ctx}">
+      <div class="mov-cbox-hdr">
+        <h3 class="mov-cbox-ttl" onclick="toggleQChart('${ctx}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" aria-expanded="${S._qChartCollapsed ? 'false' : 'true'}"><i class="ti ti-chevron-${S._qChartCollapsed ? 'right' : 'down'} mov-cbox-chev"></i> Análisis visual</h3>
+        <div class="mov-cbox-pills" style="display:flex;gap:4px">${_qPills}</div>
+      </div>
+      <div class="mov-cbox-body">
+        <div class="cwrap-lg"><canvas id="${qChId}"></canvas></div>
+        <div id="legend-${qChId}" class="chart-legend"></div>
+      </div>
     </div>
   </div>
 
@@ -5440,6 +5475,20 @@ function rQuincenaPanel(ctx) {
     <div id="${qAiId}" style="display:none"></div>
   </div>
 </div>`;
+}
+
+function setQChart(ctx, tipo) {
+  S._qChartType = tipo;
+  document.querySelectorAll('#q-cbox-' + ctx + ' .f-pill[data-qct]').forEach(b => b.classList.toggle('on', b.dataset.qct === tipo));
+  if (S._qChartFn && S._qChartFn[ctx]) S._qChartFn[ctx]();
+}
+function toggleQChart(ctx) {
+  S._qChartCollapsed = !S._qChartCollapsed;
+  const box = $('q-cbox-' + ctx); if (!box) return;
+  box.classList.toggle('collapsed', S._qChartCollapsed);
+  const ttl = box.querySelector('.mov-cbox-ttl'); if (ttl) ttl.setAttribute('aria-expanded', S._qChartCollapsed ? 'false' : 'true');
+  const ch = box.querySelector('.mov-cbox-chev'); if (ch) ch.className = `ti ti-chevron-${S._qChartCollapsed ? 'right' : 'down'} mov-cbox-chev`;
+  if (!S._qChartCollapsed && S._qChartFn && S._qChartFn[ctx]) S._qChartFn[ctx]();
 }
 
 function navQ(dir, mode) {
