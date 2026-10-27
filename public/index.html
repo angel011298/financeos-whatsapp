@@ -2349,7 +2349,7 @@ body.sheet-locked{overflow:hidden}
     <!-- MAIN -->
     <main>
       <div id="ghost-banner">
-        <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-eye"></i> <strong>Modo Fantasma</strong> — viendo el dashboard de Alicia</span>
+        <span style="flex:1;min-width:0;line-height:1.35"><i class="ti ti-eye" style="vertical-align:-2px"></i> <strong>Modo Fantasma</strong> — viendo a Alicia en vivo, sin avisarle (chat solo lectura)</span>
         <button onclick="toggleGhost()" title="Salir"><i class="ti ti-x"></i></button>
       </div>
 
@@ -2551,10 +2551,11 @@ function badgeFecha(d) {
 }
 
 async function api(m, p, b, opts={}) {
+  if (S.ghostMode && m !== 'GET' && /^\/api\/(pareja|push)\//.test(p)) throw new Error('Modo fantasma: solo lectura');   // el chat de pareja y los avisos no se tocan a nombre de Alicia
   const ctrl = new AbortController();
   const tid  = setTimeout(() => ctrl.abort(), opts.timeout || 28000);
   try {
-    const r = await fetch(p, { method:m, headers:{'Content-Type':'application/json'}, body:b?JSON.stringify(b):undefined, signal:ctrl.signal });
+    const r = await fetch(p, { method:m, headers: S.ghostMode ? {'Content-Type':'application/json','x-ghost':'1'} : {'Content-Type':'application/json'}, body:b?JSON.stringify(b):undefined, signal:ctrl.signal });
     clearTimeout(tid);
     if (r.status === 413) throw new Error('Audio demasiado largo. Graba menos de 60 segundos.');
     const text = await r.text();
@@ -2682,22 +2683,25 @@ function logout() {
 }
 
 // ── GHOST MODE ───────────────────────────────────────────────────────────────
+// Estado que pertenece a UNA cuenta (chat de pareja, Wishlist, notas, filtros…): se limpia al entrar y salir del modo fantasma
+// para no mezclar lo de Alicia con lo de Ángel.
+function _resetCuentaState() {
+  ['_par', '_wl', '_notasInicio', '_niditoItems', '_ndCmts', '_shMov', '_shGas', '_insights', '_ngCache', '_negProyId', '_calData', '_expItemData',
+   '_movData', '_metaData', '_tdcData', '_patData', '_periodoIni', '_liveSig', '_hojaKey', '_hojaSnap'].forEach(k => { delete S[k]; });
+  S.movF = null; S.periodo = { tipo: 'quincena', offset: 0 }; S.qOffset = 0;
+  if (S._parT) { clearInterval(S._parT); S._parT = null; }
+}
 async function toggleGhost() {
   if (S.ghostMode) {
     exitGhost();
   } else {
-    let bPhone = localStorage.getItem('fos_phone_B');
-    if (!bPhone) {
-      const r = await api('GET', '/api/usuarios');
-      if (r.success && r.data) {
-        const otros = r.data.filter(u => u.telefono !== S.adminPhone);
-        if (otros.length) { bPhone = otros[0].telefono; localStorage.setItem('fos_phone_B', bPhone); }
-      }
-    }
+    // Alicia = la pareja registrada de la cuenta de Ángel: la misma que usan el chat, los avisos y compartir
+    const bPhone = S.data?.pareja?.telefono;
     if (!bPhone) {
       alert('Alicia aún no ha iniciado sesión en ningún dispositivo.\nUsa WhatsApp o pídele que acceda al dashboard primero.');
       return;
     }
+    cerrarHoja(); _resetCuentaState();
     S.ghostMode = true;
     S.phone     = bPhone;
     $('ghost-icon').className = 'ti ti-eye-off';
@@ -2706,8 +2710,8 @@ async function toggleGhost() {
     await load();
   }
 }
-
 function exitGhost() {
+  cerrarHoja(); _resetCuentaState();
   S.ghostMode = false;
   S.phone     = S.adminPhone;
   $('ghost-icon').className = 'ti ti-eye';
@@ -2750,7 +2754,7 @@ function _startLivePoll() {
     if (!S.phone) return;
     if (document.visibilityState !== 'visible') return;
     if ($('ovl')?.classList.contains('open')) return;
-    if ($('dash-sheet')?.classList.contains('open')) return;
+    if ($('dash-sheet')?.classList.contains('open') && !S.ghostMode) return;   // fantasma = solo mira, así que también se actualiza con un módulo abierto
     // Si la petición anterior sigue en vuelo (conexión lenta), no lancemos otra
     // encima — dos respuestas resolviendo casi juntas disparaban dos renderTab()
     // seguidos (pantalla "parpadeando") aunque los datos fueran los mismos.
@@ -2764,6 +2768,7 @@ function _startLivePoll() {
         S._liveSig = fresh;
         S.data = { ...(r.data || {}), despensa: S.data?.despensa };   // la despensa llega en otra petición: no perderla
         renderTab(S.tab);
+        if (S.ghostMode) _refrescarHojaAbierta();
       }
     } catch { /* un poll fallido no debe interrumpir al usuario; se reintenta en 2s */ }
     finally { _livePollBusy = false; }
@@ -2779,6 +2784,18 @@ function _startLivePoll() {
     setTimeout(() => { S._chatVista = 'par'; go('chat'); }, 600);
   }   // deja la Wishlist lista antes de abrirla (y pinta el punto de lo compartido)
   setInterval(() => { if (document.visibilityState === 'visible') wlBadgePar(); }, 20000);
+}
+
+// Repinta la hoja abierta (Gastos de la quincena, Cuentas, Despensa…) con los datos nuevos; los módulos grandes ya se repintan con renderTab(S.tab)
+function _refrescarHojaAbierta() {
+  const k = S._hojaKey; if (!k || S._modalTab) return;
+  try {
+    if (k === 'gastQuinc' || k === 'ingQuinc') refreshQuincenaPanel();
+    else if (k === 'cuentas' || k === 'retiro') cuRepaint();
+    else if (k === 'despensa') rDespensa();
+    else if (k === 'analisis') gxPanel();
+    else if (k === 'notas') niLoad();
+  } catch (e) { console.error('refrescar hoja:', e); }
 }
 
 // ── Cifras de los widgets (.kpi-val): tan grandes como quepan ────────────────
@@ -10509,6 +10526,7 @@ function parAbrirTarjeta(kind, id, mio) {
   } else { wlAbrir(); if (!mio) { S._wl.vista = 'pareja'; setTimeout(() => wlRender(), 50); } }
 }
 async function parArchivo(input) {
+  if (S.ghostMode) { input.value = ''; toast('Modo fantasma: solo lectura', 'warn'); return; }
   const files = [...(input.files || [])]; input.value = '';
   for (const f of files) {
     if (f.size > 25 * 1024 * 1024) { toast(`${f.name} pesa más de 25 MB`, 'error'); continue; }
@@ -10620,6 +10638,7 @@ async function parPerfil(p) {
 }
 // Foto de fondo: se reduce y comprime aquí (JPEG, lado mayor 1400 px) antes de subirla cifrada
 function parFondoFoto(input) {
+  if (S.ghostMode) { input.value = ''; toast('Modo fantasma: solo lectura', 'warn'); return; }
   const f = input.files?.[0]; input.value = ''; if (!f) return;
   const img = new Image(), url = URL.createObjectURL(f);
   img.onload = () => {
@@ -10658,6 +10677,7 @@ function parFoto(input) {
 // Avisos push (en iPhone: solo con la app instalada en la pantalla de inicio, iOS 16.4+)
 function _b64u(s) { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...b].map(c => c.charCodeAt(0))); }
 async function _parPushEstado() {
+  if (S.ghostMode) return;   // nunca suscribir este dispositivo a los avisos de Alicia
   const b = $('par-push'); if (!b) return;
   const ok = 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
   let sub = null;

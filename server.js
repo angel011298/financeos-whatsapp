@@ -2872,7 +2872,7 @@ async function callIA(user, sysBlocks, text, phone, direct = false) {
 app.get('/api/dashboard/:phone', async (req, res) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
-    tocarPresencia(phone, false).catch(() => {});   // "últ. vez" del chat de pareja = última vez con la app abierta
+    if (!_esGhost(req)) tocarPresencia(phone, false).catch(() => {});   // "últ. vez" del chat de pareja = última vez con la app abierta (el modo fantasma no cuenta)
     // Auto-create usuario si accede por primera vez desde la web
     const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', phone).maybeSingle();
     if (!existing) {
@@ -2880,7 +2880,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
     }
     // Registra los recurrentes vencidos antes de armar el dashboard, para que
     // aparezcan de inmediato en los totales de esta misma respuesta.
-    await procesarRecurrentes(phone).catch(() => null);
+    if (!_esGhost(req)) await procesarRecurrentes(phone).catch(() => null);
     const qActual = getQuincenaActual().key;
     // Todas las consultas de este endpoint llevan un criterio de orden secundario
     // determinista (id) además de su criterio de negocio (prioridad/fecha/contador/orden).
@@ -6264,6 +6264,7 @@ async function _parejaO403(phone, res) {
   return par;
 }
 const _presW = new Map();
+const _esGhost = req => String((req && req.headers && req.headers['x-ghost']) || '') === '1';
 async function tocarPresencia(phone, enChat) {
   const t = Date.now();
   if (!enChat && t - (_presW.get(phone) || 0) < 20000) return;   // sin escribir a la base en cada sondeo
@@ -6301,12 +6302,16 @@ async function _avisarPar(de, par) {
   pushA(par.telefono, { title: `💬 ${nombre}`, body: 'Nuevo mensaje', tag: 'pareja-chat', url: '/?chat=pareja' }).catch(() => {});
 }
 
+app.use(['/api/pareja', '/api/push/suscribir'], (req, res, next) => (_esGhost(req) && req.method !== 'GET')
+  ? res.status(403).json({ success: false, error: 'Modo fantasma: solo lectura' }) : next());
+
 // Mensajes (los últimos 80, o los nuevos desde ?desde=id, o anteriores con ?antes=id) + presencia de la pareja
 app.get('/api/pareja/chat', async (req, res) => {
   try {
     const { phone } = req.query;
     const par = await _parejaO403(phone, res); if (!par) return;
-    const desde = parseInt(req.query.desde) || 0, antes = parseInt(req.query.antes) || 0, visto = req.query.visto === '1';
+    const ghost = _esGhost(req);
+    const desde = parseInt(req.query.desde) || 0, antes = parseInt(req.query.antes) || 0, visto = req.query.visto === '1' && !ghost;   // fantasma: nunca marca leído
     const pares = [phone, par.telefono];
     let q = sb.from('pareja_mensajes').select('*').in('de', pares).in('para', pares).is('deleted_at', null);
     if (desde) q = q.gt('id', desde).order('id', { ascending: true }).limit(200);
@@ -6321,7 +6326,7 @@ app.get('/api/pareja/chat', async (req, res) => {
       desde ? sb.from('pareja_mensajes').select('id').in('de', pares).in('para', pares).not('deleted_at', 'is', null).gte('deleted_at', new Date(Date.now() - 120000).toISOString()) : Promise.resolve({ data: [] }),
     ]);
     if (error) return res.status(400).json({ success: false, error: error.message });
-    tocarPresencia(phone, visto).catch(() => {});
+    if (!ghost) tocarPresencia(phone, visto).catch(() => {});
     const ahora = Date.now(), ls = pres?.last_seen ? new Date(pres.last_seen).getTime() : 0;
     const rows = (data || []).sort((a, b) => a.id - b.id).map(m => _msgOut(m, phone));
     const pp = perf[par.telefono] || {};
