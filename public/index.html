@@ -119,6 +119,33 @@ body{
 }
 .auth-box p{color:var(--text-2);margin-bottom:20px;font-size:var(--text-sm)}
 
+/* ═══════════════════════════════════════════════════════ CANDADO (PIN) */
+#pin-lock{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;background:var(--bg-app);padding:env(safe-area-inset-top,0px) 16px env(safe-area-inset-bottom,0px);box-sizing:border-box;overflow-y:auto}
+#pin-lock.on{display:flex}
+.pin-box{width:300px;max-width:100%;text-align:center;margin:auto}
+.pin-logo{width:64px;height:64px;border-radius:16px;display:block;margin:0 auto 12px}
+.pin-box h1{font-size:21px;font-weight:700;color:var(--text-1);margin-bottom:6px}
+.pin-msg{min-height:20px;margin-bottom:18px;color:var(--text-2);font-size:var(--text-sm)}
+.pin-msg.err{color:var(--color-expense)}
+.pin-dots{display:flex;justify-content:center;gap:16px;margin-bottom:26px}
+.pin-dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--text-3);transition:background var(--t-fast),border-color var(--t-fast),transform var(--t-fast) var(--ease-spring)}
+.pin-dots i.on{background:var(--text-1);border-color:var(--text-1);transform:scale(1.15)}
+.pin-dots.err{animation:pin-shake .4s}
+@keyframes pin-shake{20%,60%{transform:translateX(-9px)}40%,80%{transform:translateX(9px)}}
+.pin-pad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;justify-items:center}
+.pin-pad button{width:72px;height:72px;border-radius:50%;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-1);font-family:inherit;font-size:26px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform var(--t-fast) var(--ease-spring),background var(--t-fast),opacity var(--t-fast);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.pin-pad button:hover{background:var(--bg-surface-2)}
+.pin-pad button:active{transform:scale(.92)}
+.pin-pad .pin-blank{visibility:hidden}
+.pin-pad.off button{opacity:.35;cursor:not-allowed}
+@media(max-height:640px){
+  .pin-logo{display:none}
+  .pin-msg{margin-bottom:12px}
+  .pin-dots{margin-bottom:16px}
+  .pin-pad{gap:8px}
+  .pin-pad button{width:60px;height:60px;font-size:22px}
+}
+
 /* ═══════════════════════════════════════════════════════ WELCOME */
 .welcome-ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
 .welcome-ovl.open{display:flex}
@@ -2220,6 +2247,127 @@ body.sheet-locked{overflow:hidden}
 </head>
 <body>
 
+<!-- ── CANDADO: PIN de 4 dígitos (se vuelve a pedir al cerrar la pestaña) ── -->
+<div id="pin-lock" role="dialog" aria-modal="true" aria-labelledby="pin-ttl">
+  <div class="pin-box">
+    <img class="pin-logo" src="/icon.svg" alt="">
+    <h1 id="pin-ttl">Us ♡</h1>
+    <div class="pin-msg" id="pin-msg" role="status" aria-live="polite">Ingresa tu PIN para continuar</div>
+    <div class="pin-dots" id="pin-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="pin-pad" id="pin-pad">
+      <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
+      <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button>
+      <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button>
+      <button type="button" class="pin-blank" tabindex="-1" aria-hidden="true"></button>
+      <button type="button" data-k="0">0</button>
+      <button type="button" data-k="del" aria-label="Borrar"><i class="ti ti-backspace"></i></button>
+    </div>
+  </div>
+</div>
+<script>
+// Candado de pantalla con PIN de 4 dígitos. Solo aplica a la sesión de Ángel (Alicia entra por su enlace y no lo lleva).
+// Se pide al abrir la app en una pestaña nueva — cerrar la pestaña lo vuelve a pedir aunque el navegador siga abierto —;
+// recargar la misma pestaña (o la recarga automática por versión nueva) no lo pide otra vez: la pestaña deja un "latido" en
+// sessionStorage y solo se respeta si es de hace menos de GRACIA ms. La app NO arranca (no consulta datos ni marca "en línea")
+// hasta desbloquear. OJO: es un candado de privacidad del lado del navegador; no protege al servidor.
+(function () {
+  const HASH = '240eb2484f40a9d48e540334c396f0e8f6a796612470d2e30d1d7e73ceca0e3d';   // SHA-256 de 'fos-pin:' + PIN
+  const GRACIA = 12000, LARGO = 4, TEXTO = 'Ingresa tu PIN para continuar';
+  const ss = {
+    g: k => { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+    s: (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} },
+    d: k => { try { sessionStorage.removeItem(k); } catch (e) {} }
+  };
+  const aplica = () => {
+    try {
+      const q = location.search, h = location.hash;
+      if (new URLSearchParams(q).get('t')) return false;     // enlace de Alicia
+      if (/angel|alicia/.test(q + h)) return true;           // ?angel y ?alicia (modo fantasma) son de Ángel
+      return localStorage.getItem('fos_identity') === 'A';
+    } catch (e) { return false; }
+  };
+  const latir = () => ss.s('fos_pin_vivo', String(Date.now()));
+  const vigente = () => ss.g('fos_pin_ok') === '1' && Date.now() - (+ss.g('fos_pin_vivo') || 0) < GRACIA;
+
+  const ovl = document.getElementById('pin-lock'), pad = document.getElementById('pin-pad');
+  const dotsBox = document.getElementById('pin-dots'), dots = dotsBox.querySelectorAll('i'), msg = document.getElementById('pin-msg');
+  const cola = [];
+  let libre = !aplica() || vigente(), tecleado = '', ocupado = false, latido = null, reloj = null;
+
+  const pintar = () => dots.forEach((d, i) => d.classList.toggle('on', i < tecleado.length));
+  const decir = (t, err) => { msg.textContent = t; msg.classList.toggle('err', !!err); };
+  const espera = () => Math.max(0, (+ss.g('fos_pin_hasta') || 0) - Date.now());
+  async function huella(p) {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('fos-pin:' + p));
+    return Array.from(new Uint8Array(d)).map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+  function vivir() {
+    latir();
+    if (!latido) latido = setInterval(latir, 4000);
+    addEventListener('pagehide', latir);
+    document.addEventListener('visibilitychange', latir);
+  }
+  function esperar() {   // tras 5 fallos seguidos: pausa de 30 s (y más si insiste)
+    clearInterval(reloj); reloj = null;
+    const tick = () => {
+      const f = espera();
+      pad.classList.toggle('off', f > 0);
+      if (f > 0) decir('Demasiados intentos. Espera ' + Math.ceil(f / 1000) + ' s', true);
+      else { clearInterval(reloj); reloj = null; decir(TEXTO); }
+    };
+    tick(); if (espera() > 0) reloj = setInterval(tick, 1000);
+  }
+  function abrir() {
+    libre = true; tecleado = ''; pintar();
+    ss.s('fos_pin_ok', '1'); vivir();
+    ovl.classList.remove('on');
+    document.removeEventListener('keydown', teclas, true);
+    cola.splice(0).forEach(f => { try { f(); } catch (e) { console.error(e); } });
+  }
+  async function revisar() {
+    if (!(window.crypto && crypto.subtle)) { console.warn('PIN: este contexto no permite verificarlo (se necesita https); se omite'); return abrir(); }
+    ocupado = true;
+    let bien = false;
+    try { bien = (await huella(tecleado)) === HASH; } finally { ocupado = false; }
+    if (bien) { ss.d('fos_pin_fallos'); ss.d('fos_pin_hasta'); return abrir(); }
+    const n = (+ss.g('fos_pin_fallos') || 0) + 1;
+    ss.s('fos_pin_fallos', String(n));
+    tecleado = ''; pintar();
+    dotsBox.classList.remove('err'); void dotsBox.offsetWidth; dotsBox.classList.add('err');
+    if (navigator.vibrate) navigator.vibrate(120);
+    if (n % 5 === 0) { ss.s('fos_pin_hasta', String(Date.now() + 30000 * Math.min(n / 5, 6))); esperar(); }
+    else decir('PIN incorrecto', true);
+  }
+  function teclear(k) {
+    if (libre || ocupado || espera() > 0) return;
+    if (k === 'del') tecleado = tecleado.slice(0, -1);
+    else if (/^\d$/.test(k) && tecleado.length < LARGO) tecleado += k;
+    else return;
+    if (msg.classList.contains('err')) decir(TEXTO);
+    pintar();
+    if (tecleado.length === LARGO) revisar();
+  }
+  function teclas(e) {   // teclado físico
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/^\d$/.test(e.key)) teclear(e.key);
+    else if (e.key === 'Backspace') teclear('del');
+    else return;
+    e.preventDefault(); e.stopPropagation();
+  }
+  pad.addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (b) teclear(b.dataset.k); });
+
+  if (libre) { if (aplica()) vivir(); }   // recarga dentro de la gracia: sigue desbloqueado
+  else { ovl.classList.add('on'); document.addEventListener('keydown', teclas, true); esperar(); }
+
+  window.fosPin = {
+    libre: () => libre,
+    alDesbloquear: f => { if (libre) f(); else cola.push(f); },   // la app arranca aquí cuando se desbloquea
+    confiar: () => { if (libre && !latido) { ss.s('fos_pin_ok', '1'); vivir(); } },   // primera vez en este equipo: ya te identificaste
+    bloquear: () => { ss.d('fos_pin_ok'); ss.d('fos_pin_vivo'); location.reload(); }
+  };
+})();
+</script>
+
 <!-- ── PANTALLA: REGISTRO DE TELÉFONO ── -->
 <div class="auth-wrap" id="auth-phone" style="display:none">
   <div class="auth-box">
@@ -2319,6 +2467,10 @@ body.sheet-locked{overflow:hidden}
         <button id="wa-btn" class="btn btn-ghost-purple btn-sm" style="width:100%;margin-bottom:6px;display:none;background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.3);justify-content:center" onclick="sendWhatsAppInvite()">
           <i class="ti ti-brand-whatsapp"></i><span>Conectar WhatsApp</span>
         </button>
+        <!-- Bloquear pantalla — solo Ángel (identity A) -->
+        <button id="lock-btn" class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:6px;display:none;justify-content:center" onclick="fosPin.bloquear()">
+          <i class="ti ti-lock"></i><span>Bloquear pantalla</span>
+        </button>
         <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="logout()">
           <i class="ti ti-logout"></i><span>Cerrar sesión</span>
         </button>
@@ -2342,6 +2494,7 @@ body.sheet-locked{overflow:hidden}
       <a onclick="go('chat')" id="rl-chat" data-tip="Chat" aria-label="Chat"><i class="ti ti-message-circle"></i></a>
       <a onclick="openMobileMore()" id="rl-mas" data-tip="Más" aria-label="Más" style="display:none"><i class="ti ti-grid-dots"></i></a>
       <div style="flex:1"></div>
+      <a onclick="fosPin.bloquear()" id="rl-lock" data-tip="Bloquear pantalla" aria-label="Bloquear pantalla" style="display:none"><i class="ti ti-lock"></i></a>
       <a onclick="toggleTheme()" id="rl-theme-btn" data-tip="Modo día" aria-label="Cambiar tema"><i class="ti ti-moon" id="rl-theme-icon"></i></a>
       <a onclick="logout()" id="rl-logout" data-tip="Cerrar sesión" aria-label="Cerrar sesión"><i class="ti ti-logout"></i></a>
     </nav>
@@ -2420,6 +2573,10 @@ body.sheet-locked{overflow:hidden}
         <!-- Enlace para Alicia — visible solo para Ángel (identity A) -->
         <div class="sheet-item" id="mn-alicia-link" style="display:none" onclick="genAliciaLink();closeMobileMore()">
           <i class="ti ti-link"></i><span>Enlace para Alicia</span>
+        </div>
+        <!-- Bloquear pantalla — solo Ángel (identity A) -->
+        <div class="sheet-item" id="mn-lock" style="display:none" onclick="closeMobileMore();fosPin.bloquear()">
+          <i class="ti ti-lock"></i><span>Bloquear</span>
         </div>
         <div class="sheet-item" style="color:var(--red)" onclick="logout()">
           <i class="ti ti-logout"></i><span>Salir</span>
@@ -2650,6 +2807,8 @@ function showApp(id, firstTime = false) {
   if (id === 'A') {
     const alb = $('alicia-link-btn'); if (alb) alb.style.display = 'flex';
     const mnAlb = $('mn-alicia-link'); if (mnAlb) mnAlb.style.display = 'flex';
+    ['lock-btn', 'rl-lock', 'mn-lock'].forEach(k => { const el = $(k); if (el) el.style.display = 'flex'; });   // candado manual
+    window.fosPin?.confiar();   // primera vez en este equipo: no vuelvas a pedir el PIN en esta pestaña
   }
   if (id === 'B') $('wa-btn').style.display = 'flex';
   const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
@@ -4581,6 +4740,14 @@ function getDineritoGastado(from, to) {
     .reduce((a, m) => a + (m.monto || 0), 0);
 }
 function toggleQDin() { S._qDinOpen = !S._qDinOpen; refreshQuincenaPanel(); }
+// Transporte: lo gastado en la categoría Transporte (combi, camión, metro, pasajes…) dentro de la quincena. Misma mecánica
+// que el Dinerito de novios: barra de avance contra lo presupuestado y, al tocar la tarjeta, el detalle de esos gastos.
+const _esGastoTransp = m => !m.deleted_at && m.tipo === 'GASTO' && _catF(m) === 'Transporte';
+function getTransporteMovs(from, to) {
+  return (S.data?.movs || []).filter(m => _esGastoTransp(m) && (m.fecha || '') >= from && (m.fecha || '') <= to)
+    .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+}
+function toggleQTr() { S._qTrOpen = !S._qTrOpen; refreshQuincenaPanel(); }
 // Abre Nidito parado en la quincena del renglón. Se fija S._niditoQ/_ndDin ANTES de navegar para que
 // la carga inicial de rNidito use la misma quincena y no pise el monto con el de otra.
 function ndIrADinerito(qKey, destino) {
@@ -4615,8 +4782,8 @@ const _MOD_RESET = {
   },
   presupuesto: () => _borrarEstado('_prOff', '_prSin', '_prAn', 'metaSort'),
   deudas: () => _borrarEstado('_tdcQ', '_tdcSearchOpen'),
-  gastQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen', '_shGas', '_qChartType', '_qChartCollapsed'); _tblReset('tbl-gastos-q-sheet'); },
-  ingQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen', '_qChartType', '_qChartCollapsed'); _tblReset('tbl-gastos-q-sheet'); },
+  gastQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen', '_qTrOpen', '_shGas', '_qChartType', '_qChartCollapsed'); _tblReset('tbl-gastos-q-sheet'); },
+  ingQuinc: () => { _borrarEstado('_qSort', '_tarjOpen', '_qDespOpen', '_qDinOpen', '_qTrOpen', '_qChartType', '_qChartCollapsed'); _tblReset('tbl-gastos-q-sheet'); },
   analisis: () => _borrarEstado('_gx'),
   despensa: () => _borrarEstado('_despQ', '_despSearchOpen', '_despEdit'),
   notas: () => _borrarEstado('_niQ', '_niBuscando'),
@@ -5362,13 +5529,32 @@ function rQuincenaPanel(ctx) {
         const sub     = ([catG, g.comentarios].filter(Boolean).join(' · ') || '—') + (g.compartido ? ' · 💞 compartido' : '');
         const esDesp  = /^despensa$/i.test((g.descripcion || '').trim());   // Despensa guardada en el presupuesto
         const esTr    = !!g._isTransporte;
+        // Transporte: igual que el Dinerito de novios — barra con lo gastado en la categoría contra lo presupuestado y, al tocarla, el detalle.
+        let trMid = '', trExp = '';
+        if (esTr) {
+          const movsT = getTransporteMovs(qi.from, qi.to), gastado = movsT.reduce((a, m) => a + (m.monto || 0), 0), rest = g.monto - gastado;
+          const pct = g.monto > 0 ? Math.min(100, Math.round(gastado / g.monto * 100)) : 0;
+          const abierto = !!S._qTrOpen, dh = g._dias === 1 ? '1 día hábil' : g._dias + ' días hábiles';
+          trMid = `<div class="mov-card-mid q-card-tap" onclick="toggleQTr()" role="button" tabindex="0" aria-expanded="${abierto}" title="${abierto ? 'Ocultar gastos de transporte' : 'Ver gastos de transporte'}"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+            <div class="mov-card-title">${g.descripcion}<i class="ti ti-chevron-${abierto ? 'up' : 'down'}"></i></div>
+            <div class="mov-card-sub">${dh} · ${rest >= 0 ? 'restan ' + fmt(rest) : 'excedido ' + fmt(-rest)}</div>
+            <div class="mov-card-sub">Gastado en transporte: ${fmt(gastado)}</div>
+            <div class="q-din-bar${rest < 0 ? ' over' : ''}"><span style="width:${pct}%"></span></div>
+          </div>`;
+          if (abierto) trExp = `<div class="q-desp-exp" onclick="event.stopPropagation()">
+              <div class="q-din-sec"><span>🚌 Gastado en transporte</span><b class="red">${fmt(gastado)}</b></div>
+              <div class="mov-cards">${movsT.map(m => _movCardHTML(m, true)).join('') || `<div class="desp-empty">Aún no hay gastos de transporte en esta ${_uTxt()}.</div>`}</div>
+              <div class="q-din-tot">Presupuestado esta ${_uTxt()}: <b>${fmt(g.monto)}</b> · ${g._dias} × ${fmt(g._diario)} por día hábil</div>
+            </div>`;
+        }
         return `<div class="mov-card q-card${pagadoId?' pagado':''}">
           ${chk}
           ${catIcHTML(catG || 'OTROS', g)}
-          <div class="mov-card-mid${esDesp ? ' q-card-tap' : ''}"${esDesp ? ` onclick="toggleQDesp()" role="button" tabindex="0" title="${S._qDespOpen ? 'Ocultar artículos' : 'Ver artículos'}"` : ''}>
+          ${esTr ? trMid : `<div class="mov-card-mid${esDesp ? ' q-card-tap' : ''}"${esDesp ? ` onclick="toggleQDesp()" role="button" tabindex="0" title="${S._qDespOpen ? 'Ocultar artículos' : 'Ver artículos'}"` : ''}>
             <div class="mov-card-title">${g.descripcion}${esDesp ? `<i class="ti ti-chevron-${S._qDespOpen ? 'up' : 'down'}"></i>` : ''}</div>
-            ${esTr ? '' : `<div class="mov-card-sub">${sub}</div>`}
-          </div>
+            <div class="mov-card-sub">${sub}</div>
+          </div>`}
           <div class="mov-card-val red">${fmt(g.monto)}</div>
           <div class="q-card-foot">
             <div class="q-card-fp">
@@ -5384,6 +5570,7 @@ function rQuincenaPanel(ctx) {
             </div>
           </div>
           ${esDesp && S._qDespOpen ? _qDespExpHTML(true) : ''}
+          ${trExp}
         </div>`;
   };
   const _fpDe    = g => fpMap[g.descripcion] || g.forma_pago || '';
@@ -5535,6 +5722,7 @@ async function loadQIA(ctx, qi) {
     const items    = gasEsp.map(g => ({
       desc: g.descripcion, esp: g.monto,
       real: g._isDinerito ? getDineritoGastado(qi.from, qi.to)
+        : g._isTransporte ? getTransporteMovs(qi.from, qi.to).reduce((a, m) => a + (m.monto || 0), 0)
         : qMovs.filter(m=>m.tipo==='GASTO'&&(m.concepto||'').toLowerCase().includes(g.descripcion.toLowerCase())).reduce((a,m)=>a+(m.monto||0),0)
     }));
     const r = await api('POST', '/api/quincenal-ia', {
@@ -11187,6 +11375,8 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
 
 // ── INICIALIZACIÓN ────────────────────────────────────────────────────────────
 (function init() {
+  // Candado de PIN: la app no arranca (ni consulta datos ni marca "en línea") hasta que se desbloquea
+  if (window.fosPin && !window.fosPin.libre()) { window.fosPin.alDesbloquear(init); return; }
   // Restaurar tema
   if (localStorage.getItem('fos_theme') === 'light') {
     document.documentElement.classList.add('light');
