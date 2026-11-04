@@ -2243,6 +2243,81 @@ body.sheet-locked{overflow:hidden}
 .ni-quien.activa{color:var(--accent-couple)}
 .ni-quien .notas-status{margin-left:0}
 .ni-card-comp{color:var(--accent-couple);font-weight:800}
+
+/* ═══════════════════════════════════════════════════════ MICROINTERACCIONES iOS (móvil)
+   Resortes, hojas que se arrastran, tirar para actualizar y respuesta al tacto. Vive en móvil (≤899px) y se apaga con
+   «reducir movimiento». Los gestos están en el bloque «iOS FEEL» del script. */
+:root{--ios-ease:cubic-bezier(.32,.72,0,1);--ios-spring:cubic-bezier(.34,1.56,.64,1)}
+@keyframes ios-pop{from{opacity:0;transform:translateY(18px) scale(.94)}}
+@keyframes ios-fade{from{opacity:0}}
+@keyframes ios-rise{from{opacity:0;transform:translateY(10px) scale(.99)}}
+@keyframes ios-in-r{from{opacity:0;transform:translateX(26px)}}
+@keyframes ios-in-l{from{opacity:0;transform:translateX(-26px)}}
+@keyframes ios-in-b{from{opacity:.55;transform:translateX(-24%)}}
+@keyframes ios-in-f{from{opacity:0}}
+@keyframes ios-nav-pop{0%{transform:scale(.7)}60%{transform:scale(1.18)}100%{transform:none}}
+@keyframes pin-out{to{opacity:0;transform:scale(1.08)}}
+#pin-lock.out{animation:pin-out .4s var(--ios-ease) forwards;pointer-events:none}
+
+/* Indicador de «tirar para actualizar» */
+#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 10px);width:40px;height:40px;margin-left:-20px;border-radius:50%;
+  background:var(--bg-surface);border:1px solid var(--border-default);box-shadow:0 6px 20px rgba(0,0,0,.3);
+  display:flex;align-items:center;justify-content:center;opacity:0;transform:translateY(-70px) scale(.6);pointer-events:none;z-index:120}
+#ptr.liberar{transition:transform .5s var(--ios-ease),opacity .3s ease}
+#ptr svg{width:24px;height:24px;transform:rotate(-90deg)}
+#ptr circle{fill:none;stroke-width:2.4;stroke-linecap:round}
+#ptr .ptr-bg{stroke:var(--border-default)}
+#ptr .ptr-arc{stroke:var(--text-1);stroke-dasharray:56.55;stroke-dashoffset:56.55}
+#ptr.spin svg{animation:spin .8s linear infinite}
+body.ios-borde main{overflow-x:hidden}
+
+@media (hover:none) and (pointer:coarse){
+  *{-webkit-tap-highlight-color:transparent}
+  a,button,[onclick],[role=button],.mov-card,.mini-tile,.kpi{touch-action:manipulation}
+  button,.btn,.mini-tile,.mini-pill,.f-pill,.sheet-item,.ico-btn,.mobile-nav a,.sw-btn,.edit-pill-btn{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+}
+@media (max-width:899px){
+  /* Respuesta al tacto: resorte al soltar */
+  .ico-btn,.sheet-item,.mini-pill,.f-pill,.cat-chip,.q-fp-pill,.edit-pill-btn,.ds-close,.icon-btn,.wl-act,.sw-btn,.tarj-col[role="button"],.mobile-nav a .ti{
+    transition:transform .4s var(--ios-spring),background-color .15s,border-color .15s,color .15s,opacity .15s}
+  .ico-btn:active,.sheet-item:active,.f-pill:active,.cat-chip:active,.q-fp-pill:active,.edit-pill-btn:active,.ds-close:active,.icon-btn:active,.wl-act:active,.sw-btn:active{transform:scale(.93)}
+  .mobile-nav a .ti{display:inline-block}
+  .mobile-nav a:active .ti{transform:scale(.8)}
+  .mobile-nav a{position:relative}
+  .mobile-nav a::after{content:'';position:absolute;bottom:3px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--accent-primary);
+    opacity:0;transform:scale(0);transition:opacity .2s,transform .4s var(--ios-spring)}
+  .mobile-nav a.active::after{opacity:1;transform:scale(1)}
+  .q-card-tap:active{opacity:.7}
+  /* Asideros para arrastrar las hojas hacia abajo */
+  .ds-handle{display:block;width:38px;height:5px;border-radius:3px;background:var(--bg-surface-3);margin:8px auto 0;flex-shrink:0}
+  .ds-head{padding-top:6px;touch-action:none}
+  .pop-head,.modal h3{touch-action:none}
+  .sheet-inner::before{content:'';display:block;width:38px;height:5px;border-radius:3px;background:var(--bg-surface-3);margin:-6px auto 12px}
+  .modal::before{content:'';display:block;width:38px;height:5px;border-radius:3px;background:var(--bg-surface-3);margin:-10px auto 12px}
+}
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  @media (max-width:899px){
+    .mobile-nav{background:color-mix(in srgb,var(--bg-surface) 80%,transparent);-webkit-backdrop-filter:saturate(1.5) blur(18px);backdrop-filter:saturate(1.5) blur(18px)}
+    #dash-sheet.open,#mobile-sheet.open,.pop.open{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  }
+}
+@media (max-width:899px) and (prefers-reduced-motion:no-preference){
+  /* Hojas: suben desde abajo con la curva de iOS */
+  .ds-panel{opacity:1;transform:translateY(calc(100% + 40px));transition:transform .32s var(--ios-ease)}
+  #dash-sheet.open .ds-panel{transform:none;transition:transform .55s var(--ios-ease)}
+  #dash-sheet,#mobile-sheet{transition:background .35s ease}
+  .sheet-inner{transition:transform .32s var(--ios-ease)}
+  #mobile-sheet.open .sheet-inner{transition:transform .55s var(--ios-ease)}
+  .pop-panel,.modal{animation:ios-pop .48s var(--ios-spring)}
+  .pop.open,.ovl.open{animation:ios-fade .25s ease}
+  /* Pestañas: entran según la dirección (el chat solo con fundido: su caja es fixed) */
+  .tab.ios-in-r{animation:ios-in-r .42s var(--ios-ease)}
+  .tab.ios-in-l{animation:ios-in-l .42s var(--ios-ease)}
+  .tab.ios-in-b{animation:ios-in-b .42s var(--ios-ease)}
+  .tab.ios-in-f{animation:ios-in-f .3s ease}
+  .ios-rise{animation:ios-rise .5s var(--ios-ease) backwards;animation-delay:calc(var(--i,0) * 32ms)}
+  .mobile-nav a.active .ti{animation:ios-nav-pop .5s var(--ios-spring)}
+}
 </style>
 </head>
 <body>
@@ -2320,7 +2395,8 @@ body.sheet-locked{overflow:hidden}
   function abrir() {
     libre = true; tecleado = ''; pintar();
     ss.s('fos_pin_ok', '1'); vivir();
-    ovl.classList.remove('on');
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches) ovl.classList.remove('on');
+    else { ovl.classList.add('out'); setTimeout(() => ovl.classList.remove('on', 'out'), 400); }   // se desvanece mientras la app arranca debajo
     document.removeEventListener('keydown', teclas, true);
     cola.splice(0).forEach(f => { try { f(); } catch (e) { console.error(e); } });
   }
@@ -2329,12 +2405,12 @@ body.sheet-locked{overflow:hidden}
     ocupado = true;
     let bien = false;
     try { bien = (await huella(tecleado)) === HASH; } finally { ocupado = false; }
-    if (bien) { ss.d('fos_pin_fallos'); ss.d('fos_pin_hasta'); return abrir(); }
+    if (bien) { ss.d('fos_pin_fallos'); ss.d('fos_pin_hasta'); if (window.iosHaptic) window.iosHaptic('success'); return abrir(); }
     const n = (+ss.g('fos_pin_fallos') || 0) + 1;
     ss.s('fos_pin_fallos', String(n));
     tecleado = ''; pintar();
     dotsBox.classList.remove('err'); void dotsBox.offsetWidth; dotsBox.classList.add('err');
-    if (navigator.vibrate) navigator.vibrate(120);
+    if (window.iosHaptic) window.iosHaptic('error'); else if (navigator.vibrate) navigator.vibrate(120);
     if (n % 5 === 0) { ss.s('fos_pin_hasta', String(Date.now() + 30000 * Math.min(n / 5, 6))); esperar(); }
     else decir('PIN incorrecto', true);
   }
@@ -2344,6 +2420,7 @@ body.sheet-locked{overflow:hidden}
     else if (/^\d$/.test(k) && tecleado.length < LARGO) tecleado += k;
     else return;
     if (msg.classList.contains('err')) decir(TEXTO);
+    if (k !== 'del' && window.iosHaptic) window.iosHaptic('light');
     pintar();
     if (tecleado.length === LARGO) revisar();
   }
@@ -2764,7 +2841,7 @@ function openMobileMore() {
 }
 function closeMobileMore() {
   const sheet = $('mobile-sheet');
-  if (sheet) { sheet.classList.remove('open'); setTimeout(() => { sheet.style.display = 'none'; }, 220); }
+  if (sheet) { sheet.classList.remove('open'); setTimeout(() => { if (!sheet.classList.contains('open')) sheet.style.display = 'none'; }, 320); }
 }
 
 // ── AUTH FLOW ────────────────────────────────────────────────────────────────
@@ -2848,6 +2925,7 @@ function _resetCuentaState() {
   ['_par', '_wl', '_notasInicio', '_niditoItems', '_ndCmts', '_shMov', '_shGas', '_insights', '_ngCache', '_negProyId', '_calData', '_expItemData',
    '_movData', '_metaData', '_tdcData', '_patData', '_periodoIni', '_liveSig', '_hojaKey', '_hojaSnap'].forEach(k => { delete S[k]; });
   S.movF = null; S.periodo = { tipo: 'quincena', offset: 0 }; S.qOffset = 0;
+  window._iosReset?.();   // las cifras del Inicio vuelven a contar desde cero con la otra cuenta
   if (S._parT) { clearInterval(S._parT); S._parT = null; }
 }
 async function toggleGhost() {
@@ -3023,6 +3101,7 @@ async function genAliciaLink() {
 
 // ── NAVEGACIÓN ────────────────────────────────────────────────────────────────
 function go(t) {
+  const prev = S._modalTab ? 'dashboard' : S.tab;
   if (S._modalTab) cerrarHoja();   // un módulo abierto en la ventana central vuelve primero a su lugar
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
@@ -3034,6 +3113,7 @@ function go(t) {
   S.tab = t;
   document.body.classList.toggle('chat-mode', t === 'chat');
   renderTab(t);
+  window._iosDespues?.(t, prev);   // transición de pestaña con dirección + entrada escalonada
 }
 
 
@@ -3043,6 +3123,7 @@ function renderTab(t) {
   // Movimientos vive dentro de Dashboard (rDash) y Objetivos dentro de Presupuesto (rPresp).
   ({ dashboard:rDash, movimientos:rMovimientos, nidito:rNidito, deudas:rDeudas, presupuesto:rPresp,
      calendario:rCal, chat:rChat, negocios:rNegocios })[t]?.();
+  if (t === 'dashboard') window._iosContar?.($('tab-dashboard'));   // las cifras del Inicio cuentan hasta su valor
   _mountNotasSoon(t);
   setTimeout(_initCollapsibles, 120);
 }
@@ -6239,6 +6320,7 @@ function abrirHoja(titulo, html, post, opts = {}) {
   document.body.classList.add('sheet-locked');
   if (post) requestAnimationFrame(() => { try { post(); } catch (e) { console.error('hoja post:', e); } });
   _hojaFocusTrapOn();
+  setTimeout(() => window._iosEscalonar?.($('dash-sheet-body'), 8), 140);
 }
 function cerrarHoja() {
   const sheet = $('dash-sheet');
@@ -6250,7 +6332,10 @@ function cerrarHoja() {
   if (nb) { const tab=$('tab-dashboard'); if (tab && !tab.querySelector('.notas-box')) tab.appendChild(nb); else nb.remove(); }
   sheet.classList.remove('open');
   document.body.classList.remove('sheet-locked');
-  setTimeout(() => { sheet.style.display = 'none'; if ($('dash-sheet-body')) $('dash-sheet-body').innerHTML = ''; }, 260);
+  setTimeout(() => {
+    if (sheet.classList.contains('open')) return;   // se volvió a abrir antes de terminar de cerrar
+    sheet.style.display = 'none'; if ($('dash-sheet-body')) $('dash-sheet-body').innerHTML = '';
+  }, 320);
   _hojaFocusTrapOff();
   const periodoCambio = _cerrarEstadoHoja();   // filtros, búsquedas y orden del módulo vuelven a su valor inicial
   if (eraModulo) { S.tab = 'dashboard'; renderTab('dashboard'); }
@@ -6985,17 +7070,17 @@ function rDash() {
 <div class="mini-top-grid dsg-grp">
   <div class="mini-bal-wrap${dsgOn('dash-dsg','balance')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='balance'}" onclick="toggleDsgPanel('balance',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver cómo se calcula">
     <div class="mini-bal-lbl">Balance <i class="ti ti-scale" style="font-size:12px"></i></div>
-    <div class="mini-bal${bal<0?' neg':''}">${bal<0?'-':''}${_bMain}<span class="cents">${_bCent}</span></div>
+    <div class="mini-bal${bal<0?' neg':''}" data-cuenta="bal" data-v="${bal}">${bal<0?'-':''}${_bMain}<span class="cents">${_bCent}</span></div>
   </div>
   <div class="mini-rows">
     <div class="mini-row${dsgOn('dash-dsg','gastos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='gastos'}" onclick="toggleDsgPanel('gastos',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de egresos">
       <div class="mini-row-hdr"><span class="emoji">💸</span><b>Egresos</b></div>
-      <span class="rv gasto">${fmt(gasC)}</span>
+      <span class="rv gasto" data-cuenta="gas" data-v="${gasC}">${fmt(gasC)}</span>
       ${gasEspTot>0?`<small>presup. ${fmt(gasEspTot)}</small>`:''}
     </div>
     <div class="mini-row${dsgOn('dash-dsg','ingresos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['dash-dsg']==='ingresos'}" onclick="toggleDsgPanel('ingresos',this,'dash-dsg','dash')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de ingresos">
       <div class="mini-row-hdr"><span class="emoji">💰</span><b>Ingresos</b></div>
-      <span class="rv ingreso">${fmt(ingC + remQ)}</span>
+      <span class="rv ingreso" data-cuenta="ing" data-v="${ingC + remQ}">${fmt(ingC + remQ)}</span>
       ${remQ>0?`<small>incluye remanente ${fmt(remQ)}</small>`:''}
       ${ingEsp>0?`<small>esperado ${fmt(ingEsp)}</small>`:''}
     </div>
@@ -9564,13 +9649,15 @@ function toast(msg, type='success') {
   if (!t) {
     t = document.createElement('div');
     t.id = 'toast-el';
-    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:9999;padding:10px 20px;border-radius:var(--radius-pill);font-size:13px;font-family:\'Nunito\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',system-ui,sans-serif;font-weight:500;display:flex;align-items:center;gap:8px;opacity:0;transition:all .22s ease;pointer-events:none;white-space:nowrap;max-width:90vw;background:var(--bg-surface);box-shadow:0 4px 20px rgba(0,0,0,.35)';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:9999;padding:10px 20px;border-radius:var(--radius-pill);font-size:13px;font-family:\'Nunito\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',system-ui,sans-serif;font-weight:500;display:flex;align-items:center;gap:8px;opacity:0;transition:opacity .22s ease,transform .5s cubic-bezier(.34,1.56,.64,1);pointer-events:none;white-space:nowrap;max-width:90vw;background:var(--bg-surface);box-shadow:0 4px 20px rgba(0,0,0,.35)';
     document.body.appendChild(t);
   }
   const clr  = type==='error' ? 'var(--red)' : type==='warn' ? 'var(--color-warning)' : 'var(--green)';
   const icon = type==='error' ? 'ti-x'    : type==='warn' ? 'ti-alert-triangle' : 'ti-check';
   t.style.border = `1px solid ${clr}`;
   t.style.color  = clr;
+  t.style.bottom = (matchMedia('(max-width:899px)').matches && !document.body.classList.contains('chat-mode')) ? 'calc(76px + env(safe-area-inset-bottom,0px))' : '24px';   // en el teléfono, sobre la barra inferior
+  window.iosHaptic?.(type === 'error' ? 'error' : type === 'warn' ? 'medium' : 'light');
   t.innerHTML = `<i class="ti ${icon}"></i><span>${msg}</span>`;
   requestAnimationFrame(() => { t.style.opacity='1'; t.style.transform='translateX(-50%) translateY(0)'; });
   clearTimeout(t._to);
@@ -11481,34 +11568,8 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     });
   })();
 
-  // Hoja del Inicio: cerrar con Escape + arrastrar hacia abajo para descartar.
+  // Hoja del Inicio: cerrar con Escape. (Arrastrar hacia abajo y deslizar desde el borde viven en «iOS FEEL», al final.)
   document.addEventListener('keydown', _escGlobal);
-  (function _dashSheetSwipe(){
-    const sheet = $('dash-sheet'); if (!sheet) return;
-    const panel = sheet.querySelector('.ds-panel'); if (!panel) return;
-    let y0=null, dy=0, fromTop=false;
-    const start = e => {
-      const body = $('dash-sheet-body');
-      // Solo inicia el arrastre si el contenido no está scrolleado (evita pelear con el scroll interno).
-      fromTop = !body || body.scrollTop <= 0;
-      y0 = e.touches ? e.touches[0].clientY : e.clientY; dy = 0;
-    };
-    const move = e => {
-      if (y0===null || !fromTop) return;
-      const y = e.touches ? e.touches[0].clientY : e.clientY;
-      dy = y - y0;
-      if (dy > 0) { panel.style.transform = `translateY(${dy}px)`; panel.style.transition='none'; }
-    };
-    const end = () => {
-      if (y0===null) return;
-      panel.style.transition=''; panel.style.transform='';
-      if (dy > 90) cerrarHoja();
-      y0=null; dy=0;
-    };
-    panel.addEventListener('touchstart', start, {passive:true});
-    panel.addEventListener('touchmove',  move,  {passive:true});
-    panel.addEventListener('touchend',   end);
-  })();
 
   document.addEventListener('click', e => {
     if (S._openCatPicker && !e.target.closest('.cat-picker') && !e.target.closest('[id^="catcell-"]')) {
@@ -11585,14 +11646,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
 
   // (El tracking de teclado/visualViewport vive en el IIFE _syncVV, junto a _scrollChat)
 
-  // Left-edge swipe → go to dashboard (when in chat tab, like Messenger)
-  let _swipeX = 0;
-  document.addEventListener('touchstart', e => { _swipeX = e.touches[0].clientX; }, { passive: true });
-  document.addEventListener('touchend', e => {
-    if (S.tab !== 'chat') return;
-    const dx = e.changedTouches[0].clientX - _swipeX;
-    if (_swipeX < 35 && dx > 65) go('dashboard');
-  }, { passive: true });
+  // (Deslizar desde el borde izquierdo para volver vive en «iOS FEEL», al final: aquí solo corría en la primera visita.)
 })();
 
 // ── SWIPE TO REVEAL (móvil) ─────────────────────────────────────────────────────
@@ -11646,14 +11700,14 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     c.appendChild(p); sw.panel = p;
     return sw;
   }
-  function mover(c, x, anim) { c.style.transition = anim ? 'transform .22s cubic-bezier(.32,1,.56,1)' : 'none'; c.style.transform = x ? `translateX(${x}px)` : ''; }
+  function mover(c, x, anim) { c.style.transition = anim ? 'transform .3s cubic-bezier(.32,.72,0,1)' : 'none'; c.style.transform = x ? `translateX(${x}px)` : ''; }
   function cerrar(c) {
     if (!c || !c._sw) return;
     const sw = c._sw; mover(c, 0, true); if (abierta === c) abierta = null;
     setTimeout(() => {
       if (c._sw !== sw) return;
       sw.panel.remove(); c.style.position = sw.prev.pos; c.style.overflow = sw.prev.ov; c.style.zIndex = sw.prev.z; c.style.willChange = ''; c.style.transition = sw.prev.tr; c.style.transform = sw.prev.tf; c._sw = null;
-    }, 240);
+    }, 320);
   }
 
   document.addEventListener('touchstart', e => {
@@ -11683,7 +11737,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     if (!st || st.modo !== 'h') { st = null; return; }
     const c = st.c, W = c._sw.W, v = (st.cur - st.base) / Math.max(1, Date.now() - st.t);   // px/ms (negativo = hacia la izquierda)
     const abrir = v < -0.35 ? true : v > 0.35 ? false : st.cur < -W / 2;
-    if (abrir) { mover(c, -W, true); abierta = c; } else cerrar(c);
+    if (abrir) { mover(c, -W, true); abierta = c; window.iosHaptic?.('light'); } else cerrar(c);
     st = null;
   }, { passive: true });
   // Un toque en una tarjeta abierta solo la cierra (no dispara lo que hace tocarla); al desplazar la lista también se cierra.
@@ -11703,6 +11757,282 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       }, 4000);
     }
   } catch (e) { /* sin almacenamiento: no se muestra la pista */ }
+})();
+
+// ── iOS FEEL: microanimaciones y gestos nativos (móvil) ─────────────────────────────────────────────────────────
+// Hojas que se arrastran hacia abajo para cerrar (el fondo sigue al dedo), deslizar desde el borde izquierdo para volver,
+// tirar hacia abajo para actualizar, transiciones de pestaña con dirección, entradas escalonadas, cifras que cuentan y
+// vibración suave donde el sistema la permite. Solo en móvil (<900px) y respeta «reducir movimiento». Estilos: bloque CSS
+// «MICROINTERACCIONES iOS». NOTA: las animaciones por rAF no usan el argumento de tiempo (el auditor de diseño lo redefine).
+(function () {
+  const mq = q => (window.matchMedia ? matchMedia(q).matches : false);
+  const esMovil = () => mq('(max-width:899px)');
+  const sinMov = () => mq('(prefers-reduced-motion:reduce)');
+  const EASE = 'cubic-bezier(.32,.72,0,1)', SPRING = 'cubic-bezier(.34,1.56,.64,1)';
+  const NO_ARRASTRAR = 'input,textarea,select,[contenteditable="true"],.sw-panel,.tbl-scroll,.gx-tabs,.chat-sug,svg,canvas';
+  const el = id => document.getElementById(id);
+  const bloqueado = () => !!el('pin-lock')?.classList.contains('on');
+  const vel = m => m.length > 1 ? (m[m.length - 1][1] - m[0][1]) / Math.max(1, m[m.length - 1][0] - m[0][0]) : 0;   // px/ms
+  // Quita estilos en línea sin que el regreso se anime (el panel ya salió de pantalla)
+  const limpio = (o, props) => { if (!o) return; o.style.transition = 'none'; props.forEach(p => { o.style[p] = ''; }); void o.offsetWidth; o.style.transition = ''; };
+  const desplazable = (n, tope) => {
+    for (; n; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return n;
+      if (n === tope) break;
+    }
+    return null;
+  };
+
+  // ── Vibración suave ──────────────────────────────────────────────────────────────────────────────────────────
+  // Android: navigator.vibrate. iPhone (Safari 17.4+): un interruptor nativo oculto que vibra al alternarse. Solo si hubo
+  // un toque en los últimos 2 s, para que nada vibre «solo».
+  let toque = 0, interruptor = null;
+  ['touchstart', 'touchmove', 'touchend', 'pointerdown', 'keydown'].forEach(ev => addEventListener(ev, () => { toque = Date.now(); }, { passive: true, capture: true }));
+  function haptic(tipo) {
+    if (Date.now() - toque > 2000) return;
+    try { if (localStorage.getItem('fos_haptics') === '0') return; } catch (e) { /* sin almacenamiento */ }
+    try {
+      if (navigator.vibrate) {
+        if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;   // Chrome bloquea vibrar antes del primer toque real
+        navigator.vibrate(tipo === 'error' ? [28, 45, 28] : tipo === 'success' ? [9, 35, 9] : tipo === 'medium' ? 16 : 8); return; }
+      if (!interruptor) {
+        interruptor = document.createElement('label'); interruptor.setAttribute('aria-hidden', 'true');
+        interruptor.style.cssText = 'position:fixed;left:-99px;top:-99px;opacity:0;pointer-events:none';
+        const i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', '');
+        interruptor.appendChild(i); document.body.appendChild(interruptor);
+      }
+      interruptor.click();
+      if (tipo === 'error' || tipo === 'success') setTimeout(() => interruptor.click(), 80);
+    } catch (e) { /* sin vibración */ }
+  }
+  window.iosHaptic = haptic;
+
+  // ── Arrastrar hacia abajo para cerrar (hojas, «Más», pop-ups y formularios) ─────────────────────────────────────
+  function cerrable({ host, panel, dim, zona, cerrar, minimo = 110 }) {
+    if (!host || !panel) return;
+    let s = null, timer = null;
+    const limpiar = () => { limpio(panel, ['transform', 'willChange']); limpio(host, ['background']); };
+    panel.addEventListener('touchstart', ev => {
+      s = null;
+      if (ev.touches.length !== 1 || !esMovil() || bloqueado() || ev.target.closest(NO_ARRASTRAR)) return;
+      const t = ev.touches[0];
+      if (zona && !zona(ev.target, t, panel)) return;
+      clearTimeout(timer);
+      s = { x: t.clientX, y: t.clientY, sc: desplazable(ev.target, panel), modo: null, d: 0, m: [] };
+    }, { passive: true });
+    panel.addEventListener('touchmove', ev => {
+      if (!s) return;
+      const t = ev.touches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
+      if (!s.modo) {
+        if (Math.abs(dx) < 7 && Math.abs(dy) < 7) return;
+        if (dy > 0 && dy > Math.abs(dx) * 1.2 && (!s.sc || s.sc.scrollTop <= 0)) {
+          s.modo = 'arrastre'; panel.style.transition = 'none'; host.style.transition = 'none'; panel.style.willChange = 'transform';
+        } else { s.modo = 'no'; return; }
+      }
+      if (s.modo !== 'arrastre') return;
+      if (ev.cancelable) ev.preventDefault();
+      s.d = dy > 0 ? dy : dy / 5;   // hacia arriba, con resistencia
+      s.m.push([Date.now(), t.clientY]); if (s.m.length > 6) s.m.shift();
+      panel.style.transform = `translateY(${s.d}px)`;
+      host.style.background = `rgba(0,0,0,${(dim * (1 - Math.min(1, Math.max(0, s.d) / (panel.offsetHeight * .9)))).toFixed(3)})`;
+    }, { passive: false });
+    const fin = cancelado => {
+      if (!s || s.modo !== 'arrastre') { s = null; return; }
+      const g = s; s = null;
+      if (!cancelado && (g.d > minimo || (vel(g.m) > .5 && g.d > 20))) {
+        const h = innerHeight - panel.getBoundingClientRect().top + 24;
+        panel.style.transition = `transform .3s ${EASE}`; panel.style.transform = `translateY(${h}px)`;
+        host.style.transition = 'background .3s ease'; host.style.background = 'rgba(0,0,0,0)';
+        haptic('light');
+        setTimeout(() => { cerrar(); limpiar(); }, 250);
+      } else {
+        panel.style.transition = `transform .5s ${SPRING}`; panel.style.transform = '';
+        host.style.transition = 'background .3s ease'; host.style.background = '';
+        timer = setTimeout(limpiar, 520);
+      }
+    };
+    panel.addEventListener('touchend', () => fin(false));
+    panel.addEventListener('touchcancel', () => fin(true));
+  }
+  cerrable({ host: el('dash-sheet'), panel: document.querySelector('#dash-sheet .ds-panel'), dim: .62, cerrar: () => cerrarHoja() });
+  cerrable({ host: el('mobile-sheet'), panel: document.querySelector('#mobile-sheet .sheet-inner'), dim: .6, cerrar: () => closeMobileMore() });
+  // Pop-ups y formularios: solo desde su cabecera, para no perder lo que se está escribiendo por un roce
+  cerrable({ host: el('pop'), panel: document.querySelector('#pop .pop-panel'), dim: .62, zona: t => !!t.closest('.pop-head'), cerrar: () => cerrarPop() });
+  cerrable({ host: el('ovl'), panel: document.querySelector('#ovl .modal'), dim: .6, cerrar: () => closeM(),
+    zona: (t, tc, p) => !!t.closest('#m-title') || tc.clientY - p.getBoundingClientRect().top < 34 });
+
+  // ── Deslizar desde el borde izquierdo para volver ────────────────────────────────────────────────────────────────
+  // Cierra la capa de arriba (formulario, pop-up, hoja, «Más»); si no hay ninguna, regresa a Inicio. La pantalla sigue al dedo.
+  function capaAbierta() {
+    const abierta = id => !!el(id)?.classList.contains('open');
+    if (abierta('ovl')) return { host: el('ovl'), panel: document.querySelector('#ovl .modal'), cerrar: () => closeM(), dim: .6 };
+    if (abierta('pop')) return { host: el('pop'), panel: document.querySelector('#pop .pop-panel'), cerrar: () => cerrarPop(), dim: .62 };
+    if (abierta('dash-sheet')) return { host: el('dash-sheet'), panel: document.querySelector('#dash-sheet .ds-panel'), cerrar: () => cerrarHoja(), dim: .62 };
+    if (abierta('mobile-sheet')) return { host: el('mobile-sheet'), panel: document.querySelector('#mobile-sheet .sheet-inner'), cerrar: () => closeMobileMore(), dim: .6 };
+    return null;
+  }
+  let eg = null;
+  document.addEventListener('touchstart', ev => {
+    eg = null;
+    if (ev.touches.length !== 1 || !esMovil() || bloqueado() || getComputedStyle(el('app')).display === 'none') return;
+    const t = ev.touches[0]; if (t.clientX > 22) return;
+    const capa = capaAbierta();
+    if (!capa && (!S.tab || S.tab === 'dashboard')) return;   // no hay a dónde volver
+    const obj = capa ? capa.panel : (S.tab === 'chat' ? document.querySelector('#tab-chat .chat-wrap') : el('tab-' + S.tab));
+    if (!obj) return;
+    eg = { x: t.clientX, y: t.clientY, capa, obj, modo: null, d: 0, m: [] };
+  }, { passive: true });
+  document.addEventListener('touchmove', ev => {
+    if (!eg) return;
+    const t = ev.touches[0], dx = t.clientX - eg.x, dy = t.clientY - eg.y;
+    if (!eg.modo) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (dx > 0 && dx > Math.abs(dy) * 1.3) {
+        eg.modo = 'borde'; eg.obj.style.transition = 'none'; eg.obj.style.willChange = 'transform';
+        if (eg.capa) eg.capa.host.style.transition = 'none'; else document.body.classList.add('ios-borde');
+      } else { eg = null; return; }
+    }
+    if (ev.cancelable) ev.preventDefault();
+    eg.d = Math.max(0, dx);
+    eg.m.push([Date.now(), t.clientX]); if (eg.m.length > 6) eg.m.shift();
+    const p = Math.min(1, eg.d / innerWidth);
+    eg.obj.style.transform = `translateX(${eg.d}px)`;
+    if (eg.capa) eg.capa.host.style.background = `rgba(0,0,0,${(eg.capa.dim * (1 - p)).toFixed(3)})`;
+    else eg.obj.style.opacity = String(1 - .35 * p);
+  }, { passive: false });
+  const finBorde = cancelado => {
+    if (!eg || eg.modo !== 'borde') { eg = null; return; }
+    const g = eg; eg = null;
+    const limpiar = () => { limpio(g.obj, ['transform', 'opacity', 'willChange']); if (g.capa) limpio(g.capa.host, ['background']); document.body.classList.remove('ios-borde'); };
+    if (!cancelado && (g.d > innerWidth * .33 || (vel(g.m) > .5 && g.d > 30))) {
+      haptic('light');
+      g.obj.style.transition = `transform .3s ${EASE}, opacity .3s ease`; g.obj.style.transform = `translateX(${innerWidth}px)`;
+      if (g.capa) { g.capa.host.style.transition = 'background .3s ease'; g.capa.host.style.background = 'rgba(0,0,0,0)'; }
+      setTimeout(() => { if (g.capa) g.capa.cerrar(); else { S._navBack = true; go('dashboard'); } limpiar(); }, 260);
+    } else {
+      g.obj.style.transition = `transform .5s ${SPRING}, opacity .3s ease`; g.obj.style.transform = ''; g.obj.style.opacity = '';
+      if (g.capa) { g.capa.host.style.transition = 'background .3s ease'; g.capa.host.style.background = ''; }
+      setTimeout(limpiar, 520);
+    }
+  };
+  document.addEventListener('touchend', () => finBorde(false));
+  document.addEventListener('touchcancel', () => finBorde(true));
+
+  // ── Tirar hacia abajo para actualizar ────────────────────────────────────────────────────────────────────────────
+  const ptr = document.createElement('div');
+  ptr.id = 'ptr'; ptr.setAttribute('aria-hidden', 'true');
+  ptr.innerHTML = '<svg viewBox="0 0 24 24"><circle class="ptr-bg" cx="12" cy="12" r="9"/><circle class="ptr-arc" cx="12" cy="12" r="9"/></svg>';
+  document.body.appendChild(ptr);
+  const arco = ptr.querySelector('.ptr-arc'), main = document.querySelector('main');
+  const UMBRAL = 64, resistir = dy => 150 * (1 - Math.exp(-dy / 200));
+  let tira = null, refrescando = false;
+  main.addEventListener('touchstart', ev => {
+    tira = null;
+    if (ev.touches.length !== 1 || refrescando || !esMovil() || bloqueado()) return;
+    if (S._modalTab || S.tab === 'chat' || capaAbierta() || main.scrollTop > 0 || ev.target.closest(NO_ARRASTRAR)) return;
+    const tab = el('tab-' + S.tab); if (!tab) return;
+    tira = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, modo: null, d: 0, listo: false, tab };
+  }, { passive: true });
+  main.addEventListener('touchmove', ev => {
+    if (!tira) return;
+    const t = ev.touches[0], dy = t.clientY - tira.y, dx = t.clientX - tira.x;
+    if (!tira.modo) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (dy > 0 && dy > Math.abs(dx) * 1.4 && main.scrollTop <= 0) { tira.modo = 'tira'; tira.tab.style.transition = 'none'; ptr.classList.remove('liberar'); }
+      else { tira = null; return; }
+    }
+    if (ev.cancelable) ev.preventDefault();
+    const d = resistir(Math.max(0, dy)), p = Math.min(1, d / UMBRAL);
+    tira.d = d;
+    tira.tab.style.transform = `translateY(${d}px)`;
+    ptr.style.opacity = String(Math.min(1, d / 28));
+    ptr.style.transform = `translateY(${Math.min(d, 90) - 48}px) scale(${.6 + .4 * p})`;
+    arco.style.strokeDashoffset = String(56.55 * (1 - p));
+    if (p >= 1 && !tira.listo) { tira.listo = true; haptic('light'); } else if (p < 1) tira.listo = false;
+  }, { passive: false });
+  const finTira = async cancelado => {
+    if (!tira || tira.modo !== 'tira') { tira = null; return; }
+    const g = tira; tira = null;
+    const soltar = () => {
+      g.tab.style.transition = `transform .5s ${EASE}`; g.tab.style.transform = '';
+      ptr.classList.add('liberar'); ptr.classList.remove('spin'); ptr.style.opacity = '0'; ptr.style.transform = 'translateY(-70px) scale(.6)';
+      setTimeout(() => { g.tab.style.transition = ''; arco.style.strokeDashoffset = '56.55'; }, 520);
+    };
+    if (cancelado || g.d < UMBRAL) { soltar(); return; }
+    refrescando = true; haptic('medium');
+    g.tab.style.transition = `transform .35s ${EASE}`; g.tab.style.transform = 'translateY(56px)';
+    ptr.classList.add('liberar', 'spin'); ptr.style.opacity = '1'; ptr.style.transform = 'translateY(14px) scale(1)'; arco.style.strokeDashoffset = '38';
+    const t0 = Date.now();
+    try { await load(); } catch (e) { toast('No se pudo actualizar', 'error'); }
+    const falta = 700 - (Date.now() - t0); if (falta > 0) await new Promise(r => setTimeout(r, falta));
+    haptic('success'); refrescando = false; soltar();
+  };
+  main.addEventListener('touchend', () => finTira(false));
+  main.addEventListener('touchcancel', () => finTira(true));
+
+  // ── Entradas escalonadas y transición de pestañas ───────────────────────────────────────────────────────────────
+  const SEL = '.mini-topbar,.mini-bal-wrap,.mini-row,.mini-tile,.kpi,.snapshot-card,.mov-card,.pr-goal,.ni-card,.nd-card,.nd-din-card,.q-total-widget,.wl-card,.desp-card';
+  function escalonar(raiz, max) {
+    if (!raiz || !esMovil() || sinMov()) return;
+    let n = 0;
+    raiz.querySelectorAll(SEL).forEach(e => {
+      if (n >= (max || 12) || e.closest('.sw-panel')) return;
+      const r = e.getBoundingClientRect(); if (r.top > innerHeight || r.bottom < 0) return;
+      e.style.setProperty('--i', n++); e.classList.add('ios-rise');
+      setTimeout(() => { e.classList.remove('ios-rise'); e.style.removeProperty('--i'); }, 900);
+    });
+  }
+  window._iosEscalonar = escalonar;
+  const ORDEN = ['chat', 'dashboard', 'movimientos', 'nidito', 'presupuesto', 'calendario', 'negocios', 'deudas'];
+  window._iosDespues = (t, prev) => {
+    const volver = S._navBack; S._navBack = false;
+    if (!esMovil() || sinMov() || t === prev) return;
+    const tab = el('tab-' + t); if (!tab) return;
+    const dir = t === 'chat' ? 'f' : (volver || prev === 'chat') ? 'b' : ORDEN.indexOf(t) >= ORDEN.indexOf(prev) ? 'r' : 'l';
+    ['r', 'l', 'b', 'f'].forEach(d => tab.classList.remove('ios-in-' + d));
+    void tab.offsetWidth; tab.classList.add('ios-in-' + dir);
+    setTimeout(() => tab.classList.remove('ios-in-' + dir), 520);
+    escalonar(tab, 10);
+  };
+  // Volver a tocar la pestaña activa sube al inicio de la pantalla, como la barra de iOS
+  document.addEventListener('click', ev => {
+    const a = ev.target.closest('.mobile-nav a.active');
+    if (a && esMovil() && main.scrollTop > 0) main.scrollTo({ top: 0, behavior: sinMov() ? 'auto' : 'smooth' });
+  }, true);
+
+  // ── Cifras del Inicio que cuentan hasta su valor ─────────────────────────────────────────────────────────────────
+  // La primera vez cuentan desde 0; después, solo cuando cambian (desde el valor anterior).
+  const cifras = {};
+  window._iosReset = () => { Object.keys(cifras).forEach(k => delete cifras[k]); };
+  function contar(e, desde, hasta) {
+    const fin = e.innerHTML, esBal = e.classList.contains('mini-bal'), neg = hasta < 0, dur = 650, t0 = performance.now();
+    const pintar = v => {
+      const s = fmt(esBal ? Math.abs(v) : v);
+      if (esBal) { const i = s.lastIndexOf('.'); e.innerHTML = (neg ? '-' : '') + (i >= 0 ? s.slice(0, i) : s) + '<span class="cents">' + (i >= 0 ? s.slice(i) : '') + '</span>'; }
+      else e.textContent = s;
+    };
+    const paso = () => {
+      if (!e.isConnected) return;
+      const p = Math.min(1, (performance.now() - t0) / dur), k = 1 - Math.pow(1 - p, 4);
+      if (p >= 1) { e.innerHTML = fin; return; }
+      const a = esBal ? Math.abs(desde) : desde, b = esBal ? Math.abs(hasta) : hasta;
+      pintar(a + (b - a) * k);
+      requestAnimationFrame(paso);
+    };
+    requestAnimationFrame(paso);
+  }
+  window._iosContar = raiz => {
+    if (!raiz) return;
+    raiz.querySelectorAll('[data-cuenta]').forEach(e => {
+      const k = e.dataset.cuenta, nuevo = Number(e.dataset.v);
+      if (!isFinite(nuevo)) return;
+      const prev = k in cifras ? cifras[k] : 0;
+      cifras[k] = nuevo;
+      if (!esMovil() || sinMov() || Math.abs(prev - nuevo) < 0.01) return;
+      contar(e, prev, nuevo);
+    });
+  };
 })();
 </script>
 
