@@ -5353,6 +5353,9 @@ async function notaSave(tab) {
   } catch(e) { if (st) st.textContent = '⚠️ No se pudo guardar'; }
 }
 
+// La Despensa se oculta o se muestra POR quincena (refs.hide_despensa_q = { '2026-10-B': true }): lo que hagas en una no toca las demás.
+const despOculta = (refs, qKey) => !!(refs.hide_despensa_q || {})[qKey];
+
 // ── QUINCENAL PANEL ──────────────────────────────────────────────────────────
 function rQuincenaPanel(ctx) {
   const refs   = (S.data.user || {}).external_refs || {};
@@ -5379,7 +5382,7 @@ function rQuincenaPanel(ctx) {
   const gasEsp    = getGastosEsperados(refs, qKey).filter(g => !/^despensa$/i.test((g.descripcion || '').trim()) && !esTransporteFijo(g));
 
   // Inject DESPENSA entry — si hay una guardada en budget_q la usa (editable); si no, inyecta sintética
-  if (refs.hide_despensa_gastos !== true) {
+  if (!despOculta(refs, qKey)) {   // ocultar/mostrar la Despensa vale solo para ESTA quincena
     const _despPend  = (S.data.despensa || []).filter(x => !x.comprado && x.compra_quincena !== false);
     const _despTotal = _despPend.reduce((a, x) => {
       const bW = typeof x.precio_walmart === 'number' ? x.precio_walmart : Infinity;
@@ -5593,7 +5596,7 @@ function rQuincenaPanel(ctx) {
             <div class="q-card-foot">
               <div class="mov-card-acts">
                 <button class="edit-pill-btn" title="Ver despensa" onclick="dashEmoji('despensa')"><i class="ti ti-shopping-cart" style="font-size:12px"></i></button>
-                <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false)"><i class="ti ti-x" style="font-size:12px"></i></button>
+                <button class="edit-pill-btn" style="color:var(--red)" title="Ocultar de gastos" onclick="toggleDespensaEnGastos(false,'${qKey}')"><i class="ti ti-x" style="font-size:12px"></i></button>
               </div>
             </div>
             ${S._qDespOpen ? _qDespExpHTML(false) : ''}
@@ -5898,6 +5901,18 @@ async function posponerGasto(id) {
   const qKeyNext = getQKey(qiNext);
 
   if (!confirm(`¿Posponer "${meta.descripcion}" (${fmt(meta.monto)}) a ${qiNext.label}?`)) return;
+
+  // Un gasto que viene de la Wishlist se mueve con SU agenda: así el deseo sigue "agendado", ahora en la siguiente quincena
+  // (antes solo se movía el gasto y la Wishlist lo soltaba como pendiente aunque siguiera en el presupuesto de la siguiente).
+  if (/^wl-/.test(String(id))) {
+    try {
+      await api('POST', `/api/wishlist/${String(id).slice(3)}/agendar`, { user_phone: S.phone, qKey: qKeyNext });
+      delete S._wl;   // la Wishlist se vuelve a leer con la nueva quincena
+      await load();
+      toast(`"${meta.descripcion}" pospuesto a ${qiNext.label} ✓`);
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+    return;
+  }
 
   // OJO: aquí NO se filtra la entrada "Despensa" (a diferencia del renderizado de la tabla, que sí
   // la excluye por mostrarse aparte). Este array se vuelve a GUARDAR completo vía action:'replace',
@@ -9965,11 +9980,10 @@ async function agregarDespensaAGastos() {
     : { phone: S.phone, field: 'budget_q', qKey, tipo: 'gastos', action: 'add', item };
   try {
     await api('POST', '/api/update-refs', body);
-    // Si la Despensa estaba oculta de "Gastos esta quincena", el guardado anterior era
-    // invisible: rQuincenaPanel filtra la fila y solo la reinyecta cuando este flag es
-    // falso. Pedir "Agregar a Gastos" es intención explícita de verla → se limpia el flag.
-    if (refs.hide_despensa_gastos === true) {
-      await api('POST', '/api/update-refs', { phone: S.phone, field: 'hide_despensa_gastos', value: false });
+    // Si la Despensa estaba oculta en ESTA quincena, el guardado sería invisible: pedir "Agregar a Gastos" es intención
+    // explícita de verla → se muestra de nuevo, y solo en esta quincena (las demás conservan lo suyo).
+    if (despOculta(refs, qKey)) {
+      await api('POST', '/api/update-refs', { phone: S.phone, field: 'hide_despensa_q', qKey, value: false });
     }
     await load();   // re-renderiza la pestaña completa (incluye "Gastos esta quincena")
     toast(existing ? `Despensa actualizada — ${fmt(total)} ✓` : `Despensa agregada a Gastos esta quincena — ${fmt(total)} ✓`);
@@ -9999,12 +10013,14 @@ async function buscarPreciosDespensa() {
   }
 }
 
-async function toggleDespensaEnGastos(visible) {
-  if (!visible && !confirm('¿Ocultar la Despensa de la sección de gastos esperados?')) return;
+async function toggleDespensaEnGastos(visible, qKey) {
+  qKey = qKey || S.currentQKey || getQKey(getQuincenaInfo(S.qOffset || 0));
+  const u = _uTxt();
+  if (!visible && !confirm(`¿Quitar la Despensa de esta ${u}? Solo afecta a esta ${u}.`)) return;
   try {
-    await api('POST', '/api/update-refs', { phone: S.phone, field: 'hide_despensa_gastos', value: !visible });
+    await api('POST', '/api/update-refs', { phone: S.phone, field: 'hide_despensa_q', qKey, value: !visible });
     await load();
-    toast(visible ? 'Despensa visible en gastos ✓' : 'Despensa ocultada de gastos');
+    toast(visible ? `Despensa visible en esta ${u} ✓` : `Despensa quitada de esta ${u}`);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 

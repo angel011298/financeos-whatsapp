@@ -5086,6 +5086,22 @@ function wlQuitarDePresupuesto(refs, qKey, wid) {
   q.gastos = q.gastos.filter(x => x._id !== 'wl-' + wid);
   return q.gastos.length !== antes;
 }
+// Dónde está cada deseo en Presupuesto: id del deseo → claves (quincena o semana, ordenadas) con un gasto "wl-<id>".
+// Es la verdad de a dónde se mandó el gasto, aunque el deseo apunte a otra clave (p. ej. tras "Posponer" en Gastos esta quincena).
+function wlMapaPresupuesto(refs) {
+  const mapa = {};
+  for (const [k, q] of Object.entries(refs.budget_q || {}))
+    for (const g of (Array.isArray(q?.gastos) ? q.gastos : []))
+      if (typeof g?._id === 'string' && g._id.startsWith('wl-')) (mapa[g._id.slice(3)] = mapa[g._id.slice(3)] || []).push(k);
+  Object.values(mapa).forEach(l => l.sort());
+  return mapa;
+}
+// Saca el gasto del deseo de TODAS las quincenas/semanas donde esté (no solo de la que el deseo recuerda).
+function wlQuitarDeTodoPresupuesto(refs, wid) {
+  let quito = false;
+  for (const k of wlMapaPresupuesto(refs)[wid] || []) if (wlQuitarDePresupuesto(refs, k, wid)) quito = true;
+  return quito;
+}
 function wlPonerEnPresupuesto(refs, qKey, row) {
   if (!refs.budget_q) refs.budget_q = {};
   const q = refs.budget_q[qKey] || (refs.budget_q[qKey] = { gastos: [], ingresos: [] });
@@ -5104,31 +5120,52 @@ async function wlPagosQ(phone, r) {
   return data || [];
 }
 
-// Pone al día los deseos ligados a una quincena, en ambos sentidos:
-//  · agendado y el gasto ya no está en Presupuesto → pendiente
+// Pone al día los deseos con su gasto en Presupuesto. El gasto "wl-<id>" de Presupuesto manda: si el deseo apunta a una
+// quincena pero su gasto se movió a otra (Posponer en "Gastos esta quincena"), se re-liga en vez de soltarlo; y si el gasto
+// sigue en Presupuesto pero el deseo figuraba como pendiente (quedó huérfano), vuelve a verse como agendado.
+//  · agendado y su gasto ya no está en ninguna quincena → pendiente
 //  · agendado y ya se marcó pagado en esa quincena ("[Ppto] nombre") → comprado (tachado)
 //  · comprado desde la quincena y luego se desmarcó ahí → vuelve a agendado
 async function wlConciliar(phone, rows) {
-  const ag = rows.filter(r => (r.estado === 'agendado' || r.estado === 'comprado') && r.quincena_key);
-  if (!ag.length) return rows;
-  const rangos = ag.map(r => wlRangoQuincena(r.quincena_key));
-  const desde = rangos.reduce((a, x) => (x.from < a ? x.from : a), '9999-12-31'), hasta = rangos.reduce((a, x) => (x.to > a ? x.to : a), '0000-01-01');
-  const [refs, { data: pagos }] = await Promise.all([
-    wlGetRefs(phone),
-    sb.from('movimientos').select('concepto, fecha').eq('user_phone', phone).eq('tipo', 'GASTO')
-      .in('concepto', [...new Set(ag.map(r => '[Ppto] ' + r.nombre))]).is('deleted_at', null).gte('fecha', desde).lte('fecha', hasta),
-  ]);
+  if (!rows.length) return rows;
+  const refs = await wlGetRefs(phone), mapa = wlMapaPresupuesto(refs);
+  // Clave donde vive de verdad el gasto del deseo: la suya si está ahí; si no, la siguiente que lo tenga (o la primera)
+  const vive = r => {
+    const ks = mapa[r.id] || [];
+    if (r.quincena_key && ks.includes(r.quincena_key)) return r.quincena_key;
+    return (r.quincena_key && ks.find(k => k >= r.quincena_key)) || ks[0] || null;
+  };
+  const cand = [];
+  for (const r of rows) {
+    if (r.estado === 'comprado' && !r.quincena_key) continue;   // comprado por fuera de la agenda: no se toca
+    const k = vive(r);
+    if (k || ((r.estado === 'agendado' || r.estado === 'comprado') && r.quincena_key)) cand.push({ r, k });
+  }
+  if (!cand.length) return rows;
+  const conK = cand.filter(c => c.k);
+  let pagos = [];
+  if (conK.length) {
+    const rangos = conK.map(c => wlRangoQuincena(c.k));
+    const desde = rangos.reduce((a, x) => (x.from < a ? x.from : a), '9999-12-31'), hasta = rangos.reduce((a, x) => (x.to > a ? x.to : a), '0000-01-01');
+    const { data } = await sb.from('movimientos').select('concepto, fecha').eq('user_phone', phone).eq('tipo', 'GASTO')
+      .in('concepto', [...new Set(conK.map(c => '[Ppto] ' + c.r.nombre))]).is('deleted_at', null).gte('fecha', desde).lte('fecha', hasta);
+    pagos = data || [];
+  }
   const cambios = [];
-  for (const r of ag) {
+  for (const { r, k } of cand) {
     let cambio = null;
-    const enPpto = wlEnPresupuesto(refs, r.quincena_key, r.id);
-    if (r.estado === 'agendado' && !enPpto) {
-      cambio = { estado: 'pendiente', quincena_key: null };
-    } else if (enPpto) {
-      const { from, to } = wlRangoQuincena(r.quincena_key);
-      const pagado = (pagos || []).some(p => p.concepto === '[Ppto] ' + r.nombre && p.fecha >= from && p.fecha <= to);
-      if (r.estado === 'agendado' && pagado)  cambio = { estado: 'comprado', comprado_at: new Date().toISOString() };
-      if (r.estado === 'comprado' && !pagado) cambio = { estado: 'agendado', comprado_at: null };
+    if (!k) {
+      if (r.estado === 'agendado') cambio = { estado: 'pendiente', quincena_key: null };
+    } else {
+      const { from, to } = wlRangoQuincena(k);
+      const pagado = pagos.some(p => p.concepto === '[Ppto] ' + r.nombre && p.fecha >= from && p.fecha <= to);
+      const c = {};
+      if (k !== r.quincena_key) c.quincena_key = k;
+      let estado = r.estado;
+      if (estado === 'pendiente') { estado = 'agendado'; c.estado = 'agendado'; }
+      if (estado === 'agendado' && pagado)   { c.estado = 'comprado'; c.comprado_at = new Date().toISOString(); }
+      if (estado === 'comprado' && !pagado)  { c.estado = 'agendado'; c.comprado_at = null; }
+      if (Object.keys(c).length) cambio = c;
     }
     if (cambio) {
       cambios.push(sb.from('wishlist').update({ ...cambio, updated_at: new Date().toISOString() }).eq('id', r.id));
@@ -5226,10 +5263,8 @@ app.put('/api/wishlist/:id', async (req, res) => {
       d.estado = estado;
       d.comprado_at = estado === 'comprado' ? new Date().toISOString() : null;
       // Con quincena_key hay gasto presupuestado: agendado, o ya pagado y conciliado como comprado.
-      if (row.quincena_key) {
-        refs = await wlGetRefs(user_phone);
-        refsCambiaron = wlQuitarDePresupuesto(refs, row.quincena_key, row.id);
-      }
+      refs = await wlGetRefs(user_phone);
+      refsCambiaron = wlQuitarDeTodoPresupuesto(refs, row.id);
       d.quincena_key = null;
     } else if (row.estado === 'agendado' && row.quincena_key && (d.nombre !== undefined || d.precio !== undefined || d.categoria !== undefined || d.forma_pago !== undefined)) {
       // Lo agendado vive en Presupuesto: mantenerlo igual al deseo editado.
@@ -5250,9 +5285,9 @@ app.delete('/api/wishlist/:id', async (req, res) => {
     if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
     const { data: row } = await wlFila(req.params.id, user_phone);
     if (!row) return res.json({ success: true });
-    if (row.quincena_key) {
+    {
       const refs = await wlGetRefs(user_phone);
-      if (wlQuitarDePresupuesto(refs, row.quincena_key, row.id)) await wlSaveRefs(user_phone, refs);
+      if (wlQuitarDeTodoPresupuesto(refs, row.id)) await wlSaveRefs(user_phone, refs);
     }
     const { error } = await sb.from('wishlist').update({ deleted_at: new Date().toISOString() }).eq('id', row.id).eq('user_phone', user_phone);
     if (error) return res.status(400).json({ success: false, error: error.message });
@@ -5270,7 +5305,7 @@ app.post('/api/wishlist/:id/agendar', async (req, res) => {
     if (row.estado === 'comprado') return res.status(400).json({ success: false, error: 'Ya está comprado: reábrelo para agendarlo de nuevo' });
     if (!(Number(row.precio) > 0)) return res.status(400).json({ success: false, error: 'Ponle un precio antes de agendarlo' });
     const refs = await wlGetRefs(user_phone);
-    if (row.quincena_key && row.quincena_key !== qKey) wlQuitarDePresupuesto(refs, row.quincena_key, row.id);
+    for (const k of wlMapaPresupuesto(refs)[row.id] || []) if (k !== qKey) wlQuitarDePresupuesto(refs, k, row.id);   // un deseo vive en UNA sola quincena
     wlPonerEnPresupuesto(refs, qKey, row);
     const r = await wlSaveRefs(user_phone, refs);
     if (r.error) return res.status(400).json({ success: false, error: r.error.message });
@@ -5288,9 +5323,9 @@ app.post('/api/wishlist/:id/desagendar', async (req, res) => {
     if (!user_phone) return res.status(400).json({ success: false, error: 'user_phone requerido' });
     const { data: row } = await wlFila(req.params.id, user_phone);
     if (!row) return res.status(404).json({ success: false, error: 'Deseo no encontrado' });
-    if (row.estado === 'agendado' && row.quincena_key) {
+    {
       const refs = await wlGetRefs(user_phone);
-      if (wlQuitarDePresupuesto(refs, row.quincena_key, row.id)) await wlSaveRefs(user_phone, refs);
+      if (wlQuitarDeTodoPresupuesto(refs, row.id)) await wlSaveRefs(user_phone, refs);
     }
     const { data, error } = await sb.from('wishlist').update({ estado: row.estado === 'agendado' ? 'pendiente' : row.estado, quincena_key: null, updated_at: new Date().toISOString() })
       .eq('id', row.id).eq('user_phone', user_phone).select().single();
@@ -5310,7 +5345,7 @@ app.post('/api/wishlist/:id/check', async (req, res) => {
     const { data: row } = await wlFila(req.params.id, user_phone);
     if (!row) return res.status(404).json({ success: false, error: 'Deseo no encontrado' });
     const refs  = row.quincena_key ? await wlGetRefs(user_phone) : null;
-    const ligado = !!(row.quincena_key && wlEnPresupuesto(refs, row.quincena_key, row.id));
+    const ligado = !!(row.quincena_key && wlEnPresupuesto(refs, row.quincena_key, row.id));   // wlConciliar ya re-ligó el deseo a donde esté su gasto
     const ahora = new Date().toISOString();
     let d, movimiento = null;
     if (hecho) {
@@ -5377,9 +5412,9 @@ app.post('/api/wishlist/:id/comprar', async (req, res) => {
       await aplicarImpactoCuentas(user_phone, null, data);
       await writeAuditLog(user_phone, 'movimientos', 'crear', data.id, null, data, 'web', `wishlist: ${row.nombre}`);
     }
-    if (row.estado === 'agendado' && row.quincena_key) {
+    {
       const refs = await wlGetRefs(user_phone);
-      if (wlQuitarDePresupuesto(refs, row.quincena_key, row.id)) await wlSaveRefs(user_phone, refs);
+      if (wlQuitarDeTodoPresupuesto(refs, row.id)) await wlSaveRefs(user_phone, refs);
     }
     const { data, error } = await sb.from('wishlist').update({ estado: 'comprado', quincena_key: null, comprado_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', row.id).eq('user_phone', user_phone).select().single();
@@ -5514,7 +5549,7 @@ async function _asWishlist(phone, text, t) {
     if (!cand.length) return `❌ No encontré "${term}" en tu Wishlist. No borré nada.`;
     if (cand.length > 1) return `Encontré ${cand.length}: ${cand.map(c => `"${c.nombre}"`).join(', ')}. ¿Cuál quito? Escribe el nombre completo.`;
     const row = cand[0];
-    if (row.quincena_key) { const refs = await wlGetRefs(phone); if (wlQuitarDePresupuesto(refs, row.quincena_key, row.id)) await wlSaveRefs(phone, refs); }
+    { const refs = await wlGetRefs(phone); if (wlQuitarDeTodoPresupuesto(refs, row.id)) await wlSaveRefs(phone, refs); }
     const { error } = await sb.from('wishlist').update({ deleted_at: new Date().toISOString() }).eq('id', row.id).eq('user_phone', phone);
     if (error) return `❌ No pude quitarlo: ${error.message}`;
     return `🗑️ Quité "${row.nombre}" de tu Wishlist${row.quincena_key ? ` (y de ${labelQuincena(row.quincena_key)} en Presupuesto)` : ''}.`;
@@ -6107,7 +6142,14 @@ app.post('/api/update-refs', async (req, res) => {
       const v = req.body.value || {}, num = x => Math.max(0, Math.min(10000, Number(x) || 0));
       refs.transporte_diario = { combi: num(v.combi), camion: num(v.camion), metro: num(v.metro) };
     } else if (field === 'hide_despensa_gastos') {
-      refs.hide_despensa_gastos = req.body.value === true;
+      refs.hide_despensa_gastos = req.body.value === true;   // antiguo (valía para todas las quincenas): el cliente nuevo ya no lo usa
+    } else if (field === 'hide_despensa_q') {
+      // Despensa oculta en UNA quincena/semana (qKey); value:true la oculta, false la vuelve a mostrar
+      const q = String(req.body.qKey || '').trim().slice(0, 20);
+      if (!q) return res.status(400).json({ success: false, error: 'qKey requerida' });
+      const mapa = { ...(refs.hide_despensa_q || {}) };
+      if (req.body.value === true) mapa[q] = true; else delete mapa[q];
+      refs.hide_despensa_q = mapa;
     } else if (field === 'cuentas' && action === 'set') {
       // Saldos de cuentas para MONITOREO (Banamex débito, Revolut ahorro).
       // No son movimientos: nunca entran en gastos/ingresos ni en ningún cálculo de balance.
