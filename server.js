@@ -5102,12 +5102,19 @@ function wlQuitarDeTodoPresupuesto(refs, wid) {
   for (const k of wlMapaPresupuesto(refs)[wid] || []) if (wlQuitarDePresupuesto(refs, k, wid)) quito = true;
   return quito;
 }
+// Un gasto de Presupuesto agregado A MANO (desde "Gastos esta quincena" o por chat) que no está ligado a ningún deseo:
+// ni de la Wishlist (wl-), ni un gasto fijo (gf-), ni un ingreso sembrado (pd-), ni uno recurrente por días.
+const wlNombreNorm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+const wlEsManual = g => !!g && !/^(wl-|gf-|pd-)/.test(String(g._id || '')) && !(Array.isArray(g.dias) && g.dias.length) && !g.compartido_de;
+// Mismo deseo = mismo nombre (sin importar mayúsculas ni acentos) y mismo monto
+const wlMismoDeseo = (g, row) => wlEsManual(g) && wlNombreNorm(g.descripcion) === wlNombreNorm(row.nombre) && Math.abs((Number(g.monto) || 0) - (Number(row.precio) || 0)) < 0.5;
 function wlPonerEnPresupuesto(refs, qKey, row) {
   if (!refs.budget_q) refs.budget_q = {};
   const q = refs.budget_q[qKey] || (refs.budget_q[qKey] = { gastos: [], ingresos: [] });
   if (!Array.isArray(q.gastos)) q.gastos = [];
   const item = { _id: 'wl-' + row.id, descripcion: row.nombre, monto: Number(row.precio) || 0, categoria: row.categoria, forma_pago: row.forma_pago || '', comentarios: 'Wishlist' };
-  const i = q.gastos.findIndex(x => x._id === item._id);
+  let i = q.gastos.findIndex(x => x._id === item._id);
+  if (i < 0) i = q.gastos.findIndex(g => wlMismoDeseo(g, row));   // ya estaba a mano en esa quincena: se liga en vez de duplicarlo
   if (i >= 0) q.gastos[i] = { ...q.gastos[i], ...item }; else q.gastos.push(item);
 }
 
@@ -5129,6 +5136,24 @@ async function wlPagosQ(phone, r) {
 async function wlConciliar(phone, rows) {
   if (!rows.length) return rows;
   const refs = await wlGetRefs(phone), mapa = wlMapaPresupuesto(refs);
+
+  // 1) Deseo pendiente cuyo gasto ya está en Presupuesto agregado a mano (mismo nombre y monto, sin ligar): se liga.
+  //    Si el mismo gasto aparece en varias quincenas no se adivina cuál es: se deja como está.
+  const adopciones = [];
+  for (const r of rows) {
+    if (r.estado !== 'pendiente' || !(Number(r.precio) > 0) || mapa[r.id]) continue;
+    const hallados = [];
+    for (const [k, q] of Object.entries(refs.budget_q || {}))
+      (Array.isArray(q?.gastos) ? q.gastos : []).forEach(g => { if (wlMismoDeseo(g, r)) hallados.push({ k, g }); });
+    if (hallados.length !== 1) continue;
+    adopciones.push({ ...hallados[0], idAntes: hallados[0].g._id, descAntes: hallados[0].g.descripcion, wid: r.id, nombre: r.nombre });
+  }
+  if (adopciones.length) {
+    for (const a of adopciones) { a.g._id = 'wl-' + a.wid; a.g.descripcion = a.nombre; (mapa[a.wid] = mapa[a.wid] || []).push(a.k); }   // mismo nombre exacto: así "[Ppto] nombre" siempre coincide
+    const rs = await wlSaveRefs(phone, refs);
+    if (rs.error) { for (const a of adopciones) { a.g._id = a.idAntes; a.g.descripcion = a.descAntes; delete mapa[a.wid]; } }   // no se pudo guardar: todo queda como estaba
+  }
+
   // Clave donde vive de verdad el gasto del deseo: la suya si está ahí; si no, la siguiente que lo tenga (o la primera)
   const vive = r => {
     const ks = mapa[r.id] || [];
@@ -5161,6 +5186,14 @@ async function wlConciliar(phone, rows) {
       const pagado = pagos.some(p => p.concepto === '[Ppto] ' + r.nombre && p.fecha >= from && p.fecha <= to);
       const c = {};
       if (k !== r.quincena_key) c.quincena_key = k;
+      // Lo editado directo en "Gastos esta quincena" (nombre, monto, categoría) se refleja en el deseo agendado
+      const bi = ((refs.budget_q || {})[k]?.gastos || []).find(g => g._id === 'wl-' + r.id);
+      if (bi && r.estado !== 'comprado') {
+        const d = wlLimpiar({ nombre: bi.descripcion, precio: Number(bi.monto) > 0 ? bi.monto : undefined, categoria: bi.categoria || undefined });
+        if (d.nombre && d.nombre !== r.nombre) c.nombre = d.nombre;
+        if (d.precio !== undefined && Math.abs(d.precio - (Number(r.precio) || 0)) >= 0.005) c.precio = d.precio;
+        if (d.categoria && d.categoria !== r.categoria) c.categoria = d.categoria;
+      }
       let estado = r.estado;
       if (estado === 'pendiente') { estado = 'agendado'; c.estado = 'agendado'; }
       if (estado === 'agendado' && pagado)   { c.estado = 'comprado'; c.comprado_at = new Date().toISOString(); }
