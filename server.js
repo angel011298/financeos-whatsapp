@@ -1042,12 +1042,16 @@ async function ajustarSaldoCuentaKey(phone, key, delta) {
 // - INGRESO: suma a la cuenta nombrada (p.ej. vales → Pluxee), EXCEPTO efectivo: el extractor
 //   usa "efectivo" como valor por defecto cuando el usuario no dice el medio, y sueldos o
 //   aguinaldos que llegan por banco terminarían inflando el efectivo con dinero que no existe.
+// Un ingreso confirmado con el botón de "Ingresos esta quincena" (Presupuesto) SÍ es una señal explícita del destino,
+// así que ese sí puede sumar al efectivo (p. ej. la beca que llega en efectivo).
+const MARCA_INGRESO_RECIBIDO = 'Recibido (Presupuesto)';
+const esIngresoConfirmado = m => m?.tipo === 'INGRESO' && String(m?.comentarios || '').includes(MARCA_INGRESO_RECIBIDO);
 function impactoCuenta(mov, defs) {
   if (!mov || (mov.tipo !== 'GASTO' && mov.tipo !== 'INGRESO')) return [];
   const monto = Number(mov.monto) || 0;
   if (!monto) return [];
   const key = medioPagoACuentaKey(mov.medio_pago, defs);
-  if (mov.tipo === 'INGRESO') return key && key !== 'efectivo' ? [{ key, delta: +monto }] : [];
+  if (mov.tipo === 'INGRESO') return key && (key !== 'efectivo' || esIngresoConfirmado(mov)) ? [{ key, delta: +monto }] : [];
   const efectos = [];
   if (key) efectos.push({ key, delta: -monto });
   if (esTransferenciaAhorro(mov)) { const ak = cuentaAhorroKey(mov, defs); if (ak) efectos.push({ key: ak, delta: +monto }); }
@@ -1073,6 +1077,12 @@ async function aplicarImpactoCuentas(phone, before, after) {
   ];
   for (const e of efectos) await ajustarSaldoCuentaKey(phone, e.key, e.delta);
 }
+
+// El remanente (sobrante de la quincena anterior) lo calcula la app sola y ya se suma a los ingresos de la siguiente
+// quincena. Registrarlo además como un ingreso lo contaría DOS veces e inflaría el balance (caso real: "Remanente"
+// $308.50 capturado el 25-oct → la app mostraba +$258.78 cuando la quincena en realidad cerró en −$49.72).
+const _esIngresoRemanente = d => d && d.tipo === 'INGRESO' && /^\s*(\[ppto\]\s*)?remanente\b/i.test(String(d.concepto || '').normalize('NFD').replace(/[̀-ͯ]/g, ''));
+const MSG_REMANENTE_AUTO = 'El remanente de la quincena anterior ya se suma solo a tus ingresos: registrarlo como ingreso lo contaría dos veces. No se guardó.';
 
 // Detecta si un GASTO debe tratarse como programado (presupuesto) y no como movimiento real.
 function esGastoProgramado(datos, today) {
@@ -1497,6 +1507,8 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
       if (accion === 'eliminar') return await gastoFijoEliminar(phone, datos, origen, texto_original);
       return await gastoFijoGuardar(phone, datos, origen, texto_original);   // crear | editar
     }
+
+    if (tabla === 'movimientos' && accion !== 'eliminar' && _esIngresoRemanente(datos)) return `❌ ${MSG_REMANENTE_AUTO}`;
 
     // Snapshot previo para editar/eliminar
     let snapshotBefore = null;
@@ -3121,6 +3133,7 @@ app.get('/api/whoami/:phone', async (req, res) => {
 app.post('/api/movimientos', async (req, res) => {
   try {
     const { user_phone, ...d } = req.body;
+    if (_esIngresoRemanente(d)) return res.status(400).json({ success: false, error: MSG_REMANENTE_AUTO });
     if (d.categoria !== undefined) d.categoria = canonCategoria(d.categoria);
     const { data, error } = await conReintentos(() =>
       sb.from('movimientos').insert({ ...d, user_phone }).select().single()
@@ -3137,6 +3150,7 @@ app.put('/api/movimientos/:id', async (req, res) => {
     const { user_phone, ...d } = req.body;
     if (d.categoria !== undefined) d.categoria = canonCategoria(d.categoria);
     const { data: before } = await sb.from('movimientos').select('*').eq('id', req.params.id).eq('user_phone', user_phone).maybeSingle();
+    if (_esIngresoRemanente({ ...(before || {}), ...d }) && !_esIngresoRemanente(before)) return res.status(400).json({ success: false, error: MSG_REMANENTE_AUTO });
     const { data, error } = await sb.from('movimientos').update(d).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
     await aplicarImpactoCuentas(user_phone, before, data);
@@ -6204,6 +6218,13 @@ app.post('/api/update-refs', async (req, res) => {
       // Notas libres por pestaña (HTML enriquecido del editor tipo Notas de iPhone)
       if (!refs.notas) refs.notas = {};
       refs.notas[itemId] = typeof req.body.value === 'string' ? req.body.value.slice(0, 100000) : '';
+    } else if (field === 'cuenta_ingresos' && action === 'set') {
+      // Cuenta a la que llega cada ingreso esperado (por nombre): al confirmarlo se suma a esa cuenta. '' = la sugerida.
+      const k = String(item || '');
+      if (k && !defs.some(d => d.key === k)) return res.status(404).json({ success: false, error: 'Esa cuenta ya no existe' });
+      const mapa = { ...(refs.cuenta_ingresos || {}) };
+      if (k) mapa[String(itemId || '').slice(0, 120)] = k; else delete mapa[String(itemId || '').slice(0, 120)];
+      refs.cuenta_ingresos = mapa;
     } else if (field === 'forma_pago_gastos' && action === 'set') {
       if (!refs.forma_pago_gastos) refs.forma_pago_gastos = {};
       refs.forma_pago_gastos[itemId] = item || '';  // itemId=descripcion, item='efectivo'|'tarjeta_debito'|''

@@ -906,6 +906,18 @@ tr:hover td{background:var(--bg-surface-2) !important;transition:background .1s}
 .q-din-bar.over span{background:var(--color-expense)}
 .mov-card.pagado{background:var(--bg-surface-2)}
 .mov-card.pagado .mov-card-title{text-decoration:line-through;opacity:.65}
+/* Ingresos esperados como tarjetas: botón redondo para confirmar que llegó (lo registra en Movimientos y suma a su cuenta) */
+.q-ing-cards{margin-bottom:4px}
+.q-ing-ok{flex:0 0 auto;width:42px;height:42px;margin-left:8px;border-radius:50%;border:2px solid var(--color-income);background:transparent;
+  color:var(--color-income);font-size:21px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s,background .15s}
+.q-ing-ok:hover{background:color-mix(in srgb,var(--color-income) 14%,transparent)}
+.q-ing-ok:active{transform:scale(.9)}
+.q-ing-ok:focus-visible{outline:3px solid var(--text-1);outline-offset:2px}
+.q-ing-ok.on{background:var(--color-income);color:var(--on-accent);border-color:var(--color-income)}
+.q-ing-ok:disabled{cursor:default}
+.mov-card.q-ing.recibido{border-color:color-mix(in srgb,var(--color-income) 45%,var(--border-default))}
+.q-ing-dst{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tarj-sub.ret{color:var(--text-1);font-weight:700}
 .mf-toggle{flex-shrink:0;white-space:nowrap}
 .mf-toggle.on{background:var(--bg-surface-2);color:var(--text-1)}
 .mf-toggle-badge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:var(--radius-pill);background:var(--accent-primary);color:var(--on-accent);font-size:10px;font-weight:800}
@@ -3840,6 +3852,14 @@ function getRemanente(off) {
   return Math.round(rem * 100) / 100;
 }
 
+// Remanente que corresponde a la lista de Movimientos: solo cuando se ve una quincena (o semana) COMPLETA y sin
+// filtros. Antes Movimientos lo omitía y la misma quincena salía con otro Balance que en Inicio y Presupuesto.
+function _remMovVista() {
+  const f = S.movF || {};
+  if (S.periodo.tipo !== _unidad() || (f.cats || []).length || (f.medios || []).length || f.search || f.onlyUnread) return 0;
+  return getRemanente(S.periodo.offset);
+}
+
 function getPeriodoRange() {
   const { tipo, offset } = S.periodo;
   const now = new Date();
@@ -4359,7 +4379,7 @@ function _wlAgendaHTML(it) {
         <span class="wl-ag-bar"><span style="width:${pct}%"></span></span></button>`;
     }).join('')}</div>
     ${st.agMas ? '' : `<button type="button" class="wl-act wl-ag-mas" onclick="wlAgMas()"><i class="ti ti-calendar-plus"></i> Ver más ${u === 'semana' ? 'semanas' : 'quincenas'}</button>`}
-    <div class="wl-hint">Libre = ingresos esperados − gastos ya planeados de esa ${u}.${planes.some(p => p.despues < 0) ? ' En rojo: no alcanza (quedarías en negativo).' : ''} Quedará en “Gastos esta ${u}”; cuando lo marques pagado ahí, el deseo pasa a comprado solo.</div>
+    <div class="wl-hint">Libre = ingresos esperados − gastos ya planeados de esa ${u}.${planes.some(p => p.despues < 0) ? ' En rojo: no alcanza (quedarías en negativo).' : ''} Quedará en “Presupuesto”; cuando lo marques pagado ahí, el deseo pasa a comprado solo.</div>
     <div class="wl-acts wl-ag-acts">
       <div class="wl-ag-sec">
         <button class="wl-act" onclick="wlCerrarPanel()">Cancelar</button>
@@ -4523,8 +4543,8 @@ async function wlCheck(id, hecho) {
   const ligado = !!it.quincena_key;
   const r = await _wlAccion(id, () => api('POST', `/api/wishlist/${id}/check`, { user_phone: S.phone, hecho }));
   if (!r) return;
-  toast(hecho ? (r.movimiento ? 'Comprado ✓ — también palomeado en Gastos esta quincena' : 'Comprado ✓')
-              : (ligado ? 'Desmarcado — vuelve a estar pendiente en Gastos esta quincena' : 'Desmarcado'));
+  toast(hecho ? (r.movimiento ? 'Comprado ✓ — también palomeado en Presupuesto' : 'Comprado ✓')
+              : (ligado ? 'Desmarcado — vuelve a estar pendiente en Presupuesto' : 'Desmarcado'));
   if (ligado) load();   // el palomeo de Gastos esta quincena cambió
 }
 function wlCiclarPrio(id) {
@@ -5009,8 +5029,11 @@ function _qPayPaint() {
   const fn = (S._qCardFn || {})[p.ctx], list = ((S._qPayList || {})[p.ctx] || {})[p.medio] || [];
   if (!fn) return;
   const tot = list.reduce((a, g) => a + (g.monto || 0), 0);
+  const rt = p.medio === 'efectivo' ? ((S._qPayList || {})[p.ctx] || {})._retiro : null;
   box.innerHTML = list.length
     ? `<div class="q-total-widget" style="margin:0 0 12px"><span class="qt-lbl">${list.length} gasto${list.length !== 1 ? 's' : ''}</span><span class="qt-val red">${fmt(tot)}</span></div>
+       ${rt ? `<div class="q-total-widget q-bal-widget" style="margin:0 0 12px" title="Lo que falta pagar en efectivo menos el remanente que ya tienes de la quincena anterior">
+         <span class="qt-lbl"><i class="ti ti-cash"></i> A retirar${rt.rem > 0 ? ` <small style="font-weight:500;color:var(--text-3)">(${fmt(rt.pend)} pendiente − ${fmt(rt.rem)} remanente)</small>` : ''}</span><span class="qt-val">${fmt(rt.ret)}</span></div>` : ''}
        <div class="mov-cards">${list.map(fn).join('')}</div>`
     : `<div class="desp-empty">Ningún gasto de esta quincena está marcado con ${QPAY_LBL[p.medio] || 'esta forma de pago'}.</div>`;
 }
@@ -5373,6 +5396,98 @@ async function notaSave(tab) {
 // La Despensa se oculta o se muestra POR quincena (refs.hide_despensa_q = { '2026-10-B': true }): lo que hagas en una no toca las demás.
 const despOculta = (refs, qKey) => !!(refs.hide_despensa_q || {})[qKey];
 
+// ── INGRESOS ESPERADOS: tarjetas con "confirmar que llegó" ──────────────────
+// Confirmar un ingreso lo registra en Movimientos con su concepto y monto, y lo suma a la cuenta donde llega
+// (Mis cuentas): sueldo → débito de nómina (Banamex), vales → Pluxee, lo demás → efectivo, o la que elijas en la tarjeta.
+const MARCA_ING_RECIBIDO = 'Recibido (Presupuesto)';   // misma marca que el servidor: permite sumar al efectivo y deshacer
+const _txtN = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/^\[ppto\]\s*/, '').replace(/\s+/g, ' ').trim();
+const _ctasIngreso = () => cuentasDef().filter(d => d.tipo !== 'ahorro');   // el ahorro no recibe ingresos directos
+function ingCuentaSugerida(desc) {
+  const defs = _ctasIngreso(), t = _txtN(desc), de = tipo => defs.find(d => d.tipo === tipo);
+  if (/\b(vales?|pluxee|despensa)\b/.test(t) && de('vales')) return de('vales').key;
+  if (/\b(sueldo|salario|nomina|aguinaldo|quincena|bono|ptu|prima|finiquito|pago)\b/.test(t) && de('debito')) return de('debito').key;
+  return (defs.find(d => d.key === 'efectivo') || defs[0] || {}).key || '';
+}
+function ingCuenta(desc) {
+  const m = (((S.data.user || {}).external_refs || {}).cuenta_ingresos || {})[desc];
+  return m && _ctasIngreso().some(d => d.key === m) ? m : ingCuentaSugerida(desc);
+}
+const _medioDeCuenta = key => { const d = cuentasDef().find(x => x.key === key); return !d ? 'transferencia' : d.key === 'efectivo' ? 'efectivo' : (d.medio || d.label); };
+function _ingRecibidos(ings, qMovs) {
+  const usados = new Set(), out = {};
+  ings.forEach(i => {
+    const k = i._id || i.id || i.descripcion, n = _txtN(i.descripcion);
+    const m = qMovs.find(x => x.tipo === 'INGRESO' && !x.deleted_at && !usados.has(x.id) && _txtN(x.concepto) === n);
+    if (m) { usados.add(m.id); out[k] = m; }
+  });
+  return out;
+}
+function _ingCardHTML(ing, qi, recibidos) {
+  const k = ing._id || ing.id || ing.descripcion, kq = String(k).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const rec = recibidos[k], dq = String(ing.descripcion || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const dias = (ing.dias || []).filter(d => dayInQuincena(d, qi));
+  const cta = ingCuenta(ing.descripcion), defs = _ctasIngreso();
+  const nomCta = key => { const d = cuentasDef().find(x => x.key === key); return d ? `${_ctaEmo(d)} ${_ndEsc(d.label)}` : ''; };
+  let sub = dias.length ? `día${dias.length > 1 ? 's' : ''} ${dias.join(', ')}` : '';
+  if (rec) sub = `Recibido el ${_wlFechaCorta(rec.fecha + 'T12:00:00')}${Math.abs((rec.monto || 0) - (ing.monto || 0)) >= 0.005 ? ` · llegaron ${fmt(rec.monto)}` : ''}`;
+  const puedeDeshacer = rec && String(rec.comentarios || '').includes(MARCA_ING_RECIBIDO);
+  const ok = rec
+    ? `<button type="button" class="q-ing-ok on" ${puedeDeshacer ? `onclick="desconfirmarIngresoQ('${rec.id}','${dq}')"` : 'disabled'} title="${puedeDeshacer ? 'Recibido · toca para deshacer' : 'Ya está registrado en Movimientos'}" aria-label="${puedeDeshacer ? 'Recibido, toca para deshacer' : 'Ya registrado'}"><i class="ti ti-circle-check-filled"></i></button>`
+    : `<button type="button" class="q-ing-ok" onclick="confirmarIngresoQ('${kq}')" title="Confirmar que llegó ${_ndEsc(ing.descripcion)} (${fmt(ing.monto)})${cta ? ' a ' + _ndEsc((cuentasDef().find(x => x.key === cta) || {}).label || '') : ''}" aria-label="Confirmar que se recibió ${_ndEsc(ing.descripcion)}"><i class="ti ti-check"></i></button>`;
+  const destino = rec
+    ? (() => {
+        const mp = _txtN(rec.medio_pago);
+        const kk = cuentasDef().find(d => (d.key === 'efectivo' && mp === 'efectivo') || (d.medio && _txtN(d.medio) === mp));
+        return `<span class="q-ing-dst">→ ${kk ? nomCta(kk.key) : _ndEsc(rec.medio_pago || '—') + ' (sin cuenta ligada)'}</span>`;
+      })()
+    : defs.length > 1 ? defs.map(d => `<button class="q-fp-pill${d.key === cta ? ' on on-ef' : ''}" onclick="setCuentaIngreso('${dq}','${d.key}')" title="Llega a ${_ndEsc(d.label)}">${_ctaEmo(d)} ${_ndEsc(d.label.split('·')[0].trim())}</button>`).join('')
+    : `<span class="q-ing-dst">→ ${nomCta(cta)}</span>`;
+  return `<div class="mov-card q-card q-ing${rec ? ' recibido' : ''}">
+    <div class="mov-card-ic emo" style="background:rgba(52,211,153,.14)" aria-hidden="true">${/vales|pluxee/i.test(ing.descripcion) ? '🎫' : /beca/i.test(ing.descripcion) ? '🎓' : '💰'}</div>
+    <div class="mov-card-mid"><div class="mov-card-title">${_ndEsc(ing.descripcion)}</div>${sub ? `<div class="mov-card-sub">${sub}</div>` : ''}</div>
+    <div class="mov-card-val green">${fmt(ing.monto)}</div>
+    ${ok}
+    <div class="q-card-foot">
+      <div class="q-card-fp">${destino}</div>
+      ${!String(ing._id || '').startsWith('legacy') ? `<div class="mov-card-acts">
+        <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('ingresos','${ing._id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+        <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('ingresos_esperados','${ing._id}')"><i class="ti ti-x" style="font-size:12px"></i></button>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+async function setCuentaIngreso(desc, key) {
+  const actual = (((S.data.user || {}).external_refs || {}).cuenta_ingresos || {})[desc];
+  const nuevo = actual === key && key !== ingCuentaSugerida(desc) ? '' : key;
+  try {
+    await api('POST', '/api/update-refs', { phone: S.phone, field: 'cuenta_ingresos', action: 'set', itemId: desc, item: nuevo });
+    const r = S.data.user.external_refs || (S.data.user.external_refs = {});
+    r.cuenta_ingresos = { ...(r.cuenta_ingresos || {}) }; if (nuevo) r.cuenta_ingresos[desc] = nuevo; else delete r.cuenta_ingresos[desc];
+    refreshQuincenaPanel();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+async function confirmarIngresoQ(k) {
+  const ing = (S._expItemData || {})[k], qi = S._ingQi;
+  if (!ing || !qi) { toast('No se encontró el ingreso', 'error'); return; }
+  const key = ingCuenta(ing.descripcion), hoyS = toISO(new Date());
+  // Fecha: hoy si cae en la quincena; si no, el día de pago dentro de esa quincena (o su primer día)
+  let fecha = hoyS >= qi.from && hoyS <= qi.to ? hoyS : qi.from;
+  if (fecha !== hoyS) { const dia = (ing.dias || []).find(d => dayInQuincena(d, qi)); if (dia) { const x = new Date(qi.from + 'T12:00:00'); for (let i = 0; i < 20; i++) { if (x.getDate() === dia) { fecha = toISO(x); break; } x.setDate(x.getDate() + 1); } } }
+  try {
+    await api('POST', '/api/movimientos', { user_phone: S.phone, tipo: 'INGRESO', categoria: 'Ingresos', concepto: ing.descripcion,
+      descripcion: '', monto: ing.monto || 0, medio_pago: _medioDeCuenta(key), fecha, comentarios: MARCA_ING_RECIBIDO });
+    window.iosHaptic && iosHaptic('success');
+    const d = cuentasDef().find(x => x.key === key);
+    toast(`${ing.descripcion} recibido ✓ — ${fmt(ing.monto)}${d ? ' sumado a ' + d.label : ''}`);
+    await load();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+async function desconfirmarIngresoQ(movId, desc) {
+  if (!confirm(`¿Deshacer la recepción de "${desc}"? Se quita de Movimientos y se resta de su cuenta.`)) return;
+  try { await api('DELETE', `/api/movimientos/${movId}`, { user_phone: S.phone }); await load(); toast('Recepción deshecha'); }
+  catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
 // ── QUINCENAL PANEL ──────────────────────────────────────────────────────────
 function rQuincenaPanel(ctx) {
   const refs   = (S.data.user || {}).external_refs || {};
@@ -5437,6 +5552,10 @@ function rQuincenaPanel(ctx) {
     return isMensual ? dayInQuincena(1, qi) : true;
   });
 
+  // Qué ingreso esperado ya llegó: un movimiento INGRESO de esta quincena con el mismo concepto (uno por ingreso)
+  const recibidos = _ingRecibidos(ingEspQ, qMovs);
+  S._ingQi = qi;
+
   const totalIngEsp  = ingEspQ.reduce((a, i) => a + (i.monto || 0), 0);
   const totalGasEsp  = gasEsp.reduce((a, g) => a + (g.monto || 0), 0);
   const totalIngReal = qMovs.filter(m => m.tipo==='INGRESO').reduce((a,m) => a+(m.monto||0), 0);
@@ -5474,6 +5593,8 @@ function rQuincenaPanel(ctx) {
     };
   };
   const _cts = refs.cuentas || {};
+  // Efectivo a retirar = lo que falta pagar en efectivo − el remanente de la quincena anterior (ese dinero ya lo tienes)
+  const _retiro = (() => { const pend = _porMedio('efectivo').pend, rem = Math.min(remanente, pend); return { pend, rem, ret: Math.max(0, Math.round((pend - remanente) * 100) / 100) }; })();
   // Cada tarjeta abre un pop-up con los gastos de esa forma de pago.
   const tarjCol = (emoji, lbl, p, saldo, id, open, medio) => `<div class="tarj-col" id="${id}" style="display:${open ? '' : 'none'}" role="button" tabindex="0"
       onclick="abrirQPay('${ctx}','${medio}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
@@ -5481,6 +5602,7 @@ function rQuincenaPanel(ctx) {
       <div class="tarj-lbl">${emoji} ${lbl}${p.n ? '<span class="tarj-n"> · ' + p.n + '</span>' : ''}</div>
       <div class="tarj-val">${p.n ? fmt(p.total) : '—'}</div>
       ${!p.n ? '<div class="tarj-sub">sin gastos</div>' : ''}
+      ${medio === 'efectivo' && p.n ? `<div class="tarj-sub ret">A retirar ${fmt(_retiro.ret)}</div>${_retiro.rem > 0 ? `<div class="tarj-sub">pendiente ${fmt(_retiro.pend)} − remanente ${fmt(_retiro.rem)}</div>` : ''}` : ''}
     </div>`;
   // Las formas de pago salen de las cuentas de cada quien: Pluxee solo si tiene cuenta de vales (o ya hay gastos con ella)
   const _dq = cuentasDef(), _pxP = _porMedio('pluxee');
@@ -5578,7 +5700,7 @@ function rQuincenaPanel(ctx) {
               <div class="mov-cards">${movsA.map(m => _movCardHTML(m, true)).join('') || '<div class="desp-empty">Aún no hay gastos con Alicia en esta quincena.</div>'}</div>
               ${pend.length ? `<div class="q-din-sec"><span>📋 Otros gastos con Alicia por pagar</span><b class="red">${fmt(sPend)}</b></div>
               <div class="mov-cards">${pend.map(x => `<div class="mov-card">${catIcHTML(x.categoria || 'Alicia', x)}
-                <div class="mov-card-mid"><div class="mov-card-title">${gxEsc(x.descripcion || '—')}</div><div class="mov-card-sub">Planeado en Gastos esta ${_uTxt()}${x.forma_pago ? ' · ' + gxEsc(x.forma_pago.replace('_', ' ')) : ''}</div></div>
+                <div class="mov-card-mid"><div class="mov-card-title">${gxEsc(x.descripcion || '—')}</div><div class="mov-card-sub">Planeado en Presupuesto${x.forma_pago ? ' · ' + gxEsc(x.forma_pago.replace('_', ' ')) : ''}</div></div>
                 <div class="mov-card-val red">${fmt(x.monto)}</div></div>`).join('')}</div>` : ''}
               <div class="q-din-tot">Total con Alicia esta ${_uTxt()}: <b>${fmt(sMov + sPend)}</b></div>
             </div>`;
@@ -5677,7 +5799,7 @@ function rQuincenaPanel(ctx) {
   const _fpDe    = g => fpMap[g.descripcion] || g.forma_pago || '';
   const _deMedio = m => gasEsp.filter(g => !g._isDinerito && !g._isNiditoComp && _fpDe(g) === m);
   (S._qCardFn  || (S._qCardFn  = {}))[ctx] = cardHTML;
-  (S._qPayList || (S._qPayList = {}))[ctx] = { efectivo: _deMedio('efectivo'), pluxee: _deMedio('pluxee'), tarjeta_debito: _deMedio('tarjeta_debito') };
+  (S._qPayList || (S._qPayList = {}))[ctx] = { efectivo: _deMedio('efectivo'), pluxee: _deMedio('pluxee'), tarjeta_debito: _deMedio('tarjeta_debito'), _retiro };
   if (S._qPop?.ctx === ctx) setTimeout(_qPayPaint, 0);
 
   return `<div class="q-panel">
@@ -5713,28 +5835,23 @@ function rQuincenaPanel(ctx) {
         <button class="btn btn-sm" style="background:rgba(52,211,153,.12);color:var(--green);font-size:11px" onclick="oAddExpItem('ingresos')"><i class="ti ti-plus"></i> Ingreso</button>
       </div>
     </div>
+    <div class="mov-cards q-ing-cards">
     ${remanente > 0 ? `
-    <div class="q-item-row">
-      <span style="font-size:12px">🔁 Remanente <span style="color:var(--muted);font-size:11px">de la ${_uTxt()} anterior</span></span>
-      <div style="display:flex;align-items:center;gap:6px"><span class="green" style="font-weight:600">${fmt(remanente)}</span></div>
-    </div>` : ''}
-    ${ingEspQ.length ? ingEspQ.map(ing=>`
-    <div class="q-item-row">
-      <span style="font-size:12px">${ing.descripcion} <span style="color:var(--muted);font-size:11px">días ${(ing.dias||[]).filter(d=>dayInQuincena(d,qi)).join(', ')}</span></span>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span class="green" style="font-weight:600">${fmt(ing.monto)}</span>
-        ${!ing._id?.startsWith('legacy')?`
-          <button class="edit-pill-btn" title="Editar" onclick="oEditExpItem('ingresos','${ing._id}')"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-          <button class="edit-pill-btn" style="color:var(--red)" title="Eliminar" onclick="removeExpItem('ingresos_esperados','${ing._id}')"><i class="ti ti-x" style="font-size:12px"></i></button>`:''}
-      </div>
-    </div>`).join('') : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin ingresos esperados esta ${_uTxt()}. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('ingresos')">+ Agregar</button></div>`}
+      <div class="mov-card q-card q-ing">
+        <div class="mov-card-ic emo" style="background:rgba(52,211,153,.14)" aria-hidden="true">🔁</div>
+        <div class="mov-card-mid"><div class="mov-card-title">Remanente</div><div class="mov-card-sub">Sobrante de la ${_uTxt()} anterior · se suma solo (no lo registres como ingreso)</div></div>
+        <div class="mov-card-val green">${fmt(remanente)}</div>
+      </div>` : ''}
+    ${ingEspQ.map(ing => _ingCardHTML(ing, qi, recibidos)).join('')}
+    </div>
+    ${ingEspQ.length ? '' : `<div style="color:var(--muted);font-size:12px;padding:8px 10px;background:var(--card2);border-radius:7px">Sin ingresos esperados esta ${_uTxt()}. <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="oAddExpItem('ingresos')">+ Agregar</button></div>`}
   </div>
 
   <!-- Gastos presupuestados esta quincena -->
   <div style="margin-bottom:10px">
     ${ctx === 'dash' ? '' : `
     <div class="sec-hdr" style="margin:14px 0 12px">
-      <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos esta ${_uTxt()}</h2></div>
+      <div class="sec-hdr-row"><h2><i class="ti ti-wallet"></i> Gastos presupuestados</h2></div>
     </div>`}
     ${gasEsp.length ? `
     <div class="q-pay-wrap">
@@ -6228,7 +6345,7 @@ function _dsgTotal(lbl, monto, color, signo = '') {
 function desgloseHTML(key, scope) {
   const r     = getPeriodoRange();
   const pMovs = scope === 'mov' ? getMovFiltradas() : filterMovs(S.data.movs || [], r.from, r.to);
-  const rem   = scope !== 'mov' && S.periodo.tipo === _unidad() ? getRemanente(S.periodo.offset) : 0;
+  const rem   = scope === 'mov' ? _remMovVista() : S.periodo.tipo === _unidad() ? getRemanente(S.periodo.offset) : 0;
   const ingL  = pMovs.filter(m => m.tipo === 'INGRESO'), gasL = pMovs.filter(m => m.tipo === 'GASTO');
   const ing   = ingL.reduce((a, m) => a + (m.monto || 0), 0), gas = gasL.reduce((a, m) => a + (m.monto || 0), 0);
 
@@ -6420,8 +6537,8 @@ function _dashEmoji(key) {
     case 'movimientos': abrirModulo('movimientos', 'Movimientos'); break;
     case 'ingQuinc': abrirHoja('Ingresos · esta quincena', '<div id="hoja-q"></div>',
                        () => { $('hoja-q').innerHTML = rQuincenaPanel('sheet'); _hojaScroll('.q-stats'); }); break;
-    case 'gastQuinc':abrirHoja('Gastos · esta quincena', '<div id="hoja-q"></div>',
-                       () => { $('hoja-q').innerHTML = rQuincenaPanel('sheet'); _hojaScrollTexto('Gastos esta quincena'); }); break;
+    case 'gastQuinc':abrirHoja('Presupuesto', '<div id="hoja-q"></div>',
+                       () => { $('hoja-q').innerHTML = rQuincenaPanel('sheet'); }); break;   // abre arriba: ingresos y luego gastos
     case 'analisis': abrirHoja('Análisis gráfico', _analisisHTML(), _analisisDraw, { size: 'md' }); break;
     case 'despensa': abrirHoja('Lista de despensa', '<div id="despensa-section"></div>', () => rDespensa(), { size: 'lg' }); break;
     case 'consejos': abrirHoja('Consejos IA', '<div id="insights-section"></div>', () => fetchInsights(true), { size: 'md' }); break;
@@ -7123,7 +7240,7 @@ ${dsgPanelHTML('dash-dsg','dash')}
   `<button class="mini-tile" aria-label="${lbl}" title="${lbl}" onclick="dashEmoji('${k}')">${e}<span class="mini-tile-lbl">${lbl}</span>${k==='wishlist' && S._wlNuevos > 0 ? `<span class="tile-dot">${S._wlNuevos}</span>` : ''}</button>`).join('')}</div>
 <div class="q-dash-wrap">
   <button class="q-dash-btn mini-tile${S._qDashOpen?' on':''}" id="q-dash-btn" onclick="toggleQuincenaDash()"
-    title="Gastos esta ${_uTxt()}" aria-label="Gastos esta ${_uTxt()}"
+    title="Presupuesto" aria-label="Presupuesto"
     aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">🧮</button>
   <button class="q-dash-btn mini-tile" onclick="dashEmoji('movimientos')" title="Movimientos" aria-label="Movimientos">📒</button>
 </div>
@@ -7518,7 +7635,7 @@ function _ndWizPaint() {
                  : `<div class="nd-wiz-calc muted">Ponle monto y fecha para calcular cuánto ahorrar por quincena.</div>`}
       </div>
       ${!w.editId && c.porQ ? `<label class="nd-wiz-split"><input type="checkbox" ${w.split ? 'checked' : ''} onchange="S._ndWiz.split=this.checked">
-        <span>💞 Repartirlo ${c.personas > 1 ? '50/50' : ''} y agregar <b>${fmt(c.porPersona)}</b> a “Gastos esta quincena” de ${c.personas > 1 ? 'cada quien' : 'tu quincena'} como Compromiso al Nidito</span></label>` : ''}`;
+        <span>💞 Repartirlo ${c.personas > 1 ? '50/50' : ''} y agregar <b>${fmt(c.porPersona)}</b> a “Presupuesto” de ${c.personas > 1 ? 'cada quien' : 'tu quincena'} como Compromiso al Nidito</span></label>` : ''}`;
   }
   box.innerHTML = `<div class="nd-wiz-dots">${dots}</div>${cuerpo}
     <div class="nd-wiz-nav">
@@ -8693,7 +8810,8 @@ function rMovs() {
   const gastos  =filtered.filter(m=>m.tipo==='GASTO');
   const ingresos=filtered.filter(m=>m.tipo==='INGRESO');
   const totGas  =gastos.reduce((a,m)=>a+(m.monto||0),0);
-  const totIng  =ingresos.reduce((a,m)=>a+(m.monto||0),0);
+  const remM    =_remMovVista();   // misma regla que Inicio: Balance = Ingresos (+ remanente) − Egresos
+  const totIng  =ingresos.reduce((a,m)=>a+(m.monto||0),0)+remM;
   const neto    =totIng-totGas;
 
   const catPills=CATS.map(c=>{
@@ -8748,7 +8866,7 @@ function rMovs() {
   <div class="kpi${dsgOn('mov-dsg','ingresos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['mov-dsg']==='ingresos'}" onclick="toggleDsgPanel('ingresos',this,'mov-dsg','mov')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de ingresos">
     <div class="kpi-lbl"><i class="ti ti-trending-up"></i> Ingresos</div>
     <div class="kpi-val green">${fmt(totIng)}</div>
-    <div class="kpi-sub">${ingresos.length} registro${ingresos.length!==1?'s':''}</div>
+    <div class="kpi-sub">${ingresos.length} registro${ingresos.length!==1?'s':''}${remM>0?` · incl. remanente ${fmt(remM)}`:''}</div>
   </div>
   <div class="kpi${dsgOn('mov-dsg','gastos')}" role="button" tabindex="0" aria-expanded="${S._dsgOpen['mov-dsg']==='gastos'}" onclick="toggleDsgPanel('gastos',this,'mov-dsg','mov')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" title="Ver desglose de egresos">
     <div class="kpi-lbl"><i class="ti ti-trending-down"></i> Egresos</div>
@@ -9834,7 +9952,7 @@ function rDespensa() {
     <button class="ico-btn acc" onclick="oDespensa()" title="Agregar artículo" aria-label="Agregar artículo"><i class="ti ti-plus"></i></button>
     ${items.length ? `<button class="ico-btn${buscando ? ' on' : ''}" onclick="toggleDespSearch()" title="Buscar" aria-label="Buscar" aria-expanded="${buscando}"><i class="ti ti-search"></i></button>` : ''}
     ${pending.length ? `<button class="ico-btn" id="btn-buscar-precios" onclick="buscarPreciosDespensa()" title="Buscar precios con IA" aria-label="Buscar precios con IA"><i class="ti ti-robot"></i></button>` : ''}
-    ${sel.length ? `<button class="ico-btn" onclick="agregarDespensaAGastos()" title="Agregar a Gastos esta quincena" aria-label="Agregar a Gastos esta quincena"><i class="ti ti-clipboard-plus"></i></button>` : ''}
+    ${sel.length ? `<button class="ico-btn" onclick="agregarDespensaAGastos()" title="Agregar a Presupuesto" aria-label="Agregar a Presupuesto"><i class="ti ti-clipboard-plus"></i></button>` : ''}
     ${done.length ? `<button class="ico-btn" onclick="limpiarCompradosDespensa()" title="Limpiar comprados" aria-label="Limpiar comprados"><i class="ti ti-trash-x"></i></button>` : ''}
     ${items.length ? `<button class="ico-btn" onclick="despExcel()" title="Descargar Excel" aria-label="Descargar Excel"><i class="ti ti-download"></i></button>` : ''}
   </div>
@@ -10003,7 +10121,7 @@ async function agregarDespensaAGastos() {
       await api('POST', '/api/update-refs', { phone: S.phone, field: 'hide_despensa_q', qKey, value: false });
     }
     await load();   // re-renderiza la pestaña completa (incluye "Gastos esta quincena")
-    toast(existing ? `Despensa actualizada — ${fmt(total)} ✓` : `Despensa agregada a Gastos esta quincena — ${fmt(total)} ✓`);
+    toast(existing ? `Despensa actualizada — ${fmt(total)} ✓` : `Despensa agregada a Presupuesto — ${fmt(total)} ✓`);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
