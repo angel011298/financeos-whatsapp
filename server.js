@@ -662,7 +662,9 @@ function promptMedios(defs) {
 // se guarda en external_refs.budget_q[quincena].gastos para que aparezca en
 // "Presupuesto y Metas" en la quincena correspondiente, hasta que el usuario lo
 // registre como gasto realizado (chat IA o manual) en su debido momento.
-function medioToFormaPago(medio) {
+// Forma de pago de un gasto de Presupuesto = el método OFICIAL (efectivo, Débito Banamex, Pluxee, Otros…).
+function medioToFormaPago(medio, defs) {
+  if (medio) return medioCanon(medio, defs);
   const m = (medio || '').toLowerCase();
   if (m === 'efectivo') return 'efectivo';
   if (/\b(pluxee|vales)\b/.test(m)) return 'pluxee';
@@ -755,7 +757,7 @@ async function gastoFijoGuardar(phone, datos, origen = 'web', texto = null) {
   const alc = gfParseQuincenas(d.quincenas != null ? d.quincenas : (d.alcance != null ? d.alcance : d.quincena));
   const cat = _gfCategoria(d.categoria);
   const fpRaw = d.forma_pago || d.medio_pago || '';
-  const fp = fpRaw ? (['efectivo', 'tarjeta_debito', 'pluxee'].includes(fpRaw) ? fpRaw : medioToFormaPago(fpRaw)) : '';
+  const fp = fpRaw ? medioToFormaPago(fpRaw, await cuentasDefPorTelefono(phone)) : '';
   let item, nuevo = false, propagadas = 0;
   if (idx < 0) {
     if (!(monto > 0)) return `❌ ¿De cuánto es el gasto fijo "${desc}"? Dime el monto.`;
@@ -988,7 +990,27 @@ const cuentasLabelDe = defs => Object.fromEntries(defs.map(d => [d.key, d.label]
 const saldoPorTipo = (refs, defs, tipo) => defs.filter(d => d.tipo === tipo).reduce((a, d) => a + (Number((refs.cuentas || {})[d.key]) || 0), 0);
 const totalCuentas = (refs, defs) => defs.reduce((a, d) => a + (Number((refs.cuentas || {})[d.key]) || 0), 0);
 // Medios de pago que ofrece una persona: los básicos + el medio de cada una de sus cuentas
-const mediosDe = defs => [...new Set(['efectivo', 'transferencia', 'débito', ...defs.filter(d => d.key !== 'efectivo' && d.medio).map(d => d.medio)])];
+// Métodos de pago OFICIALES = las cuentas de la persona (menos las de ahorro) + "Otros" (tarjetas de regalo, cupones,
+// créditos…). Ángel: efectivo, Débito Banamex, Débito Revolut, Pluxee, Otros. Una cuenta nueva (Klar, Amazon…) se vuelve
+// método de pago en toda la app sin tocar código.
+const MEDIO_OTROS = 'Otros';
+const medioDeCuenta = d => d.key === 'efectivo' ? 'efectivo' : (d.medio || d.label);
+const mediosDe = defs => [...new Set([...(defs.some(d => d.key === 'efectivo') ? [] : ['efectivo']), ...defs.filter(d => d.tipo !== 'ahorro').map(medioDeCuenta), MEDIO_OTROS])];
+// Cualquier texto de medio de pago ("débito", "transferencia", "tarjeta_debito", "vales", "AMEX"…) → uno de los oficiales.
+// Débito/transferencia genéricos → la primera cuenta de débito (la de nómina); lo que no sea una cuenta propia → "Otros".
+function medioCanon(medio, defs) {
+  defs = defs || CUENTAS_ANGEL;
+  const m = _ctaNorm(medio).replace(/_/g, ' ');
+  if (!m) return 'efectivo';
+  if (m === 'otros' || m === 'otro') return MEDIO_OTROS;
+  const key = medioPagoACuentaKey(medio, defs) || medioPagoACuentaKey(m, defs);
+  const d = key && defs.find(x => x.key === key);
+  if (d && d.tipo !== 'ahorro') return medioDeCuenta(d);
+  if (m === 'efectivo' || m === 'cash') return 'efectivo';
+  if (/^(tarjeta (de )?)?debito$|^t\.? ?debito$|transfer|^spei$|^tarjeta$|^nomina$/.test(m)) { const db = defs.find(x => x.tipo === 'debito'); return db ? medioDeCuenta(db) : MEDIO_OTROS; }
+  return MEDIO_OTROS;
+}
+async function medioCanonDe(phone, medio) { return medioCanon(medio, await cuentasDefPorTelefono(phone)); }
 const _reCuenta = d => { const t = (d.match && d.match.length ? d.match : tokensCuenta(d.label)).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); return t.length ? new RegExp('\\b(' + t.join('|') + ')\\b') : null; };
 
 // Tolerante a variantes ("Débito Banamex", "banamex débito", "tarjeta de vales", etc.) — no depende de que la IA
@@ -1200,7 +1222,7 @@ async function addGastoProgramado(phone, datos, origen, texto_original) {
     descripcion: datos.concepto || datos.descripcion || 'Gasto programado',
     monto: Number(datos.monto) || 0,
   };
-  const fp = medioToFormaPago(datos.medio_pago);
+  const fp = medioToFormaPago(datos.medio_pago, await cuentasDefPorTelefono(phone));
   if (fp) item.forma_pago = fp;
   refs.budget_q[qKey].gastos.push(item);
   const { error } = await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', phone);
@@ -1466,7 +1488,7 @@ async function procesarRecurrentes(phone, forzar = false) {
           categoria:  rec.categoria || 'OTROS',
           concepto:   rec.concepto || 'Recurrente',
           monto:      Number(rec.monto) || 0,
-          medio_pago: rec.medio_pago || 'efectivo',
+          medio_pago: medioCanon(rec.medio_pago, cuentasDefDe(refs, null)),
           fecha:      rec.proxima,
           comentarios: 'Recurrente',
         };
@@ -1621,6 +1643,7 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
       // ── Reglas deterministas de categorización (palabras clave) ────────────
       if (tabla === 'movimientos') aplicarReglasCategoria(datos, texto_original);
       if (tabla === 'movimientos' && datos && datos.categoria !== undefined) datos.categoria = canonCategoria(datos.categoria);
+      if (tabla === 'movimientos' && datos && (accion === 'crear' || datos.medio_pago !== undefined)) datos.medio_pago = await medioCanonDe(phone, datos.medio_pago);
       // ── Gasto programado/futuro → Presupuesto, NO movimiento real ──────────
       if (tabla === 'movimientos' && esGastoProgramado(datos, hoy())) {
         const r = await addGastoProgramado(phone, datos, origen, texto_original);
@@ -3135,6 +3158,7 @@ app.post('/api/movimientos', async (req, res) => {
     const { user_phone, ...d } = req.body;
     if (_esIngresoRemanente(d)) return res.status(400).json({ success: false, error: MSG_REMANENTE_AUTO });
     if (d.categoria !== undefined) d.categoria = canonCategoria(d.categoria);
+    d.medio_pago = await medioCanonDe(user_phone, d.medio_pago);
     const { data, error } = await conReintentos(() =>
       sb.from('movimientos').insert({ ...d, user_phone }).select().single()
     );
@@ -3149,6 +3173,7 @@ app.put('/api/movimientos/:id', async (req, res) => {
   try {
     const { user_phone, ...d } = req.body;
     if (d.categoria !== undefined) d.categoria = canonCategoria(d.categoria);
+    if (d.medio_pago !== undefined) d.medio_pago = await medioCanonDe(user_phone, d.medio_pago);
     const { data: before } = await sb.from('movimientos').select('*').eq('id', req.params.id).eq('user_phone', user_phone).maybeSingle();
     if (_esIngresoRemanente({ ...(before || {}), ...d }) && !_esIngresoRemanente(before)) return res.status(400).json({ success: false, error: MSG_REMANENTE_AUTO });
     const { data, error } = await sb.from('movimientos').update(d).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
@@ -5051,9 +5076,9 @@ const WL_RE_QKEY = /^\d{4}-((0[1-9]|1[0-2])-[AB]|W(0[1-9]|[1-4]\d|5[0-3]))$/;
 // Formas de pago de un deseo = las de "Gastos esta quincena"; WL_MEDIO las traduce al medio_pago
 // de un movimiento (así el saldo de la cuenta correcta se ajusta al registrarlo).
 const WL_FORMAS = ['', 'efectivo', 'tarjeta_debito', 'pluxee'];
-const WL_MEDIO  = { efectivo: 'efectivo', tarjeta_debito: 'débito', pluxee: 'Pluxee' };
+const WL_MEDIO  = { efectivo: 'efectivo', tarjeta_debito: 'débito', pluxee: 'Pluxee' };   // valores viejos; hoy se guarda el medio oficial
 // La forma de pago puesta en la tarjeta de la quincena (forma_pago_gastos, por nombre) manda sobre la del deseo.
-const wlMedio = (refs, row) => WL_MEDIO[(refs.forma_pago_gastos || {})[row.nombre] || row.forma_pago] || 'efectivo';
+const wlMedio = (refs, row, defs) => { const v = (refs.forma_pago_gastos || {})[row.nombre] || row.forma_pago; return medioCanon(WL_MEDIO[v] || v, defs); };
 
 // 'YYYY-MM-A' = días 10–24; 'YYYY-MM-B' = día 25 a 9 del mes siguiente (igual que getQuincena).
 function wlRangoQuincena(qKey) {
@@ -5072,7 +5097,7 @@ function wlLimpiar(b = {}) {
   if (b.prioridad !== undefined) d.prioridad = ['alta', 'media', 'baja'].includes(b.prioridad) ? b.prioridad : 'media';
   if (b.categoria !== undefined) d.categoria = CATEGORIAS.includes(b.categoria) ? b.categoria : 'OTROS';
   if (b.notas     !== undefined) d.notas     = String(b.notas).slice(0, 2000);
-  if (b.forma_pago !== undefined) d.forma_pago = WL_FORMAS.includes(b.forma_pago) ? b.forma_pago : '';
+  if (b.forma_pago !== undefined) d.forma_pago = String(b.forma_pago || '').trim().slice(0, 60);   // medio oficial (efectivo, Débito Banamex, Pluxee, Otros…)
   if (b.compartido !== undefined) d.compartido = b.compartido === true;
   if (b.enlace    !== undefined) {
     let e = String(b.enlace).trim().slice(0, 500);
@@ -5402,9 +5427,10 @@ app.post('/api/wishlist/:id/check', async (req, res) => {
       if (ligado && hoy() >= from) {
         if (!(Number(row.precio) > 0)) return res.status(400).json({ success: false, error: 'Ponle un precio para marcarlo como pagado' });
         if (!(await wlPagosQ(user_phone, row)).length) {
+          const medioWl = wlMedio(refs, row, await cuentasDefPorTelefono(user_phone));
           const { data, error } = await conReintentos(() => sb.from('movimientos').insert({
             user_phone, tipo: 'GASTO', categoria: row.categoria || 'OTROS', concepto: '[Ppto] ' + row.nombre, descripcion: '',
-            monto: Number(row.precio), medio_pago: wlMedio(refs, row), fecha: hoy() <= to ? hoy() : to, comentarios: 'Wishlist',
+            monto: Number(row.precio), medio_pago: medioWl, fecha: hoy() <= to ? hoy() : to, comentarios: 'Wishlist',
           }).select().single());
           if (error || !data?.id) return res.status(400).json({ success: false, error: error?.message || 'No se pudo registrar el gasto' });
           movimiento = data;
@@ -5860,10 +5886,14 @@ async function _fqPendientesData(phone, D) {
 async function _fqPendientes(phone, D) {
   const { q, items, total } = await _fqPendientesData(phone, D);
   if (!items.length) return `✅ No te falta pagar nada de lo planeado en la ${_fqQLbl(q.key)}.`;
-  const c = D.refs.cuentas || {}, FP = { efectivo: ['🏦 Efectivo', Number(c.efectivo) || 0], pluxee: ['🎫 Pluxee', saldoPorTipo(D.refs, D.defs, 'vales')], tarjeta_debito: ['💳 Débito', saldoPorTipo(D.refs, D.defs, 'debito')] };
+  // Agrupado por método de pago OFICIAL; cada uno se compara con el saldo de su cuenta (Otros no tiene cuenta)
+  const c = D.refs.cuentas || {}, canon = v => v ? medioCanon(v, D.defs) : '';
+  items.forEach(i => { if (!i.din) i.fp = canon(i.fp); });
   const porFp = {}; items.filter(i => !i.din).forEach(i => { porFp[i.fp] = (porFp[i.fp] || 0) + i.monto; });
-  const chequeo = Object.entries(porFp).filter(([k]) => FP[k]).map(([k, v]) => { const [l, s] = FP[k]; return `  ${l}: ${fmt(v)} · saldo ${fmt(s)} ${s >= v ? '✅' : `⚠️ faltan ${fmt(v - s)}`}`; });
-  return `🧾 *Te falta pagar en la ${_fqQLbl(q.key)}: ${fmt(total)}*\n${items.sort((a, b) => b.monto - a.monto).map(i => `• ${i.desc}: ${fmt(i.monto)}${i.fp ? ` (${{ efectivo: 'efectivo', pluxee: 'Pluxee', tarjeta_debito: 'débito' }[i.fp] || i.fp})` : ''}`).join('\n')}`
+  const chequeo = Object.entries(porFp).filter(([k]) => k && k !== MEDIO_OTROS).map(([k, v]) => {
+    const key = medioPagoACuentaKey(k, D.defs), s = Number(c[key]) || 0, lbl = k === 'efectivo' ? 'Efectivo' : k;
+    return `  ${lbl}: ${fmt(v)} · saldo ${fmt(s)} ${s >= v ? '✅' : `⚠️ faltan ${fmt(v - s)}`}`; });
+  return `🧾 *Te falta pagar en la ${_fqQLbl(q.key)}: ${fmt(total)}*\n${items.sort((a, b) => b.monto - a.monto).map(i => `• ${i.desc}: ${fmt(i.monto)}${i.fp ? ` (${i.fp})` : ''}`).join('\n')}`
     + (chequeo.length ? `\n¿Alcanza el saldo?\n${chequeo.join('\n')}` : '') + (porFp[''] ? `\n_${fmt(porFp[''])} sin forma de pago asignada._` : '');
 }
 
