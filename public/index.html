@@ -2999,12 +2999,29 @@ function exitGhost() {
 }
 
 // ── CARGA DE DATOS ───────────────────────────────────────────────────────────
+// ── CAMBIOS OPTIMISTAS (casillas instantáneas) ────────────────────────────────
+// Palomear en Presupuesto o en la Wishlist se ve AL INSTANTE: se cambia el dato en memoria y se repinta solo lo
+// necesario; el servidor se actualiza por detrás. Mientras hay cambios en vuelo, ni el sondeo de 2 s ni load()
+// aplican respuestas viejas (las que salieron antes del clic), así la casilla no "regresa". Al terminar todo, una
+// sola sincronización silenciosa trae saldos de cuentas y lo demás que calculó el servidor.
+function _optIni() { S._optN = (S._optN || 0) + 1; S._optT = Date.now(); }
+function _optFin() { S._optN = Math.max(0, (S._optN || 0) - 1); S._optT = Date.now(); _syncPronto(); }
+let _syncT = null;
+function _syncPronto() { clearTimeout(_syncT); _syncT = setTimeout(() => { if (!S._optN) load().catch(() => {}); }, 1500); }
+const _optViejo = t0 => !!S._optN || (S._optT || 0) >= t0;   // ¿la respuesta que salió en t0 ya quedó vieja?
+function _repintarRapido() {
+  try { renderTab(S.tab); } catch (e) { /* la pestaña de atrás no es crítica */ }
+  try { refreshQuincenaPanel(); } catch (e) { /* idem */ }
+  try { if (S._qPop) _qPayPaint(); } catch (e) { /* idem */ }
+}
+
 async function load() {
   const ts = Date.now();
   const [r, rd] = await Promise.all([
     api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}?_t=${ts}`),
     api('GET', `/api/despensa/${encodeURIComponent(S.phone)}?_t=${ts}`).catch(() => ({ success: false, data: [] }))
   ]);
+  if (r.success && _optViejo(ts)) { _syncPronto(); return; }   // un palomeo ocurrió mientras cargaba: esta foto ya es vieja
   if (r.success) {
     S.data = r.data || {};
     S.data.despensa = rd.success ? (rd.data || []) : [];
@@ -3037,10 +3054,12 @@ function _startLivePoll() {
     // encima — dos respuestas resolviendo casi juntas disparaban dos renderTab()
     // seguidos (pantalla "parpadeando") aunque los datos fueran los mismos.
     if (_livePollBusy) return;
+    if (S._optN) return;   // hay un palomeo guardándose: no pisarlo
     _livePollBusy = true;
+    const t0 = Date.now();
     try {
       const r = await api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}?_t=${Date.now()}`);
-      if (!r.success) return;
+      if (!r.success || _optViejo(t0)) return;
       const fresh = JSON.stringify(r.data || {});
       if (fresh !== S._liveSig) {
         S._liveSig = fresh;
@@ -4544,13 +4563,41 @@ function wlNuevaPrio(p) { S._wl.newPrio = p; wlRender(); }
 function wlFP(id, k) { const it = _wlItem(id); if (it) wlCampo(id, 'forma_pago', fpCanon(it.forma_pago) === k ? '' : k); }
 // Casilla de comprado. Si el deseo está agendado, el servidor lo palomea también en Gastos esta quincena.
 async function wlCheck(id, hecho) {
-  const it = _wlItem(id); if (!it) return;
-  const ligado = !!it.quincena_key;
-  const r = await _wlAccion(id, () => api('POST', `/api/wishlist/${id}/check`, { user_phone: S.phone, hecho }));
-  if (!r) return;
-  toast(hecho ? (r.movimiento ? 'Comprado ✓ — también palomeado en Presupuesto' : 'Comprado ✓')
-              : (ligado ? 'Desmarcado — vuelve a estar pendiente en Presupuesto' : 'Desmarcado'));
-  if (ligado) load();   // el palomeo de Gastos esta quincena cambió
+  const it = _wlItem(id); if (!it || it._busy) return;
+  const antes = { ...it }, ligado = !!it.quincena_key, movs = S.data.movs || (S.data.movs = []);
+  // Se tacha (o destacha) al instante; el servidor confirma por detrás
+  it._busy = true;
+  it.estado = hecho ? 'comprado' : (it.quincena_key ? 'agendado' : 'pendiente');
+  if (hecho) it.comprado_at = new Date().toISOString();
+  let quitados = [];
+  if (!hecho && ligado) {   // también se despalomea en Presupuesto al instante
+    const enSuQ = m => { try { return getQKey(getQuincenaInfo(getQuincenaOffsetFromDate(fd(m.fecha)))) === it.quincena_key; } catch (e) { return false; } };
+    quitados = movs.filter(m => m.tipo === 'GASTO' && m.concepto === '[Ppto] ' + it.nombre && enSuQ(m));
+    if (quitados.length) S.data.movs = movs.filter(m => !quitados.includes(m));
+  }
+  _optIni();
+  window.iosHaptic && iosHaptic(hecho ? 'success' : 'light');
+  wlRender();
+  if (quitados.length) _repintarRapido();
+  try {
+    await wlGuardar(id);   // que el servidor tenga el último precio/nombre antes de actuar
+    const r = await api('POST', `/api/wishlist/${id}/check`, { user_phone: S.phone, hecho });
+    const i = S._wl.items.findIndex(x => x.id === id);
+    if (i >= 0 && r?.data) S._wl.items[i] = _wlNorm(r.data);
+    if (r?.movimiento) { (S.data.movs || (S.data.movs = [])).unshift(r.movimiento); _repintarRapido(); }
+    wlRender();
+    toast(hecho ? (r?.movimiento ? 'Comprado ✓ — también palomeado en Presupuesto' : 'Comprado ✓')
+                : (ligado ? 'Desmarcado — vuelve a estar pendiente en Presupuesto' : 'Desmarcado'));
+  } catch (e) {
+    const i = S._wl.items.findIndex(x => x.id === id);
+    if (i >= 0) S._wl.items[i] = antes;
+    if (quitados.length) { S.data.movs = [...quitados, ...(S.data.movs || [])]; _repintarRapido(); }
+    wlRender();
+    toast('No se guardó: ' + e.message, 'error');
+  } finally {
+    const x = _wlItem(id); if (x) delete x._busy;
+    _optFin();
+  }
 }
 function wlCiclarPrio(id) {
   const it = _wlItem(id); if (!it) return;
@@ -4664,12 +4711,14 @@ async function _wlPoll() {
   const f = document.activeElement;
   if (st.eleg || st.editando || st.panel || Object.keys(S._wlPend || {}).length
       || (f && f.closest?.('#wl-root') && /INPUT|TEXTAREA|SELECT/.test(f.tagName))) return;   // no pisar lo que se está haciendo
+  if (S._optN) return;
   st._pollBusy = true;
+  const t0 = Date.now();
   try {
     const [a, b] = await Promise.all([
       api('GET', `/api/wishlist?phone=${encodeURIComponent(S.phone)}`),
       api('GET', `/api/wishlist/compartidos?phone=${encodeURIComponent(S.phone)}`)]);
-    if (!a.success || !b.success) return;
+    if (!a.success || !b.success || _optViejo(t0)) return;
     const mias = (a.data || []).map(_wlNorm), par = { de: b.de || '', items: b.data || [], copiados: b.copiados || [] };
     const sig = _wlSig(mias, par);
     if (sig !== st._sig) {
@@ -10251,31 +10300,50 @@ async function marcarPagado(nombre, esp, pagadoId) {
 async function marcarGastoQ(itemId, pagadoId) {
   const g = S._expItemData[itemId];
   if (!g) { toast('No se encontró el gasto', 'error'); return; }
+  const k = 'q:' + itemId; S._busy = S._busy || {};
+  if (S._busy[k]) return;   // un segundo toque mientras se guarda no lo deshace
+  S._busy[k] = true;
+  const movs = S.data.movs || (S.data.movs = []);
+  let tmp = null, quitado = null, idx = -1, datos = null;
+  if (pagadoId) {
+    idx = movs.findIndex(m => String(m.id) === String(pagadoId));
+    if (idx >= 0) quitado = movs.splice(idx, 1)[0];
+  } else {
+    const refs  = (S.data.user || {}).external_refs || {};
+    const fp    = (refs.forma_pago_gastos || {})[g.descripcion] || g.forma_pago || 'efectivo';
+    const cat   = g.categoria || CATS.find(c =>
+      (g.descripcion || '').toLowerCase().includes(c.toLowerCase()) ||
+      c.toLowerCase().includes((g.descripcion || '').toLowerCase())
+    ) || 'OTROS';
+    // Fecha: hoy si cae en la quincena que estás viendo; si no, el borde más cercano de ESA quincena (si no, el
+    // movimiento quedaba en otra quincena y la casilla parecía no hacer nada)
+    const qi = S._ingQi, hoyS = toISO(new Date());
+    const fecha = !qi ? hoyS : hoyS < qi.from ? qi.from : hoyS > qi.to ? qi.to : hoyS;
+    datos = { tipo: 'GASTO', categoria: cat, concepto: '[Ppto] ' + (g.descripcion || ''), descripcion: '',
+      monto: g.monto || 0, medio_pago: fpCanon(fp) || 'efectivo', fecha, comentarios: g.comentarios || '' };
+    tmp = { ...datos, id: 'tmp-' + Date.now(), _tmp: true, created_at: new Date().toISOString() };
+    movs.unshift(tmp);
+  }
+  _optIni();
+  window.iosHaptic && iosHaptic(pagadoId ? 'light' : 'success');
+  _repintarRapido();
   try {
     if (pagadoId) {
-      await api('DELETE', `/api/movimientos/${pagadoId}`, { user_phone: S.phone });
+      if (!String(pagadoId).startsWith('tmp-')) await api('DELETE', `/api/movimientos/${pagadoId}`, { user_phone: S.phone });
     } else {
-      const refs  = (S.data.user || {}).external_refs || {};
-      const fpMap = refs.forma_pago_gastos || {};
-      const fp    = fpMap[g.descripcion] || g.forma_pago || 'efectivo';
-      const cat   = g.categoria || CATS.find(c =>
-        (g.descripcion || '').toLowerCase().includes(c.toLowerCase()) ||
-        c.toLowerCase().includes((g.descripcion || '').toLowerCase())
-      ) || 'OTROS';
-      await api('POST', '/api/movimientos', {
-        user_phone:  S.phone,
-        tipo:        'GASTO',
-        categoria:   cat,
-        concepto:    '[Ppto] ' + (g.descripcion || ''),
-        descripcion: '',
-        monto:       g.monto || 0,
-        medio_pago:  fpCanon(fp) || 'efectivo',   // método oficial: así resta de la cuenta correcta
-        fecha:       toISO(new Date()),
-        comentarios: g.comentarios || ''
-      });
+      const r = await api('POST', '/api/movimientos', { user_phone: S.phone, ...datos });
+      const i = movs.indexOf(tmp); if (i >= 0 && r?.data) movs[i] = r.data;
     }
-    await load();
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  } catch (e) {
+    // No se guardó: se regresa la casilla como estaba y se avisa
+    if (tmp) { const i = movs.indexOf(tmp); if (i >= 0) movs.splice(i, 1); }
+    if (quitado) movs.splice(Math.max(0, idx), 0, quitado);
+    _repintarRapido();
+    toast('No se guardó: ' + e.message, 'error');
+  } finally {
+    delete S._busy[k];
+    _optFin();
+  }
 }
 async function dEvt(id)  { const _ev=(S._calData||{})[id]; if(!confirm(_ev && _calEtq(_ev) ? '¿Eliminar este evento para los dos?' : '¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
 async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/metas/${id}`,{user_phone:S.phone}); await load(); }
