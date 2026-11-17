@@ -490,7 +490,7 @@ module.exports = function montarCorreo(app, deps) {
       //    pedido hecho antes de conectar), se proponen sus avisos de "Enviado" (lo cobrado en cada envío).
       const cubiertos = new Set();
       for (const r of todas) if (r.fuente === 'amazon' && r.tipo === 'compra' && r.parser !== 'envio' && ['pendiente', 'registrado', 'omitido', 'cancelado', 'duplicado'].includes(r.estado))
-        (r.pedidos || []).forEach(p => cubiertos.add(p));
+        ((r.pedidos && r.pedidos.length) ? r.pedidos : r.pedido ? [r.pedido] : []).forEach(p => cubiertos.add(p));
       const aPend = [], aDup = [];
       for (const r of todas.filter(x => x.parser === 'envio')) {
         if (r.estado === 'envio' && r.pedido && !cubiertos.has(r.pedido)) { aPend.push(r.id); promovidos.push(r); }
