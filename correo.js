@@ -77,17 +77,49 @@ function nombreRemitente(from) {
 }
 
 // ── ¿Qué tipo de correo es? ──
-function clasificar(asunto, lineas, fuente) {
-  const a = norm(asunto), ini = norm(lineas.slice(0, 12).join(' ')).slice(0, 900);
-  if (/reembolso|reintegro|refund|te devolvimos|devolvimos tu dinero|devolucion (de tu dinero|aprobada|procesada)|compra cancelada|pedido cancelado|cancelamos tu (compra|pedido)/.test(a + ' ' + ini)) return 'reembolso';
-  const promo = /oferta|ofertas|promo|% de descuento|% off|cupon|newsletter|novedades|te extranamos|olvidaste|carrito|recomend|califica|opina|resena|encuesta|inicio de sesion|contrasena|verifica|codigo|seguridad|estado de cuenta|tu paquete|en camino|ha sido enviado|fue enviado|enviamos tu|se envio|entregado|entregamos|llego|llegara|recoger|pregunta|suscribete|webinar|evento|invitacion/;
-  const senal = /pedido|compra|compraste|order|recibo|receipt|factura|pago|pagaste|cargo|confirmacion|gracias por|tu viaje|viaje con|tu orden|ticket|comprobante|transaccion|consumo/;
-  if (ES_BANCO(fuente) && /recibiste|deposito|abono|te enviaron|transferencia recibida|nomina|te depositaron/.test(a + ' ' + ini)) return 'ingreso';
-  if (promo.test(a) && !/(confirmacion|recibo|factura|comprobante) de (tu )?(pedido|compra|pago)|gracias por tu (compra|pedido)|compraste/.test(a)) return 'ignorar';
-  if (senal.test(a)) return 'compra';
-  if (fuente !== 'generico' && senal.test(ini)) return 'compra';
+// Solo cuentan las compras hechas y cobradas: publicidad, recomendaciones ("te puede gustar"), avisos de envío o
+// entrega, alertas de cuenta, depósitos, transferencias entre cuentas propias y retiros en cajero se descartan.
+const RE_PROMO = /oferta|ofertas|promo|% de descuento|% off|\bhasta \d+ ?%|\d+ ?msi\b|meses sin intereses|cupon|newsletter|novedades|te extranamos|olvidaste|carrito|recomend|te (puede|podria|pueden) (gustar|interesar)|encontramos algo|vistazo|descubre|aprovecha|no te quedes|arrancaron|comienzan|cuenta regresiva|buen fin|hot sale|black friday|cyber|dominguito|mesa de regalos|gratis|prueba (gratis|gratuita)|suscri|califica|valoraras|opina|resena|encuesta|colabora|inicio de sesion|contrasena|verifica|codigo|seguridad|restablec|estado de cuenta|alta de cuenta|activacion|activada|bienvenid|limite de|beneficiario|cambia tus datos|netkey|acceso|tu paquete|en camino|enviado|en proceso de entrega|en reparto|rastrea|ha sido enviado|fue enviado|enviamos tu|se envio|entregado|entregamos|llego|llegara|llega hoy|recoger|pregunta|webinar|evento|invitacion|you're expected/;
+const RE_SENAL = /pedido|compra|compraste|order|recibo|receipt|factura|pago|pagaste|cargo|confirmacion|gracias por|tu viaje|viaje con|tu orden|ticket|comprobante|transaccion|consumo/;
+const RE_CANCELA = /se cancel(o|aron)|cancelamos|(pedido|compra|orden) cancelad|cancelacion de (tu |la )?(pedido|compra|orden)/;
+const RE_REEMBOLSO = /reembolso|reintegro|refund|te devolvimos|devolvimos tu dinero|devolucion (de tu dinero|aprobada|procesada)/;
+const ES_APP = f => /^(rappi|ubereats|didifood|uber|didi)$/.test(f);
+function remitenteLocal(from) { const m = String(from || '').match(/<?([^<>\s"]+)@/); return norm(m ? m[1] : ''); }
+function clasificar(asunto, lineas, fuente, remitente) {
+  const a = norm(asunto), ini = norm(lineas.slice(0, 14).join(' ')).slice(0, 1200), loc = remitenteLocal(remitente);
+  if (RE_REEMBOLSO.test(a) || (!ES_BANCO(fuente) && RE_REEMBOLSO.test(ini) && !RE_PROMO.test(a))) return 'reembolso';
+  if (RE_CANCELA.test(a) || (!ES_BANCO(fuente) && RE_CANCELA.test(ini) && /pedido|compra|orden/.test(ini))) return 'cancelacion';
+
+  if (fuente === 'amazon') {
+    // Amazon: solo la confirmación del pedido ("Pedido: …", "Gracias por tu compra"). Envíos, entregas,
+    // recomendaciones, promociones (noreply/store-news) y mensajes de cuenta NO son compras.
+    if (/^(noreply|no-reply|store-news|marketing|marketplace-messages|account-update|shipment-tracking|order-update)$/.test(loc)) return 'ignorar';
+    if (/^pedido:|^tu pedido de amazon|confirmacion de (tu )?pedido|gracias por tu (compra|pedido)/.test(a) || loc === 'auto-confirm' || /gracias por tu compra/.test(ini) && !RE_PROMO.test(a)) return 'compra';
+    return 'ignorar';
+  }
+  if (ES_BANCO(fuente)) {
+    const t = a + ' ' + ini;
+    if (/deposito|abono|recibiste|te enviaron|transferencia recibida|nomina|te depositaron/.test(t)) return 'ignorar';
+    if (/dis\.?\s?efe|disposicion de efectivo|retiro (en|de) cajero|cajero automatico|\batm\b/.test(t)) return 'ignorar';
+    if (/estatus (rechazad|declinad|fallid|no exitos|cancelad)|operacion (rechazada|declinada|no exitosa)/.test(t)) return 'ignorar';
+    if (/estado de cuenta|alta de cuenta|activacion|acceso|beneficiario|cambia tus datos|netkey|seguridad|codigo|contrasena|bienvenid/.test(a)) return 'ignorar';
+    if (/cuentas? propias?|entre (mis|tus) cuentas/.test(norm(lineas.join(' ')))) return 'ignorar';
+    // "Enviaste $X a <tu mismo nombre>" = transferencia a ti mismo
+    const hola = (lineas.join('\n').match(/hola,?\s+([\p{L}]+)/iu) || [])[1], dest = (lineas.join('\n').match(/enviaste\s+\S+\s+a\s+([\p{L}]+)/iu) || [])[1];
+    if (hola && dest && norm(hola) === norm(dest)) return 'ignorar';
+    if (/retiro\/compra|compra|cargo|pagaste|enviaste|pago (en|a|de)|consumo|transaccion/.test(t)) return 'compra';
+    return 'ignorar';
+  }
+  if (/rechazad|declinad|no se pudo (procesar|completar)|pago fallido|intenta de nuevo/.test(a)) return 'ignorar';
+  // Apps de comida y viajes: su recibo llega como "Tu pedido de X fue entregado" o "Tu viaje …"
+  if (ES_APP(fuente) && /(total pagado|total|cargo neto|pagaste|cobramos)/.test(ini) && /pedido|orden|viaje|recibo|entregado|gracias/.test(a + ' ' + ini) && !/oferta|promo|cupon|descuento de|% /.test(a)) return 'compra';
+  if (RE_PROMO.test(a) && !/(confirmacion|recibo|factura|comprobante) de (tu )?(pedido|compra|pago)|gracias por tu (compra|pedido)|compraste/.test(a)) return 'ignorar';
+  if (/^(noreply|no-reply|store-news|marketing|promo(s|ciones)?|newsletter|news|ofertas)$/.test(loc) && !/compraste|tu compra|recibo|comprobante|pagaste/.test(a)) return 'ignorar';
+  if (RE_SENAL.test(a)) return 'compra';
+  if (fuente !== 'generico' && RE_SENAL.test(ini)) return 'compra';
   return 'ignorar';
 }
+const pedidosDe = texto => [...new Set(String(texto).match(/\b\d{3}-\d{7}-\d{7}\b/g) || [])];
 
 // ── Pedido, medio de pago ──
 function pedidoDe(texto, fuente) {
@@ -121,11 +153,11 @@ const MEDIO_DE_HINT = h => {
 const CAT_REGLAS = [
   ['Alicia', /\balicia\b/],
   ['Transporte', /\b(uber(?! ?eats)|didi(?! ?food)|cabify|taxi|gasolina|pemex|metro|metrobus|estacionamiento|caseta|peaje|boleto de autobus|ado)\b/],
-  ['Comida', /\b(uber ?eats|didi ?food|rappi|restaurante|starbucks|cafe|pizza|burger|hamburguesa|tacos?|sushi|comida|food|kfc|mcdonald|domino|little caesars|subway|bebida|snack|galletas|chocolate|dulces)\b/],
-  ['Despensa', /\b(walmart|soriana|chedraui|superama|la comer|costco|sams|bodega aurrera|despensa|supermercado|abarrotes|leche|huevo|frutas?|verduras?|cereal|arroz|frijol|aceite|atun|papel higienico|servilletas)\b/],
-  ['Hogar', /\b(hogar|casa|cocina|limpieza|detergente|jabon (para|de) (ropa|trastes)|cloro|mueble|lampara|foco|sarten|olla|colchon|almohada|toalla|sabana|cortina|organizador|home depot|ikea|herramienta|taladro|extension|multicontacto|filtro|escoba|trapeador|cubeta|mascota|croquetas|arena para gato)\b/],
+  ['Comida', /\b(uber ?eats|didi ?food|rappi|restaurante|starbucks|tim ?hort\w*|cafe|pizza|burger|hamburguesa|tacos?|sushi|comida|food|kfc|mcdonald|domino|little caesars|subway|bebida|snack|galletas|chocolate|dulces)\b/],
+  ['Despensa', /\b(wal ?mart|oxxo|7 ?eleven|soriana|chedraui|superama|la comer|costco|sams|bodega aurrera|despensa|supermercado|abarrotes|leche|huevo|frutas?|verduras?|cereal|arroz|frijol|aceite|atun|papel higienico|servilletas)\b/],
+  ['Hogar', /\b(hogar|casa|cocina|limpieza|detergente|jabon (para|de) (ropa|trastes)|cloro|mueble|lampara|foco|sarten|olla|colchon|almohada|toalla|sabana|cortina|organizador|home depot|ikea|ikano|herramienta|taladro|extension|multicontacto|filtro|escoba|trapeador|cubeta|mascota|croquetas|arena para gato)\b/],
   ['Ocio', /\b(netflix|spotify|disney|hbo|max|prime video|youtube|cine|cinepolis|cinemex|juego|videojuego|playstation|ps5|xbox|nintendo|switch|steam|libro|kindle|concierto|ticketmaster|boletos?|lego|juguete|figura|funko|apple music|crunchyroll)\b/],
-  ['Personales', /\b(ropa|playera|camisa|pantalon|jeans|sudadera|chamarra|tenis|zapatos|calcetines|boxer|shampoo|acondicionador|crema|perfume|desodorante|cepillo|rastrillo|farmacia|medicamento|vitaminas?|suplemento|proteina|maquillaje|audifonos|funda|cargador|cable usb|mochila|reloj|lentes|corte de cabello|barberia|gimnasio|gym)\b/],
+  ['Personales', /\b(ropa|hm mx\w*|h ?& ?m|zara|pull ?& ?bear|bershka|c ?& ?a|liverpool|suburbia|sanborns|farmacias?|benavides|guadalajara|playera|camisa|pantalon|jeans|sudadera|chamarra|tenis|zapatos|calcetines|boxer|shampoo|acondicionador|crema|perfume|desodorante|cepillo|rastrillo|farmacia|medicamento|vitaminas?|suplemento|proteina|maquillaje|audifonos|funda|cargador|cable usb|mochila|reloj|lentes|corte de cabello|barberia|gimnasio|gym)\b/],
 ];
 function catSugerida(nombre, comercio, fuente) {
   const t = norm(`${nombre || ''} ${comercio || ''}`);
@@ -136,8 +168,8 @@ function catSugerida(nombre, comercio, fuente) {
 }
 
 // ── Lector exacto por renglones ──
-const RE_CORTE = /(te (podria|puede|pueden) (interesar|gustar)|recomendad|tambien te (puede|podria)|productos relacionados|inspirado en|basado en tu|clientes que (compraron|vieron)|sigue comprando|seguir comprando|descarga la app|siguenos|redes sociales|aviso de privacidad|terminos y condiciones|preguntas frecuentes|centro de ayuda|este correo (fue|se) (enviado|genero)|no respondas)/;
-const RE_TOTAL_FUERTE = /\b(total (del|de tu|de la) (pedido|compra|orden|cargo)|total pagado|total a pagar|total cobrado|importe total|monto total|grand total|order total|total \(iva incluido\)|total con iva|pagaste|monto del cargo|importe del cargo|cobramos)\b/;
+const RE_CORTE = /(te (podria|puede|pueden) (interesar|gustar)|ofertas (inspiradas|para ti|del dia)|comprar nuevamente|productos sustituidos|ya estas antojado|recomendad|tambien te (puede|podria)|productos relacionados|inspirado en|basado en tu|clientes que (compraron|vieron)|sigue comprando|seguir comprando|descarga la app|siguenos|redes sociales|aviso de privacidad|terminos y condiciones|preguntas frecuentes|centro de ayuda|este correo (fue|se) (enviado|genero)|no respondas)/;
+const RE_TOTAL_FUERTE = /\b(total (del|de tu|de la) (pedido|compra|orden|cargo)|total pagado|total a pagar|total cobrado|importe total|monto total|grand total|order total|total \(iva incluido\)|total con iva|pagaste|cargo neto|monto del cargo|importe del cargo|cobramos)\b/;
 const RE_TOTAL = /\b(total|importe|monto|cargo por|compra por|pago por|pago de|por un (monto|importe) de)\b/;
 const RE_SUB = /\b(sub ?total|suma parcial|total (de|del) (los )?(productos?|articulos?)|^productos?|^articulos?|valor de los productos)\b/;
 const RE_ENVIO = /\b(envio|envios|shipping|costo de entrega|cargo de entrega|tarifa de entrega|delivery)\b/;
@@ -168,8 +200,13 @@ function lectorExacto(lineas) {
     }
     const m = ms[ms.length - 1];
     let label = L.replace(RE_MONTO, ' ').replace(/[│|]+/g, ' ').replace(/\s+/g, ' ').trim();
-    // Renglón con solo "Cantidad: 1  $599.00": el nombre del producto está en el renglón de arriba
-    if (!/\p{L}{3}/u.test(limpiaNombre(label))) label = (etiquetas[etiquetas.length - 1] || '') + (/\p{L}{3}/u.test(label) ? ' ' + label : '');
+    // Renglón con solo "Cantidad: 1  $599.00" o solo el precio: el nombre del producto está en un renglón de arriba
+    // (Amazon: "Nombre…" / "Cantidad: 1" / "$ 260.00")
+    if (!/\p{L}{3}/u.test(limpiaNombre(label))) {
+      let k = etiquetas.length - 1;
+      while (k >= 0 && !/\p{L}{3}/u.test(limpiaNombre(etiquetas[k]))) k--;
+      label = k >= 0 ? etiquetas.slice(k).join(' ') + (/\p{L}{3}/u.test(label) ? ' ' + label : '') : label;
+    }
     const n = norm(label);
     etiquetas = [];
     if (RE_TOTAL_FUERTE.test(n)) { totales.push({ v: m.v, fuerte: true, i }); continue; }
@@ -183,6 +220,7 @@ function lectorExacto(lineas) {
     if (RE_TARIFA.test(n)) { items.push({ nombre: 'Tarifa de servicio', cantidad: 1, precio: m.v, i, extra: true }); continue; }
     const nombre = limpiaNombre(label);
     if (nombre.length < 3 || /^(ver|comprar|rastrear|detalles|precio|importe)\b/i.test(nombre)) continue;
+    if (/\b\d{1,2}:\d{2}\b|^\d{1,2} de \p{L}+\.? de \d{4}|^-?\d+ ?%$/u.test(nombre)) continue;   // fechas/horas o "-10%" no son productos
     items.push({ nombre, cantidad: cantidadDe(L + ' ' + label), precio: m.v, i });
   }
   const fuertes = totales.filter(t => t.fuerte);
@@ -243,36 +281,94 @@ ${String(texto).slice(0, 12000)}`;
   }
 }
 
+// Texto del correo: el HTML convertido; si el script tuvo que recortar el HTML (pedidos enormes), el texto plano
+// completo es más confiable.
+function textoDe(m) {
+  const h = m.html ? htmlATexto(m.html) : '', t = String(m.text || '').trim();
+  const recortado = m.html && (m.html_recortado || String(m.html).length >= 149990);
+  return (recortado && t ? t : h) || t;
+}
+
+// Amazon pinta los centavos aparte ("$ 350 07" = $350.07)
+const centavos = L => L.replace(/((?:MXN|MX\$|\$)\s?\d{1,3}(?:,\d{3})*) (\d{2})\s*$/, '$1.$2');
+
+// Cuando el correo solo da el total (Amazon, Rappi…), la diferencia contra la suma de productos es envío/tarifas
+// (si falta) o descuento (si sobra). Solo si la diferencia es razonable.
+function ajustar(lx) {
+  const suma = r2(lx.items.reduce((a, x) => a + x.precio, 0)), t = lx.total;
+  if (!t || !lx.items.length || lx.envio || lx.descuento) return null;
+  const d = r2(t - suma);
+  if (Math.abs(d) <= 1.01) return { items: lx.items, envio: 0, descuento: 0, total: t };
+  if (d > 0 && d <= suma * 0.6) return { items: lx.items, envio: d, descuento: 0, total: t };
+  if (d < 0 && -d <= suma * 0.6) return { items: lx.items, envio: 0, descuento: -d, total: t };
+  return null;
+}
+
+// Confirmación de Amazon: puede traer varios pedidos ("Pedido n.º …" en cada uno) con su propio "Total".
+function lectorAmazon(lineas) {
+  const grupos = []; let cur = null;
+  for (const L of lineas) {
+    const p = (L.match(/\b(\d{3}-\d{7}-\d{7})\b/) || [])[1];
+    if (p) { if (!cur || cur.pedido !== p) { cur = grupos.find(g => g.pedido === p) || null; if (!cur) { cur = { pedido: p, lineas: [] }; grupos.push(cur); } } continue; }
+    if (cur && !cur.cerrado) cur.lineas.push(L);
+    if (cur && /^total\b/i.test(norm(L).replace(/[│|]/g, ' ').trim()) && montosDe(L).length) cur.cerrado = true;
+  }
+  if (!grupos.length) return null;
+  let items = [], envio = 0, descuento = 0, total = 0, exacto = true;
+  for (const g of grupos) {
+    const lx = lectorExacto(g.lineas);
+    if (!lx.items.length) continue;
+    const a = cuadra(lx.items, lx.envio, lx.descuento, lx.total) ? { items: lx.items, envio: lx.envio, descuento: lx.descuento, total: lx.total } : ajustar(lx);
+    const usa = a || { items: lx.items, envio: 0, descuento: 0, total: r2(lx.items.reduce((s, x) => s + x.precio, 0)) };
+    if (!a) exacto = false;
+    const nota = grupos.length > 1 ? `Pedido ${g.pedido}` : null;
+    items.push(...usa.items.map(x => (nota ? { ...x, nota } : x)));
+    envio = r2(envio + usa.envio); descuento = r2(descuento + usa.descuento); total = r2(total + usa.total);
+  }
+  if (!items.length) return null;
+  return { items, envio, descuento, total, exacto, pedidos: grupos.map(g => g.pedido) };
+}
+
 const fechaMX = iso => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date(iso)); } catch { return null; } };
 
 // Lee un correo → fila para correo_compras (estado 'ignorado' si no es una compra)
 async function leerCorreo(deps, phone, msg) {
   const asunto = String(msg.subject || '').slice(0, 300), remitente = String(msg.from || '').slice(0, 200);
-  const texto = (msg.html ? htmlATexto(msg.html) : '') || String(msg.text || '');
-  const lineas = texto.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 1500);
+  const texto = textoDe(msg);
+  const lineas = texto.split('\n').map(s => centavos(s.trim())).filter(Boolean).slice(0, 1500);
   const fuente = fuenteDe(remitente, asunto);
   const fila = { user_phone: phone, msg_id: String(msg.id).slice(0, 120), cuenta: String(msg.cuenta || '').slice(0, 120) || null, remitente, asunto,
     fecha_correo: msg.date ? new Date(msg.date).toISOString() : new Date().toISOString(), fuente, texto: texto.slice(0, 60000) };
-  let tipo = clasificar(asunto, lineas, fuente);
-  if (tipo === 'ignorar') return { ...fila, tipo: 'compra', estado: 'ignorado', parser: 'filtro' };
+  const pedido = pedidoDe(texto, fuente);
+  let tipo = clasificar(asunto, lineas, fuente, remitente);
+  // Los descartados guardan su número de pedido: un aviso de envío confirma que ese pedido sí siguió adelante
+  if (tipo === 'ignorar') return { ...fila, tipo: 'compra', estado: 'ignorado', parser: 'filtro', pedido, comercio: null, items: [], total: null };
+  if (tipo === 'cancelacion') return { ...fila, tipo: 'compra', estado: 'ignorado', parser: 'cancelacion', pedido, comercio: COMERCIO[fuente] || nombreRemitente(remitente), items: [], total: null };
   let comercio = COMERCIO[fuente] || nombreRemitente(remitente);
   if (fuente === 'generico' && /amazon/i.test(asunto)) comercio = 'Amazon';
-  const pedido = pedidoDe(texto, fuente), medio_hint = medioHintDe(texto, fuente);
+  const medio_hint = medioHintDe(texto, fuente);
   let items = [], total = null, envio = 0, descuento = 0, parser = 'exacto';
 
-  if (ES_BANCO(fuente) || tipo === 'reembolso' || tipo === 'ingreso') {
+  const amz = fuente === 'amazon' && tipo === 'compra' ? lectorAmazon(lineas) : null;
+  if (amz) {
+    items = amz.items; envio = amz.envio; descuento = amz.descuento; total = amz.total; parser = amz.exacto ? 'exacto' : 'aprox';
+  } else if (ES_BANCO(fuente) || tipo === 'reembolso' || tipo === 'ingreso') {
     const b = lectorBanco(lineas, fuente);
     total = b.total;
     if (b.comercio && ES_BANCO(fuente)) comercio = b.comercio;
-    const etiqueta = tipo === 'reembolso' ? `Reembolso ${comercio}` : tipo === 'ingreso' ? `Depósito ${COMERCIO[fuente] || ''}`.trim() : comercio;
+    const etiqueta = tipo === 'reembolso' ? `Reembolso ${comercio}` : tipo === 'ingreso' ? `Depósito ${COMERCIO[fuente] || ''}`.trim()
+      : ES_BANCO(fuente) && comercio === COMERCIO[fuente] ? `Cargo ${comercio} (sin comercio)` : comercio;
     if (total) items = [{ nombre: etiqueta, cantidad: 1, precio: total }];
   } else {
     const lx = lectorExacto(lineas), el = elegirItems(lx);
     items = el.items; envio = lx.envio; descuento = lx.descuento; total = lx.total;
-    if (!el.exacto) parser = 'aprox';
+    if (!el.exacto) {
+      const a = ES_APP(fuente) ? ajustar(lx) : null;   // apps de comida: el recibo da productos + "Total pagado"
+      if (a) ({ items, envio, descuento, total } = a); else parser = 'aprox';
+    }
   }
 
-  if (parser === 'aprox' || !total || !items.length) {
+  if (!amz && (parser === 'aprox' || !total || !items.length)) {
     const g = await geminiCompra(deps, { asunto, remitente, texto, phone });
     if (g && g.es_compra === false) return { ...fila, tipo: 'compra', estado: 'ignorado', parser: 'gemini' };
     if (g && Array.isArray(g.items)) {
@@ -335,8 +431,14 @@ module.exports = function montarCorreo(app, deps) {
           }
           const { user_phone: _p, msg_id: _m, texto: _t, ...upd } = f;
           await sb.from('correo_compras').update(upd).eq('id', r.id);
-          if (f.estado === 'pendiente') listos.push(f);
+          if (f.estado === 'pendiente') listos.push({ ...f, id: r.id });
         }
+      }
+      await conciliar(phone);
+      if (listos.length) {
+        const { data: siguen } = await sb.from('correo_compras').select('id').in('id', listos.map(x => x.id)).eq('estado', 'pendiente');
+        const ok = new Set((siguen || []).map(x => x.id));
+        listos.splice(0, listos.length, ...listos.filter(x => ok.has(x.id)));
       }
     } catch (e) { console.error('[correo] cola:', e.message); }
     finally { _cola.delete(phone); }
@@ -346,6 +448,36 @@ module.exports = function montarCorreo(app, deps) {
       pushA(phone, { title: f.tipo === 'reembolso' ? '↩️ Reembolso detectado' : f.tipo === 'ingreso' ? '💰 Depósito detectado' : '📨 Compra detectada',
         body: `${f.comercio} · ${n > 1 ? n + ' productos · ' : ''}$${Number(f.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}${extra}`, tag: 'compras', url: '/?ir=compras' }, true).catch(() => {});
     }
+  }
+
+  // Pedidos cancelados: si llega la cancelación (o el reembolso completo) de un pedido que sigue pendiente, ese pedido
+  // deja de proponerse. Amazon a veces cancela "los pedidos recientes" sin decir cuál: se cancelan los confirmados
+  // en las 36 h previas que nunca tuvieron aviso de envío/entrega.
+  async function conciliar(phone) {
+    try {
+      const desde = new Date(Date.now() - 60 * 864e5).toISOString();
+      const { data: rows } = await sb.from('correo_compras').select('id, fuente, tipo, pedido, estado, parser, asunto, fecha_correo, texto, total')
+        .eq('user_phone', phone).gte('fecha_correo', desde).limit(1000);
+      const todas = rows || [];
+      const pend = todas.filter(r => r.estado === 'pendiente');
+      const cancelar = new Set();
+      for (const c of todas.filter(r => r.parser === 'cancelacion')) {
+        const peds = pedidosDe(c.texto).concat(c.pedido ? [c.pedido] : []);
+        if (peds.length) { pend.filter(r => r.tipo === 'compra' && peds.includes(r.pedido)).forEach(r => cancelar.add(r.id)); continue; }
+        const tc = new Date(c.fecha_correo).getTime();
+        for (const r of pend) {
+          const tr = new Date(r.fecha_correo).getTime();
+          if (r.tipo !== 'compra' || r.fuente !== c.fuente || !r.pedido || tr > tc || tc - tr > 36 * 3600e3) continue;
+          const siguio = todas.some(o => o.id !== r.id && o.pedido === r.pedido && /enviado|entrega|entregado|en reparto/.test(norm(o.asunto)));
+          if (!siguio) cancelar.add(r.id);
+        }
+      }
+      for (const rf of pend.filter(r => r.tipo === 'reembolso' && r.pedido)) {
+        const compra = pend.find(r => r.tipo === 'compra' && r.pedido === rf.pedido && Math.abs(Number(r.total) - Number(rf.total)) <= 1);
+        if (compra) { cancelar.add(compra.id); cancelar.add(rf.id); }
+      }
+      if (cancelar.size) await sb.from('correo_compras').update({ estado: 'cancelado', resuelto_at: new Date().toISOString() }).in('id', [...cancelar]).eq('estado', 'pendiente');
+    } catch (e) { console.error('[correo] conciliar:', e.message); }
   }
 
   // El script de Gmail entrega correos. Se guardan tal cual (ya en texto) y se leen después; los ya vistos se ignoran.
@@ -358,7 +490,7 @@ module.exports = function montarCorreo(app, deps) {
         remitente: String(m.from || '').slice(0, 200), asunto: String(m.subject || '').slice(0, 300),
         fecha_correo: m.date && !isNaN(new Date(m.date)) ? new Date(m.date).toISOString() : new Date().toISOString(),
         fuente: fuenteDe(m.from, m.subject), estado: 'procesando',
-        texto: ((m.html ? htmlATexto(m.html) : '') || String(m.text || '')).slice(0, 60000) }));
+        texto: textoDe(m).slice(0, 60000) }));
       if (filas.length) {
         const { error } = await sb.from('correo_compras').upsert(filas, { onConflict: 'user_phone,msg_id', ignoreDuplicates: true });
         if (error) return res.status(500).json({ success: false, error: error.message });
@@ -467,17 +599,26 @@ module.exports = function montarCorreo(app, deps) {
     try {
       const { user_phone, todos } = req.body || {};
       if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
-      let q = sb.from('correo_compras').select('id, msg_id, cuenta, remitente, asunto, fecha_correo, texto, estado').eq('user_phone', user_phone).limit(200);
-      q = todos ? q.in('estado', ['pendiente', 'ignorado']) : q.eq('estado', 'pendiente');
+      let q = sb.from('correo_compras').select('id, msg_id, cuenta, remitente, asunto, fecha_correo, texto, estado').eq('user_phone', user_phone)
+        .order('fecha_correo', { ascending: true }).limit(400);
+      q = todos ? q.in('estado', ['pendiente', 'ignorado', 'duplicado', 'cancelado']) : q.eq('estado', 'pendiente');
       const { data: rows } = await q;
       let n = 0;
+      const resumen = {};
       for (const r of rows || []) {
         const f = await leerCorreo(deps, user_phone, { id: r.msg_id, from: r.remitente, subject: r.asunto, date: r.fecha_correo, text: r.texto, cuenta: r.cuenta });
+        if (f.estado === 'pendiente' && f.pedido) {   // mismo pedido ya pendiente/registrado/omitido en otro correo
+          const { data: dup } = await sb.from('correo_compras').select('id').eq('user_phone', user_phone).eq('pedido', f.pedido).eq('tipo', f.tipo)
+            .in('estado', ['pendiente', 'registrado', 'omitido']).neq('id', r.id).limit(1);
+          if ((dup || []).length) f.estado = 'duplicado';
+        }
         const { user_phone: _p, msg_id: _m, texto: _t, ...upd } = f;
         await sb.from('correo_compras').update(upd).eq('id', r.id);
+        resumen[f.estado] = (resumen[f.estado] || 0) + 1;
         n++;
       }
-      res.json({ success: true, releidos: n });
+      await conciliar(user_phone);
+      res.json({ success: true, releidos: n, resumen });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
 };

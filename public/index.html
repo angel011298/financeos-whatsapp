@@ -5264,8 +5264,9 @@ function sincronizar() {
   hilos.forEach(function (h) {
     h.getMessages().forEach(function (m) {
       if (m.getDate() < desde) return;
+      var html = m.getBody();
       lote.push({ id: m.getId(), from: m.getFrom(), subject: m.getSubject(), date: m.getDate().toISOString(),
-                  html: m.getBody().slice(0, 150000), text: m.getPlainBody().slice(0, 30000) });
+                  html: html.slice(0, 400000), html_recortado: html.length > 400000, text: m.getPlainBody().slice(0, 100000) });
     });
     hilosLote.push(h);
     if (lote.length >= 10) { enviar(lote, hilosLote, etiqueta, cuenta); lote = []; hilosLote = []; }
