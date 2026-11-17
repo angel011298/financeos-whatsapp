@@ -10,7 +10,8 @@ const crypto    = require('crypto');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+// Los correos que manda el script de Gmail traen el HTML completo: esa ruta acepta cuerpos grandes
+app.use((req, res, next) => express.json({ limit: req.path === '/api/correo/ingest' ? '12mb' : '100kb' })(req, res, next));
 
 // ── Validación de variables de entorno ──────────────────────────────────────
 const REQUIRED_ENV = ['TWILIO_SID','TWILIO_TOKEN','GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY'];
@@ -6831,6 +6832,10 @@ async function seedAdminOnStartup() {
     console.log(`✅ Admin seeded: ${adminPhone} | TDC: ${tdcCount} | Metas: ${metasCount}`);
   } catch (e) { console.error('seedAdmin error:', e.message); }
 }
+
+// ── Compras desde Gmail (Apps Script → /api/correo/ingest → pop-up en la app) ──
+require('./correo')(app, { sb, genAI, geminiWithRetry, logUsage, SHARE_SECRET, pushA, medioCanonDe, canonCategoria,
+  aplicarImpactoCuentas, conReintentos, learnPattern, esGhost: _esGhost });
 
 const PORT   = process.env.PORT || 3000;
 const server = app.listen(PORT, async () => {

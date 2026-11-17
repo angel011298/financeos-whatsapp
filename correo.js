@@ -1,0 +1,484 @@
+// ── COMPRAS DESDE GMAIL ──────────────────────────────────────────────────────
+// Un Apps Script en el Gmail de la persona (ver public/index.html → "Conectar Gmail") busca cada 10 min los correos de
+// compras, recibos, cargos y reembolsos y los manda a POST /api/correo/ingest con un token firmado (HMAC). Aquí se leen
+// (lectores exactos para Amazon, Mercado Libre, apps y bancos; Gemini solo cuando el lector no cuadra el total; si
+// tampoco, se propone el total del correo) y quedan "pendientes" en correo_compras. La app los muestra en un pop-up
+// para que la persona registre (un movimiento por producto), corrija u omita. Nada se registra sin su confirmación.
+const crypto = require('crypto');
+
+const norm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+
+// ── HTML → texto con renglones (las celdas de una fila quedan en el mismo renglón, separadas por │) ──
+const ENT = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", ntilde: 'ñ', Ntilde: 'Ñ', uuml: 'ü', iexcl: '¡', iquest: '¿',
+  bull: '•', middot: '·', ndash: '–', mdash: '—', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', laquo: '«', raquo: '»',
+  reg: '', copy: '', trade: '', hellip: '…', times: '×', deg: '°', euro: '€', dollar: '$', zwnj: '', zwj: '', shy: '' };
+function decodeEnt(s) {
+  return s.replace(/&#(\d+);?/g, (_, n) => { try { return String.fromCodePoint(+n); } catch { return ' '; } })
+    .replace(/&#x([0-9a-f]+);?/gi, (_, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return ' '; } })
+    .replace(/&([aeiouAEIOU])(acute|grave|uml|circ);/g, (_, v, k) => (v + ({ acute: '́', grave: '̀', uml: '̈', circ: '̂' })[k]).normalize('NFC'))
+    .replace(/&([a-zA-Z]+);/g, (m, n) => (n in ENT ? ENT[n] : m));
+}
+function htmlATexto(html) {
+  let s = String(html || '');
+  s = s.replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(style|script|head|title|noscript)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|h[1-6]|table|tbody|section|article|center|ul|ol)>/gi, '\n')
+    .replace(/<(td|th)\b[^>]*>/gi, ' │ ')
+    .replace(/<[^>]+>/g, ' ');
+  s = decodeEnt(s).replace(/[​-‏⁠﻿͏]/g, '');
+  return s.split('\n')
+    .map(l => l.replace(/[ \t ]+/g, ' ').replace(/(\s*│\s*)+/g, ' │ ').replace(/^[\s│|]+|[\s│|]+$/g, '').trim())
+    .filter(l => l && /[\p{L}\p{N}$]/u.test(l)).join('\n');
+}
+
+// ── Montos ──
+const RE_MONTO = /(-|−|–)?\s*(?:MXN|MX\$|US\$|\$)\s?(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d])|(\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2})\s?(?:MXN|pesos)\b/gi;
+function parseMonto(txt) {
+  let t = String(txt || '').replace(/\s/g, '');
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(t)) t = t.replace(/\./g, '').replace(',', '.');   // 1.299,50 (formato con puntos)
+  else if (/^\d+,\d{1,2}$/.test(t)) t = t.replace(',', '.');                                  // 299,50
+  else t = t.replace(/,/g, '');
+  const n = parseFloat(t);
+  return Number.isFinite(n) ? n : null;
+}
+function montosDe(linea) {
+  const out = [];
+  for (const m of String(linea).matchAll(RE_MONTO)) {
+    const v = parseMonto(m[2] || m[3]);
+    if (v != null && v > 0 && v < 1e7) out.push({ v, neg: !!m[1], idx: m.index });
+  }
+  return out;
+}
+
+// ── Remitentes ──
+function fuenteDe(from, asunto) {
+  const f = norm(from), a = norm(asunto);
+  if (/amazon\./.test(f)) return 'amazon';
+  if (/mercadolibre|mercadolivre/.test(f)) return 'mercadolibre';
+  if (/mercadopago/.test(f)) return 'mercadopago';
+  if (/uber/.test(f)) return /eats/.test(f + a) ? 'ubereats' : 'uber';
+  if (/didi/.test(f)) return /food/.test(f + a) ? 'didifood' : 'didi';
+  if (/rappi/.test(f)) return 'rappi';
+  if (/banamex|citibanamex|citi\.com/.test(f)) return 'banamex';
+  if (/revolut/.test(f)) return 'revolut';
+  if (/pluxee|sodexo/.test(f)) return 'pluxee';
+  return 'generico';
+}
+const COMERCIO = { amazon: 'Amazon', mercadolibre: 'Mercado Libre', mercadopago: 'Mercado Pago', uber: 'Uber', ubereats: 'Uber Eats',
+  didi: 'DiDi', didifood: 'DiDi Food', rappi: 'Rappi', banamex: 'Banamex', revolut: 'Revolut', pluxee: 'Pluxee' };
+const ES_BANCO = f => f === 'banamex' || f === 'revolut' || f === 'pluxee';
+function nombreRemitente(from) {
+  const m = String(from || '').match(/^\s*"?([^"<]+?)"?\s*</);
+  let n = (m ? m[1] : String(from || '').split('@')[1] || '').trim();
+  n = n.replace(/\b(no-?reply|noreply|notificaciones|notifications|info|hola|ventas|pedidos|orders?)\b/gi, '').replace(/\.(com|mx|net|org)(\.mx)?$/i, '').trim();
+  return n.slice(0, 60) || 'Comercio';
+}
+
+// ── ¿Qué tipo de correo es? ──
+function clasificar(asunto, lineas, fuente) {
+  const a = norm(asunto), ini = norm(lineas.slice(0, 12).join(' ')).slice(0, 900);
+  if (/reembolso|reintegro|refund|te devolvimos|devolvimos tu dinero|devolucion (de tu dinero|aprobada|procesada)|compra cancelada|pedido cancelado|cancelamos tu (compra|pedido)/.test(a + ' ' + ini)) return 'reembolso';
+  const promo = /oferta|ofertas|promo|% de descuento|% off|cupon|newsletter|novedades|te extranamos|olvidaste|carrito|recomend|califica|opina|resena|encuesta|inicio de sesion|contrasena|verifica|codigo|seguridad|estado de cuenta|tu paquete|en camino|ha sido enviado|fue enviado|enviamos tu|se envio|entregado|entregamos|llego|llegara|recoger|pregunta|suscribete|webinar|evento|invitacion/;
+  const senal = /pedido|compra|compraste|order|recibo|receipt|factura|pago|pagaste|cargo|confirmacion|gracias por|tu viaje|viaje con|tu orden|ticket|comprobante|transaccion|consumo/;
+  if (ES_BANCO(fuente) && /recibiste|deposito|abono|te enviaron|transferencia recibida|nomina|te depositaron/.test(a + ' ' + ini)) return 'ingreso';
+  if (promo.test(a) && !/(confirmacion|recibo|factura|comprobante) de (tu )?(pedido|compra|pago)|gracias por tu (compra|pedido)|compraste/.test(a)) return 'ignorar';
+  if (senal.test(a)) return 'compra';
+  if (fuente !== 'generico' && senal.test(ini)) return 'compra';
+  return 'ignorar';
+}
+
+// ── Pedido, medio de pago ──
+function pedidoDe(texto, fuente) {
+  if (fuente === 'amazon') { const m = texto.match(/\b(\d{3}-\d{7}-\d{7})\b/); if (m) return m[1]; }
+  const m = texto.match(/(?:compra|pedido|venta|orden|order|operaci[oó]n|folio|recibo|referencia|transacci[oó]n)\s*(?:n[uú]m(?:ero)?\.?|no\.?|#|id)?\s*:?\s*#?\s*([A-Z0-9][A-Z0-9-]{5,24})\b/i);
+  return m && /\d{4}/.test(m[1]) ? m[1] : null;
+}
+function medioHintDe(texto, fuente) {
+  if (ES_BANCO(fuente)) { const t4 = (texto.match(/(?:terminaci[oó]n|termina(?:da)? en|con terminaci[oó]n|\*{2,}|•{2,}|x{3,})\s*(\d{4})\b/i) || [])[1]; return fuente + (t4 ? ' ' + t4 : ''); }
+  const t = norm(texto);
+  const tarj = texto.match(/(visa|master\s?card|amex|american express|carnet)[^\n]{0,40}?(?:terminaci[oó]n|termina(?:da)? en|\*+|•+|x{2,}|-)\s*(\d{4})\b/i)
+    || texto.match(/(tarjeta|d[eé]bito|cr[eé]dito)[^\n]{0,30}?(?:terminaci[oó]n|termina(?:da)? en|\*+|•+)\s*(\d{4})\b/i);
+  if (tarj) return norm(tarj[1]).replace(/\s+/g, '').replace('americanexpress', 'amex') + ' ' + tarj[2];
+  if (/dinero (disponible )?en (tu )?(cuenta de )?mercado pago|saldo (en|de) mercado pago|con mercado pago/.test(t)) return 'mercado pago';
+  if (/paypal/.test(t)) return 'paypal';
+  if (/\boxxo\b|pago en efectivo/.test(t)) return 'efectivo';
+  if (/meses sin intereses|\bmsi\b/.test(t)) return 'credito';
+  return null;
+}
+const MEDIO_DE_HINT = h => {
+  const t = norm(h);
+  if (/banamex/.test(t)) return 'Débito Banamex';
+  if (/revolut/.test(t)) return 'Débito Revolut';
+  if (/pluxee|vales/.test(t)) return 'Pluxee';
+  if (/^efectivo/.test(t)) return 'efectivo';
+  if (/mercado pago|paypal|credito/.test(t)) return 'Otros';
+  return null;
+};
+
+// ── Categoría sugerida (las de US) ──
+const CAT_REGLAS = [
+  ['Alicia', /\balicia\b/],
+  ['Transporte', /\b(uber(?! ?eats)|didi(?! ?food)|cabify|taxi|gasolina|pemex|metro|metrobus|estacionamiento|caseta|peaje|boleto de autobus|ado)\b/],
+  ['Comida', /\b(uber ?eats|didi ?food|rappi|restaurante|starbucks|cafe|pizza|burger|hamburguesa|tacos?|sushi|comida|food|kfc|mcdonald|domino|little caesars|subway|bebida|snack|galletas|chocolate|dulces)\b/],
+  ['Despensa', /\b(walmart|soriana|chedraui|superama|la comer|costco|sams|bodega aurrera|despensa|supermercado|abarrotes|leche|huevo|frutas?|verduras?|cereal|arroz|frijol|aceite|atun|papel higienico|servilletas)\b/],
+  ['Hogar', /\b(hogar|casa|cocina|limpieza|detergente|jabon (para|de) (ropa|trastes)|cloro|mueble|lampara|foco|sarten|olla|colchon|almohada|toalla|sabana|cortina|organizador|home depot|ikea|herramienta|taladro|extension|multicontacto|filtro|escoba|trapeador|cubeta|mascota|croquetas|arena para gato)\b/],
+  ['Ocio', /\b(netflix|spotify|disney|hbo|max|prime video|youtube|cine|cinepolis|cinemex|juego|videojuego|playstation|ps5|xbox|nintendo|switch|steam|libro|kindle|concierto|ticketmaster|boletos?|lego|juguete|figura|funko|apple music|crunchyroll)\b/],
+  ['Personales', /\b(ropa|playera|camisa|pantalon|jeans|sudadera|chamarra|tenis|zapatos|calcetines|boxer|shampoo|acondicionador|crema|perfume|desodorante|cepillo|rastrillo|farmacia|medicamento|vitaminas?|suplemento|proteina|maquillaje|audifonos|funda|cargador|cable usb|mochila|reloj|lentes|corte de cabello|barberia|gimnasio|gym)\b/],
+];
+function catSugerida(nombre, comercio, fuente) {
+  const t = norm(`${nombre || ''} ${comercio || ''}`);
+  for (const [c, re] of CAT_REGLAS) if (re.test(t)) return c;
+  if (fuente === 'uber' || fuente === 'didi') return 'Transporte';
+  if (fuente === 'ubereats' || fuente === 'didifood' || fuente === 'rappi') return 'Comida';
+  return 'OTROS';
+}
+
+// ── Lector exacto por renglones ──
+const RE_CORTE = /(te (podria|puede|pueden) (interesar|gustar)|recomendad|tambien te (puede|podria)|productos relacionados|inspirado en|basado en tu|clientes que (compraron|vieron)|sigue comprando|seguir comprando|descarga la app|siguenos|redes sociales|aviso de privacidad|terminos y condiciones|preguntas frecuentes|centro de ayuda|este correo (fue|se) (enviado|genero)|no respondas)/;
+const RE_TOTAL_FUERTE = /\b(total (del|de tu|de la) (pedido|compra|orden|cargo)|total pagado|total a pagar|total cobrado|importe total|monto total|grand total|order total|total \(iva incluido\)|total con iva|pagaste|monto del cargo|importe del cargo|cobramos)\b/;
+const RE_TOTAL = /\b(total|importe|monto|cargo por|compra por|pago por|pago de|por un (monto|importe) de)\b/;
+const RE_SUB = /\b(sub ?total|suma parcial|total (de|del) (los )?(productos?|articulos?)|^productos?|^articulos?|valor de los productos)\b/;
+const RE_ENVIO = /\b(envio|envios|shipping|costo de entrega|cargo de entrega|tarifa de entrega|delivery)\b/;
+const RE_DESC = /\b(descuento|descuentos|ahorro|ahorraste|ahorras|promocion|cupon|bonificacion|rebaja|discount|cashback aplicado)\b/;
+const RE_IMP = /\b(iva|impuesto|impuestos|ieps|tax|retencion)\b/;
+const RE_PROPINA = /\b(propina|tip)\b/;
+const RE_TARIFA = /\b(tarifa de servicio|cargo por servicio|costo de servicio|comision|service fee|cuota de servicio|tarifa de plataforma)\b/;
+const RE_RUIDO = /\b(meses|msi|mensualidad|mensualidades|cuotas?|saldo|disponible|limite|puntos|cashback|precio unitario|antes|ahorra hasta|desde \$|envio gratis en|compra minima|credito|pago minimo|precio regular|precio de lista|p\.u\.|valor|cotizacion|tipo de cambio)\b/;
+const limpiaNombre = s => String(s || '').replace(/│/g, ' ').replace(/\b(cantidad|cant\.?|qty|unidades?)\s*:?\s*\d{1,3}\b/gi, ' ')
+  .replace(/\b(vendido|enviado) por\b.*$/i, '').replace(/\bcondici[oó]n:?\s*\w+/i, '').replace(/\bprecio:?\s*$/i, '')
+  .replace(/[:•·\-–|]+\s*$/, '').replace(/^\s*[:•·\-–|]+/, '').replace(/\s+/g, ' ').trim().slice(0, 140);
+function cantidadDe(s) {
+  const m = String(s).match(/\b(?:cantidad|cant\.?|qty|unidades?)\s*:?\s*(\d{1,3})\b/i) || String(s).match(/^\s*(\d{1,2})\s*[x×]\s+\S/) || String(s).match(/\s[x×]\s?(\d{1,2})\s*$/);
+  const n = m ? parseInt(m[1], 10) : 1;
+  return n > 0 && n < 100 ? n : 1;
+}
+
+function lectorExacto(lineas) {
+  const items = [], totales = [], subs = [];
+  let envio = 0, descuento = 0, etiquetas = [];
+  for (let i = 0; i < lineas.length; i++) {
+    const L = lineas[i], nL = norm(L);
+    if (RE_CORTE.test(nL) && (items.length || totales.length)) break;
+    const ms = montosDe(L);
+    if (!ms.length) {
+      if (/\p{L}{3}/u.test(L) && L.length < 220) { etiquetas.push(L); if (etiquetas.length > 3) etiquetas.shift(); }
+      continue;
+    }
+    const m = ms[ms.length - 1];
+    let label = L.replace(RE_MONTO, ' ').replace(/[│|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    // Renglón con solo "Cantidad: 1  $599.00": el nombre del producto está en el renglón de arriba
+    if (!/\p{L}{3}/u.test(limpiaNombre(label))) label = (etiquetas[etiquetas.length - 1] || '') + (/\p{L}{3}/u.test(label) ? ' ' + label : '');
+    const n = norm(label);
+    etiquetas = [];
+    if (RE_TOTAL_FUERTE.test(n)) { totales.push({ v: m.v, fuerte: true, i }); continue; }
+    if (RE_SUB.test(n)) { subs.push(m.v); continue; }
+    if (RE_ENVIO.test(n)) { if (!/gratis/.test(n)) envio = r2(envio + m.v); continue; }
+    if (RE_DESC.test(n) || m.neg) { descuento = r2(descuento + m.v); continue; }
+    if (RE_IMP.test(n)) continue;
+    if (RE_TOTAL.test(n) && !/\p{L}{4,}.*\p{L}{4,}.*\p{L}{4,}/u.test(n.replace(RE_TOTAL, ''))) { totales.push({ v: m.v, fuerte: false, i }); continue; }
+    if (RE_RUIDO.test(n)) continue;
+    if (RE_PROPINA.test(n)) { items.push({ nombre: 'Propina', cantidad: 1, precio: m.v, i, extra: true }); continue; }
+    if (RE_TARIFA.test(n)) { items.push({ nombre: 'Tarifa de servicio', cantidad: 1, precio: m.v, i, extra: true }); continue; }
+    const nombre = limpiaNombre(label);
+    if (nombre.length < 3 || /^(ver|comprar|rastrear|detalles|precio|importe)\b/i.test(nombre)) continue;
+    items.push({ nombre, cantidad: cantidadDe(L + ' ' + label), precio: m.v, i });
+  }
+  const fuertes = totales.filter(t => t.fuerte);
+  const total = fuertes.length ? Math.max(...fuertes.map(t => t.v)) : (totales.length ? Math.max(...totales.map(t => t.v)) : null);
+  return { items, total, subtotal: subs.length ? Math.max(...subs) : null, envio, descuento, iTotal: (fuertes[0] || totales[0] || {}).i };
+}
+const cuadra = (items, envio, descuento, total) => total != null && items.length > 0 && Math.abs(r2(items.reduce((a, x) => a + x.precio, 0) + envio - descuento) - total) <= 1.01;
+function elegirItems(lx) {
+  const { items, envio, descuento, total, subtotal, iTotal } = lx;
+  const sinDup = arr => arr.filter((x, k) => arr.findIndex(y => y.nombre === x.nombre && y.precio === x.precio) === k);
+  const antes = iTotal != null ? items.filter(x => x.i < iTotal) : items;
+  const opciones = [items, sinDup(items), antes, sinDup(antes), items.filter(x => !x.extra)];
+  for (const op of opciones) if (cuadra(op, envio, descuento, total)) return { items: op, exacto: true };
+  if (subtotal != null) for (const op of opciones) if (op.length && Math.abs(r2(op.reduce((a, x) => a + x.precio, 0)) - subtotal) <= 1.01) return { items: op, exacto: total == null || Math.abs(r2(subtotal + envio - descuento) - total) <= 1.01 };
+  return { items: sinDup(antes.length ? antes : items), exacto: false };
+}
+
+// Avisos de banco: un solo cargo (o abono). "Compra por $1,234.50 en WALMART…", "Pagaste $X a Y".
+function lectorBanco(lineas, fuente) {
+  const txt = lineas.join('\n');
+  let total = null, comercio = null;
+  for (const L of lineas) {
+    const ms = montosDe(L); if (!ms.length) continue;
+    const n = norm(L);
+    if (/saldo|disponible|limite/.test(n) && !/(cargo|compra|pago|pagaste|abono|deposito|recibiste)/.test(n)) continue;
+    total = ms[0].v;
+    const c = L.match(/(?:\ben\b|\ba\b|comercio:?|establecimiento:?|beneficiario:?|de parte de|de)\s+([A-Z0-9][A-Za-z0-9 .*&'\-]{2,40}?)(?:\s+(?:el|con|por|desde|a las|,|\.)|$)/);
+    if (c) comercio = c[1].trim();
+    break;
+  }
+  if (!comercio) { const c = txt.match(/(?:comercio|establecimiento|negocio|beneficiario|concepto)\s*:?\s*([^\n│]{3,40})/i); if (c) comercio = c[1].trim(); }
+  return { total, comercio };
+}
+
+// ── Gemini (solo si el lector exacto no cuadra) ──
+let _gemPausa = 0;
+async function geminiCompra(deps, { asunto, remitente, texto, phone }) {
+  const { genAI, geminiWithRetry, logUsage } = deps;
+  if (!genAI || !process.env.GEMINI_API_KEY || Date.now() < _gemPausa) return null;
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: 'application/json', temperature: 0 } });
+    const prompt = `Eres un lector de recibos. Del correo de abajo extrae la compra en JSON, sin texto extra:
+{"es_compra":true|false,"tipo":"compra"|"reembolso"|"ingreso","comercio":"","pedido":null,"items":[{"nombre":"","cantidad":1,"precio":0}],"envio":0,"descuento":0,"total":0,"medio":null}
+Reglas: "precio" es el importe total de ese renglón en pesos (cantidad × unitario). Ignora productos recomendados, publicidad y montos de saldo, puntos o meses sin intereses. "descuento" es positivo. "medio" es la forma de pago tal como aparece (p. ej. "Visa 1234", "Mercado Pago") o null. Si es una promoción, un aviso de envío o no hay un pago real, es_compra=false.
+Remitente: ${remitente}
+Asunto: ${asunto}
+Correo:
+${String(texto).slice(0, 12000)}`;
+    const r = await Promise.race([geminiWithRetry(() => model.generateContent(prompt), 1), new Promise(res => setTimeout(() => res(null), 25000))]);
+    if (!r) return null;
+    try { logUsage && logUsage(phone, 'gemini-2.5-flash', r.response.usageMetadata, 'correo'); } catch {}
+    const j = JSON.parse(String(r.response.text()).replace(/^```(?:json)?|```$/g, '').trim());
+    return j && typeof j === 'object' ? j : null;
+  } catch (e) {
+    if (/429|quota|exhausted/i.test(e.message || '')) _gemPausa = Date.now() + 60 * 60 * 1000;
+    console.error('[correo] gemini:', e.message);
+    return null;
+  }
+}
+
+const fechaMX = iso => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date(iso)); } catch { return null; } };
+
+// Lee un correo → fila para correo_compras (estado 'ignorado' si no es una compra)
+async function leerCorreo(deps, phone, msg) {
+  const asunto = String(msg.subject || '').slice(0, 300), remitente = String(msg.from || '').slice(0, 200);
+  const texto = (msg.html ? htmlATexto(msg.html) : '') || String(msg.text || '');
+  const lineas = texto.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 1500);
+  const fuente = fuenteDe(remitente, asunto);
+  const fila = { user_phone: phone, msg_id: String(msg.id).slice(0, 120), cuenta: String(msg.cuenta || '').slice(0, 120) || null, remitente, asunto,
+    fecha_correo: msg.date ? new Date(msg.date).toISOString() : new Date().toISOString(), fuente, texto: texto.slice(0, 60000) };
+  let tipo = clasificar(asunto, lineas, fuente);
+  if (tipo === 'ignorar') return { ...fila, tipo: 'compra', estado: 'ignorado', parser: 'filtro' };
+  let comercio = COMERCIO[fuente] || nombreRemitente(remitente);
+  if (fuente === 'generico' && /amazon/i.test(asunto)) comercio = 'Amazon';
+  const pedido = pedidoDe(texto, fuente), medio_hint = medioHintDe(texto, fuente);
+  let items = [], total = null, envio = 0, descuento = 0, parser = 'exacto';
+
+  if (ES_BANCO(fuente) || tipo === 'reembolso' || tipo === 'ingreso') {
+    const b = lectorBanco(lineas, fuente);
+    total = b.total;
+    if (b.comercio && ES_BANCO(fuente)) comercio = b.comercio;
+    const etiqueta = tipo === 'reembolso' ? `Reembolso ${comercio}` : tipo === 'ingreso' ? `Depósito ${COMERCIO[fuente] || ''}`.trim() : comercio;
+    if (total) items = [{ nombre: etiqueta, cantidad: 1, precio: total }];
+  } else {
+    const lx = lectorExacto(lineas), el = elegirItems(lx);
+    items = el.items; envio = lx.envio; descuento = lx.descuento; total = lx.total;
+    if (!el.exacto) parser = 'aprox';
+  }
+
+  if (parser === 'aprox' || !total || !items.length) {
+    const g = await geminiCompra(deps, { asunto, remitente, texto, phone });
+    if (g && g.es_compra === false) return { ...fila, tipo: 'compra', estado: 'ignorado', parser: 'gemini' };
+    if (g && Array.isArray(g.items)) {
+      const gi = g.items.map(x => ({ nombre: limpiaNombre(x.nombre), cantidad: Math.max(1, parseInt(x.cantidad, 10) || 1), precio: r2(x.precio) })).filter(x => x.nombre && x.precio > 0);
+      const gt = Number(g.total) || null, ge = r2(g.envio), gd = r2(g.descuento);
+      if (gi.length && (cuadra(gi, ge, gd, gt) || !total)) { items = gi; total = gt || r2(gi.reduce((a, x) => a + x.precio, 0) + ge - gd); envio = ge; descuento = gd; parser = 'gemini'; }
+      if (g.tipo === 'reembolso' || g.tipo === 'ingreso') tipo = g.tipo;
+      if (g.comercio && fuente === 'generico') comercio = String(g.comercio).slice(0, 60);
+    }
+  }
+  if (!total && items.length) total = r2(items.reduce((a, x) => a + x.precio, 0) + envio - descuento);
+  if (!total) return { ...fila, tipo, estado: 'ignorado', parser: 'sin-monto', comercio, pedido };
+  if (!items.length) { items = [{ nombre: comercio, cantidad: 1, precio: total }]; parser = 'total'; }
+  if (parser !== 'exacto' && parser !== 'gemini' && !cuadra(items, envio, descuento, total)) {
+    // Ni el lector ni la IA cuadran: se propone el total del correo como un solo renglón (con los productos en la nota)
+    const nota = items.filter(x => !x.extra).map(x => x.nombre).slice(0, 6).join(' · ');
+    items = [{ nombre: `${comercio}${pedido ? ' · pedido ' + pedido : ''}`, cantidad: 1, precio: total, nota }];
+    envio = 0; descuento = 0; parser = 'total';
+  }
+  items = items.map(x => ({ nombre: x.nombre, cantidad: x.cantidad || 1, precio: r2(x.precio), categoria: tipo === 'compra' ? catSugerida(x.nombre, comercio, fuente) : 'OTROS', ...(x.nota ? { nota: x.nota } : {}) }));
+  return { ...fila, tipo, comercio, pedido, items, total: r2(total), envio: r2(envio), descuento: r2(descuento), medio_hint, parser, estado: 'pendiente' };
+}
+
+module.exports = function montarCorreo(app, deps) {
+  const { sb, SHARE_SECRET, pushA, medioCanonDe, canonCategoria, aplicarImpactoCuentas, conReintentos, learnPattern, esGhost } = deps;
+  const firmar = phone => crypto.createHmac('sha256', SHARE_SECRET).update('correo:' + String(phone)).digest('base64url');
+  const tokenOk = (phone, tok) => { const a = Buffer.from(String(tok || '')), b = Buffer.from(firmar(phone)); return a.length === b.length && crypto.timingSafeEqual(a, b); };
+
+  app.use('/api/correo', (req, res, next) => (esGhost(req) && req.method !== 'GET')
+    ? res.status(403).json({ success: false, error: 'Modo fantasma: solo lectura' }) : next());
+
+  // Token para el script de Gmail (el script lo manda en cada sincronización)
+  app.post('/api/correo/token', async (req, res) => {
+    const phone = req.body?.user_phone;
+    if (!phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+    res.json({ success: true, token: firmar(phone) });
+  });
+
+  // Lee en segundo plano los correos recibidos (estado 'procesando'): así el script de Gmail recibe respuesta al
+  // instante aunque haya que consultar a Gemini. Si el servidor se reinicia a la mitad, GET /pendientes lo retoma.
+  const _cola = new Set();
+  async function procesarCola(phone) {
+    if (_cola.has(phone)) return;
+    _cola.add(phone);
+    const listos = [];
+    try {
+      for (let vuelta = 0; vuelta < 10; vuelta++) {
+        const { data: rows } = await sb.from('correo_compras').select('id, msg_id, cuenta, remitente, asunto, fecha_correo, texto')
+          .eq('user_phone', phone).eq('estado', 'procesando').order('fecha_correo', { ascending: true }).limit(20);
+        if (!(rows || []).length) break;
+        for (const r of rows) {
+          let f;
+          try { f = await leerCorreo(deps, phone, { id: r.msg_id, from: r.remitente, subject: r.asunto, date: r.fecha_correo, text: r.texto, cuenta: r.cuenta }); }
+          catch (e) { console.error('[correo] leer:', e.message); f = { estado: 'ignorado', parser: 'error' }; }
+          // Mismo pedido en otro correo (confirmación + "enviado" + factura): solo el primero queda pendiente
+          if (f.estado === 'pendiente' && f.pedido) {
+            const { data: dup } = await sb.from('correo_compras').select('id').eq('user_phone', phone).eq('pedido', f.pedido).eq('tipo', f.tipo)
+              .in('estado', ['pendiente', 'registrado', 'omitido']).neq('id', r.id).limit(1);
+            if ((dup || []).length) f.estado = 'duplicado';
+          }
+          const { user_phone: _p, msg_id: _m, texto: _t, ...upd } = f;
+          await sb.from('correo_compras').update(upd).eq('id', r.id);
+          if (f.estado === 'pendiente') listos.push(f);
+        }
+      }
+    } catch (e) { console.error('[correo] cola:', e.message); }
+    finally { _cola.delete(phone); }
+    if (listos.length && pushA) {
+      const f = listos[listos.length - 1], extra = listos.length > 1 ? ` y ${listos.length - 1} más` : '';
+      const n = (f.items || []).length;
+      pushA(phone, { title: f.tipo === 'reembolso' ? '↩️ Reembolso detectado' : f.tipo === 'ingreso' ? '💰 Depósito detectado' : '📨 Compra detectada',
+        body: `${f.comercio} · ${n > 1 ? n + ' productos · ' : ''}$${Number(f.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}${extra}`, tag: 'compras', url: '/?ir=compras' }, true).catch(() => {});
+    }
+  }
+
+  // El script de Gmail entrega correos. Se guardan tal cual (ya en texto) y se leen después; los ya vistos se ignoran.
+  app.post('/api/correo/ingest', async (req, res) => {
+    try {
+      const { phone, token, cuenta } = req.body || {};
+      if (!phone || !tokenOk(phone, token)) return res.status(401).json({ success: false, error: 'Token inválido' });
+      const mensajes = (Array.isArray(req.body.mensajes) ? req.body.mensajes : []).filter(m => m && m.id).slice(0, 80);
+      const filas = mensajes.map(m => ({ user_phone: phone, msg_id: String(m.id).slice(0, 120), cuenta: String(cuenta || '').slice(0, 120) || null,
+        remitente: String(m.from || '').slice(0, 200), asunto: String(m.subject || '').slice(0, 300),
+        fecha_correo: m.date && !isNaN(new Date(m.date)) ? new Date(m.date).toISOString() : new Date().toISOString(),
+        fuente: fuenteDe(m.from, m.subject), estado: 'procesando',
+        texto: ((m.html ? htmlATexto(m.html) : '') || String(m.text || '')).slice(0, 60000) }));
+      if (filas.length) {
+        const { error } = await sb.from('correo_compras').upsert(filas, { onConflict: 'user_phone,msg_id', ignoreDuplicates: true });
+        if (error) return res.status(500).json({ success: false, error: error.message });
+      }
+      const { data: s0 } = await sb.from('correo_sync').select('recibidos').eq('user_phone', phone).maybeSingle();
+      await sb.from('correo_sync').upsert({ user_phone: phone, cuenta: String(cuenta || '').slice(0, 120) || null, ultimo_sync: new Date().toISOString(), recibidos: (s0?.recibidos || 0) + filas.length });
+      res.json({ success: true, recibidos: filas.length });
+      setImmediate(() => procesarCola(phone));
+    } catch (e) { console.error('[correo] ingest:', e.message); res.status(500).json({ success: false, error: e.message }); }
+  });
+
+  // Pendientes de revisar (+ posibles duplicados contra Movimientos y entre correos) y estado de la conexión
+  app.get('/api/correo/pendientes', async (req, res) => {
+    try {
+      const phone = req.query.phone;
+      if (!phone) return res.status(400).json({ success: false, error: 'Falta phone' });
+      const [{ data: rows }, { data: sync }, { data: u }] = await Promise.all([
+        sb.from('correo_compras').select('id, cuenta, remitente, asunto, fecha_correo, fuente, tipo, pedido, comercio, items, total, envio, descuento, medio_hint, parser')
+          .eq('user_phone', phone).eq('estado', 'pendiente').order('fecha_correo', { ascending: false }).limit(60),
+        sb.from('correo_sync').select('cuenta, ultimo_sync, recibidos').eq('user_phone', phone).maybeSingle(),
+        sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle()]);
+      const lista = rows || [];
+      sb.from('correo_compras').select('id', { count: 'exact', head: true }).eq('user_phone', phone).eq('estado', 'procesando')
+        .then(({ count }) => { if (count) procesarCola(phone); }, () => {});
+      const aprendidos = (u?.external_refs || {}).correo_medios || {};
+      let movs = [];
+      if (lista.length) {
+        const fechas = lista.map(r => fechaMX(r.fecha_correo)).filter(Boolean).sort();
+        const d0 = new Date(fechas[0] + 'T12:00:00Z'); d0.setUTCDate(d0.getUTCDate() - 4);
+        const { data } = await sb.from('movimientos').select('id, concepto, monto, fecha, tipo').eq('user_phone', phone).gte('fecha', d0.toISOString().slice(0, 10)).limit(2000);
+        movs = data || [];
+      }
+      const dias = (a, b) => Math.abs((new Date(a + 'T12:00:00Z') - new Date(b + 'T12:00:00Z')) / 864e5);
+      const out = [];
+      for (const r of lista) {
+        const fecha = fechaMX(r.fecha_correo);
+        const tipoMov = r.tipo === 'compra' ? 'GASTO' : 'INGRESO';
+        const montos = [Number(r.total), ...(r.items || []).map(x => Number(x.precio))];
+        const dupMov = movs.find(m => m.tipo === tipoMov && dias(m.fecha, fecha) <= 3 && montos.some(v => Math.abs(Number(m.monto) - v) <= 1));
+        // Aviso del banco por el mismo cargo que un pedido (Amazon pagado con Banamex) → posible duplicado
+        const dupCorreo = ES_BANCO(r.fuente) || r.fuente === 'mercadopago'
+          ? lista.find(o => o.id !== r.id && !ES_BANCO(o.fuente) && o.fuente !== 'mercadopago' && o.tipo === r.tipo && Math.abs(Number(o.total) - Number(r.total)) <= 1 && dias(fechaMX(o.fecha_correo), fecha) <= 3) : null;
+        let medio = r.medio_hint && aprendidos[r.medio_hint];
+        if (!medio) medio = MEDIO_DE_HINT(r.medio_hint || '') || 'débito';
+        out.push({ ...r, fecha, medio_sugerido: await medioCanonDe(phone, medio),
+          posible_dup: dupMov ? { tipo: 'mov', concepto: dupMov.concepto, monto: Number(dupMov.monto), fecha: dupMov.fecha }
+            : dupCorreo ? { tipo: 'correo', concepto: dupCorreo.comercio, monto: Number(dupCorreo.total), fecha: fechaMX(dupCorreo.fecha_correo) } : null });
+      }
+      res.json({ success: true, data: out, sync: sync || null });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+
+  // Registrar en Movimientos lo que la persona confirmó (un movimiento por renglón)
+  app.post('/api/correo/:id/registrar', async (req, res) => {
+    try {
+      const { user_phone, fecha, medio_pago, items } = req.body || {};
+      if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+      const { data: row } = await sb.from('correo_compras').select('*').eq('id', req.params.id).eq('user_phone', user_phone).maybeSingle();
+      if (!row) return res.status(404).json({ success: false, error: 'No se encontró el correo' });
+      if (row.estado !== 'pendiente') return res.status(409).json({ success: false, error: 'Este correo ya se había registrado u omitido' });
+      const sel = (Array.isArray(items) ? items : []).map(x => ({ ...x, monto: r2(x.monto) })).filter(x => x.monto > 0 && String(x.concepto || '').trim());
+      if (!sel.length) return res.status(400).json({ success: false, error: 'No hay renglones para registrar' });
+      const f = /^\d{4}-\d{2}-\d{2}$/.test(String(fecha || '')) ? fecha : fechaMX(row.fecha_correo);
+      const medio = await medioCanonDe(user_phone, medio_pago);
+      const tipoMov = row.tipo === 'compra' ? 'GASTO' : 'INGRESO';
+      const desc = `📨 ${row.comercio || 'Correo'}${row.pedido ? ' · pedido ' + row.pedido : ''}`.slice(0, 120);
+      const creados = [];
+      for (const x of sel) {
+        const d = { tipo: x.tipo === 'INGRESO' || x.tipo === 'GASTO' ? x.tipo : tipoMov, categoria: canonCategoria(x.categoria || 'OTROS'),
+          concepto: String(x.concepto).trim().slice(0, 140), descripcion: desc, monto: x.monto, medio_pago: x.medio_pago ? await medioCanonDe(user_phone, x.medio_pago) : medio,
+          fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(x.fecha || '')) ? x.fecha : f, comentarios: String(x.comentarios || '').slice(0, 400) };
+        const { data, error } = await conReintentos(() => sb.from('movimientos').insert({ ...d, user_phone }).select().single());
+        if (error || !data?.id) {
+          if (creados.length) await sb.from('correo_compras').update({ movimiento_ids: creados.map(c => c.id) }).eq('id', row.id);
+          return res.status(400).json({ success: false, error: (error?.message || 'no se pudo guardar') + (creados.length ? ` (se guardaron ${creados.length} de ${sel.length})` : ''), data: creados });
+        }
+        if (d.tipo === 'GASTO') { try { await learnPattern(user_phone, d); } catch {} }
+        await aplicarImpactoCuentas(user_phone, null, data);
+        creados.push(data);
+      }
+      await sb.from('correo_compras').update({ estado: 'registrado', resuelto_at: new Date().toISOString(), movimiento_ids: creados.map(c => c.id) }).eq('id', row.id);
+      if (row.medio_hint && medio_pago) {   // aprende: la próxima vez esa tarjeta/método sugiere este medio
+        const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', user_phone).maybeSingle();
+        const refs = { ...(u?.external_refs || {}) };
+        if ((refs.correo_medios || {})[row.medio_hint] !== medio) {
+          refs.correo_medios = { ...(refs.correo_medios || {}), [row.medio_hint]: medio };
+          await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', user_phone);
+        }
+      }
+      res.json({ success: true, data: creados });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+
+  app.post('/api/correo/:id/omitir', async (req, res) => {
+    try {
+      const { user_phone } = req.body || {};
+      const { data, error } = await sb.from('correo_compras').update({ estado: 'omitido', resuelto_at: new Date().toISOString() })
+        .eq('id', req.params.id).eq('user_phone', user_phone).eq('estado', 'pendiente').select('id');
+      if (error) return res.status(400).json({ success: false, error: error.message });
+      res.json({ success: true, omitidos: (data || []).length });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+
+  // Vuelve a leer los correos guardados con el lector actual (al mejorar los lectores no hace falta tocar el script)
+  app.post('/api/correo/releer', async (req, res) => {
+    try {
+      const { user_phone, todos } = req.body || {};
+      if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+      let q = sb.from('correo_compras').select('id, msg_id, cuenta, remitente, asunto, fecha_correo, texto, estado').eq('user_phone', user_phone).limit(200);
+      q = todos ? q.in('estado', ['pendiente', 'ignorado']) : q.eq('estado', 'pendiente');
+      const { data: rows } = await q;
+      let n = 0;
+      for (const r of rows || []) {
+        const f = await leerCorreo(deps, user_phone, { id: r.msg_id, from: r.remitente, subject: r.asunto, date: r.fecha_correo, text: r.texto, cuenta: r.cuenta });
+        const { user_phone: _p, msg_id: _m, texto: _t, ...upd } = f;
+        await sb.from('correo_compras').update(upd).eq('id', r.id);
+        n++;
+      }
+      res.json({ success: true, releidos: n });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+};
+module.exports._test = { htmlATexto, leerCorreo, lectorExacto, elegirItems, clasificar, fuenteDe, medioHintDe, catSugerida, montosDe };

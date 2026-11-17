@@ -1882,6 +1882,57 @@ body.sheet-locked{overflow:hidden}
 .tile-dot{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ec4899;color:#fff;
   font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--mcard,var(--bg-surface))}
 .mini-tile{position:relative}
+/* Compras del correo (📨) */
+.cm-root{display:flex;flex-direction:column;gap:10px}
+.cm-head{display:flex;align-items:center;gap:6px}
+.cm-st{flex:1;min-width:0;font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cm-st .ti-circle-check{color:var(--color-income)}
+.cm-st span{overflow:hidden;text-overflow:ellipsis}
+.cm-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:12px 14px;display:flex;flex-direction:column;gap:10px;
+  transition:opacity .25s,transform .25s}
+.cm-card.busy{opacity:.55;pointer-events:none}
+.cm-card.sale{opacity:0;transform:translateX(24px)}
+.cm-top{display:flex;align-items:flex-start;gap:10px}
+.cm-ic{width:38px;height:38px;border-radius:12px;background:var(--bg-surface-2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.cm-mid{flex:1;min-width:0}
+.cm-name{font-size:14.5px;font-weight:800;color:var(--text-1);word-break:break-word}
+.cm-sub{font-size:11.5px;color:var(--text-3);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cm-tot{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
+.cm-tot.gasto{color:var(--color-expense)}
+.cm-tot.ing{color:var(--color-income)}
+.cm-chips{display:flex;flex-wrap:wrap;gap:5px}
+.cm-dup{font-size:12px;color:var(--color-warning);background:rgba(252,204,142,.08);border-radius:var(--radius-md);padding:8px 10px;line-height:1.45}
+.cm-meta{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:10px;align-items:start}
+.cm-meta label{font-size:11px;color:var(--text-3);display:block;margin-bottom:4px}
+.cm-meta input[type=date]{width:100%;padding:7px 9px;font-size:13px}
+.cm-fp{display:flex;flex-wrap:wrap;gap:4px}
+.cm-items{display:flex;flex-direction:column;gap:6px}
+.cm-it{display:grid;grid-template-columns:26px minmax(0,1fr) minmax(0,108px);gap:6px;align-items:center;padding:8px;border-radius:var(--radius-md);background:var(--bg-surface-2)}
+.cm-it.off{opacity:.5}
+.cm-it.off .cm-it2,.cm-it.off .cm-aj{display:none}
+.cm-chk{background:none;border:none;color:var(--text-1);font-size:20px;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center}
+.cm-it input,.cm-it select{width:100%;min-width:0;padding:7px 9px;font-size:13px}
+.cm-mto{position:relative}
+.cm-mto span{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:12px;pointer-events:none}
+.cm-mto input{padding-left:20px;text-align:right;font-variant-numeric:tabular-nums}
+.cm-it2{grid-column:2 / 4;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:6px}
+.cm-it2.solo{grid-template-columns:minmax(0,1fr)}
+.cm-aj{grid-column:2 / 4;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.cm-rep{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);cursor:pointer;line-height:1.35}
+.cm-rep input{width:auto;margin:0;accent-color:var(--color-income)}
+.cm-pie{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px dashed var(--border-default);padding-top:10px}
+.cm-pie-tot{flex:1;min-width:130px;font-size:12px;color:var(--text-3);line-height:1.35}
+.cm-pie-tot b{color:var(--text-1);font-size:14.5px;font-variant-numeric:tabular-nums}
+.cm-pie .btn{white-space:nowrap}
+@media (max-width:520px){
+  .cm-meta{grid-template-columns:minmax(0,1fr)}
+  .cm-it{grid-template-columns:26px minmax(0,1fr) minmax(0,92px)}
+}
+.cm-setup{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:14px;display:flex;flex-direction:column;gap:10px}
+.cm-setup ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--text-2);line-height:1.5}
+.cm-setup a{color:var(--text-1);font-weight:700}
+.cm-setup summary{cursor:pointer;font-size:12px;color:var(--text-3)}
+.cm-setup textarea{width:100%;min-height:170px;margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;resize:vertical}
 
 /* ═══════════════════════════════════════════════════════ v16 — Calendario: feriados y rediseño */
 .cal-nav2{display:flex;align-items:center;justify-content:center;gap:12px;margin:0 0 12px}
@@ -3074,6 +3125,9 @@ function _startLivePoll() {
   setTimeout(wlPrefetch, 2500);
   setTimeout(parNoLeidos, 3000);
   setInterval(parNoLeidos, 15000);   // contador de mensajes nuevos de la pareja
+  setTimeout(() => cmPrefetch(true), 3200);   // compras del correo: insignia 📨 y pop-up si hay nuevas
+  setInterval(() => { if (document.visibilityState === 'visible') cmPrefetch(true); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(() => cmPrefetch(true), 800); });
   const _ir = new URLSearchParams(location.search).get('ir');
   if (_ir) { history.replaceState(null, '', location.pathname); setTimeout(() => _irA(_ir), 700); }
   if (new URLSearchParams(location.search).get('chat') === 'pareja') {
@@ -5018,6 +5072,295 @@ const dsgOn = (panelId, key) => S._dsgOpen[panelId] === key ? ' dsg-on' : '';
 // ── ESC / logo → Inicio ──────────────────────────────────────────────────────
 // ESC cierra lo que esté encima (formulario, día del calendario, ventana central); si no hay nada
 // abierto y no estás en Inicio, te regresa a Inicio. Dentro de un campo de texto solo quita el foco.
+// ── COMPRAS DEL CORREO (Gmail → US) ──────────────────────────────────────────
+// Un Apps Script en el Gmail de Ángel manda cada 10 min los correos de compras, recibos, cargos y reembolsos al servidor
+// (correo.js), que separa productos y precios. Aquí se revisan: un movimiento por producto, con fecha, categoría, monto,
+// medio de pago y notas editables; envío y descuentos se reparten entre los productos. Nada se registra sin confirmar.
+const CM_ICO = { amazon: '📦', mercadolibre: '🤝', mercadopago: '💠', uber: '🚗', ubereats: '🍔', didi: '🚕', didifood: '🍔', rappi: '🛵',
+  banamex: '🏦', revolut: '🏦', pluxee: '🎫', generico: '🧾' };
+const _cmOn = () => S.identity === 'A' && !S.ghostMode;
+function _cmSt() { return S._cm || (S._cm = { lista: [], sync: null, draft: {}, busy: {}, hechos: new Set(), listo: false, setup: false, token: '' }); }
+const _cmN = () => (S._cm?.lista || []).length;
+const _cmFecha = iso => { if (!iso) return ''; const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); return d.getDate() + ' ' + _MES_L[d.getMonth()].slice(0, 3); };
+function _cmHace(ts) {
+  const m = Math.max(0, Math.round((Date.now() - new Date(ts)) / 60000));
+  return m < 1 ? 'hace un momento' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
+}
+async function cmPrefetch(auto) {
+  if (!S.phone || !_cmOn()) return;
+  const st = _cmSt();
+  try {
+    const r = await api('GET', `/api/correo/pendientes?phone=${encodeURIComponent(S.phone)}`);
+    const sig = (r.data || []).map(x => x.id).join(',');
+    st.lista = (r.data || []).filter(x => !st.hechos.has(x.id));
+    st.sync = r.sync || null; st.listo = true;
+    const root = $('cm-root');
+    if (root && (sig !== st._sig || !root.dataset.listo) && !root.contains(document.activeElement)) cmRender();
+    st._sig = sig;
+  } catch { return; }
+  _cmBadge();
+  if (auto) _cmAutoAbrir();
+}
+function _cmBadge() {
+  document.querySelectorAll('.mini-tile[aria-label="Compras del correo"]').forEach(b => {
+    b.querySelector('.tile-dot')?.remove();
+    if (_cmN()) { const d = document.createElement('span'); d.className = 'tile-dot'; d.textContent = _cmN(); b.appendChild(d); }
+  });
+}
+// Pop-up al abrir US: una vez por sesión por cada compra nueva y solo si no hay otra ventana abierta
+function _cmAutoAbrir() {
+  const st = _cmSt(); if (!st.lista.length || S.tab === 'chat' || document.visibilityState !== 'visible') return;
+  if ($('dash-sheet')?.classList.contains('open') || $('ovl')?.classList.contains('open') || $('pop')?.classList.contains('open')) return;
+  let vistos = []; try { vistos = JSON.parse(sessionStorage.getItem('cm_auto') || '[]'); } catch {}
+  const nuevos = st.lista.filter(x => !vistos.includes(x.id));
+  if (!nuevos.length) return;
+  try { sessionStorage.setItem('cm_auto', JSON.stringify([...vistos, ...nuevos.map(x => x.id)].slice(-300))); } catch {}
+  dashEmoji('compras');
+}
+function cmAbrir() {
+  const st = _cmSt();
+  abrirHoja('Compras del correo', `<div id="cm-root" class="cm-root">${st.listo ? '' : '<div class="wl-empty">Revisando tu correo…</div>'}</div>`,
+    () => { if (st.listo) cmRender(); cmPrefetch(false); }, { size: 'md' });
+}
+function _cmDraft(c) {
+  const st = _cmSt(); if (st.draft[c.id]) return st.draft[c.id];
+  const dup = !!c.posible_dup;
+  return st.draft[c.id] = {
+    fecha: c.fecha || toISO(new Date()), medio: c.medio_sugerido || 'efectivo', repartir: true,
+    items: (c.items || []).map(x => ({ on: !dup, concepto: x.nombre + ((x.cantidad || 1) > 1 ? ` (×${x.cantidad})` : ''), monto: +x.precio || 0,
+      categoria: c.tipo === 'compra' ? (x.categoria || 'OTROS') : 'OTROS', notas: x.nota || '' })),
+  };
+}
+// Renglones finales: el descuento siempre se reparte entre lo marcado; el envío también, salvo que se pida aparte
+function _cmFinal(c) {
+  const d = _cmDraft(c), esC = c.tipo === 'compra';
+  const env = esC ? (+c.envio || 0) : 0, des = esC ? (+c.descuento || 0) : 0;
+  const rows = d.items.map((x, i) => ({ ...x, i, final: Math.round((+x.monto || 0) * 100) / 100, ajuste: 0 })).filter(x => x.on && x.final > 0 && x.concepto.trim());
+  const base = rows.reduce((a, x) => a + x.final, 0), aj = Math.round(((d.repartir ? env : 0) - des) * 100);
+  if (base > 0 && aj) {
+    let rest = aj;
+    rows.forEach((x, k) => { const c2 = k === rows.length - 1 ? rest : Math.round(aj * x.final / base); x.ajuste = c2 / 100; x.final = Math.max(0, Math.round(x.final * 100 + c2) / 100); rest -= c2; });
+  }
+  if (!d.repartir && env > 0 && rows.length) rows.push({ concepto: 'Envío', final: env, ajuste: 0, categoria: rows[0].categoria, notas: '', i: -1 });
+  return { rows, total: Math.round(rows.reduce((a, x) => a + x.final, 0) * 100) / 100, env, des };
+}
+function _cmPieHTML(c) {
+  const F = _cmFinal(c), n = F.rows.length, ing = c.tipo !== 'compra';
+  return `<div class="cm-pie-tot">${ing ? 'Entra' : 'Se registra'}: <b>${fmt(F.total)}</b><br>${n} ${n === 1 ? 'movimiento' : 'movimientos'} · correo ${fmt(c.total)}</div>
+    <button class="btn btn-ghost btn-sm" onclick="cmOmitir(${c.id})" title="No registrar este correo"><i class="ti ti-eye-off"></i> Omitir</button>
+    <button class="btn btn-accent btn-sm" onclick="cmRegistrar(${c.id})" ${n ? '' : 'disabled'}><i class="ti ti-check"></i> Registrar${n > 1 ? ' ' + n : ''}</button>`;
+}
+function _cmAjTxt(c, i) {
+  const x = _cmFinal(c).rows.find(r => r.i === i);
+  return x && x.ajuste ? `Con ${x.ajuste > 0 ? 'envío' : 'descuento'} repartido: ${fmt(x.final)}` : '';
+}
+function _cmCardHTML(c) {
+  const st = _cmSt(), d = _cmDraft(c), esC = c.tipo === 'compra', id = c.id;
+  const E = _ndEsc, F = _cmFinal(c);
+  const chips = [
+    c.pedido ? `<span class="wl-chip">Pedido ${E(c.pedido)}</span>` : '',
+    c.tipo === 'reembolso' ? '<span class="wl-chip ok">↩️ Reembolso · entra como ingreso</span>' : '',
+    c.tipo === 'ingreso' ? '<span class="wl-chip ok">💰 Depósito · entra como ingreso</span>' : '',
+    c.parser === 'total' ? '<span class="wl-chip warn">No pude separar los productos: revisa el monto</span>' : '',
+    c.parser === 'aprox' ? '<span class="wl-chip warn">Revisa los montos</span>' : '',
+    c.parser === 'gemini' ? '<span class="wl-chip">✨ Leído con IA</span>' : '',
+  ].join('');
+  const pd = c.posible_dup;
+  const dup = pd ? `<div class="cm-dup"><i class="ti ti-alert-triangle"></i> ${pd.tipo === 'mov' ? 'Parece que ya está en Movimientos' : 'Parece el mismo cargo que otro correo'}:
+    <b>${E(pd.concepto || '')}</b> · ${fmt(pd.monto)} · ${_cmFecha(pd.fecha)}. Lo dejé sin marcar; márcalo si sí es otro gasto.</div>` : '';
+  const cats = x => CATS.map(k => `<option value="${k}"${k === x.categoria ? ' selected' : ''}>${CAT_EMOJI[k] || ''} ${k === 'OTROS' ? 'Otros' : k}</option>`).join('');
+  const items = d.items.map((x, i) => `<div class="cm-it${x.on ? '' : ' off'}">
+      <button type="button" class="cm-chk" onclick="cmTog(${id},${i})" aria-pressed="${x.on}" aria-label="${x.on ? 'No registrar' : 'Registrar'} ${E(x.concepto)}" style="color:${x.on ? 'var(--color-income)' : 'var(--text-3)'}"><i class="ti ti-${x.on ? 'checkbox' : 'square'}"></i></button>
+      <input value="${E(x.concepto)}" oninput="cmIt(${id},${i},'concepto',this.value)" aria-label="Concepto" maxlength="140">
+      <div class="cm-mto"><span>$</span><input type="number" inputmode="decimal" step="0.01" min="0" value="${x.monto}" oninput="cmIt(${id},${i},'monto',this.value)" aria-label="Monto"></div>
+      <div class="cm-it2${esC ? '' : ' solo'}">
+        ${esC ? `<select onchange="cmIt(${id},${i},'categoria',this.value)" aria-label="Categoría">${cats(x)}</select>` : ''}
+        <input value="${E(x.notas)}" placeholder="Notas" oninput="cmIt(${id},${i},'notas',this.value)" aria-label="Notas" maxlength="400">
+      </div>
+      <div class="cm-aj" id="cm-aj-${id}-${i}">${_cmAjTxt(c, i)}</div>
+    </div>`).join('');
+  const rep = esC && (F.env > 0 || F.des > 0) ? `<label class="cm-rep">${F.env > 0
+      ? `<input type="checkbox" ${d.repartir ? 'checked' : ''} onchange="cmRep(${id},this.checked)"> Repartir el envío (${fmt(F.env)}) entre los productos${F.des > 0 ? ` · descuento −${fmt(F.des)} repartido` : ''}${d.repartir ? '' : ' — se registra como renglón aparte'}`
+      : `<i class="ti ti-discount"></i> Descuento −${fmt(F.des)} repartido entre los productos`}</label>` : '';
+  return `<div class="cm-card${st.busy[id] ? ' busy' : ''}" id="cm-card-${id}">
+    <div class="cm-top">
+      <div class="cm-ic" aria-hidden="true">${CM_ICO[c.fuente] || '🧾'}</div>
+      <div class="cm-mid"><div class="cm-name">${E(c.comercio || 'Compra')}</div>
+        <div class="cm-sub" title="${E(c.asunto || '')}">${_cmFecha(c.fecha)} · ${E(c.asunto || '')}</div></div>
+      <div class="cm-tot ${esC ? 'gasto' : 'ing'}">${esC ? '' : '+'}${fmt(c.total)}</div>
+    </div>
+    ${chips ? `<div class="cm-chips">${chips}</div>` : ''}
+    ${dup}
+    <div class="cm-meta">
+      <div><label for="cm-f-${id}">Fecha</label><input type="date" id="cm-f-${id}" value="${d.fecha}" max="${toISO(new Date())}" onchange="cmSet(${id},'fecha',this.value)"></div>
+      <div><label>${esC ? 'Medio de pago' : 'Entra a'}</label><div class="cm-fp" id="cm-fp-${id}">${fpPills(d.medio, v => `cmMedio(${id},'${_jsq(v)}')`)}</div></div>
+    </div>
+    <div class="cm-items">${items}${esC && !d.repartir && F.env > 0 ? `<div class="cm-it"><span class="cm-chk" style="color:var(--color-income)" aria-hidden="true"><i class="ti ti-truck-delivery"></i></span><span>Envío <small style="color:var(--text-3)">· renglón aparte</small></span><b style="text-align:right;font-variant-numeric:tabular-nums">${fmt(F.env)}</b></div>` : ''}</div>
+    ${rep}
+    <div class="cm-pie" id="cm-pie-${id}">${_cmPieHTML(c)}</div>
+  </div>`;
+}
+function _cmSetupHTML() {
+  const st = _cmSt();
+  return `<div class="cm-setup">
+    <div class="wl-panel-t">📨 Conectar Gmail · una sola vez, unos 3 minutos</div>
+    <ol>
+      <li>Abre <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Proyecto nuevo</a> con tu cuenta de Gmail.</li>
+      <li>Borra lo que trae, pega el código y guarda (💾).<br>
+        <button class="btn btn-accent btn-sm" style="margin-top:6px" onclick="cmCopiarScript()"><i class="ti ti-copy"></i> Copiar código</button></li>
+      <li>Arriba, en la lista de funciones, elige <b>instalar</b> y presiona <b>▶ Ejecutar</b>.</li>
+      <li>Google pide permiso: “Revisar permisos” → tu cuenta → “Configuración avanzada” → “Ir a… (no seguro)” → “Permitir”.
+        Es tu propio script: solo lee tus correos de compras y los manda a US.</li>
+      <li>Listo. Revisa tu correo cada 10 minutos (desde el inicio de la quincena) y le pone la etiqueta <b>US-importado</b> a lo que ya mandó.</li>
+    </ol>
+    <details><summary>Ver el código</summary><textarea readonly id="cm-code" aria-label="Código del script">${st.token ? _ndEsc(_cmScript()) : 'Cargando…'}</textarea></details>
+  </div>`;
+}
+function cmRender() {
+  const root = $('cm-root'); if (!root) return;
+  const st = _cmSt(), s2 = st.sync;
+  const head = `<div class="cm-head">
+    <div class="cm-st">${s2 ? `<i class="ti ti-circle-check"></i><span>Gmail conectado${s2.cuenta ? ' · ' + _ndEsc(s2.cuenta) : ''} · revisado ${_cmHace(s2.ultimo_sync)}</span>`
+      : '<i class="ti ti-plug-connected-x"></i><span>Gmail aún sin conectar</span>'}</div>
+    <button class="wl-act ico" onclick="cmSetupTog()" title="Cómo conectar Gmail" aria-label="Cómo conectar Gmail"><i class="ti ti-settings"></i></button>
+    <button class="wl-act ico" onclick="cmRefrescar(this)" title="Buscar de nuevo" aria-label="Buscar de nuevo"><i class="ti ti-refresh"></i></button>
+  </div>`;
+  const setup = !s2 || st.setup ? _cmSetupHTML() : '';
+  const vacio = st.lista.length ? '' : `<div class="wl-empty">📭 No hay compras por revisar.<br>${s2 ? 'Cuando llegue un recibo a tu Gmail aparecerá aquí.' : 'Conecta tu Gmail para que US las encuentre solo.'}</div>`;
+  root.innerHTML = head + setup + vacio + st.lista.map(_cmCardHTML).join('');
+  root.dataset.listo = '1';
+  if ((!s2 || st.setup) && !st.token) _cmToken();
+}
+async function _cmToken() {
+  const st = _cmSt();
+  try { const r = await api('POST', '/api/correo/token', { user_phone: S.phone }); st.token = r.token; const t = $('cm-code'); if (t) t.value = _cmScript(); }
+  catch (e) { toast('No se pudo preparar el código: ' + e.message, 'error'); }
+}
+function _cmScript() {
+  const st = _cmSt(), desde = (getQuincenaInfo(0).from || toISO(new Date())).replace(/-/g, '/');
+  return `// US · Compras desde Gmail. Pega esto en script.google.com, guarda y ejecuta "instalar" una vez.
+// Cada 10 minutos busca correos de compras, recibos, cargos y reembolsos y los manda a tu US para que los revises.
+var US_URL = '${location.origin}/api/correo/ingest';
+var US_TEL = '${S.phone}';
+var US_TOKEN = '${st.token}';
+var DESDE = '${desde}';
+var ETIQUETA = 'US-importado';
+var BUSQUEDA = '{from:amazon from:mercadolibre from:mercadopago from:uber from:didi from:rappi from:banamex from:citibanamex from:revolut from:pluxee ' +
+  'subject:pedido subject:compra subject:compraste subject:recibo subject:factura subject:pagaste subject:cargo subject:"tu pago" ' +
+  'subject:order subject:receipt subject:reembolso subject:devolución subject:comprobante}';
+
+function instalar() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('sincronizar').timeBased().everyMinutes(10).create();
+  sincronizar();
+}
+
+function sincronizar() {
+  var etiqueta = GmailApp.getUserLabelByName(ETIQUETA) || GmailApp.createLabel(ETIQUETA);
+  var hilos = GmailApp.search(BUSQUEDA + ' after:' + DESDE + ' -label:' + ETIQUETA + ' -in:spam -in:trash', 0, 40);
+  var desde = new Date(DESDE.replace(/\\//g, '-') + 'T00:00:00-06:00');
+  var cuenta = Session.getEffectiveUser().getEmail();
+  var lote = [], hilosLote = [];
+  hilos.forEach(function (h) {
+    h.getMessages().forEach(function (m) {
+      if (m.getDate() < desde) return;
+      lote.push({ id: m.getId(), from: m.getFrom(), subject: m.getSubject(), date: m.getDate().toISOString(),
+                  html: m.getBody().slice(0, 150000), text: m.getPlainBody().slice(0, 30000) });
+    });
+    hilosLote.push(h);
+    if (lote.length >= 10) { enviar(lote, hilosLote, etiqueta, cuenta); lote = []; hilosLote = []; }
+  });
+  if (hilosLote.length) enviar(lote, hilosLote, etiqueta, cuenta);
+}
+
+function enviar(lote, hilos, etiqueta, cuenta) {
+  if (lote.length) {
+    var r = UrlFetchApp.fetch(US_URL, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      payload: JSON.stringify({ phone: US_TEL, token: US_TOKEN, cuenta: cuenta, mensajes: lote }) });
+    if (r.getResponseCode() !== 200) { console.log('US respondió ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200)); return; }
+  }
+  hilos.forEach(function (h) { h.addLabel(etiqueta); });
+}
+`;
+}
+async function cmCopiarScript() {
+  const st = _cmSt();
+  if (!st.token) await _cmToken();
+  if (!st.token) return;
+  try { await navigator.clipboard.writeText(_cmScript()); toast('📋 Código copiado'); }
+  catch { const t = $('cm-code'); if (t) { t.closest('details').open = true; t.select(); } toast('Selecciona el código y cópialo', 'info'); }
+}
+function cmSetupTog() { const st = _cmSt(); st.setup = !st.setup; cmRender(); }
+async function cmRefrescar(btn) { btn?.classList.add('spin'); await cmPrefetch(false); cmRender(); btn?.classList.remove('spin'); }
+const _cmC = id => _cmSt().lista.find(x => x.id === id);
+function _cmPintar(id) { const c = _cmC(id), el = $('cm-card-' + id); if (c && el) el.outerHTML = _cmCardHTML(c); }
+function _cmPie(id) {
+  const c = _cmC(id); if (!c) return;
+  const p = $('cm-pie-' + id); if (p) p.innerHTML = _cmPieHTML(c);
+  _cmDraft(c).items.forEach((_, i) => { const a = $(`cm-aj-${id}-${i}`); if (a) a.textContent = _cmAjTxt(c, i); });
+}
+function cmSet(id, k, v) { const c = _cmC(id); if (c) _cmDraft(c)[k] = v; }
+function cmMedio(id, v) { const c = _cmC(id); if (!c) return; _cmDraft(c).medio = v; const el = $('cm-fp-' + id); if (el) el.innerHTML = fpPills(v, x => `cmMedio(${id},'${_jsq(x)}')`); }
+function cmRep(id, on) { const c = _cmC(id); if (!c) return; _cmDraft(c).repartir = on; _cmPintar(id); }
+function cmTog(id, i) { const c = _cmC(id); if (!c) return; const x = _cmDraft(c).items[i]; x.on = !x.on; window.iosHaptic && iosHaptic('light'); _cmPintar(id); }
+function cmIt(id, i, k, v) {
+  const c = _cmC(id); if (!c) return;
+  const x = _cmDraft(c).items[i]; if (!x) return;
+  x[k] = k === 'monto' ? (parseFloat(v) || 0) : v;
+  if (k === 'monto' || k === 'concepto') _cmPie(id);
+}
+function _cmQuitar(id) {
+  const st = _cmSt(), el = $('cm-card-' + id);
+  st.hechos.add(id); st.lista = st.lista.filter(x => x.id !== id); delete st.draft[id];
+  _cmBadge();
+  if (el) { el.classList.add('sale'); setTimeout(() => { el.remove(); if (!st.lista.length) cmRender(); }, 260); }
+  else if ($('cm-root')) cmRender();
+}
+async function cmRegistrar(id) {
+  const st = _cmSt(), c = _cmC(id); if (!c || st.busy[id]) return;
+  const d = _cmDraft(c), F = _cmFinal(c);
+  if (!F.rows.length) { toast('Marca al menos un renglón', 'error'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha || '')) { toast('Elige la fecha de la compra', 'error'); return; }
+  const tipo = c.tipo === 'compra' ? 'GASTO' : 'INGRESO';
+  const items = F.rows.map(x => ({ tipo, concepto: x.concepto.trim(), monto: x.final, categoria: x.categoria, comentarios: x.notas }));
+  // Al instante: la tarjeta sale y los movimientos aparecen; el servidor guarda por detrás (si falla, todo regresa)
+  const idx = st.lista.indexOf(c), movs = S.data.movs || (S.data.movs = []);
+  const desc = `📨 ${c.comercio || 'Correo'}${c.pedido ? ' · pedido ' + c.pedido : ''}`;
+  const tmps = items.map((x, k) => ({ ...x, descripcion: desc, medio_pago: fpCanon(d.medio) || d.medio, fecha: d.fecha, id: `tmp-cm-${id}-${k}`, _tmp: true, created_at: new Date().toISOString() }));
+  st.busy[id] = true;
+  movs.unshift(...tmps);
+  _cmQuitar(id);
+  _optIni();
+  window.iosHaptic && iosHaptic('success');
+  _repintarRapido();
+  try {
+    const r = await api('POST', `/api/correo/${id}/registrar`, { user_phone: S.phone, fecha: d.fecha, medio_pago: d.medio, items });
+    const nuevos = r.data || [];
+    S.data.movs = [...nuevos, ...(S.data.movs || []).filter(m => !tmps.includes(m))];
+    toast(`✓ ${nuevos.length === 1 ? 'Registrado en Movimientos' : nuevos.length + ' movimientos registrados'}`);
+  } catch (e) {
+    S.data.movs = (S.data.movs || []).filter(m => !tmps.includes(m));
+    st.hechos.delete(id); st.lista.splice(Math.max(0, idx), 0, c); st.draft[id] = d;
+    _cmBadge(); if ($('cm-root')) cmRender();
+    toast('No se guardó: ' + e.message, 'error');
+  } finally {
+    delete st.busy[id];
+    _repintarRapido();
+    _optFin();
+  }
+}
+async function cmOmitir(id) {
+  const st = _cmSt(), c = _cmC(id); if (!c || st.busy[id]) return;
+  const idx = st.lista.indexOf(c), draft = st.draft[id];
+  _cmQuitar(id);
+  window.iosHaptic && iosHaptic('light');
+  try { await api('POST', `/api/correo/${id}/omitir`, { user_phone: S.phone }); toast('Omitido'); }
+  catch (e) {
+    st.hechos.delete(id); st.lista.splice(Math.max(0, idx), 0, c); if (draft) st.draft[id] = draft;
+    _cmBadge(); cmRender(); toast('No se omitió: ' + e.message, 'error');
+  }
+}
+
 // ── POP-UP LIGERO ────────────────────────────────────────────────────────────
 // Encima de las ventanas de módulos (z 250) y debajo de los formularios (#ovl, z 300): así un ✎
 // tocado dentro del pop-up abre su formulario por encima. Se cierra con ✕, tocando fuera o con Esc.
@@ -6641,6 +6984,7 @@ function _dashEmoji(key) {
     case 'consejos': abrirHoja('Consejos IA', '<div id="insights-section"></div>', () => fetchInsights(true), { size: 'md' }); break;
     case 'notas':    _hojaNotas(); break;
     case 'wishlist': wlAbrir(); break;
+    case 'compras':  cmAbrir(); break;
   }
 }
 
@@ -7354,6 +7698,7 @@ ${dsgPanelHTML('dash-dsg','dash')}
     title="Presupuesto" aria-label="Presupuesto"
     aria-expanded="${S._qDashOpen?'true':'false'}" aria-controls="quincena-dash-section">🧮</button>
   <button class="q-dash-btn mini-tile" onclick="dashEmoji('movimientos')" title="Movimientos" aria-label="Movimientos">📒</button>
+  ${_cmOn() ? `<button class="q-dash-btn mini-tile" onclick="dashEmoji('compras')" title="Compras del correo" aria-label="Compras del correo">📨${_cmN() ? `<span class="tile-dot">${_cmN()}</span>` : ''}</button>` : ''}
 </div>
 <div id="quincena-dash-section" style="display:${S._qDashOpen?'':'none'}"></div>
 `;
@@ -11376,6 +11721,7 @@ function _irA(ir) {
   else if (ir === 'negocios') go('negocios');
   else if (ir === 'quincena') { go('dashboard'); setTimeout(() => dashEmoji('gastQuinc'), 250); }
   else if (ir === 'notas') { go('dashboard'); setTimeout(() => dashEmoji('notas'), 250); }
+  else if (ir === 'compras') { go('dashboard'); setTimeout(() => dashEmoji('compras'), 250); }
 }
 function _chatKey() { return 'fos_chat_' + S.phone; }
 
