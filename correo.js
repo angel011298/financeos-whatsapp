@@ -136,6 +136,9 @@ function medioHintDe(texto, fuente) {
   const tarj = texto.match(/(visa|master\s?card|amex|american express|carnet)[^\n]{0,40}?(?:terminaci[oó]n|termina(?:da)? en|\*+|•+|x{2,}|-)\s*(\d{4})\b/i)
     || texto.match(/(tarjeta|d[eé]bito|cr[eé]dito)[^\n]{0,30}?(?:terminaci[oó]n|termina(?:da)? en|\*+|•+)\s*(\d{4})\b/i);
   if (tarj) return norm(tarj[1]).replace(/\s+/g, '').replace('americanexpress', 'amex') + ' ' + tarj[2];
+  // Rappi: después de "Cargo neto $X" viene un renglón solo con la terminación de la tarjeta ("0513")
+  const rap = texto.match(/cargo neto\s*\n\s*\$?[\d,.]+\s*\n\s*(\d{4})\s*\n/i);
+  if (rap) return 'tarjeta ' + rap[1];
   if (/dinero (disponible )?en (tu )?(cuenta de )?mercado pago|saldo (en|de) mercado pago|con mercado pago/.test(t)) return 'mercado pago';
   if (/paypal/.test(t)) return 'paypal';
   if (/\boxxo\b|pago en efectivo/.test(t)) return 'efectivo';
@@ -587,7 +590,8 @@ module.exports = function montarCorreo(app, deps) {
         // Aviso del banco por el mismo cargo que un pedido (Amazon pagado con Banamex) → posible duplicado
         const dupCorreo = ES_BANCO(r.fuente) || r.fuente === 'mercadopago'
           ? lista.find(o => o.id !== r.id && !ES_BANCO(o.fuente) && o.fuente !== 'mercadopago' && o.tipo === r.tipo && Math.abs(Number(o.total) - Number(r.total)) <= 1 && dias(fechaMX(o.fecha_correo), fecha) <= 3) : null;
-        let medio = r.medio_hint && aprendidos[r.medio_hint];
+        // Lo aprendido por tarjeta manda; si el correo no dice con qué se pagó (Amazon), lo aprendido por comercio
+        let medio = (r.medio_hint && aprendidos[r.medio_hint]) || (!r.medio_hint && r.comercio && aprendidos['comercio:' + norm(r.comercio)]);
         if (!medio) medio = MEDIO_DE_HINT(r.medio_hint || '') || 'débito';
         out.push({ ...r, fecha, medio_sugerido: await medioCanonDe(phone, medio),
           posible_dup: dupMov ? { tipo: 'mov', concepto: dupMov.concepto, monto: Number(dupMov.monto), fecha: dupMov.fecha }
@@ -626,11 +630,12 @@ module.exports = function montarCorreo(app, deps) {
         creados.push(data);
       }
       await sb.from('correo_compras').update({ estado: 'registrado', resuelto_at: new Date().toISOString(), movimiento_ids: creados.map(c => c.id) }).eq('id', row.id);
-      if (row.medio_hint && medio_pago) {   // aprende: la próxima vez esa tarjeta/método sugiere este medio
+      const llave = row.medio_hint || (row.comercio && !ES_BANCO(row.fuente) ? 'comercio:' + norm(row.comercio) : null);
+      if (llave && medio_pago) {   // aprende: la próxima vez esa tarjeta (o ese comercio, si el correo no lo dice) sugiere este medio
         const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', user_phone).maybeSingle();
         const refs = { ...(u?.external_refs || {}) };
-        if ((refs.correo_medios || {})[row.medio_hint] !== medio) {
-          refs.correo_medios = { ...(refs.correo_medios || {}), [row.medio_hint]: medio };
+        if ((refs.correo_medios || {})[llave] !== medio) {
+          refs.correo_medios = { ...(refs.correo_medios || {}), [llave]: medio };
           await sb.from('usuarios').update({ external_refs: refs }).eq('telefono', user_phone);
         }
       }
