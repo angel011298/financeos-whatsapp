@@ -1,6 +1,6 @@
 # Segundo Cerebro (US) — Plan maestro
 
-Última actualización: 2026-11-11. Documento vivo: se actualiza al cerrar cada fase.
+Última actualización: 2026-11-17. Documento vivo: se actualiza al cerrar cada fase.
 
 ## Objetivo
 US deja de ser solo una app de finanzas y se vuelve el contexto permanente de Ángel: finanzas, negocios (YaEntre,
@@ -80,6 +80,7 @@ solo del navegador. Con Gmail/Drive/SAT adentro esto no es aceptable.
 ## Estado
 - [x] Cuestionario respondido (2026-11)
 - [x] Base financiera coherente: balance/remanente único, Presupuesto, métodos de pago homologados desde cuentas (d0a024c)
+- [x] Compras desde Gmail (Apps Script → pop-up "Compras del correo"), adelantado de la Fase 4 a pedido de Ángel, sin Fase 0 por decisión suya (7eab571)
 - [ ] Fase 0 — Seguridad
 - [ ] Fase 1 — Contexto total
 - [ ] Fase 2 — Contador de plataformas
