@@ -5164,6 +5164,7 @@ function _cmCardHTML(c) {
     c.parser === 'total' ? '<span class="wl-chip warn">No pude separar los productos: revisa el monto</span>' : '',
     c.parser === 'aprox' ? '<span class="wl-chip warn">Revisa los montos</span>' : '',
     c.parser === 'gemini' ? '<span class="wl-chip">✨ Leído con IA</span>' : '',
+    c.parser === 'envio' ? '<span class="wl-chip">📦 Cobro de un envío</span>' : '',
   ].join('');
   const pd = c.posible_dup;
   const dup = pd ? `<div class="cm-dup"><i class="ti ti-alert-triangle"></i> ${pd.tipo === 'mov' ? 'Parece que ya está en Movimientos' : 'Parece el mismo cargo que otro correo'}:
@@ -5257,7 +5258,8 @@ function instalar() {
 
 function sincronizar() {
   var etiqueta = GmailApp.getUserLabelByName(ETIQUETA) || GmailApp.createLabel(ETIQUETA);
-  var hilos = GmailApp.search(BUSQUEDA + ' after:' + DESDE + ' -label:' + ETIQUETA + ' -in:spam -in:trash', 0, 40);
+  // in:anywhere = todas las carpetas, incluidas Spam y Papelera
+  var hilos = GmailApp.search('in:anywhere ' + BUSQUEDA + ' after:' + DESDE + ' -label:' + ETIQUETA, 0, 40);
   var desde = new Date(DESDE.replace(/\\//g, '-') + 'T00:00:00-06:00');
   var cuenta = Session.getEffectiveUser().getEmail();
   var lote = [], hilosLote = [];

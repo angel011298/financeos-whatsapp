@@ -93,6 +93,8 @@ function clasificar(asunto, lineas, fuente, remitente) {
   if (fuente === 'amazon') {
     // Amazon: solo la confirmación del pedido ("Pedido: …", "Gracias por tu compra"). Envíos, entregas,
     // recomendaciones, promociones (noreply/store-news) y mensajes de cuenta NO son compras.
+    // El aviso "Enviado: …" trae lo cobrado en ese envío: se guarda en reserva por si la confirmación no cubre ese pedido.
+    if (/^enviado\b/.test(a) && (loc === 'shipment-tracking' || /tu paquete fue enviado/.test(ini))) return 'envio';
     if (/^(noreply|no-reply|store-news|marketing|marketplace-messages|account-update|shipment-tracking|order-update)$/.test(loc)) return 'ignorar';
     if (/^pedido:|^tu pedido de amazon|confirmacion de (tu )?pedido|gracias por tu (compra|pedido)/.test(a) || loc === 'auto-confirm' || /gracias por tu compra/.test(ini) && !RE_PROMO.test(a)) return 'compra';
     return 'ignorar';
@@ -103,7 +105,8 @@ function clasificar(asunto, lineas, fuente, remitente) {
     if (/dis\.?\s?efe|disposicion de efectivo|retiro (en|de) cajero|cajero automatico|\batm\b/.test(t)) return 'ignorar';
     if (/estatus (rechazad|declinad|fallid|no exitos|cancelad)|operacion (rechazada|declinada|no exitosa)/.test(t)) return 'ignorar';
     if (/estado de cuenta|alta de cuenta|activacion|acceso|beneficiario|cambia tus datos|netkey|seguridad|codigo|contrasena|bienvenid/.test(a)) return 'ignorar';
-    if (/cuentas? propias?|entre (mis|tus) cuentas/.test(norm(lineas.join(' ')))) return 'ignorar';
+    // Traspasos entre cuentas propias (Banamex ⇄ Revolut, ahorro…)
+    if (/traspaso|cuentas? propias?|entre (mis|tus|sus) cuentas|misma cuenta|a tu cuenta revolut|a revolut|desde revolut|de revolut|revolut bank|recarga (de|a) (tu )?cuenta|ahorro propio/.test(norm(lineas.join(' ')))) return 'ignorar';
     // "Enviaste $X a <tu mismo nombre>" = transferencia a ti mismo
     const hola = (lineas.join('\n').match(/hola,?\s+([\p{L}]+)/iu) || [])[1], dest = (lineas.join('\n').match(/enviaste\s+\S+\s+a\s+([\p{L}]+)/iu) || [])[1];
     if (hola && dest && norm(hola) === norm(dest)) return 'ignorar';
@@ -314,19 +317,32 @@ function lectorAmazon(lineas) {
     if (cur && /^total\b/i.test(norm(L).replace(/[│|]/g, ' ').trim()) && montosDe(L).length) cur.cerrado = true;
   }
   if (!grupos.length) return null;
+  // Si el correo llegó recortado, los pedidos sin "Total" quedan incompletos: se dejan fuera y los cubren sus
+  // avisos de "Enviado" (cada uno trae lo que se cobró). Solo si ningún pedido está completo se usa lo que haya.
+  const completos = grupos.filter(g => g.cerrado);
+  const usar = completos.length ? completos : grupos;
   let items = [], envio = 0, descuento = 0, total = 0, exacto = true;
-  for (const g of grupos) {
+  for (const g of usar) {
     const lx = lectorExacto(g.lineas);
     if (!lx.items.length) continue;
+    // Amazon muestra el precio unitario junto a "Cantidad: N"
+    lx.items = lx.items.map(x => ({ ...x, precio: r2(x.precio * (x.cantidad || 1)) }));
     const a = cuadra(lx.items, lx.envio, lx.descuento, lx.total) ? { items: lx.items, envio: lx.envio, descuento: lx.descuento, total: lx.total } : ajustar(lx);
-    const usa = a || { items: lx.items, envio: 0, descuento: 0, total: r2(lx.items.reduce((s, x) => s + x.precio, 0)) };
-    if (!a) exacto = false;
-    const nota = grupos.length > 1 ? `Pedido ${g.pedido}` : null;
+    let usa = a;
+    if (!a) {
+      exacto = false;
+      const suma = r2(lx.items.reduce((s, x) => s + x.precio, 0)), d = lx.total ? r2(lx.total - suma) : 0;
+      // El "Total" del correo es lo cobrado: si faltan productos en la lista se agrega la diferencia como renglón
+      usa = d > 0 ? { items: [...lx.items, { nombre: 'Otros productos del pedido', cantidad: 1, precio: d }], envio: 0, descuento: 0, total: lx.total }
+        : d < 0 ? { items: lx.items, envio: 0, descuento: -d, total: lx.total }
+        : { items: lx.items, envio: 0, descuento: 0, total: suma };
+    }
+    const nota = usar.length > 1 ? `Pedido ${g.pedido}` : null;
     items.push(...usa.items.map(x => (nota ? { ...x, nota } : x)));
     envio = r2(envio + usa.envio); descuento = r2(descuento + usa.descuento); total = r2(total + usa.total);
   }
   if (!items.length) return null;
-  return { items, envio, descuento, total, exacto, pedidos: grupos.map(g => g.pedido) };
+  return { items, envio, descuento, total, exacto, pedidos: (completos.length ? completos : []).map(g => g.pedido) };
 }
 
 const fechaMX = iso => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date(iso)); } catch { return null; } };
@@ -349,7 +365,14 @@ async function leerCorreo(deps, phone, msg) {
   const medio_hint = medioHintDe(texto, fuente);
   let items = [], total = null, envio = 0, descuento = 0, parser = 'exacto';
 
-  const amz = fuente === 'amazon' && tipo === 'compra' ? lectorAmazon(lineas) : null;
+  const amz = fuente === 'amazon' && (tipo === 'compra' || tipo === 'envio') ? lectorAmazon(lineas) : null;
+  if (tipo === 'envio') {
+    // En reserva (estado 'envio'): conciliar() lo propone solo si ninguna confirmación completa cubre ese pedido
+    if (!amz || !amz.total) return { ...fila, tipo: 'compra', estado: 'ignorado', parser: 'filtro', pedido, comercio: null, items: [], total: null };
+    const its = amz.items.map(x => ({ nombre: x.nombre, cantidad: x.cantidad || 1, precio: r2(x.precio), categoria: catSugerida(x.nombre, comercio, fuente) }));
+    return { ...fila, tipo: 'compra', comercio, pedido, pedidos: pedido ? [pedido] : [], items: its, total: r2(amz.total), envio: amz.envio, descuento: amz.descuento,
+      medio_hint, parser: 'envio', estado: 'envio' };
+  }
   if (amz) {
     items = amz.items; envio = amz.envio; descuento = amz.descuento; total = amz.total; parser = amz.exacto ? 'exacto' : 'aprox';
   } else if (ES_BANCO(fuente) || tipo === 'reembolso' || tipo === 'ingreso') {
@@ -389,7 +412,8 @@ async function leerCorreo(deps, phone, msg) {
     envio = 0; descuento = 0; parser = 'total';
   }
   items = items.map(x => ({ nombre: x.nombre, cantidad: x.cantidad || 1, precio: r2(x.precio), categoria: tipo === 'compra' ? catSugerida(x.nombre, comercio, fuente) : 'OTROS', ...(x.nota ? { nota: x.nota } : {}) }));
-  return { ...fila, tipo, comercio, pedido, items, total: r2(total), envio: r2(envio), descuento: r2(descuento), medio_hint, parser, estado: 'pendiente' };
+  const pedidos = amz ? amz.pedidos : (pedido ? [pedido] : []);
+  return { ...fila, tipo, comercio, pedido: amz && amz.pedidos.length ? amz.pedidos[0] : pedido, pedidos, items, total: r2(total), envio: r2(envio), descuento: r2(descuento), medio_hint, parser, estado: 'pendiente' };
 }
 
 module.exports = function montarCorreo(app, deps) {
@@ -434,7 +458,8 @@ module.exports = function montarCorreo(app, deps) {
           if (f.estado === 'pendiente') listos.push({ ...f, id: r.id });
         }
       }
-      await conciliar(phone);
+      const prom = await conciliar(phone);
+      listos.push(...prom);
       if (listos.length) {
         const { data: siguen } = await sb.from('correo_compras').select('id').in('id', listos.map(x => x.id)).eq('estado', 'pendiente');
         const ok = new Set((siguen || []).map(x => x.id));
@@ -456,10 +481,38 @@ module.exports = function montarCorreo(app, deps) {
   async function conciliar(phone) {
     try {
       const desde = new Date(Date.now() - 60 * 864e5).toISOString();
-      const { data: rows } = await sb.from('correo_compras').select('id, fuente, tipo, pedido, estado, parser, asunto, fecha_correo, texto, total')
-        .eq('user_phone', phone).gte('fecha_correo', desde).limit(1000);
+      const { data: rows } = await sb.from('correo_compras').select('id, fuente, tipo, pedido, pedidos, estado, parser, asunto, fecha_correo, texto, total, comercio, items')
+        .eq('user_phone', phone).gte('fecha_correo', desde).limit(2000);
       const todas = rows || [];
-      const pend = todas.filter(r => r.estado === 'pendiente');
+      const promovidos = [];
+
+      // 1) Amazon: cada pedido debe quedar cubierto. Si ninguna confirmación completa lo trae (correo recortado o
+      //    pedido hecho antes de conectar), se proponen sus avisos de "Enviado" (lo cobrado en cada envío).
+      const cubiertos = new Set();
+      for (const r of todas) if (r.fuente === 'amazon' && r.tipo === 'compra' && r.parser !== 'envio' && ['pendiente', 'registrado', 'omitido', 'cancelado', 'duplicado'].includes(r.estado))
+        (r.pedidos || []).forEach(p => cubiertos.add(p));
+      const aPend = [], aDup = [];
+      for (const r of todas.filter(x => x.parser === 'envio')) {
+        if (r.estado === 'envio' && r.pedido && !cubiertos.has(r.pedido)) { aPend.push(r.id); promovidos.push(r); }
+        else if (r.estado === 'pendiente' && r.pedido && cubiertos.has(r.pedido)) aDup.push(r.id);
+      }
+      if (aPend.length) await sb.from('correo_compras').update({ estado: 'pendiente' }).in('id', aPend).eq('estado', 'envio');
+      if (aDup.length) await sb.from('correo_compras').update({ estado: 'envio' }).in('id', aDup).eq('estado', 'pendiente');
+      aPend.forEach(id => { const r = todas.find(x => x.id === id); if (r) r.estado = 'pendiente'; });
+
+      // 2) Traspasos a cuentas propias sin concepto (Banamex "Retiro/Compra" sin comercio): si otro banco avisó que
+      //    recibiste/depositaste el mismo monto en ±2 días, es un traspaso entre tus cuentas y no se propone.
+      const recibos = todas.filter(r => ES_BANCO(r.fuente) && /recibiste|dep[oó]sito|abono|recarga|te enviaron|transferencia recibida/i.test(String(r.asunto) + ' ' + String(r.texto).slice(0, 1500)));
+      const traspasos = [];
+      for (const r of todas.filter(x => x.estado === 'pendiente' && ES_BANCO(x.fuente) && x.tipo === 'compra' && /sin comercio/.test(String(((x.items || [])[0] || {}).nombre)))) {
+        const t = new Date(r.fecha_correo).getTime(), v = Number(r.total);
+        const par = recibos.find(o => o.id !== r.id && Math.abs(new Date(o.fecha_correo).getTime() - t) <= 2 * 864e5
+          && montosDe(String(o.texto).slice(0, 3000)).some(m => Math.abs(m.v - v) <= 0.5));
+        if (par) traspasos.push(r.id);
+      }
+      if (traspasos.length) await sb.from('correo_compras').update({ estado: 'ignorado', parser: 'traspaso' }).in('id', traspasos).eq('estado', 'pendiente');
+
+      const pend = todas.filter(r => r.estado === 'pendiente' && !traspasos.includes(r.id));
       const cancelar = new Set();
       for (const c of todas.filter(r => r.parser === 'cancelacion')) {
         const peds = pedidosDe(c.texto).concat(c.pedido ? [c.pedido] : []);
@@ -477,7 +530,8 @@ module.exports = function montarCorreo(app, deps) {
         if (compra) { cancelar.add(compra.id); cancelar.add(rf.id); }
       }
       if (cancelar.size) await sb.from('correo_compras').update({ estado: 'cancelado', resuelto_at: new Date().toISOString() }).in('id', [...cancelar]).eq('estado', 'pendiente');
-    } catch (e) { console.error('[correo] conciliar:', e.message); }
+      return promovidos.filter(r => !cancelar.has(r.id));
+    } catch (e) { console.error('[correo] conciliar:', e.message); return []; }
   }
 
   // El script de Gmail entrega correos. Se guardan tal cual (ya en texto) y se leen después; los ya vistos se ignoran.
@@ -601,7 +655,7 @@ module.exports = function montarCorreo(app, deps) {
       if (!user_phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
       let q = sb.from('correo_compras').select('id, msg_id, cuenta, remitente, asunto, fecha_correo, texto, estado').eq('user_phone', user_phone)
         .order('fecha_correo', { ascending: true }).limit(400);
-      q = todos ? q.in('estado', ['pendiente', 'ignorado', 'duplicado', 'cancelado']) : q.eq('estado', 'pendiente');
+      q = todos ? q.in('estado', ['pendiente', 'ignorado', 'duplicado', 'cancelado', 'envio']) : q.eq('estado', 'pendiente');
       const { data: rows } = await q;
       let n = 0;
       const resumen = {};
