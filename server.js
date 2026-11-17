@@ -11,7 +11,7 @@ const crypto    = require('crypto');
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 // Los correos que manda el script de Gmail traen el HTML completo: esa ruta acepta cuerpos grandes
-app.use((req, res, next) => express.json({ limit: req.path === '/api/correo/ingest' ? '12mb' : '100kb' })(req, res, next));
+app.use((req, res, next) => express.json({ limit: (req.path === '/api/correo/ingest' || req.path === '/api/chat-web') ? '12mb' : '100kb' })(req, res, next));
 
 // ── Validación de variables de entorno ──────────────────────────────────────
 const REQUIRED_ENV = ['TWILIO_SID','TWILIO_TOKEN','GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY'];
@@ -4634,6 +4634,7 @@ app.post('/webhook', async (req, res) => {
 // reenvía — sin esto, la solicitud original igual termina insertando todo.
 const _chatInFlight = new Map(); // phone -> { text, ts, promise }
 const CHAT_DEDUP_WINDOW_MS = 5 * 60 * 1000; // 5 min — cubre el peor caso observado
+let CORREO = null;   // { ticketDesdeFoto } — lo llena el montaje de correo.js al final del archivo
 
 app.post('/api/chat-web', async (req, res) => {
   const { phone, message, audio_b64, audio_mime, image_b64, image_mime } = req.body;
@@ -4683,9 +4684,36 @@ app.post('/api/chat-web', async (req, res) => {
       }
     }
 
-    // Foto de recibo/ticket → Gemini lo lee y lo convierte a texto natural, que
-    // luego entra por el MISMO camino de registro que un mensaje escrito.
-    if (image_b64) {
+    // Foto de ticket → se desglosa producto por producto (con promociones aplicadas y cuadrando con el total) y se
+    // abre el menú de registro (misma tarjeta que Compras del correo). Nada se registra hasta que la persona confirma.
+    if (image_b64 && CORREO) {
+      const sizeKB = Math.round(image_b64.length * 0.75 / 1024);
+      console.log(`🧾 Ticket recibido | mime=${image_mime} | size≈${sizeKB}KB`);
+      try {
+        const tk = await CORREO.ticketDesdeFoto(phone, image_b64, image_mime);
+        if (tk && tk.es_ticket !== false) {
+          const f = n => '$' + Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const [y, m, d] = String(tk.fecha || '').split('-');
+          let reply;
+          if (tk.repetido && tk.estado !== 'pendiente') reply = `🧾 Este ticket de **${tk.comercio}** (${f(tk.total)}) ya lo habías ${tk.estado === 'registrado' ? 'registrado' : 'revisado'}.`;
+          else {
+            reply = `🧾 **${tk.comercio}** · ${d}/${m}/${y}\n${tk.n} productos · total **${f(tk.total)}**`
+              + (tk.cuadra ? ' ✓ cuadra con el ticket' : `\n⚠️ La suma no cuadró exacto: agregué una diferencia de ${f(Math.abs(tk.dif || 0))} para que la revises.`)
+              + (tk.ahorro ? `\nAhorraste ${f(tk.ahorro)} en promociones (ya aplicadas a cada producto).` : '')
+              + (tk.reemplaza ? `\nEs el mismo cargo de ${f(tk.reemplaza.total)} que avisó el banco: lo sustituye, no se registra dos veces.` : '')
+              + `\nRevisa categorías, medio de pago y notas, y registra. (También queda en 📨 Compras por revisar.)`;
+          }
+          await guardarMensaje(phone, 'user', '[🧾 Foto de ticket]');
+          await guardarMensaje(phone, 'assistant', reply);
+          return res.json({ reply, ticket: tk.repetido && tk.estado !== 'pendiente' ? null : { id: tk.id } });
+        }
+        if (!message || !message.trim()) return res.json({ reply: '📷 No veo un ticket de compra en la foto. Si es un ticket, intenta con mejor luz y que se vea completo, de arriba abajo.' });
+      } catch (e) {
+        console.error(`🧾 Error ticket: ${e.message}`);
+        return res.json({ reply: `⚠️ No pude leer el ticket: ${e.message?.slice(0, 80) || 'error'}. Intenta de nuevo o con otra foto.` });
+      }
+    }
+    if (image_b64 && !CORREO) {
       const sizeKB = Math.round(image_b64.length * 0.75 / 1024);
       console.log(`📷 Imagen recibida | mime=${image_mime} | size≈${sizeKB}KB`);
       try {
@@ -6834,7 +6862,7 @@ async function seedAdminOnStartup() {
 }
 
 // ── Compras desde Gmail (Apps Script → /api/correo/ingest → pop-up en la app) ──
-require('./correo')(app, { sb, genAI, geminiWithRetry, logUsage, SHARE_SECRET, pushA, medioCanonDe, canonCategoria,
+CORREO = require('./correo')(app, { sb, genAI, geminiWithRetry, logUsage, SHARE_SECRET, pushA, medioCanonDe, canonCategoria,
   aplicarImpactoCuentas, conReintentos, learnPattern, esGhost: _esGhost });
 
 const PORT   = process.env.PORT || 3000;

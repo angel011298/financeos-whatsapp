@@ -1924,9 +1924,17 @@ body.sheet-locked{overflow:hidden}
 .cm-pie-tot{flex:1;min-width:130px;font-size:12px;color:var(--text-3);line-height:1.35}
 .cm-pie-tot b{color:var(--text-1);font-size:14.5px;font-variant-numeric:tabular-nums}
 .cm-pie .btn{white-space:nowrap}
+.cm-todos{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3)}
+.cm-todos select{width:auto;min-width:0;max-width:60%;padding:5px 8px;font-size:12.5px}
+.cm-cuadra{font-size:12px;color:var(--color-income);display:flex;align-items:center;gap:6px}
+.cm-cuadra.no{color:var(--color-warning)}
+/* Ticket leído en el chat: botón para abrir su menú de registro */
+.msg-tk{display:flex;flex-direction:column;gap:8px}
+.msg-tk .btn{align-self:flex-start}
 @media (max-width:520px){
   .cm-meta{grid-template-columns:minmax(0,1fr)}
   .cm-it{grid-template-columns:26px minmax(0,1fr) minmax(0,92px)}
+  .cm-it2{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
 }
 .cm-setup{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:14px;display:flex;flex-direction:column;gap:10px}
 .cm-setup ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--text-2);line-height:1.5}
@@ -5002,6 +5010,7 @@ const _MOD_RESET = {
     _tblReset('tbl-movs');
   },
   nidito: () => _borrarEstado('_ndTab', '_ndOpen', '_ndDinList', '_niditoQ', '_ndDin'),
+  ticket: () => { if (S._cm) S._cm.solo = null; },
   calendario: () => {
     _borrarEstado('_calQ', '_calSearchOpen', '_calSort', '_calPanel', '_calSel', '_calNewFecha', '_calNewTipo', '_calNewTag');
     const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth();
@@ -5119,6 +5128,7 @@ function _cmAutoAbrir() {
 }
 function cmAbrir() {
   const st = _cmSt();
+  st.solo = null;
   abrirHoja('Compras del correo', `<div id="cm-root" class="cm-root">${st.listo ? '' : '<div class="wl-empty">Revisando tu correo…</div>'}</div>`,
     () => { if (st.listo) cmRender(); cmPrefetch(false); }, { size: 'md' });
 }
@@ -5146,13 +5156,35 @@ function _cmFinal(c) {
 }
 function _cmPieHTML(c) {
   const F = _cmFinal(c), n = F.rows.length, ing = c.tipo !== 'compra';
-  return `<div class="cm-pie-tot">${ing ? 'Entra' : 'Se registra'}: <b>${fmt(F.total)}</b><br>${n} ${n === 1 ? 'movimiento' : 'movimientos'} · correo ${fmt(c.total)}</div>
+  return `<div class="cm-pie-tot">${ing ? 'Entra' : 'Se registra'}: <b>${fmt(F.total)}</b><br>${n} ${n === 1 ? 'movimiento' : 'movimientos'} · ${c.fuente === 'ticket' ? 'ticket' : 'correo'} ${fmt(c.total)}</div>
     <button class="btn btn-ghost btn-sm" onclick="cmOmitir(${c.id})" title="No registrar este correo"><i class="ti ti-eye-off"></i> Omitir</button>
     <button class="btn btn-accent btn-sm" onclick="cmRegistrar(${c.id})" ${n ? '' : 'disabled'}><i class="ti ti-check"></i> Registrar${n > 1 ? ' ' + n : ''}</button>`;
 }
 function _cmAjTxt(c, i) {
   const x = _cmFinal(c).rows.find(r => r.i === i);
   return x && x.ajuste ? `Con ${x.ajuste > 0 ? 'envío' : 'descuento'} repartido: ${fmt(x.final)}` : '';
+}
+// Ticket: lo que se va a registrar (marcado, con descuentos repartidos) contra el total pagado
+const _cmEsDif = x => /^Diferencia para cuadrar/i.test(x.concepto || '');
+function _cmCuadra(c) {
+  const d = _cmDraft(c), F = _cmFinal(c);
+  const igual = Math.abs(F.total - (+c.total || 0)) <= 0.05;
+  const dif = d.items.find(x => x.on && _cmEsDif(x) && +x.monto > 0);
+  const faltan = d.items.some(x => !x.on && !_cmEsDif(x));
+  return { ok: igual && !dif, igual, dif, faltan, total: F.total };
+}
+function _cmCuadraTxt(c) {
+  const q = _cmCuadra(c);
+  if (q.ok) return `<i class="ti ti-circle-check"></i> Los productos suman ${fmt(q.total)}, igual que el total del ticket`;
+  if (q.igual && q.dif) return `<i class="ti ti-alert-triangle"></i> ${fmt(+q.dif.monto)} no se pudieron leer bien. Corrige el monto del producto que no coincida con tu ticket y desmarca la diferencia.`;
+  if (q.faltan) return `<i class="ti ti-info-circle"></i> Registrarás ${fmt(q.total)} de ${fmt(c.total)} (desmarcaste productos)`;
+  return `<i class="ti ti-alert-triangle"></i> Suman ${fmt(q.total)} y el ticket dice ${fmt(c.total)}: revisa los montos`;
+}
+function cmTodos(id, cat) {
+  const c = _cmC(id); if (!c || !cat) return;
+  _cmDraft(c).items.forEach(x => { x.categoria = cat; });
+  window.iosHaptic && iosHaptic('light');
+  _cmPintar(id);
 }
 function _cmCardHTML(c) {
   const st = _cmSt(), d = _cmDraft(c), esC = c.tipo === 'compra', id = c.id;
@@ -5165,7 +5197,12 @@ function _cmCardHTML(c) {
     c.parser === 'aprox' ? '<span class="wl-chip warn">Revisa los montos</span>' : '',
     c.parser === 'gemini' ? '<span class="wl-chip">✨ Leído con IA</span>' : '',
     c.parser === 'envio' ? '<span class="wl-chip">📦 Cobro de un envío</span>' : '',
+    c.fuente === 'ticket' ? '<span class="wl-chip">🧾 Foto de ticket · promociones ya aplicadas</span>' : '',
   ].join('');
+  // Ticket: ¿la suma de lo marcado da el total pagado?
+  const cuadra = c.fuente === 'ticket' ? `<div class="cm-cuadra${_cmCuadra(c).ok ? '' : ' no'}" id="cm-cu-${id}">${_cmCuadraTxt(c)}</div>` : '';
+  const todos = esC && d.items.length > 3 ? `<div class="cm-todos"><span>Categoría para todos</span><select onchange="cmTodos(${id},this.value)" aria-label="Categoría para todos los productos">
+      <option value="">Elegir…</option>${CATS.map(k => `<option value="${k}">${CAT_EMOJI[k] || ''} ${k === 'OTROS' ? 'Otros' : k}</option>`).join('')}</select></div>` : '';
   const pd = c.posible_dup;
   const dup = pd ? `<div class="cm-dup"><i class="ti ti-alert-triangle"></i> ${pd.tipo === 'mov' ? 'Parece que ya está en Movimientos' : 'Parece el mismo cargo que otro correo'}:
     <b>${E(pd.concepto || '')}</b> · ${fmt(pd.monto)} · ${_cmFecha(pd.fecha)}. Lo dejé sin marcar; márcalo si sí es otro gasto.</div>` : '';
@@ -5196,6 +5233,7 @@ function _cmCardHTML(c) {
       <div><label for="cm-f-${id}">Fecha</label><input type="date" id="cm-f-${id}" value="${d.fecha}" max="${toISO(new Date())}" onchange="cmSet(${id},'fecha',this.value)"></div>
       <div><label>${esC ? 'Medio de pago' : 'Entra a'}</label><div class="cm-fp" id="cm-fp-${id}">${fpPills(d.medio, v => `cmMedio(${id},'${_jsq(v)}')`)}</div></div>
     </div>
+    ${cuadra}${todos}
     <div class="cm-items">${items}${esC && !d.repartir && F.env > 0 ? `<div class="cm-it"><span class="cm-chk" style="color:var(--color-income)" aria-hidden="true"><i class="ti ti-truck-delivery"></i></span><span>Envío <small style="color:var(--text-3)">· renglón aparte</small></span><b style="text-align:right;font-variant-numeric:tabular-nums">${fmt(F.env)}</b></div>` : ''}</div>
     ${rep}
     <div class="cm-pie" id="cm-pie-${id}">${_cmPieHTML(c)}</div>
@@ -5220,6 +5258,12 @@ function _cmSetupHTML() {
 function cmRender() {
   const root = $('cm-root'); if (!root) return;
   const st = _cmSt(), s2 = st.sync;
+  if (st.solo != null) {   // ventana de un solo ticket (abierta desde el chat)
+    const c = _cmC(st.solo);
+    root.innerHTML = c ? _cmCardHTML(c) : '<div class="wl-empty">✓ Listo</div>';
+    root.dataset.listo = '1';
+    return;
+  }
   const head = `<div class="cm-head">
     <div class="cm-st">${s2 ? `<i class="ti ti-circle-check"></i><span>Gmail conectado${s2.cuenta ? ' · ' + _ndEsc(s2.cuenta) : ''} · revisado ${_cmHace(s2.ultimo_sync)}</span>`
       : '<i class="ti ti-plug-connected-x"></i><span>Gmail aún sin conectar</span>'}</div>
@@ -5301,6 +5345,7 @@ function _cmPie(id) {
   const c = _cmC(id); if (!c) return;
   const p = $('cm-pie-' + id); if (p) p.innerHTML = _cmPieHTML(c);
   _cmDraft(c).items.forEach((_, i) => { const a = $(`cm-aj-${id}-${i}`); if (a) a.textContent = _cmAjTxt(c, i); });
+  const q = $('cm-cu-' + id); if (q) { q.innerHTML = _cmCuadraTxt(c); q.classList.toggle('no', !_cmCuadra(c).ok); }
 }
 function cmSet(id, k, v) { const c = _cmC(id); if (c) _cmDraft(c)[k] = v; }
 function cmMedio(id, v) { const c = _cmC(id); if (!c) return; _cmDraft(c).medio = v; const el = $('cm-fp-' + id); if (el) el.innerHTML = fpPills(v, x => `cmMedio(${id},'${_jsq(x)}')`); }
@@ -5316,6 +5361,7 @@ function _cmQuitar(id) {
   const st = _cmSt(), el = $('cm-card-' + id);
   st.hechos.add(id); st.lista = st.lista.filter(x => x.id !== id); delete st.draft[id];
   _cmBadge();
+  if (st.solo === id) { st.solo = null; setTimeout(() => { if ($('cm-root')) cerrarHoja(); }, 280); }
   if (el) { el.classList.add('sale'); setTimeout(() => { el.remove(); if (!st.lista.length) cmRender(); }, 260); }
   else if ($('cm-root')) cmRender();
 }
@@ -11867,28 +11913,67 @@ async function sendChat() {
   await _askBot(text);
 }
 
-// Foto de un ticket → el servidor la lee con visión y la registra como gasto.
+// Foto de un ticket → se reduce en el teléfono (legible, ~0.5 MB) y el servidor la desglosa producto por producto;
+// después se abre el menú para revisarla y registrarla en Movimientos.
+async function _fotoLigera(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('No se pudo abrir la foto')); i.src = url; });
+    const max = 2400, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    let q = 0.86, data = cv.toDataURL('image/jpeg', q);
+    while (data.length > 2.6e6 && q > 0.5) { q -= 0.12; data = cv.toDataURL('image/jpeg', q); }
+    return { b64: data.split(',')[1], mime: 'image/jpeg' };
+  } finally { URL.revokeObjectURL(url); }
+}
 async function enviarFotoTicket(input) {
   const file = input.files?.[0];
   input.value = '';                       // permite volver a elegir la misma foto
   if (!file) return;
-  if (file.size > 8 * 1024 * 1024) { _appendMsg('bot', '📷 La foto pesa más de 8 MB. Intenta con una más ligera.'); return; }
+  if (file.size > 25 * 1024 * 1024) { _appendMsg('bot', '📷 La foto pesa más de 25 MB. Intenta con una más ligera.'); return; }
   const ico = $('foto-icon');
   if (ico) ico.className = 'ti ti-loader-2';
   try {
-    const b64 = await new Promise((res, rej) => {
-      const fr = new FileReader();
-      fr.onload  = () => res(String(fr.result).split(',')[1]);
-      fr.onerror = () => rej(new Error('No se pudo leer la foto'));
-      fr.readAsDataURL(file);
-    });
-    _appendMsg('user', '📷 Foto de ticket');
-    await _askBot('', null, null, b64, file.type || 'image/jpeg');
+    let foto;
+    try { foto = await _fotoLigera(file); }
+    catch {   // formato que el navegador no abre: se manda tal cual
+      foto = { mime: file.type || 'image/jpeg', b64: await new Promise((res, rej) => {
+        const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = () => rej(new Error('No se pudo leer la foto')); fr.readAsDataURL(file); }) };
+    }
+    _appendMsg('user', '🧾 Foto de ticket');
+    _appendMsg('bot', '🔍 Leyendo el ticket producto por producto… puede tardar hasta un minuto.', null, false);
+    await _askBot('', null, null, foto.b64, foto.mime);
   } catch (e) {
     _appendMsg('bot', '📷 Error al leer la foto: ' + e.message);
   } finally {
     if (ico) ico.className = 'ti ti-camera';
   }
+}
+
+function _appendTicketBtn(id) {
+  const msgs = $('chat-msgs'); if (!msgs) return;
+  const el = document.createElement('div');
+  el.className = 'msg msg-bot msg-tk';
+  el.innerHTML = `<button class="btn btn-accent btn-sm" onclick="tkAbrir(${Number(id)})"><i class="ti ti-receipt"></i> Revisar y registrar</button>`;
+  msgs.appendChild(el); _scrollChat();
+}
+// Abre el menú de registro de un ticket (la misma tarjeta de Compras del correo, sola en la ventana)
+async function tkAbrir(id) {
+  const st = _cmSt();
+  try {
+    if (!_cmC(id)) {
+      const r = await api('GET', `/api/correo/uno/${id}?phone=${encodeURIComponent(S.phone)}`);
+      if (r.data?.estado && r.data.estado !== 'pendiente') { toast(r.data.estado === 'registrado' ? 'Este ticket ya está registrado' : 'Este ticket ya se revisó', 'info'); return; }
+      st.hechos.delete(id);
+      st.lista = [r.data, ...st.lista.filter(x => x.id !== id)];
+      _cmBadge();
+    }
+    st.solo = id;
+    const c = _cmC(id);
+    abrirHoja(`🧾 Ticket · ${c?.comercio || ''}`, '<div id="cm-root" class="cm-root"></div>', () => cmRender(), { size: 'md', key: 'ticket' });
+  } catch (e) { toast('No se pudo abrir el ticket: ' + e.message, 'error'); }
 }
 
 async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = null, imageMime = null) {
@@ -11901,11 +11986,13 @@ async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = nu
     if (imageB64) { body.image_b64 = imageB64; body.image_mime = imageMime; }
     // Timeout generoso: registrar varios gastos en un solo mensaje puede tardar
     // más que el default (Gemini + inserciones secuenciales en el servidor).
-    const r = await api('POST', '/api/chat-web', body, { timeout: 90000 });
+    const r = await api('POST', '/api/chat-web', body, { timeout: imageB64 ? 170000 : 90000 });
     _hideTyping();
+    if (imageB64) _removeTypingMsg('Leyendo el ticket');
     if (r.error) { _appendMsg('bot', '❌ Error servidor: ' + r.error); return; }
     if (r.transcription) _appendMsg('user', '🎤 ' + r.transcription);
     _appendMsg('bot', r.reply || '...');
+    if (r.ticket?.id) { _appendTicketBtn(r.ticket.id); tkAbrir(r.ticket.id); }
     // Refresca datos en SEGUNDO PLANO (sin await): el chat queda libre al instante;
     // el dashboard se actualiza solo cuando termina la recarga.
     load().catch(() => {});

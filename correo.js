@@ -348,6 +348,99 @@ function lectorAmazon(lineas) {
   return { items, envio, descuento, total, exacto, pedidos: (completos.length ? completos : []).map(g => g.pedido) };
 }
 
+// ── Tickets en foto (chat) ──
+// Gemini lee el ticket renglón por renglón; las rebajas/promociones se aplican al producto de arriba y la suma de
+// los importes finales DEBE dar el total pagado. Si no cuadra se vuelve a pedir con la diferencia; si aun así no
+// cuadra, se agrega un renglón de diferencia marcado para revisar (nunca se registra algo que no sume el total).
+const CATS_US = ['Despensa', 'Comida', 'Hogar', 'Personales', 'Ocio', 'Transporte', 'Alicia', 'OTROS'];
+const PROMPT_TICKET = `Eres un lector experto de tickets de compra mexicanos (Walmart, Soriana, Oxxo, Costco, Chedraui, farmacias, restaurantes…).
+Lee la foto y devuelve SOLO este JSON:
+{"es_ticket":true|false,"comercio":"","sucursal":"","fecha":"YYYY-MM-DD","hora":"HH:MM",
+ "items":[{"texto_ticket":"","nombre":"","cantidad":1,"precio_unitario":0,"importe":0,"descuento":0,"importe_final":0,"categoria":""}],
+ "subtotal":0,"impuestos":0,"total":0,"ahorro":0,"forma_pago":"efectivo|tarjeta|vales|otro","tarjeta_tipo":"","tarjeta_terminacion":""}
+Reglas:
+- Un renglón por producto. "importe" = cantidad × precio unitario (p. ej. "56.00 x 8" → 448.00).
+- Las líneas de rebaja, promoción, "COMBINA", "2x$…", "Rebaja", "DESC", cupón o ahorro con monto negativo NO son productos:
+  su monto va en "descuento" (positivo) del producto que está JUSTO ARRIBA, e "importe_final" = importe − descuento.
+  Si el ticket ya muestra el total neto del renglón (p. ej. 199.00 y abajo "Rebaja… 163.00"), usa ese neto.
+- En México los precios del ticket YA incluyen IVA/IEPS: el desglose de impuestos no se suma a los productos.
+  Solo si el ticket deja claro que los precios son sin IVA (suma de productos + impuestos = total), reparte el impuesto en "importe_final".
+- La suma de todos los "importe_final" debe ser EXACTAMENTE el TOTAL pagado del ticket. Revísalo antes de responder.
+- "texto_ticket" = la descripción tal cual viene (con código si lo trae). "nombre" = nombre claro en español, expandiendo
+  abreviaturas cuando se entienda ("SC DESL 1." → "Leche Santa Clara deslactosada 1 L", "ELVIVE SH" → "Shampoo Elvive",
+  "AC GRANA 4" → "Acondicionador Grana 4"); si no se entiende, deja el texto del ticket en minúsculas capitalizadas.
+- "categoria" de: ${CATS_US.join(', ')} (Despensa = súper/abarrotes/lácteos/limpieza de cocina; Hogar = limpieza de casa, detergentes,
+  artículos para la casa; Personales = higiene, cuidado personal, ropa, farmacia, cosméticos; Ocio = juguetes, juegos, entretenimiento;
+  Comida = comida preparada, restaurante, botanas y dulces para consumo inmediato).
+- "fecha" del ticket (formato DD/MM/AA en México). "tarjeta_terminacion" = últimos dígitos visibles (p. ej. "**98" → "98").
+- Si la foto no es un ticket o recibo de compra, es_ticket=false.`;
+
+async function geminiTicket(deps, phone, b64, mime, extra, hasta, orden) {
+  const { genAI, logUsage } = deps;
+  const partes = [{ inlineData: { mimeType: mime || 'image/jpeg', data: b64 } }, PROMPT_TICKET + (extra ? '\n\n' + extra : '')];
+  // Gemini a veces responde 503 "alta demanda": se reintenta con pausa y, si sigue, con otro modelo de visión
+  // gemini-flash-latest = el Flash vigente (Google lo actualiza solo); 2.5-flash y flash-lite como respaldo
+  const intentos = orden || [['gemini-2.5-flash', 0], ['gemini-3-flash-preview', 0], ['gemini-flash-latest', 0], ['gemini-flash-lite-latest', 0], ['gemini-3.1-flash-lite', 0], ['gemini-2.5-flash', 2000]];
+  const limite = hasta || Date.now() + 100000;
+  let ultimo;
+  for (const [nombre, pausa] of intentos) {
+    if (pausa) await new Promise(s => setTimeout(s, pausa));
+    if (Date.now() > limite) break;
+    try {
+      // Razonamiento acotado: sin él se equivoca en fechas y rebajas; sin tope tarda más de un minuto
+      const gc = { responseMimeType: 'application/json', temperature: 0, ...(/2\.5-flash$/.test(nombre) ? { thinkingConfig: { thinkingBudget: 4096 } } : {}) };
+      const model = genAI.getGenerativeModel({ model: nombre, generationConfig: gc });
+      const r = await Promise.race([model.generateContent(partes), new Promise((_, rej) => setTimeout(() => rej(new Error('La lectura tardó demasiado')), Math.max(5000, Math.min(45000, limite - Date.now()))))]);
+      try { logUsage && logUsage(phone, nombre, r.response.usageMetadata, 'ticket'); } catch {}
+      return JSON.parse(String(r.response.text()).replace(/^```(?:json)?|```$/g, '').trim());
+    } catch (e) {
+      ultimo = e;
+      if (!/503|500|404|not found|no longer available|overload|high demand|unavailable|429|quota|exhausted|fetch failed|ECONNRESET|tard/i.test(e.message || '')) throw e;
+      console.error(`[ticket] ${nombre}: ${String(e.message).slice(0, 90)}`);
+    }
+  }
+  throw new Error(/429|quota|exhausted/i.test(ultimo?.message || '') ? 'Se agotó el cupo de lectura de fotos por hoy' : 'El lector de fotos está saturado, intenta en un minuto');
+}
+
+function normTicket(j) {
+  const items = (Array.isArray(j.items) ? j.items : []).map(x => {
+    const cant = Math.max(1, Number(x.cantidad) || 1), imp = r2(Number(x.importe) || (Number(x.precio_unitario) || 0) * cant);
+    const desc = r2(Math.abs(Number(x.descuento) || 0));
+    // La cuenta la hace US, no la IA: importe − promoción (la IA solo transcribe cantidades, precios y rebajas)
+    let fin = imp > 0 ? r2(imp - desc) : r2(Number(x.importe_final));
+    if (!(fin > 0)) fin = r2(Number(x.importe_final));
+    // Sin el código de barras ni el "40.00 x 2" que a veces se cuela: solo la descripción del ticket
+    const texto = String(x.texto_ticket || '').replace(/^\s*\d{6,14}\s*/, '').replace(/\s+-?\d+[.,]\d{2}\s*[x×]\s*\d+.*$/i, '').replace(/\s+(rebaja|combina)\b.*$/i, '').trim().slice(0, 60);
+    return { texto, nombre: limpiaNombre(x.nombre || x.texto_ticket || ''), cantidad: cant,
+      unit: r2(Number(x.precio_unitario) || imp / cant), importe: imp, descuento: desc, precio: fin,
+      categoria: CATS_US.includes(x.categoria) ? x.categoria : null };
+  }).filter(x => x.nombre && x.precio > 0);
+  return { ...j, items, total: r2(Number(j.total) || 0), suma: r2(items.reduce((a, x) => a + x.precio, 0)) };
+}
+
+async function leerTicket(deps, phone, b64, mime) {
+  const fin = Date.now() + 150000;   // todo (1a lectura + corrección) en menos de 2.5 min
+  let t = normTicket(await geminiTicket(deps, phone, b64, mime, null, fin - 70000));
+  if (t.es_ticket === false || !t.items.length) return { es_ticket: false };
+  if (t.total && Math.abs(t.suma - t.total) > 0.05 && fin - Date.now() > 25000) {
+    // Segunda vuelta con la diferencia: casi siempre es una rebaja mal asignada o una cantidad mal leída
+    try {
+      const t2 = normTicket(await geminiTicket(deps, phone, b64, mime,
+        `ATENCIÓN: en una primera lectura la suma de los productos dio ${t.suma.toFixed(2)} y el TOTAL del ticket es ${t.total.toFixed(2)} ` +
+        `(diferencia ${(t.total - t.suma).toFixed(2)}). Vuelve a leer con cuidado cada precio (dígito por dígito), cantidades, ` +
+        `rebajas/COMBINA y productos omitidos o repetidos. Lectura anterior: ` +
+        JSON.stringify(t.items.map(x => [x.texto, x.cantidad, x.importe, x.descuento])) +
+        (t.impuestos ? ` Pista: si el ticket marca productos con IVA (letra "A" o similar), el IVA impreso permite ubicar en qué grupo está el error.` : ''),
+        // La corrección la hace un modelo más fino (lee mejor dígitos borrosos: 8 vs 6, 3 vs 8)
+        fin, [['gemini-3-flash-preview', 0], ['gemini-flash-latest', 0], ['gemini-2.5-flash', 0]]));
+      if (t2.items.length && Math.abs(t2.suma - t2.total) < Math.abs(t.suma - t.total)) t = t2;
+    } catch (e) { console.error('[ticket] 2a lectura:', e.message); }
+  }
+  if (!t.total) t.total = t.suma;
+  t.cuadra = Math.abs(t.suma - t.total) <= 0.05;
+  return t;
+}
+
 const fechaMX = iso => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date(iso)); } catch { return null; } };
 
 // Lee un correo → fila para correo_compras (estado 'ignorado' si no es una compra)
@@ -537,6 +630,53 @@ module.exports = function montarCorreo(app, deps) {
     } catch (e) { console.error('[correo] conciliar:', e.message); return []; }
   }
 
+  // Ticket en foto desde el chat → tarjeta "por revisar" (la misma de Compras del correo). Si el banco ya avisó
+  // ese mismo cargo (mismo total, ±3 días), el ticket lo sustituye: así no se registra dos veces.
+  async function ticketDesdeFoto(phone, b64, mime) {
+    const msg_id = 'ticket:' + crypto.createHash('sha1').update(String(b64)).digest('hex').slice(0, 24);
+    const { data: ya } = await sb.from('correo_compras').select('id, estado, comercio, total, fecha_correo, items, parser').eq('user_phone', phone).eq('msg_id', msg_id).maybeSingle();
+    if (ya) return { id: ya.id, estado: ya.estado, comercio: ya.comercio, total: Number(ya.total), n: (ya.items || []).length, fecha: fechaMX(ya.fecha_correo), cuadra: ya.parser === 'ticket', repetido: true };
+    const t = await leerTicket(deps, phone, b64, mime);
+    if (!t.es_ticket) return { es_ticket: false };
+    const nombreCom = s => String(s || '').trim().toLowerCase().replace(/(^|\s)\p{L}/gu, m => m.toUpperCase()).slice(0, 60);
+    const comercio = nombreCom(t.comercio) || 'Ticket';
+    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(t.fecha || '')) ? t.fecha : fechaMX(new Date().toISOString());
+    const hora = /^\d{1,2}:\d{2}$/.test(String(t.hora || '')) ? t.hora.padStart(5, '0') : '12:00';
+    const $ = n => '$' + Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    let items = t.items.map(x => {
+      const partes = [x.texto && norm(x.texto) !== norm(x.nombre) ? x.texto : '', x.cantidad > 1 ? `${x.cantidad} × ${$(x.unit)}` : '',
+        x.descuento > 0 ? `${$(x.importe)} − ${$(x.descuento)} de promoción` : ''].filter(Boolean);
+      return { nombre: x.nombre, cantidad: x.cantidad, precio: x.precio, categoria: x.categoria || catSugerida(x.nombre, comercio, 'generico'), ...(partes.length ? { nota: partes.join(' · ') } : {}) };
+    });
+    let descuento = 0;
+    const dif = r2(t.total - t.suma);
+    if (!t.cuadra) {
+      if (dif > 0) items.push({ nombre: 'Diferencia para cuadrar con el total', cantidad: 1, precio: dif, categoria: 'OTROS', nota: 'Revisa qué producto falta o se leyó mal' });
+      else descuento = -dif;
+    }
+    // Medio de pago: terminación de la tarjeta del ticket, o el aviso del banco del mismo cargo
+    const term = String(t.tarjeta_terminacion || '').replace(/\D/g, '');
+    let medio_hint = /vale/i.test(t.forma_pago || '') ? 'pluxee' : /efectivo/i.test(t.forma_pago || '') && !term ? 'efectivo' : term ? 'tarjeta ' + term : null;
+    const f0 = new Date(fecha + 'T12:00:00Z');
+    const { data: bancos } = await sb.from('correo_compras').select('id, fuente, comercio, total, fecha_correo, medio_hint').eq('user_phone', phone).eq('estado', 'pendiente').eq('tipo', 'compra')
+      .gte('fecha_correo', new Date(f0 - 4 * 864e5).toISOString()).lte('fecha_correo', new Date(+f0 + 4 * 864e5).toISOString());
+    const banco = (bancos || []).find(b => ES_BANCO(b.fuente) && Math.abs(Number(b.total) - t.total) <= 1);
+    if (banco) {
+      if (banco.medio_hint && (!term || String(banco.medio_hint).endsWith(term) || !medio_hint)) medio_hint = banco.medio_hint;
+      await sb.from('correo_compras').update({ estado: 'duplicado', resuelto_at: new Date().toISOString() }).eq('id', banco.id).eq('estado', 'pendiente');
+    }
+    const texto = [`Ticket ${comercio}${t.sucursal ? ' · ' + t.sucursal : ''} · ${fecha} ${hora}`,
+      ...t.items.map(x => `${x.texto || x.nombre} │ ${x.cantidad} × ${x.unit} │ ${x.importe}${x.descuento ? ' │ −' + x.descuento : ''} │ ${x.precio}`),
+      `Subtotal ${t.subtotal || ''} │ Impuestos ${t.impuestos || ''} │ Total ${t.total} │ Ahorro ${t.ahorro || 0}`, `Pago: ${t.forma_pago || ''} ${t.tarjeta_tipo || ''} ${term}`].join('\n');
+    const fila = { user_phone: phone, msg_id, cuenta: 'chat', remitente: 'Foto del chat', asunto: `Ticket · ${items.length} productos${t.ahorro ? ' · ahorraste ' + $(t.ahorro) : ''}`,
+      fecha_correo: new Date(`${fecha}T${hora}:00-06:00`).toISOString(), fuente: 'ticket', tipo: 'compra', comercio, items, total: r2(t.total), envio: 0, descuento: r2(descuento),
+      medio_hint, parser: t.cuadra ? 'ticket' : 'aprox', estado: 'pendiente', texto, pedidos: [] };
+    const { data: row, error } = await sb.from('correo_compras').insert(fila).select('id').single();
+    if (error) throw new Error(error.message);
+    return { id: row.id, comercio, total: r2(t.total), n: items.length, fecha, cuadra: t.cuadra, dif, ahorro: r2(t.ahorro || 0),
+      reemplaza: banco ? { comercio: banco.comercio, total: Number(banco.total) } : null };
+  }
+
   // El script de Gmail entrega correos. Se guardan tal cual (ya en texto) y se leen después; los ya vistos se ignoran.
   app.post('/api/correo/ingest', async (req, res) => {
     try {
@@ -585,7 +725,8 @@ module.exports = function montarCorreo(app, deps) {
       for (const r of lista) {
         const fecha = fechaMX(r.fecha_correo);
         const tipoMov = r.tipo === 'compra' ? 'GASTO' : 'INGRESO';
-        const montos = [Number(r.total), ...(r.items || []).map(x => Number(x.precio))];
+        // Ticket: solo el total (con 20 productos, algún precio suelto coincidiría con cualquier gasto de la semana)
+        const montos = r.fuente === 'ticket' ? [Number(r.total)] : [Number(r.total), ...(r.items || []).map(x => Number(x.precio))];
         const dupMov = movs.find(m => m.tipo === tipoMov && dias(m.fecha, fecha) <= 3 && montos.some(v => Math.abs(Number(m.monto) - v) <= 1));
         // Aviso del banco por el mismo cargo que un pedido (Amazon pagado con Banamex) → posible duplicado
         const dupCorreo = ES_BANCO(r.fuente) || r.fuente === 'mercadopago'
@@ -614,7 +755,7 @@ module.exports = function montarCorreo(app, deps) {
       const f = /^\d{4}-\d{2}-\d{2}$/.test(String(fecha || '')) ? fecha : fechaMX(row.fecha_correo);
       const medio = await medioCanonDe(user_phone, medio_pago);
       const tipoMov = row.tipo === 'compra' ? 'GASTO' : 'INGRESO';
-      const desc = `📨 ${row.comercio || 'Correo'}${row.pedido ? ' · pedido ' + row.pedido : ''}`.slice(0, 120);
+      const desc = (row.fuente === 'ticket' ? `🧾 ${row.comercio || 'Ticket'} · ticket` : `📨 ${row.comercio || 'Correo'}${row.pedido ? ' · pedido ' + row.pedido : ''}`).slice(0, 120);
       const creados = [];
       for (const x of sel) {
         const d = { tipo: x.tipo === 'INGRESO' || x.tipo === 'GASTO' ? x.tipo : tipoMov, categoria: canonCategoria(x.categoria || 'OTROS'),
@@ -680,5 +821,26 @@ module.exports = function montarCorreo(app, deps) {
       res.json({ success: true, releidos: n, resumen });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
+
+  // Una tarjeta por revisar en concreto (la abre el chat al leer un ticket)
+  app.get('/api/correo/uno/:id', async (req, res) => {
+    try {
+      const phone = req.query.phone;
+      const { data: r } = await sb.from('correo_compras').select('id, cuenta, remitente, asunto, fecha_correo, fuente, tipo, pedido, comercio, items, total, envio, descuento, medio_hint, parser, estado')
+        .eq('id', req.params.id).eq('user_phone', phone).maybeSingle();
+      if (!r) return res.status(404).json({ success: false, error: 'No se encontró' });
+      const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+      const apr = (u?.external_refs || {}).correo_medios || {};
+      const medio = (r.medio_hint && apr[r.medio_hint]) || (!r.medio_hint && r.comercio && apr['comercio:' + norm(r.comercio)]) || MEDIO_DE_HINT(r.medio_hint || '') || 'débito';
+      const fecha = fechaMX(r.fecha_correo);
+      const { data: movs } = await sb.from('movimientos').select('concepto, monto, fecha').eq('user_phone', phone).eq('tipo', 'GASTO')
+        .gte('fecha', new Date(new Date(fecha + 'T12:00:00Z') - 3 * 864e5).toISOString().slice(0, 10)).lte('fecha', new Date(+new Date(fecha + 'T12:00:00Z') + 3 * 864e5).toISOString().slice(0, 10));
+      const dm = (movs || []).find(m => Math.abs(Number(m.monto) - Number(r.total)) <= 1);
+      res.json({ success: true, data: { ...r, fecha, medio_sugerido: await medioCanonDe(phone, medio),
+        posible_dup: dm ? { tipo: 'mov', concepto: dm.concepto, monto: Number(dm.monto), fecha: dm.fecha } : null } });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+
+  return { ticketDesdeFoto };
 };
-module.exports._test = { htmlATexto, leerCorreo, lectorExacto, elegirItems, clasificar, fuenteDe, medioHintDe, catSugerida, montosDe };
+module.exports._test = { leerTicket, normTicket, htmlATexto, leerCorreo,lectorExacto, elegirItems, clasificar, fuenteDe, medioHintDe, catSugerida, montosDe };
