@@ -71,6 +71,25 @@ solo del navegador. Con Gmail/Drive/SAT adentro esto no es aceptable.
 - Trabajo pesado (indexar Drive/Gmail, resúmenes) en tareas programadas de Claude (plan Pro), que escriben el
   resultado en Supabase; la app solo lee.
 
+### Chat sobre todo lo que hay en Google (pedido de Ángel, 2026-11-17)
+El chat de US debe responder con lo que encuentre en **Gmail, Drive, Google Fotos y el resto de la suite**, no solo
+gastos. Respuestas con cifras exactas calculadas en el servidor (como `faqFinanciero`), la IA solo redacta.
+- **Base**: índice en Supabase de cada fuente (correos: remitente, asunto, fecha, montos, productos, pedido;
+  Drive: nombre, carpeta, tipo, texto extraído; Fotos: fecha, lugar, álbum, descripción) + búsqueda por texto.
+- **Suscripciones y cargos recurrentes**: detectarlos de los correos (IPSY, Apple Music, Google One/Fotos, Netflix,
+  Spotify, iCloud…) con monto, día de cobro, tarjeta y próxima fecha; avisar antes del cobro.
+- **Preguntas que debe contestar** (mínimo):
+  - "¿Cuánto he gastado en Amazon esta semana / quincena / mes / en los últimos N días?" (y cualquier comercio)
+  - "Enlista montos y productos comprados en Amazon en los últimos N días"
+  - "¿Cuándo se cobra IPSY / Apple Music / Google Fotos?", "¿qué suscripciones tengo y cuánto suman al mes?"
+  - "¿Qué compras siguen sin registrar?", "¿dónde va mi pedido X?" (avisos de envío/entrega)
+  - "¿Cuánto me han reembolsado?", "¿qué cargos de Banamex no reconozco?" (cargos sin comercio)
+  - "¿Cuál fue mi compra más cara del mes?", "¿cuánto gasto en Rappi/Uber por semana?"
+  - "Búscame el correo/archivo/foto de …" (factura, contrato, INE, ticket, garantía) con enlace directo
+  - "¿Cuándo vence …?" (garantías, pólizas, documentos en Drive), "¿qué fotos tengo de …?" (fecha/lugar)
+- **Ya disponible para empezar**: `correo_compras` (todo lo que manda el Apps Script, incluidos ignorados con su
+  texto) + `movimientos`. Drive y Fotos requieren el conector OAuth (y Fase 0).
+
 ## Lo que necesita Ángel (no lo puede hacer el asistente)
 1. Pegar o volver a pasar el "prompt de seguridad" y aprobar el cambio de inicio de sesión (Fase 0).
 2. Crear el proyecto de Google Cloud y el cliente OAuth (pantalla de consentimiento en modo prueba con sus 2 correos).
@@ -81,6 +100,7 @@ solo del navegador. Con Gmail/Drive/SAT adentro esto no es aceptable.
 - [x] Cuestionario respondido (2026-11)
 - [x] Base financiera coherente: balance/remanente único, Presupuesto, métodos de pago homologados desde cuentas (d0a024c)
 - [x] Compras desde Gmail (Apps Script → pop-up "Compras del correo"), adelantado de la Fase 4 a pedido de Ángel, sin Fase 0 por decisión suya (7eab571)
+- [ ] Chat sobre Gmail/Drive/Fotos/suite (ver "Chat sobre todo lo que hay en Google") — pendiente, pedido 2026-11-17
 - [ ] Fase 0 — Seguridad
 - [ ] Fase 1 — Contexto total
 - [ ] Fase 2 — Contador de plataformas
