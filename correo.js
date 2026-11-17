@@ -662,7 +662,7 @@ module.exports = function montarCorreo(app, deps) {
       .gte('fecha_correo', new Date(f0 - 4 * 864e5).toISOString()).lte('fecha_correo', new Date(+f0 + 4 * 864e5).toISOString());
     const banco = (bancos || []).find(b => ES_BANCO(b.fuente) && Math.abs(Number(b.total) - t.total) <= 1);
     if (banco) {
-      if (banco.medio_hint && (!term || String(banco.medio_hint).endsWith(term) || !medio_hint)) medio_hint = banco.medio_hint;
+      if (banco.medio_hint) medio_hint = banco.medio_hint;   // es el mismo cargo: lo pagó esa cuenta
       await sb.from('correo_compras').update({ estado: 'duplicado', resuelto_at: new Date().toISOString() }).eq('id', banco.id).eq('estado', 'pendiente');
     }
     const texto = [`Ticket ${comercio}${t.sucursal ? ' · ' + t.sucursal : ''} · ${fecha} ${hora}`,
