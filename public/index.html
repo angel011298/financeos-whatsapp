@@ -2418,6 +2418,48 @@ body.ios-borde main{overflow-x:hidden}
   .ios-rise{animation:ios-rise .5s var(--ios-ease) backwards;animation-delay:calc(var(--i,0) * 32ms)}
   .mobile-nav a.active .ti{animation:ios-nav-pop .5s var(--ios-spring)}
 }
+
+/* ═══════════════════════════════════════════════════════ MADEJA (estado del Asistente IA) Y REVELADOS
+   «Madeja»: esfera de fibras de luz dibujada en canvas con el color del texto (no agrega colores). Se eriza al
+   escuchar, forma bandas al pensar, gira rápido al buscar, late al responder, se peina al terminar y se deshilacha
+   si algo falla. Revelados: entrada con desenfoque → nitidez, barras que se llenan, cifras que se enfocan al contar,
+   pastilla deslizante en los segmentos, esqueletos al cargar y apertura circular. Todo se apaga con «reducir movimiento». */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.madeja{display:block;color:var(--text-1);flex-shrink:0}
+.ia-orb{width:34px;height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:default}
+.madeja-hero{position:sticky;top:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:100%;min-height:0;
+  pointer-events:none;opacity:1;transition:opacity .4s ease}
+.madeja-hero[hidden]{display:none}
+.madeja-hero .mh-t{font-size:12px;color:var(--text-3);letter-spacing:.02em;transition:opacity .25s}
+#chat-spacer{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#chat-typing.mdj{display:flex;align-items:center;gap:8px;opacity:1;padding:8px 14px 8px 10px}
+#chat-typing.mdj span{font-size:12.5px;color:var(--text-3)}
+/* Pastilla deslizante en los segmentos (Quinc/Mes…, chats, Wishlist) */
+.seg-ok{position:relative;isolation:isolate}
+.seg-ok > button{position:relative;z-index:1}
+.seg-ok > button.on,.seg-ok > button.act{background:transparent!important;box-shadow:none!important}
+.seg-ind{position:absolute;top:0;left:0;z-index:0;pointer-events:none;will-change:transform,width}
+.seg-ind.mov{transition:transform .42s var(--ios-ease),width .42s var(--ios-ease),height .42s var(--ios-ease)}
+.periodo-tabs .seg-ind{background:var(--text-1);border-radius:var(--radius-md)}
+.chat-seg .seg-ind{background:var(--bg-surface);box-shadow:var(--shadow-sm);border-radius:var(--radius-pill)}
+.wl-seg .seg-ind{background:var(--text-1);border-radius:var(--radius-pill)}
+/* Esqueletos al cargar */
+.skel{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:14px;display:flex;flex-direction:column;gap:10px}
+.skel i{display:block;height:10px;border-radius:6px;background:var(--bg-surface-2);position:relative;overflow:hidden}
+.skel i.b{height:34px;border-radius:10px}
+.skel i::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--text-1) 7%,transparent),transparent);animation:skel-sh 1.3s ease-in-out infinite}
+@keyframes skel-sh{to{transform:translateX(100%)}}
+@keyframes ios-blur{from{opacity:0;filter:blur(8px);transform:translateY(8px) scale(.99)}}
+@keyframes bar-grow{from{transform:scaleX(0)}}
+@keyframes iris{from{clip-path:circle(0% at 50% 42%)}to{clip-path:circle(140% at 50% 42%)}}
+@media (prefers-reduced-motion:no-preference){
+  .ios-rise{animation:ios-blur .55s var(--ios-ease) backwards!important;animation-delay:calc(var(--i,0) * 34ms)!important}
+  .bar-in{transform-origin:left center;animation:bar-grow .95s var(--ios-ease) backwards;animation-delay:calc(var(--i,0) * 34ms + 120ms)}
+  #app.iris{animation:iris .8s var(--ios-ease) both}
+  .msg-bot.mdj-in{animation:ios-blur .45s var(--ios-ease)}
+}
+@media (prefers-reduced-motion:reduce){ .skel i::after{animation:none} }
 </style>
 </head>
 <body>
@@ -2979,6 +3021,7 @@ async function confirmPhone() {
 function showApp(id, firstTime = false) {
   $('auth-phone').style.display = 'none';
   $('app').style.display        = 'block';
+  window._iris?.();   // apertura circular (una vez por carga)
   $('id-label').textContent = id === 'A' ? 'Ángel' : '';
   // ghost-btn y mn-ghost-item permanecen ocultos — acceso via URL ?alicia
   if (id === 'A') {
@@ -5126,10 +5169,12 @@ function _cmAutoAbrir() {
   try { sessionStorage.setItem('cm_auto', JSON.stringify([...vistos, ...nuevos.map(x => x.id)].slice(-300))); } catch {}
   dashEmoji('compras');
 }
+// Esqueleto mientras llegan las compras (en lugar de un texto suelto)
+const _cmSkel = () => [0, 1].map(() => '<div class="skel" aria-hidden="true"><i style="width:45%"></i><i style="width:70%"></i><i class="b"></i><i class="b"></i><i style="width:35%"></i></div>').join('') + '<span class="sr-only">Revisando tu correo…</span>';
 function cmAbrir() {
   const st = _cmSt();
   st.solo = null;
-  abrirHoja('Compras del correo', `<div id="cm-root" class="cm-root">${st.listo ? '' : '<div class="wl-empty">Revisando tu correo…</div>'}</div>`,
+  abrirHoja('Compras del correo', `<div id="cm-root" class="cm-root">${st.listo ? '' : _cmSkel()}</div>`,
     () => { if (st.listo) cmRender(); cmPrefetch(false); }, { size: 'md' });
 }
 function _cmDraft(c) {
@@ -11229,15 +11274,16 @@ function rChat() {
       <button role="tab" id="seg-par" onclick="chatVista('par')"><span aria-hidden="true">💬</span> <span id="seg-par-n">${_parNombreGuess()}</span><span class="chat-badge" id="par-badge" hidden></span></button>
       <button role="tab" id="seg-ia" onclick="chatVista('ia')"><span aria-hidden="true">✨</span> Asistente IA</button>
     </div>
+    <div class="ia-orb" id="ia-orb" title="Asistente: en reposo" aria-hidden="true"><canvas class="madeja" data-tam="30"></canvas></div>
   </div>
   <div class="chat-pane" id="pane-ia">
-    <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"></div></div>
+    <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"><div class="madeja-hero" id="madeja-hero" aria-hidden="true"><canvas class="madeja" data-tam="132"></canvas><div class="mh-t" data-madeja-txt>En reposo</div></div></div></div>
     <div class="chat-sug" id="chat-sug">${CHAT_SUG.map(t => `<button type="button" onclick="chatSug(this.textContent)">${t}</button>`).join('')}</div>
     <form class="chat-bar" onsubmit="event.preventDefault();sendChat()">
       <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio"><i class="ti ti-microphone" id="mic-icon"></i></button>
       <button type="button" class="round-btn" id="foto-btn" style="background:var(--bg-surface-2)" onclick="document.getElementById('foto-input').click()" title="Foto de un ticket"><i class="ti ti-camera" id="foto-icon"></i></button>
       <input type="file" id="foto-input" accept="image/*" capture="environment" style="display:none" onchange="enviarFotoTicket(this)">
-      <textarea id="chat-input" rows="1" placeholder="Escribe un mensaje…" autocomplete="off" oninput="autoGrowChat(this)"
+      <textarea id="chat-input" rows="1" placeholder="Escribe un mensaje…" autocomplete="off" oninput="autoGrowChat(this);window.madeja?.escuchar()"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!_chatEsMovil()){event.preventDefault();sendChat()}"></textarea>
       <button type="submit" class="round-btn send-btn" title="Enviar"><i class="ti ti-send"></i></button>
     </form>
@@ -11255,6 +11301,8 @@ function chatVista(v) {
   par.style.display = v === 'par' ? '' : 'none';
   $('seg-ia')?.classList.toggle('on', v === 'ia'); $('seg-par')?.classList.toggle('on', v === 'par');
   $('seg-ia')?.setAttribute('aria-selected', v === 'ia'); $('seg-par')?.setAttribute('aria-selected', v === 'par');
+  const orb = $('ia-orb'); if (orb) orb.style.visibility = v === 'ia' ? '' : 'hidden';
+  window.madeja?.montar($('chat-wrap'));
   if (v === 'ia') _scrollChat(); else parAbrir();
 }
 
@@ -11875,6 +11923,12 @@ function _showTyping() {
   if (!msgs || $('chat-typing')) return;
   const el = document.createElement('div');
   el.id = 'chat-typing'; el.className = 'msg msg-bot';
+  if (window.madeja) {   // la Madeja chica con el estado («Pensando…», «Buscando…») en lugar de los tres puntos
+    el.classList.add('mdj');
+    el.innerHTML = '<canvas class="madeja" data-tam="22"></canvas><span data-madeja-txt>' + window.madeja.texto() + '</span>';
+    msgs.appendChild(el); window.madeja.montar(el); _scrollChat();
+    return;
+  }
   el.style.cssText = 'opacity:.6;padding:12px 16px;display:flex;gap:5px;align-items:center';
   el.innerHTML = '<span style="animation:pulse .8s infinite">●</span><span style="animation:pulse .8s .2s infinite">●</span><span style="animation:pulse .8s .4s infinite">●</span>';
   msgs.appendChild(el); _scrollChat();
@@ -11977,6 +12031,7 @@ async function tkAbrir(id) {
 }
 
 async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = null, imageMime = null) {
+  window.madeja?.estado(imageB64 ? 'buscando' : 'pensando');
   _showTyping();
   const btn = $('chat-input');
   if (btn) btn.disabled = true;
@@ -11992,6 +12047,7 @@ async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = nu
     if (r.error) { _appendMsg('bot', '❌ Error servidor: ' + r.error); return; }
     if (r.transcription) _appendMsg('user', '🎤 ' + r.transcription);
     _appendMsg('bot', r.reply || '...');
+    window.madeja?.respuesta(r.reply || '');
     if (r.ticket?.id) { _appendTicketBtn(r.ticket.id); tkAbrir(r.ticket.id); }
     // Refresca datos en SEGUNDO PLANO (sin await): el chat queda libre al instante;
     // el dashboard se actualiza solo cuando termina la recarga.
@@ -12002,6 +12058,7 @@ async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = nu
               : e.message?.includes('Failed to fetch') ? '❌ Sin conexión. Revisa tu red e intenta de nuevo.'
               : `❌ Error: ${e.message || 'Intenta de nuevo.'}`;
     _appendMsg('bot', msg);
+    window.madeja?.estado('error', 2800);
   } finally {
     if (btn) btn.disabled = false;
     $('chat-input')?.focus();
@@ -12012,6 +12069,7 @@ async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = nu
 // Estrategia: Web Speech API (nativa, sin subir audio) → fallback MediaRecorder+Gemini
 function _stopRecording() {
   _recording = false;
+  setTimeout(() => window.madeja?.soltar('escuchando'), 350);   // si no se mandó nada, vuelve a reposo
   if (_recTimer) { clearTimeout(_recTimer); _recTimer = null; }
   const r = _recognition;
   _recognition = null;             // nulificar antes de abort para evitar re-entrada
@@ -12047,6 +12105,7 @@ async function _recFallback() {
     _mediaRec    = new MediaRecorder(stream, { mimeType: mime });
     _audioChunks = [];
     _recording   = true;
+    window.madeja?.estado('escuchando');
     $('mic-btn').classList.add('recording');
     $('mic-icon').className = 'ti ti-player-stop-filled';
     _appendMsg('bot', '🔴 Grabando... toca para detener', null, false);
@@ -12689,21 +12748,31 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
 
   // ── Entradas escalonadas y transición de pestañas ───────────────────────────────────────────────────────────────
   const SEL = '.mini-topbar,.mini-bal-wrap,.mini-row,.mini-tile,.kpi,.snapshot-card,.mov-card,.pr-goal,.ni-card,.nd-card,.nd-din-card,.q-total-widget,.wl-card,.desp-card';
+  const BARRAS = '.bpfill,.bpover,.nd-pfill,.q-din-bar>span,.wl-ag-bar>span';
   function escalonar(raiz, max) {
-    if (!raiz || !esMovil() || sinMov()) return;
+    if (!raiz || sinMov()) return;
     let n = 0;
     raiz.querySelectorAll(SEL).forEach(e => {
       if (n >= (max || 12) || e.closest('.sw-panel')) return;
       const r = e.getBoundingClientRect(); if (r.top > innerHeight || r.bottom < 0) return;
       e.style.setProperty('--i', n++); e.classList.add('ios-rise');
-      setTimeout(() => { e.classList.remove('ios-rise'); e.style.removeProperty('--i'); }, 900);
+      setTimeout(() => { e.classList.remove('ios-rise'); e.style.removeProperty('--i'); }, 1000);
+    });
+    // Barras de avance: se llenan desde cero al aparecer (solo las que están a la vista)
+    let b = 0;
+    raiz.querySelectorAll(BARRAS).forEach(e => {
+      if (b >= 24) return;
+      const r = e.getBoundingClientRect(); if (r.top > innerHeight || r.bottom < 0 || !r.width) return;
+      e.style.setProperty('--i', Math.min(b++, 12)); e.classList.add('bar-in');
+      setTimeout(() => { e.classList.remove('bar-in'); e.style.removeProperty('--i'); }, 1600);
     });
   }
   window._iosEscalonar = escalonar;
   const ORDEN = ['chat', 'dashboard', 'movimientos', 'nidito', 'presupuesto', 'calendario', 'negocios', 'deudas'];
   window._iosDespues = (t, prev) => {
     const volver = S._navBack; S._navBack = false;
-    if (!esMovil() || sinMov() || t === prev) return;
+    if (sinMov() || t === prev) return;
+    if (!esMovil()) { if (t !== 'chat') escalonar(el('tab-' + t), 12); return; }   // escritorio: solo el revelado con desenfoque
     const tab = el('tab-' + t); if (!tab) return;
     const dir = t === 'chat' ? 'f' : (volver || prev === 'chat') ? 'b' : ORDEN.indexOf(t) >= ORDEN.indexOf(prev) ? 'r' : 'l';
     ['r', 'l', 'b', 'f'].forEach(d => tab.classList.remove('ios-in-' + d));
@@ -12731,9 +12800,10 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     const paso = () => {
       if (!e.isConnected) return;
       const p = Math.min(1, (performance.now() - t0) / dur), k = 1 - Math.pow(1 - p, 4);
-      if (p >= 1) { e.innerHTML = fin; return; }
+      if (p >= 1) { e.innerHTML = fin; e.style.filter = ''; return; }
       const a = esBal ? Math.abs(desde) : desde, b = esBal ? Math.abs(hasta) : hasta;
       pintar(a + (b - a) * k);
+      e.style.filter = k < .98 ? `blur(${((1 - k) * 3.2).toFixed(2)}px)` : '';   // de borroso a nítido mientras cuenta
       requestAnimationFrame(paso);
     };
     requestAnimationFrame(paso);
@@ -12745,11 +12815,230 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       if (!isFinite(nuevo)) return;
       const prev = k in cifras ? cifras[k] : 0;
       cifras[k] = nuevo;
-      if (!esMovil() || sinMov() || Math.abs(prev - nuevo) < 0.01) return;
+      if (sinMov() || Math.abs(prev - nuevo) < 0.01) return;
       contar(e, prev, nuevo);
     });
   };
 })();
+
+// ── MADEJA: el estado del Asistente IA como una esfera de fibras de luz ─────────────────────────────────────────────
+// Cada fibra es un círculo sobre la esfera (centro c, radio angular a) dibujado como arco parcial; la esfera gira y cada
+// estado lleva las fibras a otra forma: reposo (madeja suelta), escuchando (se eriza), pensando (bandas brillantes que
+// giran), buscando (gira rápido y densa), hablando (late hacia afuera), lista (se peina en paralelos) y error (se
+// deshilacha y se apaga). Se dibuja con el color del texto, así respeta el tema claro/oscuro sin agregar colores.
+// Un solo bucle de animación para todas las madejas; se pausa si no se ven o la pestaña está oculta.
+// NOTA: el bucle no usa el argumento de rAF (el auditor de diseño lo redefine).
+(function () {
+  const mq = q => (window.matchMedia ? matchMedia(q).matches : false);
+  const sinMov = () => mq('(prefers-reduced-motion:reduce)');
+  const P = {   // vel: giro; eriza/pulso/deshila: deformaciones; banda/orden: forma; alfa: brillo; dens: fibras visibles
+    reposo:     { vel: .22, eriza: 0,   pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .62, dens: .8 },
+    escuchando: { vel: .34, eriza: .13, pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .78, dens: .9 },
+    pensando:   { vel: .95, eriza: 0,   pulso: 0, deshila: 0, banda: 1, orden: 0, alfa: .88, dens: 1 },
+    buscando:   { vel: 1.9, eriza: .04, pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .9,  dens: 1 },
+    hablando:   { vel: .5,  eriza: 0,   pulso: 1, deshila: 0, banda: 0, orden: 0, alfa: .85, dens: .95 },
+    lista:      { vel: .26, eriza: 0,   pulso: 0, deshila: 0, banda: 0, orden: 1, alfa: .8,  dens: .9 },
+    error:      { vel: .1,  eriza: 0,   pulso: 0, deshila: 1, banda: 0, orden: 0, alfa: .42, dens: .7 },
+  };
+  const TXT = { reposo: 'En reposo', escuchando: 'Escuchando…', pensando: 'Pensando…', buscando: 'Buscando…', hablando: 'Respondiendo…', lista: 'Listo', error: 'Algo falló' };
+  let estado = 'reposo', timer = null;
+  const cur = { ...P.reposo };
+  const inst = new Set();
+  const norm3 = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const rnd = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };   // pseudoaleatorio estable
+  const EJE = norm3([.42, .82, .38]);
+
+  function fibras(n) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const z = rnd(i, 1) * 2 - 1, t = rnd(i, 2) * Math.PI * 2, rr = Math.sqrt(1 - z * z);
+      const c0 = [rr * Math.cos(t), z, rr * Math.sin(t)];
+      const a0 = Math.PI * (.3 + .2 * rnd(i, 3));
+      // Bandas (pensando): centros cerca de un eje inclinado; paralelos (lista): eje vertical y radios repartidos
+      // Pensando: la madeja se enrolla sobre un eje inclinado en 5 franjas brillantes
+      const cb = norm3([EJE[0] + (rnd(i, 4) - .5) * .12, EJE[1] + (rnd(i, 5) - .5) * .12, EJE[2] + (rnd(i, 6) - .5) * .12]);
+      const ab = Math.PI * (.14 + .72 * Math.floor(rnd(i, 7) * 5) / 4 + (rnd(i, 13) - .5) * .05);
+      const co = [0, 1, 0], ao = Math.PI * (.06 + .88 * ((i + .5) / n));
+      out.push({ c0, a0, cb, ab, co, ao, c: c0.slice(), a: a0, f0: rnd(i, 8) * Math.PI * 2, span: Math.PI * (1.15 + .85 * rnd(i, 9)), s: rnd(i, 10) * 10, k: 2 + Math.floor(rnd(i, 12) * 4) });
+    }
+    return out;
+  }
+  function crear(cv) {
+    if (cv._mdj) return cv._mdj;
+    const tam = +cv.dataset.tam || 32, dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(tam * dpr); cv.height = Math.round(tam * dpr);
+    cv.style.width = tam + 'px'; cv.style.height = tam + 'px';
+    const o = { cv, ctx: cv.getContext('2d'), tam, dpr, fib: fibras(tam >= 90 ? 210 : tam >= 30 ? 80 : 46), pasos: tam >= 90 ? 54 : 28, rot: rnd(tam, 11) * 6, color: '', colorT: 0 };
+    cv._mdj = o; inst.add(o);
+    return o;
+  }
+  function dibujar(o, t, dt) {
+    const { ctx, cv } = o, W = cv.width, R = W * .42, cx = W / 2, cy = W / 2;
+    if (!o.color || t - o.colorT > 1500) {
+      o.color = getComputedStyle(cv).color || '#fff'; o.colorT = t;
+      const m = o.color.match(/\d+(\.\d+)?/g) || [255, 255, 255];
+      o.claro = (+m[0] * .299 + +m[1] * .587 + +m[2] * .114) > 128;   // fibras claras (tema oscuro): lleva brillo al centro
+    }
+    ctx.clearRect(0, 0, W, W);
+    o.rot += cur.vel * dt;
+    const ry = o.rot, rx = .42 + Math.sin(t * .00023) * .12;
+    const cY = Math.cos(ry), sY = Math.sin(ry), cX = Math.cos(rx), sX = Math.sin(rx);
+    const k = 1 - Math.exp(-dt * 3.2);   // qué tan rápido cambian de forma las fibras
+    const cubos = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+    const tt = t / 1000, late = cur.pulso * (.05 * Math.sin(tt * 8.5) + .03 * Math.sin(tt * 13.1));
+    const nVis = Math.round(o.fib.length * cur.dens);
+    for (let i = 0; i < nVis; i++) {
+      const f = o.fib[i];
+      const wb = cur.banda, wo = cur.orden, w0 = Math.max(0, 1 - wb - wo);
+      const tc = norm3([f.c0[0] * w0 + f.cb[0] * wb + f.co[0] * wo, f.c0[1] * w0 + f.cb[1] * wb + f.co[1] * wo, f.c0[2] * w0 + f.cb[2] * wb + f.co[2] * wo]);
+      const ta = f.a0 * w0 + f.ab * wb + f.ao * wo;
+      f.c = norm3([f.c[0] + (tc[0] - f.c[0]) * k, f.c[1] + (tc[1] - f.c[1]) * k, f.c[2] + (tc[2] - f.c[2]) * k]);
+      f.a += (ta - f.a) * k;
+      const c = f.c, h = Math.abs(c[1]) < .9 ? [0, 1, 0] : [1, 0, 0];
+      let u = [c[1] * h[2] - c[2] * h[1], c[2] * h[0] - c[0] * h[2], c[0] * h[1] - c[1] * h[0]]; u = norm3(u);
+      const v = [c[1] * u[2] - c[2] * u[1], c[2] * u[0] - c[0] * u[2], c[0] * u[1] - c[1] * u[0]];
+      const ond = .2 * (1 - wo);   // cada fibra serpentea un poco (madeja), salvo cuando se peina
+      const span = f.span * (1 - .6 * cur.deshila) * (wo > .5 ? 1.35 : 1), n = o.pasos;
+      let px = 0, py = 0, pz = 0;
+      for (let j = 0; j <= n; j++) {
+        const th = f.f0 + tt * (.25 + .2 * wb) + span * j / n;
+        const ct = Math.cos(th), st = Math.sin(th), aj = f.a + ond * Math.sin(th * f.k + f.s + tt * .35), ca = Math.cos(aj), sa = Math.sin(aj);
+        let x = ca * c[0] + sa * (ct * u[0] + st * v[0]), y = ca * c[1] + sa * (ct * u[1] + st * v[1]), z = ca * c[2] + sa * (ct * u[2] + st * v[2]);
+        const r = 1 + late + cur.eriza * Math.sin(th * 9 + tt * 7 + f.s) * Math.sin(th * 4 - tt * 5 + f.s * 2)
+          + cur.deshila * .26 * Math.max(0, Math.sin(th * 2.3 + f.s + tt * .6)) * (j / n);
+        if (cur.deshila) y -= cur.deshila * .12 * (j / n) * (j / n);   // las puntas sueltas caen
+        x *= r; y *= r; z *= r;
+        const x1 = x * cY + z * sY, z1 = -x * sY + z * cY;
+        const y2 = y * cX - z1 * sX, z2 = y * sX + z1 * cX;
+        const X = cx + x1 * R, Y = cy - y2 * R;
+        if (j) {
+          const b = Math.max(0, Math.min(3, Math.floor((((pz + z2) / 2) + 1) * 2)));
+          cubos[b].moveTo(px, py); cubos[b].lineTo(X, Y);
+        }
+        px = X; py = Y; pz = z2;
+      }
+    }
+    // Brillo suave al centro, como en la esfera original
+    if (o.claro) {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+      ctx.globalAlpha = .1 * cur.alfa; g.addColorStop(0, o.color); g.addColorStop(1, 'transparent');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.strokeStyle = o.color; ctx.lineCap = 'round';
+    ctx.lineWidth = (o.tam >= 90 ? .55 : .6) * o.dpr;
+    const AL = [.05, .11, .24, .46];
+    for (let b = 0; b < 4; b++) { ctx.globalAlpha = Math.min(1, AL[b] * cur.alfa * (o.tam < 40 ? 1.35 : 1)); ctx.stroke(cubos[b]); }
+    ctx.globalAlpha = 1;
+  }
+  let ult = 0, vivo = false;
+  function visible(o) {
+    if (!o.cv.isConnected) { inst.delete(o); return false; }
+    const r = o.cv.getBoundingClientRect();
+    return r.width > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  }
+  function bucle() {
+    vivo = false;
+    if (document.hidden || !inst.size) return;
+    const t = performance.now(), dt = Math.min(.05, ult ? (t - ult) / 1000 : .016); ult = t;
+    const k = 1 - Math.exp(-dt * 2.6), obj = P[estado];
+    Object.keys(cur).forEach(x => { cur[x] += (obj[x] - cur[x]) * k; });
+    inst.forEach(o => { if (visible(o)) dibujar(o, t, dt); });
+    if (inst.size) { vivo = true; requestAnimationFrame(bucle); }
+  }
+  function arrancar() {
+    if (sinMov()) { Object.assign(cur, P[estado]); inst.forEach(o => { if (visible(o)) dibujar(o, performance.now(), 0); }); return; }
+    if (!vivo) { vivo = true; ult = 0; requestAnimationFrame(bucle); }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) arrancar(); });
+  function rotular() {
+    document.querySelectorAll('[data-madeja-txt]').forEach(e => { e.textContent = TXT[estado]; });
+    const orb = document.getElementById('ia-orb'); if (orb) orb.title = 'Asistente: ' + TXT[estado].toLowerCase().replace('…', '');
+  }
+  // La Madeja grande solo se muestra cuando el chat tiene espacio libre arriba de los mensajes
+  let ro = null;
+  function vigilarHueco() {
+    const sp = document.getElementById('chat-spacer');
+    if (!sp || sp._mdjRO || !window.ResizeObserver) return;
+    sp._mdjRO = true;
+    ro = ro || new ResizeObserver(es => es.forEach(e => {
+      const hr = e.target.querySelector('.madeja-hero');
+      if (hr) hr.hidden = e.contentRect.height < 190;
+    }));
+    ro.observe(sp);
+  }
+  window.madeja = {
+    montar(raiz) { (raiz || document).querySelectorAll('canvas.madeja').forEach(crear); rotular(); vigilarHueco(); arrancar(); },
+    estado(e, dur, despues) {
+      if (!P[e]) return;
+      clearTimeout(timer); estado = e; rotular(); arrancar();
+      if (dur) timer = setTimeout(() => { if (Array.isArray(despues)) window.madeja.estado(...despues); else window.madeja.estado(despues || 'reposo'); }, dur);
+    },
+    soltar(e) { if (estado === e) window.madeja.estado('reposo'); },
+    texto: () => TXT[estado],
+    actual: () => estado,
+    escuchar() {   // al escribir: se eriza y vuelve a reposo si dejas de teclear
+      if (estado !== 'reposo' && estado !== 'escuchando' && estado !== 'lista') return;
+      window.madeja.estado('escuchando', 1500);
+    },
+    respuesta(txt) {
+      const s = String(txt || '');
+      if (/^\s*(❌|⚠️)/.test(s)) { window.madeja.estado('error', 2800); return; }
+      const dur = Math.max(900, Math.min(2600, s.length * 14));
+      const ok = /✅|✓|registr|guardad|listo|agregad|actualizad/i.test(s);
+      window.madeja.estado('hablando', dur, ok ? ['lista', 1700] : 'reposo');
+    },
+  };
+})();
+
+// ── PASTILLA DESLIZANTE en los controles segmentados (periodo, chats, Wishlist) ─────────────────────────────────────
+// La marca del botón activo se desliza al nuevo botón en lugar de saltar. Como esos controles se vuelven a pintar,
+// se recuerda dónde estaba la pastilla y se anima desde ahí.
+(function () {
+  const SEL = '.periodo-tabs,.chat-seg,.wl-seg';
+  const ult = {};
+  const sinMov = () => window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches;
+  function poner(cont, i) {
+    const on = cont.querySelector(':scope > button.on, :scope > button.act');
+    let ind = cont.querySelector(':scope > .seg-ind');
+    if (!on) { if (ind) ind.remove(); cont.classList.remove('seg-ok'); return; }
+    if (!cont.offsetWidth || !on.offsetWidth) return;
+    cont.classList.add('seg-ok');   // antes de medir: el contenedor queda como referencia de la posición
+    const pos = { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
+    const key = cont.className.split(' ')[0] + ':' + i;
+    const prev = ult[key];
+    if (!ind) {
+      ind = document.createElement('span'); ind.className = 'seg-ind'; ind.setAttribute('aria-hidden', 'true');
+      cont.insertBefore(ind, cont.firstChild);
+      const p0 = prev || pos;   // pintado nuevo: arranca donde estaba antes
+      ind.style.transform = `translate(${p0.x}px,${p0.y}px)`; ind.style.width = p0.w + 'px'; ind.style.height = p0.h + 'px';
+      void ind.offsetWidth;
+    } else if (prev && prev.x === pos.x && prev.w === pos.w && prev.y === pos.y && prev.h === pos.h) return;
+    ind.classList.toggle('mov', !sinMov() && !!prev);
+    ind.style.transform = `translate(${pos.x}px,${pos.y}px)`; ind.style.width = pos.w + 'px'; ind.style.height = pos.h + 'px';
+    ult[key] = pos;
+  }
+  let pend = false;
+  function sync() { if (!pend) return; pend = false; document.querySelectorAll(SEL).forEach(poner); }
+  const pedir = () => { if (!pend) { pend = true; requestAnimationFrame(sync); setTimeout(sync, 120); } };
+  window._segSync = pedir;
+  if (window.MutationObserver) new MutationObserver(ms => {
+    for (const m of ms) {
+      const t = m.target;
+      if (t.nodeType !== 1 || t.classList?.contains('seg-ind')) continue;
+      if (t.matches?.(SEL) || t.closest?.(SEL) || (m.type === 'childList' && t.querySelector?.(SEL))) { pedir(); return; }
+    }
+  }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+  window.addEventListener('resize', pedir);
+})();
+
+// ── APERTURA CIRCULAR al entrar a US (una vez por carga, después del PIN si lo hay) ──────────────────────────────────
+window._iris = function () {
+  if (window._irisHecho) return; window._irisHecho = true;
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const app = document.getElementById('app'); if (!app) return;
+  app.classList.add('iris');
+  setTimeout(() => app.classList.remove('iris'), 900);
+};
 </script>
 
 </body>
