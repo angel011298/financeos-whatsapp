@@ -2450,13 +2450,13 @@ body.ios-borde main{overflow-x:hidden}
 .skel i::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
   background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--text-1) 7%,transparent),transparent);animation:skel-sh 1.3s ease-in-out infinite}
 @keyframes skel-sh{to{transform:translateX(100%)}}
-@keyframes ios-blur{from{opacity:0;filter:blur(8px);transform:translateY(8px) scale(.99)}}
+@keyframes ios-blur{from{opacity:0;filter:blur(4px);transform:translateY(6px)}}
 @keyframes bar-grow{from{transform:scaleX(0)}}
 @keyframes iris{from{clip-path:circle(0% at 50% 42%)}to{clip-path:circle(140% at 50% 42%)}}
 @media (prefers-reduced-motion:no-preference){
-  .ios-rise{animation:ios-blur .55s var(--ios-ease) backwards!important;animation-delay:calc(var(--i,0) * 34ms)!important}
-  .bar-in{transform-origin:left center;animation:bar-grow .95s var(--ios-ease) backwards;animation-delay:calc(var(--i,0) * 34ms + 120ms)}
-  #app.iris{animation:iris .8s var(--ios-ease) both}
+  .ios-rise{animation:ios-blur .4s var(--ios-ease) backwards!important;animation-delay:calc(var(--i,0) * 28ms)!important}
+  .bar-in{transform-origin:left center;animation:bar-grow .7s var(--ios-ease) backwards;animation-delay:calc(var(--i,0) * 28ms + 80ms)}
+  #app.iris{animation:iris .45s var(--ios-ease) both}
   .msg-bot.mdj-in{animation:ios-blur .45s var(--ios-ease)}
 }
 @media (prefers-reduced-motion:reduce){ .skel i::after{animation:none} }
@@ -3127,7 +3127,7 @@ async function load() {
   if (r.success) {
     S.data = r.data || {};
     S.data.despensa = rd.success ? (rd.data || []) : [];
-    S._liveSig = JSON.stringify(r.data || {});
+    S._liveSig = r.sig || JSON.stringify(r.data || {});   // firma del servidor (o el JSON si un servidor viejo no la manda)
     if (S._periodoIni !== S.phone) {   // primera carga de esta cuenta: arranca en su unidad (Semana para Alicia)
       S._periodoIni = S.phone;
       if (_unidad() === 'semana' && S.periodo.tipo === 'quincena' && !S.periodo.offset) S.periodo = { tipo: 'semana', offset: 0 };
@@ -3160,9 +3160,11 @@ function _startLivePoll() {
     _livePollBusy = true;
     const t0 = Date.now();
     try {
-      const r = await api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}?_t=${Date.now()}`);
-      if (!r.success || _optViejo(t0)) return;
-      const fresh = JSON.stringify(r.data || {});
+      // Manda la firma de lo que ya tiene: si nada cambió el servidor responde {same:true} (sin volver a bajar ni comparar todo)
+      const sigQ = S._liveSig && S._liveSig.length < 40 ? `&sig=${encodeURIComponent(S._liveSig)}` : '';
+      const r = await api('GET', `/api/dashboard/${encodeURIComponent(S.phone)}?_t=${Date.now()}${sigQ}`);
+      if (!r.success || r.same || _optViejo(t0)) return;
+      const fresh = r.sig || JSON.stringify(r.data || {});
       if (fresh !== S._liveSig) {
         S._liveSig = fresh;
         S.data = { ...(r.data || {}), despensa: S.data?.despensa };   // la despensa llega en otra petición: no perderla
@@ -3291,6 +3293,7 @@ function renderTab(t) {
   if (t === 'dashboard') window._iosContar?.($('tab-dashboard'));   // las cifras del Inicio cuentan hasta su valor
   _mountNotasSoon(t);
   setTimeout(_initCollapsibles, 120);
+  window._segSync?.();   // pastilla deslizante de los segmentos
 }
 
 // Fuerza el guardado pendiente de notas antes de que el DOM se reemplace.
@@ -12751,21 +12754,24 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
   const BARRAS = '.bpfill,.bpover,.nd-pfill,.q-din-bar>span,.wl-ag-bar>span';
   function escalonar(raiz, max) {
     if (!raiz || sinMov()) return;
-    let n = 0;
-    raiz.querySelectorAll(SEL).forEach(e => {
-      if (n >= (max || 12) || e.closest('.sw-panel')) return;
-      const r = e.getBoundingClientRect(); if (r.top > innerHeight || r.bottom < 0) return;
+    let n = 0, vistos = 0;
+    const tope = Math.min(max || 10, 10);
+    for (const e of raiz.querySelectorAll(SEL)) {
+      if (n >= tope || vistos > 40) break;
+      vistos++;
+      if (e.closest('.sw-panel')) continue;
+      const r = e.getBoundingClientRect(); if (r.top > innerHeight) break; if (r.bottom < 0) continue;
       e.style.setProperty('--i', n++); e.classList.add('ios-rise');
-      setTimeout(() => { e.classList.remove('ios-rise'); e.style.removeProperty('--i'); }, 1000);
-    });
+      setTimeout(() => { e.classList.remove('ios-rise'); e.style.removeProperty('--i'); }, 800);
+    }
     // Barras de avance: se llenan desde cero al aparecer (solo las que están a la vista)
     let b = 0;
-    raiz.querySelectorAll(BARRAS).forEach(e => {
-      if (b >= 24) return;
-      const r = e.getBoundingClientRect(); if (r.top > innerHeight || r.bottom < 0 || !r.width) return;
-      e.style.setProperty('--i', Math.min(b++, 12)); e.classList.add('bar-in');
-      setTimeout(() => { e.classList.remove('bar-in'); e.style.removeProperty('--i'); }, 1600);
-    });
+    for (const e of raiz.querySelectorAll(BARRAS)) {
+      if (b >= 12) break;
+      const r = e.getBoundingClientRect(); if (r.top > innerHeight) break; if (r.bottom < 0 || !r.width) continue;
+      e.style.setProperty('--i', b++); e.classList.add('bar-in');
+      setTimeout(() => { e.classList.remove('bar-in'); e.style.removeProperty('--i'); }, 1200);
+    }
   }
   window._iosEscalonar = escalonar;
   const ORDEN = ['chat', 'dashboard', 'movimientos', 'nidito', 'presupuesto', 'calendario', 'negocios', 'deudas'];
@@ -12868,8 +12874,9 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     const tam = +cv.dataset.tam || 32, dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(tam * dpr); cv.height = Math.round(tam * dpr);
     cv.style.width = tam + 'px'; cv.style.height = tam + 'px';
-    const o = { cv, ctx: cv.getContext('2d'), tam, dpr, fib: fibras(tam >= 90 ? 210 : tam >= 30 ? 80 : 46), pasos: tam >= 90 ? 54 : 28, rot: rnd(tam, 11) * 6, color: '', colorT: 0 };
+    const o = { cv, ctx: cv.getContext('2d'), tam, dpr, fib: fibras(tam >= 90 ? 110 : tam >= 30 ? 36 : 24), pasos: tam >= 90 ? 30 : 14, rot: rnd(tam, 11) * 6, color: '', colorT: 0 };
     cv._mdj = o; inst.add(o);
+    if (io) io.observe(cv); else o.vis = true;
     return o;
   }
   function dibujar(o, t, dt) {
@@ -12931,19 +12938,26 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     ctx.globalAlpha = 1;
   }
   let ult = 0, vivo = false;
+  // Qué madejas se ven: lo dice el navegador (sin medir cada cuadro). Si ninguna se ve, el bucle se detiene.
+  const io = window.IntersectionObserver ? new IntersectionObserver(es => {
+    es.forEach(e => { if (e.target._mdj) e.target._mdj.vis = e.isIntersecting; });
+    if (es.some(e => e.isIntersecting)) arrancar();
+  }) : null;
   function visible(o) {
-    if (!o.cv.isConnected) { inst.delete(o); return false; }
-    const r = o.cv.getBoundingClientRect();
-    return r.width > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+    if (!o.cv.isConnected) { inst.delete(o); io && io.unobserve(o.cv); return false; }
+    return !!o.vis;
   }
   function bucle() {
     vivo = false;
     if (document.hidden || !inst.size) return;
-    const t = performance.now(), dt = Math.min(.05, ult ? (t - ult) / 1000 : .016); ult = t;
+    const t = performance.now();
+    if (ult && t - ult < 30) { vivo = true; requestAnimationFrame(bucle); return; }   // ~30 cuadros por segundo bastan
+    const dt = Math.min(.06, ult ? (t - ult) / 1000 : .033); ult = t;
     const k = 1 - Math.exp(-dt * 2.6), obj = P[estado];
     Object.keys(cur).forEach(x => { cur[x] += (obj[x] - cur[x]) * k; });
-    inst.forEach(o => { if (visible(o)) dibujar(o, t, dt); });
-    if (inst.size) { vivo = true; requestAnimationFrame(bucle); }
+    let alguna = false;
+    inst.forEach(o => { if (visible(o)) { alguna = true; dibujar(o, t, dt); } });
+    if (alguna) { vivo = true; requestAnimationFrame(bucle); } else ult = 0;
   }
   function arrancar() {
     if (sinMov()) { Object.assign(cur, P[estado]); inst.forEach(o => { if (visible(o)) dibujar(o, performance.now(), 0); }); return; }
@@ -13021,14 +13035,10 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
   function sync() { if (!pend) return; pend = false; document.querySelectorAll(SEL).forEach(poner); }
   const pedir = () => { if (!pend) { pend = true; requestAnimationFrame(sync); setTimeout(sync, 120); } };
   window._segSync = pedir;
-  if (window.MutationObserver) new MutationObserver(ms => {
-    for (const m of ms) {
-      const t = m.target;
-      if (t.nodeType !== 1 || t.classList?.contains('seg-ind')) continue;
-      if (t.matches?.(SEL) || t.closest?.(SEL) || (m.type === 'childList' && t.querySelector?.(SEL))) { pedir(); return; }
-    }
-  }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
-  window.addEventListener('resize', pedir);
+  // Sin observar todo el DOM (US se repinta cada 2 s): basta con sincronizar después de pintar una pestaña o ventana,
+  // después de cada toque (cambia el periodo, el chat o la lista) y al cambiar el tamaño de la ventana.
+  document.addEventListener('click', () => setTimeout(pedir, 0), true);
+  window.addEventListener('resize', pedir, { passive: true });
 })();
 
 // ── APERTURA CIRCULAR al entrar a US (una vez por carga, después del PIN si lo hay) ──────────────────────────────────
@@ -13037,7 +13047,7 @@ window._iris = function () {
   if (window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches) return;
   const app = document.getElementById('app'); if (!app) return;
   app.classList.add('iris');
-  setTimeout(() => app.classList.remove('iris'), 900);
+  setTimeout(() => app.classList.remove('iris'), 500);
 };
 </script>
 

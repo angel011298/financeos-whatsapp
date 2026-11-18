@@ -12,6 +12,12 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 // Los correos que manda el script de Gmail traen el HTML completo: esa ruta acepta cuerpos grandes
 app.use((req, res, next) => express.json({ limit: (req.path === '/api/correo/ingest' || req.path === '/api/chat-web') ? '12mb' : '100kb' })(req, res, next));
+// Versión de los datos: cualquier escritura (de cualquiera de los dos, del webhook o de un cron) la sube y así el Inicio
+// en caché deja de valer. El Inicio se sondea cada 2 s; sin esto cada sondeo recalculaba todo (1.5–3 s de servidor).
+let _dashVer = 0;
+const _dashCache = new Map();
+const _NO_CAMBIA_INICIO = /^\/api\/(pareja\/(escribiendo|presencia|leido|visto)|correo\/token)/;   // avisos efímeros: no tocan los datos del Inicio
+app.use((req, res, next) => { if ((req.method !== 'GET' && !_NO_CAMBIA_INICIO.test(req.path)) || req.path.startsWith('/cron')) _dashVer++; next(); });
 
 // ── Validación de variables de entorno ──────────────────────────────────────
 const REQUIRED_ENV = ['TWILIO_SID','TWILIO_TOKEN','GEMINI_API_KEY','SUPABASE_URL','SUPABASE_KEY'];
@@ -2909,6 +2915,14 @@ app.get('/api/dashboard/:phone', async (req, res) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
     if (!_esGhost(req)) tocarPresencia(phone, false).catch(() => {});   // "últ. vez" del chat de pareja = última vez con la app abierta (el modo fantasma no cuenta)
+    // Caché corta: mismo usuario, sin escrituras desde el último cálculo y menos de 15 s → respuesta inmediata.
+    // Si el cliente manda la firma de lo que ya tiene y no cambió, solo se responde {same:true} (unos bytes).
+    const ck = phone + (_esGhost(req) ? ':g' : '');
+    const hit = _dashCache.get(ck);
+    if (hit && hit.ver === _dashVer && Date.now() - hit.t < 15000) {
+      return req.query.sig && req.query.sig === hit.sig ? res.json({ success: true, same: true, sig: hit.sig }) : res.type('json').send(hit.body);
+    }
+    const verIni = _dashVer;
     // Auto-create usuario si accede por primera vez desde la web
     const { data: existing } = await sb.from('usuarios').select('id').eq('telefono', phone).maybeSingle();
     if (!existing) {
@@ -3025,7 +3039,7 @@ app.get('/api/dashboard/:phone', async (req, res) => {
       }
     } catch (e) { console.error('compartidos dashboard:', e.message); }
 
-    res.json({ success: true, data: {
+    const _payload = { success: true, data: {
       pareja: await parejaDe(phone).then(p => p ? { telefono: p.telefono, nombre: p.nombre || '', role: p.role || '' } : null).catch(() => null),
       tdc: tdc.data, movs: movs.data, metas: metas.data, metas_pareja: metasPar, user: user.data,
       calendario: cal.data, patrones: pat.data, presupuesto: presp.data,
@@ -3046,7 +3060,13 @@ app.get('/api/dashboard/:phone', async (req, res) => {
         neto_personal:    retiros_q - aportes_q,
         eventos:          negEventos,
       },
-    }});
+    }};
+    const dataStr = JSON.stringify(_payload.data);
+    const sig = crypto.createHash('sha1').update(dataStr).digest('base64url').slice(0, 16);
+    const body = `{"success":true,"sig":"${sig}","data":${dataStr}}`;
+    if (verIni === _dashVer) _dashCache.set(ck, { ver: verIni, t: Date.now(), sig, body });   // si algo se escribió mientras se calculaba, no se guarda
+    if (req.query.sig && req.query.sig === sig) return res.json({ success: true, same: true, sig });
+    res.type('json').send(body);
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
