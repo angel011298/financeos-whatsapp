@@ -5191,13 +5191,16 @@ function cmAbrir() {
   abrirHoja('Compras del correo', `<div id="cm-root" class="cm-root">${st.listo ? '' : _cmSkel()}</div>`,
     () => { if (st.listo) cmRender(); cmPrefetch(false); }, { size: 'md' });
 }
+const CM_MAMA_SERV = /(^|[^a-z0-9])(disney|claude|anthropic|hbo|telcel|google|apple\s*music)([^a-z0-9]|$)/i;
 function _cmDraft(c) {
   const st = _cmSt(); if (st.draft[c.id]) return st.draft[c.id];
   const dup = !!c.posible_dup;
+  // Suscripciones que paga Mamá (misma lista que el servidor): la nota ya trae «Mamá»
+  const mama = c.tipo === 'compra' && CM_MAMA_SERV.test(`${c.comercio || ''} ${c.asunto || ''}`.normalize('NFD').replace(/[̀-ͯ]/g, ''));
   return st.draft[c.id] = {
     fecha: c.fecha || toISO(new Date()), medio: c.medio_sugerido || 'efectivo', repartir: true,
     items: (c.items || []).map(x => ({ on: !dup, concepto: x.nombre + ((x.cantidad || 1) > 1 ? ` (×${x.cantidad})` : ''), monto: +x.precio || 0,
-      categoria: c.tipo === 'compra' ? (x.categoria || 'OTROS') : 'OTROS', notas: x.nota || '' })),
+      categoria: c.tipo === 'compra' ? (x.categoria || 'OTROS') : 'OTROS', notas: mama ? ['Mamá', x.nota].filter(Boolean).join(' · ') : (x.nota || '') })),
   };
 }
 // Renglones finales: el descuento siempre se reparte entre lo marcado; el envío también, salvo que se pida aparte

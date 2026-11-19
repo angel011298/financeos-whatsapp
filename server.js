@@ -1133,13 +1133,23 @@ async function aplicarImpactoCuentas(phone, before, after) {
 // (el gasto ya restó de la cuenta con que se pagó y el ingreso lo compensa en el balance). Solo desde MAMA_DESDE: antes
 // de esa quincena los ingresos «Mamá» se capturaban a mano junto a cada gasto.
 const RE_MAMA = /(^|[^a-záéíóúüñ])mam[aá]([^a-záéíóúüñ]|$)/i;
+// Suscripciones y servicios que también paga Mamá aunque la nota no lo diga (pedido de Ángel, 2026-11-19): se reconocen
+// por el concepto o la descripción (que trae el comercio cuando viene de un correo, de cualquiera de sus Gmail).
+const RE_MAMA_SERV = /(^|[^a-z0-9])(disney|claude|anthropic|hbo|telcel|google|apple\s*music)([^a-z0-9]|$)/i;
 const MARCA_MAMA = 'Auto · gastos pagados por Mamá';
 const MAMA_DESDE = '2026-11-10';
-const esGastoMama = m => !!m && m.tipo === 'GASTO' && !m.deleted_at && RE_MAMA.test(String(m.comentarios || ''));
+const _sinAcento = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+const esServMama = m => RE_MAMA_SERV.test(_sinAcento(`${m.concepto || ''} · ${m.descripcion || ''}`));
+const esGastoMama = m => !!m && m.tipo === 'GASTO' && !m.deleted_at && (RE_MAMA.test(String(m.comentarios || '')) || esServMama(m));
+// Ingreso «Mamá» capturado a mano (o desde Presupuesto): cubre el gasto de Mamá del mismo monto, que ya no se suma al automático
+const esIngresoMamaManual = m => !!m && m.tipo === 'INGRESO' && !m.deleted_at && RE_MAMA.test(String(m.concepto || '')) && !String(m.comentarios || '').startsWith(MARCA_MAMA);
 const _mamaPend = new Map();
 function programarMama(phone, ...movs) {
   for (const m of movs) {
-    if (!m || !m.fecha || m.tipo !== 'GASTO' || !RE_MAMA.test(String(m.comentarios || ''))) continue;
+    if (!m || !m.fecha) continue;
+    const toca = m.tipo === 'GASTO' ? (RE_MAMA.test(String(m.comentarios || '')) || esServMama(m))
+      : m.tipo === 'INGRESO' && RE_MAMA.test(String(m.concepto || '')) && !String(m.comentarios || '').startsWith(MARCA_MAMA);
+    if (!toca) continue;
     const q = getQuincena(String(m.fecha).slice(0, 10));
     if (q.fin < MAMA_DESDE) continue;
     const k = phone + '|' + q.key;
@@ -1149,10 +1159,15 @@ function programarMama(phone, ...movs) {
 }
 async function recalcularMama(phone, q) {
   const ini = q.inicio < MAMA_DESDE ? MAMA_DESDE : q.inicio;
-  const { data: rows, error } = await sb.from('movimientos').select('id, tipo, monto, fecha, comentarios, deleted_at')
+  const { data: rows, error } = await sb.from('movimientos').select('id, tipo, concepto, descripcion, monto, fecha, comentarios, deleted_at')
     .eq('user_phone', phone).is('deleted_at', null).gte('fecha', ini).lte('fecha', q.fin);
   if (error) throw new Error(error.message);
-  const gastos = (rows || []).filter(esGastoMama);
+  let gastos = (rows || []).filter(esGastoMama).sort((a, b) => a.id - b.id);
+  // Lo que ya tiene su ingreso «Mamá» a mano (mismo monto) no se cuenta dos veces
+  for (const im of (rows || []).filter(esIngresoMamaManual)) {
+    const i = gastos.findIndex(g => Math.abs(Number(g.monto) - Number(im.monto)) <= 0.5);
+    if (i >= 0) gastos.splice(i, 1);
+  }
   const total = Math.round(gastos.reduce((a, m) => a + Number(m.monto || 0), 0) * 100) / 100;
   const autos = (rows || []).filter(m => m.tipo === 'INGRESO' && String(m.comentarios || '').startsWith(MARCA_MAMA)).sort((a, b) => a.id - b.id);
   const ahora = new Date().toISOString();
