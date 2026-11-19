@@ -356,6 +356,7 @@ async function undoLastAction(phone) {
     await sb.from(entry.tabla).update({ deleted_at: null }).eq('id', entry.registro_id);
     await writeAuditLog(phone, entry.tabla, 'undo', entry.registro_id, entry.datos_antes, null, 'undo');
   }
+  if (entry.tabla === 'movimientos') programarMama(phone, entry.datos_antes, entry.datos_despues);   // el ingreso «Mamá» sigue al gasto
   return '↩️ Deshecho. El registro fue revertido.';
 }
 
@@ -1105,7 +1106,61 @@ async function aplicarImpactoCuentas(phone, before, after) {
     ...(cuenta(after)  ? impactoCuenta(after, defs)  : []),                                              // aplicar lo nuevo
   ];
   for (const e of efectos) await ajustarSaldoCuentaKey(phone, e.key, e.delta);
+  programarMama(phone, before, after);   // gastos con «Mamá» en Notas → ingreso «Mamá» de la quincena
 }
+
+// ── GASTOS PAGADOS POR MAMÁ ──────────────────────────────────────────────────
+// Un gasto con la palabra «Mamá» (o «Mama») en Notas lo pagó la mamá: entra también como ingreso por el mismo monto.
+// Todos se agrupan en UN ingreso «Mamá» por quincena (suma de esos gastos), que se recalcula solo cada vez que se crea,
+// edita o borra un gasto así. El ingreso va en efectivo y sin la marca «Recibido», así que no mueve saldos de cuentas
+// (el gasto ya restó de la cuenta con que se pagó y el ingreso lo compensa en el balance). Solo desde MAMA_DESDE: antes
+// de esa quincena los ingresos «Mamá» se capturaban a mano junto a cada gasto.
+const RE_MAMA = /(^|[^a-záéíóúüñ])mam[aá]([^a-záéíóúüñ]|$)/i;
+const MARCA_MAMA = 'Auto · gastos pagados por Mamá';
+const MAMA_DESDE = '2026-11-10';
+const esGastoMama = m => !!m && m.tipo === 'GASTO' && !m.deleted_at && RE_MAMA.test(String(m.comentarios || ''));
+const _mamaPend = new Map();
+function programarMama(phone, ...movs) {
+  for (const m of movs) {
+    if (!m || !m.fecha || m.tipo !== 'GASTO' || !RE_MAMA.test(String(m.comentarios || ''))) continue;
+    const q = getQuincena(String(m.fecha).slice(0, 10));
+    if (q.fin < MAMA_DESDE) continue;
+    const k = phone + '|' + q.key;
+    clearTimeout(_mamaPend.get(k));   // varios gastos seguidos (ticket, correo) → un solo recálculo
+    _mamaPend.set(k, setTimeout(() => { _mamaPend.delete(k); recalcularMama(phone, q).catch(e => console.error('[mamá]', e.message)); }, 400));
+  }
+}
+async function recalcularMama(phone, q) {
+  const ini = q.inicio < MAMA_DESDE ? MAMA_DESDE : q.inicio;
+  const { data: rows, error } = await sb.from('movimientos').select('id, tipo, monto, fecha, comentarios, deleted_at')
+    .eq('user_phone', phone).is('deleted_at', null).gte('fecha', ini).lte('fecha', q.fin);
+  if (error) throw new Error(error.message);
+  const gastos = (rows || []).filter(esGastoMama);
+  const total = Math.round(gastos.reduce((a, m) => a + Number(m.monto || 0), 0) * 100) / 100;
+  const autos = (rows || []).filter(m => m.tipo === 'INGRESO' && String(m.comentarios || '').startsWith(MARCA_MAMA)).sort((a, b) => a.id - b.id);
+  const ahora = new Date().toISOString();
+  if (!total) {
+    if (autos.length) await sb.from('movimientos').update({ deleted_at: ahora }).in('id', autos.map(a => a.id));
+  } else {
+    const fecha = gastos.map(g => String(g.fecha).slice(0, 10)).sort().pop();
+    const d = { tipo: 'INGRESO', concepto: 'Mamá', categoria: 'Ingresos', monto: total, medio_pago: 'efectivo', fecha,
+      descripcion: `Pagado por Mamá · ${gastos.length} ${gastos.length === 1 ? 'gasto' : 'gastos'}`, comentarios: `${MARCA_MAMA} (${gastos.length})` };
+    if (autos.length) {
+      await sb.from('movimientos').update(d).eq('id', autos[0].id);
+      if (autos.length > 1) await sb.from('movimientos').update({ deleted_at: ahora }).in('id', autos.slice(1).map(a => a.id));
+    } else await sb.from('movimientos').insert({ ...d, user_phone: phone });
+  }
+  _dashVer++;   // el Inicio en caché ya no vale
+}
+app.post('/api/mama/recalcular', async (req, res) => {   // recalcula las quincenas desde MAMA_DESDE (uso de mantenimiento)
+  try {
+    const phone = req.body?.user_phone; if (!phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+    const { data } = await sb.from('movimientos').select('fecha').eq('user_phone', phone).is('deleted_at', null).gte('fecha', MAMA_DESDE);
+    const qs = {}; (data || []).forEach(m => { const q = getQuincena(String(m.fecha).slice(0, 10)); qs[q.key] = q; });
+    for (const q of Object.values(qs)) await recalcularMama(phone, q);
+    res.json({ success: true, quincenas: Object.keys(qs) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
 
 // El remanente (sobrante de la quincena anterior) lo calcula la app sola y ya se suma a los ingresos de la siguiente
 // quincena. Registrarlo además como un ingreso lo contaría DOS veces e inflaría el balance (caso real: "Remanente"
@@ -4479,6 +4534,7 @@ app.post('/webhook', async (req, res) => {
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (ultimo) {
         await sb.from('movimientos').update({ deleted_at: new Date().toISOString() }).eq('id', ultimo.id);
+        programarMama(From, ultimo);
         await writeAuditLog(From, 'movimientos', 'eliminar', ultimo.id, ultimo, null, 'whatsapp');
         reply = `🗑 Eliminado: ${ultimo.tipo} | ${ultimo.categoria} | ${ultimo.concepto || ultimo.descripcion || ''} | ${fmt(ultimo.monto)}\nResponde *deshacer* para revertirlo.`;
       } else {
