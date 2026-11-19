@@ -540,6 +540,13 @@ module.exports = function montarCorreo(app, deps) {
           .eq('user_phone', phone).eq('estado', 'procesando').order('fecha_correo', { ascending: true }).limit(20);
         if (!(rows || []).length) break;
         for (const r of rows) {
+          // El mismo correo llegó a dos de tus cuentas de Gmail (copia, reenvío automático): solo cuenta una vez
+          if (r.cuenta) {
+            const t = new Date(r.fecha_correo).getTime();
+            const { data: gemelo } = await sb.from('correo_compras').select('id').eq('user_phone', phone).neq('cuenta', r.cuenta).neq('estado', 'procesando')
+              .eq('remitente', r.remitente).eq('asunto', r.asunto).gte('fecha_correo', new Date(t - 180e3).toISOString()).lte('fecha_correo', new Date(t + 180e3).toISOString()).limit(1);
+            if ((gemelo || []).length) { await sb.from('correo_compras').update({ estado: 'duplicado', parser: 'otra-cuenta' }).eq('id', r.id); continue; }
+          }
           let f;
           try { f = await leerCorreo(deps, phone, { id: r.msg_id, from: r.remitente, subject: r.asunto, date: r.fecha_correo, text: r.texto, cuenta: r.cuenta }); }
           catch (e) { console.error('[correo] leer:', e.message); f = { estado: 'ignorado', parser: 'error' }; }
@@ -692,8 +699,10 @@ module.exports = function montarCorreo(app, deps) {
         const { error } = await sb.from('correo_compras').upsert(filas, { onConflict: 'user_phone,msg_id', ignoreDuplicates: true });
         if (error) return res.status(500).json({ success: false, error: error.message });
       }
-      const { data: s0 } = await sb.from('correo_sync').select('recibidos').eq('user_phone', phone).maybeSingle();
-      await sb.from('correo_sync').upsert({ user_phone: phone, cuenta: String(cuenta || '').slice(0, 120) || null, ultimo_sync: new Date().toISOString(), recibidos: (s0?.recibidos || 0) + filas.length });
+      // Una fila por cuenta de Gmail conectada (puede haber varias por persona: principal, secundaria…)
+      const cta = String(cuenta || '').trim().toLowerCase().slice(0, 120);
+      const { data: s0 } = await sb.from('correo_sync').select('recibidos').eq('user_phone', phone).eq('cuenta', cta).maybeSingle();
+      await sb.from('correo_sync').upsert({ user_phone: phone, cuenta: cta, ultimo_sync: new Date().toISOString(), recibidos: (s0?.recibidos || 0) + filas.length }, { onConflict: 'user_phone,cuenta' });
       res.json({ success: true, recibidos: filas.length });
       setImmediate(() => procesarCola(phone));
     } catch (e) { console.error('[correo] ingest:', e.message); res.status(500).json({ success: false, error: e.message }); }
@@ -707,7 +716,7 @@ module.exports = function montarCorreo(app, deps) {
       const [{ data: rows }, { data: sync }, { data: u }] = await Promise.all([
         sb.from('correo_compras').select('id, cuenta, remitente, asunto, fecha_correo, fuente, tipo, pedido, comercio, items, total, envio, descuento, medio_hint, parser')
           .eq('user_phone', phone).eq('estado', 'pendiente').order('fecha_correo', { ascending: false }).limit(60),
-        sb.from('correo_sync').select('cuenta, ultimo_sync, recibidos').eq('user_phone', phone).maybeSingle(),
+        sb.from('correo_sync').select('cuenta, ultimo_sync, recibidos').eq('user_phone', phone).order('ultimo_sync', { ascending: false }),
         sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle()]);
       const lista = rows || [];
       sb.from('correo_compras').select('id', { count: 'exact', head: true }).eq('user_phone', phone).eq('estado', 'procesando')
@@ -738,7 +747,8 @@ module.exports = function montarCorreo(app, deps) {
           posible_dup: dupMov ? { tipo: 'mov', concepto: dupMov.concepto, monto: Number(dupMov.monto), fecha: dupMov.fecha }
             : dupCorreo ? { tipo: 'correo', concepto: dupCorreo.comercio, monto: Number(dupCorreo.total), fecha: fechaMX(dupCorreo.fecha_correo) } : null });
       }
-      res.json({ success: true, data: out, sync: sync || null });
+      const cuentas = sync || [];   // la más reciente primero; `sync` se conserva para clientes viejos
+      res.json({ success: true, data: out, sync: cuentas[0] || null, cuentas });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
 

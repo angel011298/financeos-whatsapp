@@ -1939,6 +1939,11 @@ body.sheet-locked{overflow:hidden}
 .cm-setup{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:14px;display:flex;flex-direction:column;gap:10px}
 .cm-setup ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--text-2);line-height:1.5}
 .cm-setup a{color:var(--text-1);font-weight:700}
+.cm-ctas{display:flex;flex-direction:column;gap:6px}
+.cm-ctas > div{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-1);min-width:0}
+.cm-ctas .ti{color:var(--color-income);flex-shrink:0}
+.cm-ctas span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-ctas small{color:var(--text-3);font-size:11.5px;flex-shrink:0}
 .cm-setup summary{cursor:pointer;font-size:12px;color:var(--text-3)}
 .cm-setup textarea{width:100%;min-height:170px;margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;resize:vertical}
 
@@ -5154,6 +5159,7 @@ async function cmPrefetch(auto) {
     const sig = (r.data || []).map(x => x.id).join(',');
     st.lista = (r.data || []).filter(x => !st.hechos.has(x.id));
     st.sync = r.sync || null; st.listo = true;
+    st.cuentas = (r.cuentas || (r.sync ? [r.sync] : [])).filter(x => x && x.cuenta !== undefined);
     const root = $('cm-root');
     if (root && (sig !== st._sig || !root.dataset.listo) && !root.contains(document.activeElement)) cmRender();
     st._sig = sig;
@@ -5251,6 +5257,8 @@ function _cmCardHTML(c) {
     c.parser === 'gemini' ? '<span class="wl-chip">✨ Leído con IA</span>' : '',
     c.parser === 'envio' ? '<span class="wl-chip">📦 Cobro de un envío</span>' : '',
     c.fuente === 'ticket' ? '<span class="wl-chip">🧾 Foto de ticket · promociones ya aplicadas</span>' : '',
+    // Con varias cuentas de Gmail conectadas: de cuál llegó
+    (st.cuentas || []).length > 1 && c.cuenta && c.cuenta.includes('@') ? `<span class="wl-chip">✉️ ${E(c.cuenta.split('@')[0])}</span>` : '',
   ].join('');
   // Ticket: ¿la suma de lo marcado da el total pagado?
   const cuadra = c.fuente === 'ticket' ? `<div class="cm-cuadra${_cmCuadra(c).ok ? '' : ' no'}" id="cm-cu-${id}">${_cmCuadraTxt(c)}</div>` : '';
@@ -5293,11 +5301,14 @@ function _cmCardHTML(c) {
   </div>`;
 }
 function _cmSetupHTML() {
-  const st = _cmSt();
+  const st = _cmSt(), ctas = (st.cuentas || []).filter(x => x.cuenta);
+  const lista = ctas.length ? `<div class="cm-ctas">${ctas.map(x => `<div><i class="ti ti-circle-check"></i><span>${_ndEsc(x.cuenta)}</span><small>revisado ${_cmHace(x.ultimo_sync)}</small></div>`).join('')}</div>` : '';
   return `<div class="cm-setup">
-    <div class="wl-panel-t">📨 Conectar Gmail · una sola vez, unos 3 minutos</div>
+    <div class="wl-panel-t">${ctas.length ? '📨 Cuentas conectadas' : '📨 Conectar Gmail · una sola vez, unos 3 minutos'}</div>
+    ${lista}
+    ${ctas.length ? '<div class="wl-panel-t" style="margin-top:2px">➕ Agregar otra cuenta de Gmail · el mismo código sirve para todas</div>' : ''}
     <ol>
-      <li>Abre <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Proyecto nuevo</a> con tu cuenta de Gmail.</li>
+      <li>Abre <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Proyecto nuevo</a> con ${ctas.length ? 'la cuenta de Gmail que quieras agregar (cambia de cuenta con tu foto, arriba a la derecha)' : 'tu cuenta de Gmail'}.</li>
       <li>Borra lo que trae, pega el código y guarda (💾).<br>
         <button class="btn btn-accent btn-sm" style="margin-top:6px" onclick="cmCopiarScript()"><i class="ti ti-copy"></i> Copiar código</button></li>
       <li>Arriba, en la lista de funciones, elige <b>instalar</b> y presiona <b>▶ Ejecutar</b>.</li>
@@ -5318,7 +5329,9 @@ function cmRender() {
     return;
   }
   const head = `<div class="cm-head">
-    <div class="cm-st">${s2 ? `<i class="ti ti-circle-check"></i><span>Gmail conectado${s2.cuenta ? ' · ' + _ndEsc(s2.cuenta) : ''} · revisado ${_cmHace(s2.ultimo_sync)}</span>`
+    <div class="cm-st">${s2 ? `<i class="ti ti-circle-check"></i><span title="${_ndEsc((st.cuentas || []).map(x => x.cuenta).filter(Boolean).join(', '))}">${(st.cuentas || []).length > 1
+        ? `Gmail conectado · ${st.cuentas.length} cuentas`
+        : 'Gmail conectado' + (s2.cuenta ? ' · ' + _ndEsc(s2.cuenta) : '')} · revisado ${_cmHace(s2.ultimo_sync)}</span>`
       : '<i class="ti ti-plug-connected-x"></i><span>Gmail aún sin conectar</span>'}</div>
     <button class="wl-act ico" onclick="cmSetupTog()" title="Cómo conectar Gmail" aria-label="Cómo conectar Gmail"><i class="ti ti-settings"></i></button>
     <button class="wl-act ico" onclick="cmRefrescar(this)" title="Buscar de nuevo" aria-label="Buscar de nuevo"><i class="ti ti-refresh"></i></button>

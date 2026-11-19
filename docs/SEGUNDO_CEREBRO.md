@@ -74,6 +74,8 @@ solo del navegador. Con Gmail/Drive/SAT adentro esto no es aceptable.
 ### Chat sobre todo lo que hay en Google (pedido de Ángel, 2026-11-17)
 El chat de US debe responder con lo que encuentre en **Gmail, Drive, Google Fotos y el resto de la suite**, no solo
 gastos. Respuestas con cifras exactas calculadas en el servidor (como `faqFinanciero`), la IA solo redacta.
+- **Varias cuentas**: Ángel tiene dos Gmail (principal y secundaria, 2026-11-19). Todo índice debe guardar de qué
+  cuenta vino cada dato (`correo_compras.cuenta`, `correo_sync` tiene una fila por cuenta) y buscar en todas a la vez.
 - **Base**: índice en Supabase de cada fuente (correos: remitente, asunto, fecha, montos, productos, pedido;
   Drive: nombre, carpeta, tipo, texto extraído; Fotos: fecha, lugar, álbum, descripción) + búsqueda por texto.
 - **Suscripciones y cargos recurrentes**: detectarlos de los correos (IPSY, Apple Music, Google One/Fotos, Netflix,
