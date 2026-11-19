@@ -263,10 +263,26 @@ async function cargarContexto(userPhone, role) {
 }
 
 // ── Historial de conversación persistente en Supabase ───────────────────────
+// Los mensajes del chat IA viven 24 h: después se borran (pedido de Ángel, 2026-11-18). La app solo muestra el
+// último intercambio; la IA recuerda lo de las últimas 24 h.
+const CHAT_TTL_MS = 24 * 60 * 60 * 1000;
+const chatCorte = () => new Date(Date.now() - CHAT_TTL_MS).toISOString();
+async function purgarChatViejo(userPhone = null) {
+  try {
+    let q = sb.from('historial_chat').delete().lt('created_at', chatCorte());
+    if (userPhone) q = q.eq('user_phone', userPhone);
+    const { error } = await q;
+    if (error) console.error('purgarChatViejo:', error.message);
+  } catch (e) { console.error('purgarChatViejo:', e.message); }
+}
+setTimeout(() => purgarChatViejo(), 20000);
+setInterval(() => purgarChatViejo(), 30 * 60 * 1000).unref?.();
+
 async function cargarHistorial(userPhone, limite = 20) {
   const { data } = await sb.from('historial_chat')
     .select('role, content')
     .eq('user_phone', userPhone)
+    .gte('created_at', chatCorte())
     .order('created_at', { ascending: false })
     .limit(limite);
   return (data || []).reverse(); // orden cronológico ascendente
@@ -274,6 +290,7 @@ async function cargarHistorial(userPhone, limite = 20) {
 
 async function guardarMensaje(userPhone, role, content) {
   await sb.from('historial_chat').insert({ user_phone: userPhone, role, content });
+  purgarChatViejo(userPhone);
 
   // Mantener solo los últimos 50 mensajes por usuario (limpieza automática)
   const { data: todos } = await sb.from('historial_chat')
@@ -4932,8 +4949,10 @@ app.get('/api/chat-history/:phone', async (req, res) => {
     const { data, error } = await sb.from('historial_chat')
       .select('role, content, created_at')
       .eq('user_phone', phone)
-      .order('created_at', { ascending: true })
+      .gte('created_at', chatCorte())   // solo lo de las últimas 24 h (lo demás se borra)
+      .order('created_at', { ascending: false })
       .limit(60);
+    if (data) data.reverse();
     if (error) return res.status(400).json({ success: false, error: error.message });
     res.json({ success: true, data: data || [] });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

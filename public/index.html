@@ -2427,11 +2427,16 @@ body.ios-borde main{overflow-x:hidden}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .madeja{display:block;color:var(--text-1);flex-shrink:0}
 .ia-orb{width:34px;height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:default}
-.madeja-hero{position:sticky;top:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:100%;min-height:0;
-  pointer-events:none;opacity:1;transition:opacity .4s ease}
-.madeja-hero[hidden]{display:none}
+/* Chat IA: la Madeja ocupa todo el escenario del chat y el último mensaje flota encima */
+.chat-stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;isolation:isolate}
+.chat-stage > .chat-msgs{position:relative;z-index:1}
+.madeja-hero{position:absolute;inset:0;z-index:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:0;
+  pointer-events:none;overflow:hidden}
 .madeja-hero .mh-t{font-size:12px;color:var(--text-3);letter-spacing:.02em;transition:opacity .25s}
-#chat-spacer{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#chat-spacer{display:block;min-height:0}
+.msg.msg-out{animation:msg-out .38s var(--ios-ease,ease) forwards;pointer-events:none}
+@keyframes msg-out{to{opacity:0;transform:translateY(-10px) scale(.98);filter:blur(4px)}}
+@media (prefers-reduced-motion:reduce){.msg.msg-out{animation:none;opacity:0}}
 #chat-typing.mdj{display:flex;align-items:center;gap:8px;opacity:1;padding:8px 14px 8px 10px}
 #chat-typing.mdj span{font-size:12.5px;color:var(--text-3)}
 /* Pastilla deslizante en los segmentos (Quinc/Mes…, chats, Wishlist) */
@@ -11277,10 +11282,13 @@ function rChat() {
       <button role="tab" id="seg-par" onclick="chatVista('par')"><span aria-hidden="true">💬</span> <span id="seg-par-n">${_parNombreGuess()}</span><span class="chat-badge" id="par-badge" hidden></span></button>
       <button role="tab" id="seg-ia" onclick="chatVista('ia')"><span aria-hidden="true">✨</span> Asistente IA</button>
     </div>
-    <div class="ia-orb" id="ia-orb" title="Asistente: en reposo" aria-hidden="true"><canvas class="madeja" data-tam="30"></canvas></div>
+    <div class="ia-orb" id="ia-orb" aria-hidden="true"></div>
   </div>
   <div class="chat-pane" id="pane-ia">
-    <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"><div class="madeja-hero" id="madeja-hero" aria-hidden="true"><canvas class="madeja" data-tam="132"></canvas><div class="mh-t" data-madeja-txt>En reposo</div></div></div></div>
+    <div class="chat-stage">
+      <div class="madeja-hero" id="madeja-hero" aria-hidden="true"><canvas class="madeja" data-tam="auto"></canvas><div class="mh-t" data-madeja-txt>En reposo</div></div>
+      <div class="chat-msgs" id="chat-msgs" data-phone="${S.phone}"><div id="chat-spacer"></div></div>
+    </div>
     <div class="chat-sug" id="chat-sug">${CHAT_SUG.map(t => `<button type="button" onclick="chatSug(this.textContent)">${t}</button>`).join('')}</div>
     <form class="chat-bar" onsubmit="event.preventDefault();sendChat()">
       <button type="button" class="round-btn mic-btn" id="mic-btn" onclick="toggleRecording()" title="Grabar audio"><i class="ti ti-microphone" id="mic-icon"></i></button>
@@ -11825,54 +11833,64 @@ function _irA(ir) {
 }
 function _chatKey() { return 'fos_chat_' + S.phone; }
 
-async function _loadChatHistory() {
-  // Cargar desde servidor primero (sincronización cross-device)
+// El chat IA solo muestra la Madeja y el último intercambio (tu último mensaje y su respuesta) si tiene menos de
+// 24 h. Al mandar uno nuevo, el anterior se desvanece; lo que cumple 24 h desaparece solo (y el servidor lo borra).
+const CHAT_TTL = 864e5;
+function _chatUltimo(lista) {
+  const lim = Date.now() - CHAT_TTL;
+  const v = (lista || []).filter(m => m && m.t && m.at > lim);
+  let i = -1; v.forEach((m, k) => { if (m.r === 'user') i = k; });
+  return i >= 0 ? v.slice(i) : v.slice(-1);
+}
+function _chatCache(f) {   // caché local del último intercambio (respaldo sin conexión)
   try {
+    const arr = f(JSON.parse(localStorage.getItem(_chatKey()) || '[]'));
+    localStorage.setItem(_chatKey(), JSON.stringify(_chatUltimo(arr)));
+  } catch (_) {}
+}
+async function _loadChatHistory() {
+  let lista = null;
+  try {   // el servidor manda: así se ve igual en todos los dispositivos
     const r = await api('GET', `/api/chat-history/${encodeURIComponent(S.phone)}`);
-    if (r.success && r.data && r.data.length) {
-      const msgs = $('chat-msgs');
-      const spacer = $('chat-spacer');
-      if (msgs) { msgs.innerHTML = ''; if (spacer) msgs.appendChild(spacer); }
-      r.data.forEach(m => {
-        const role = m.role === 'user' ? 'user' : 'bot';
-        const ts = m.created_at
-          ? new Date(m.created_at).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' })
-          : null;
-        _appendMsg(role, m.content, ts, false);
-      });
-      // Actualizar caché localStorage
-      localStorage.setItem(_chatKey(), JSON.stringify(
-        r.data.map(m => ({
-          r: m.role === 'user' ? 'user' : 'bot',
-          t: m.content,
-          ts: m.created_at ? new Date(m.created_at).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' }) : null
-        }))
-      ));
-      _scrollChat();
-      return;
-    }
-  } catch(_) {}
-
-  // Fallback: localStorage (sin conexión o historial vacío en servidor)
-  const saved = localStorage.getItem(_chatKey());
-  if (saved) {
-    try { JSON.parse(saved).slice(-60).forEach(m => _appendMsg(m.r, m.t, m.ts, false)); }
-    catch(_) {}
-  } else {
-    _appendMsg('bot',
-      'Hola 👋 Soy tu asistente Us.\n\nPuedes decirme:\n• "Gasté 350 en comida"\n• "Recibí $10,000 de sueldo"\n• "¿Cuánto debo en total?"\n• "Agrega viaje a Europa al nidito"\n\nO graba un audio con el micrófono 🎤',
-      null, false);
-  }
+    if (r.success) lista = (r.data || []).map(m => ({ r: m.role === 'user' ? 'user' : 'bot', t: m.content, at: Date.parse(m.created_at) || 0 }));
+  } catch (_) {}
+  if (!lista) { try { lista = JSON.parse(localStorage.getItem(_chatKey()) || '[]'); } catch (_) { lista = []; } }
+  const msgs = $('chat-msgs');
+  if (!msgs || msgs.querySelector('.msg')) return;   // ya escribiste algo mientras cargaba
+  const ult = _chatUltimo(lista);
+  ult.forEach(m => _appendMsg(m.r, m.t, null, false, m.at));
+  _chatCache(() => ult);
+  _chatVigilar();
   _scrollChat();
 }
+// Desvanece y quita los mensajes anteriores (al mandar uno nuevo, o los que ya cumplieron 24 h)
+function _chatQuitar(els) {
+  els.forEach(el => {
+    if (el.classList.contains('msg-out')) return;
+    el.classList.add('msg-out');
+    setTimeout(() => el.remove(), 400);
+  });
+}
+let _chatVigia = null;
+function _chatVigilar() {
+  if (_chatVigia) return;
+  _chatVigia = setInterval(() => {
+    const msgs = $('chat-msgs'); if (!msgs) return;
+    const lim = Date.now() - CHAT_TTL;
+    _chatQuitar([...msgs.querySelectorAll('.msg[data-at]')].filter(el => +el.dataset.at <= lim));
+    _chatCache(a => a);
+  }, 60000);
+}
 
-function _appendMsg(role, text, ts = null, save = true) {
+function _appendMsg(role, text, ts = null, save = true, at = Date.now()) {
   const msgs = $('chat-msgs');
   if (!msgs) return;
-  const t   = ts || new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+  if (role === 'user' && save) _chatQuitar([...msgs.querySelectorAll('.msg:not(#chat-typing)')]);
+  const t   = ts || new Date(at).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
   const el  = document.createElement('div');
   el.className = `msg msg-${role}`;
-  const html = text
+  el.dataset.at = at;
+  const html = String(text ?? '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
     .replace(/\*(.*?)\*/g,'<strong>$1</strong>')
@@ -11880,13 +11898,8 @@ function _appendMsg(role, text, ts = null, save = true) {
   el.innerHTML = `${html}<div class="msg-time">${t}</div>`;
   msgs.appendChild(el);
   _scrollChat();
-  if (save) {
-    const saved = localStorage.getItem(_chatKey());
-    const arr   = saved ? JSON.parse(saved) : [];
-    arr.push({ r: role, t: text, ts: t });
-    if (arr.length > 80) arr.splice(0, arr.length - 80);
-    localStorage.setItem(_chatKey(), JSON.stringify(arr));
-  }
+  _chatVigilar();
+  if (save) _chatCache(arr => role === 'user' ? [{ r: role, t: text, at }] : [...arr, { r: role, t: text, at }]);
 }
 
 function _scrollChat() {
@@ -11924,6 +11937,7 @@ function _scrollChat() {
 function _showTyping() {
   const msgs = $('chat-msgs');
   if (!msgs || $('chat-typing')) return;
+  if ($('madeja-hero')) return;   // la Madeja grande ya dice «Pensando…» / «Buscando…»
   const el = document.createElement('div');
   el.id = 'chat-typing'; el.className = 'msg msg-bot';
   if (window.madeja) {   // la Madeja chica con el estado («Pensando…», «Buscando…») en lugar de los tres puntos
@@ -12013,6 +12027,7 @@ function _appendTicketBtn(id) {
   const msgs = $('chat-msgs'); if (!msgs) return;
   const el = document.createElement('div');
   el.className = 'msg msg-bot msg-tk';
+  el.dataset.at = Date.now();
   el.innerHTML = `<button class="btn btn-accent btn-sm" onclick="tkAbrir(${Number(id)})"><i class="ti ti-receipt"></i> Revisar y registrar</button>`;
   msgs.appendChild(el); _scrollChat();
 }
@@ -12869,15 +12884,41 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     }
     return out;
   }
-  function crear(cv) {
-    if (cv._mdj) return cv._mdj;
-    const tam = +cv.dataset.tam || 32, dpr = Math.min(2, window.devicePixelRatio || 1);
+  // Tamaño en px CSS: fijo (data-tam="30") o «auto» = lo que quepa en el escenario del chat
+  function medir(o, tam) {
+    tam = Math.max(24, Math.round(tam));
+    if (o.tam === tam) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1), cv = o.cv;
     cv.width = Math.round(tam * dpr); cv.height = Math.round(tam * dpr);
     cv.style.width = tam + 'px'; cv.style.height = tam + 'px';
-    const o = { cv, ctx: cv.getContext('2d'), tam, dpr, fib: fibras(tam >= 90 ? 110 : tam >= 30 ? 36 : 24), pasos: tam >= 90 ? 30 : 14, rot: rnd(tam, 11) * 6, color: '', colorT: 0 };
+    const n = tam >= 260 ? 150 : tam >= 90 ? 110 : tam >= 30 ? 36 : 24;
+    if (!o.fib || o.fib.length !== n) o.fib = fibras(n);
+    Object.assign(o, { tam, dpr, pasos: tam >= 260 ? 36 : tam >= 90 ? 30 : 14 });
+    if (sinMov() && o.vis) dibujar(o, performance.now(), 0);
+  }
+  function crear(cv) {
+    if (cv._mdj) return cv._mdj;
+    const auto = cv.dataset.tam === 'auto';
+    const o = { cv, ctx: cv.getContext('2d'), tam: 0, rot: rnd(auto ? 7 : +cv.dataset.tam || 32, 11) * 6, color: '', colorT: 0 };
+    medir(o, auto ? 200 : (+cv.dataset.tam || 32));
     cv._mdj = o; inst.add(o);
     if (io) io.observe(cv); else o.vis = true;
+    if (auto) vigilarEscenario(o);
     return o;
+  }
+  // La Madeja «auto» llena el escenario del chat: lado = lo que quepa (ancho o alto, sin la leyenda)
+  let ro = null;
+  function vigilarEscenario(o) {
+    const hero = o.cv.parentElement;
+    if (!hero) return;
+    const ajustar = () => {
+      const w = hero.clientWidth, h = hero.clientHeight;
+      if (!w || !h) return;
+      const ley = hero.querySelector('.mh-t');
+      medir(o, Math.min(620, w * .94, (h - (ley ? ley.offsetHeight + 6 : 0)) * .96));
+    };
+    if (window.ResizeObserver) { ro = ro || new ResizeObserver(es => es.forEach(e => e.target._ajMdj && e.target._ajMdj())); hero._ajMdj = ajustar; ro.observe(hero); }
+    ajustar();
   }
   function dibujar(o, t, dt) {
     const { ctx, cv } = o, W = cv.width, R = W * .42, cx = W / 2, cy = W / 2;
@@ -12932,7 +12973,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
     }
     ctx.strokeStyle = o.color; ctx.lineCap = 'round';
-    ctx.lineWidth = (o.tam >= 90 ? .55 : .6) * o.dpr;
+    ctx.lineWidth = (o.tam >= 90 ? Math.min(.9, .55 + (o.tam - 90) / 900) : .6) * o.dpr;
     const AL = [.05, .11, .24, .46];
     for (let b = 0; b < 4; b++) { ctx.globalAlpha = Math.min(1, AL[b] * cur.alfa * (o.tam < 40 ? 1.35 : 1)); ctx.stroke(cubos[b]); }
     ctx.globalAlpha = 1;
@@ -12968,20 +13009,8 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     document.querySelectorAll('[data-madeja-txt]').forEach(e => { e.textContent = TXT[estado]; });
     const orb = document.getElementById('ia-orb'); if (orb) orb.title = 'Asistente: ' + TXT[estado].toLowerCase().replace('…', '');
   }
-  // La Madeja grande solo se muestra cuando el chat tiene espacio libre arriba de los mensajes
-  let ro = null;
-  function vigilarHueco() {
-    const sp = document.getElementById('chat-spacer');
-    if (!sp || sp._mdjRO || !window.ResizeObserver) return;
-    sp._mdjRO = true;
-    ro = ro || new ResizeObserver(es => es.forEach(e => {
-      const hr = e.target.querySelector('.madeja-hero');
-      if (hr) hr.hidden = e.contentRect.height < 190;
-    }));
-    ro.observe(sp);
-  }
   window.madeja = {
-    montar(raiz) { (raiz || document).querySelectorAll('canvas.madeja').forEach(crear); rotular(); vigilarHueco(); arrancar(); },
+    montar(raiz) { (raiz || document).querySelectorAll('canvas.madeja').forEach(crear); rotular(); arrancar(); },
     estado(e, dur, despues) {
       if (!P[e]) return;
       clearTimeout(timer); estado = e; rotular(); arrancar();
