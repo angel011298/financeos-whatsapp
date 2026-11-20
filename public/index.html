@@ -2433,7 +2433,8 @@ body.ios-borde main{overflow-x:hidden}
 .madeja{display:block;color:var(--text-1);flex-shrink:0}
 .ia-orb{width:34px;height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:default}
 /* Chat IA: la Madeja ocupa todo el escenario del chat y el último mensaje flota encima */
-.chat-stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;isolation:isolate}
+.chat-stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;isolation:isolate;touch-action:none}
+.chat-stage > .chat-msgs{touch-action:none}
 .chat-stage > .chat-msgs{position:relative;z-index:1}
 .madeja-hero{position:absolute;inset:0;z-index:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:0;
   pointer-events:none;overflow:hidden}
@@ -11923,6 +11924,7 @@ function _scrollChat() {
   if (!msgs) return;
   requestAnimationFrame(() => requestAnimationFrame(() => {
     msgs.scrollTop = msgs.scrollHeight;
+    msgs.style.touchAction = msgs.scrollHeight > msgs.clientHeight + 2 ? 'pan-y' : 'none';   // el dedo mueve la esfera salvo que haya que desplazar un texto largo
     setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 120);
   }));
 }
@@ -12869,13 +12871,13 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
   const mq = q => (window.matchMedia ? matchMedia(q).matches : false);
   const sinMov = () => mq('(prefers-reduced-motion:reduce)');
   const P = {   // vel: giro; eriza/pulso/deshila: deformaciones; banda/orden: forma; alfa: brillo; dens: fibras visibles
-    reposo:     { vel: .22, eriza: 0,   pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .62, dens: .8 },
-    escuchando: { vel: .34, eriza: .13, pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .78, dens: .9 },
-    pensando:   { vel: .95, eriza: 0,   pulso: 0, deshila: 0, banda: 1, orden: 0, alfa: .88, dens: 1 },
-    buscando:   { vel: 1.9, eriza: .04, pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .9,  dens: 1 },
-    hablando:   { vel: .5,  eriza: 0,   pulso: 1, deshila: 0, banda: 0, orden: 0, alfa: .85, dens: .95 },
-    lista:      { vel: .26, eriza: 0,   pulso: 0, deshila: 0, banda: 0, orden: 1, alfa: .8,  dens: .9 },
-    error:      { vel: .1,  eriza: 0,   pulso: 0, deshila: 1, banda: 0, orden: 0, alfa: .42, dens: .7 },
+    reposo:     { hue: 215, vel: .22, eriza: 0,   pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .62, dens: .8 },
+    escuchando: { hue: 188, vel: .34, eriza: .13, pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .78, dens: .9 },
+    pensando:   { hue: 268, vel: .95, eriza: 0,   pulso: 0, deshila: 0, banda: 1, orden: 0, alfa: .88, dens: 1 },
+    buscando:   { hue: 36, vel: 1.9, eriza: .04, pulso: 0, deshila: 0, banda: 0, orden: 0, alfa: .9,  dens: 1 },
+    hablando:   { hue: 322, vel: .5,  eriza: 0,   pulso: 1, deshila: 0, banda: 0, orden: 0, alfa: .85, dens: .95 },
+    lista:      { hue: 150, vel: .26, eriza: 0,   pulso: 0, deshila: 0, banda: 0, orden: 1, alfa: .8,  dens: .9 },
+    error:      { hue: 4, vel: .1,  eriza: 0,   pulso: 0, deshila: 1, banda: 0, orden: 0, alfa: .42, dens: .7 },
   };
   const TXT = { reposo: 'En reposo', escuchando: 'Escuchando…', pensando: 'Pensando…', buscando: 'Buscando…', hablando: 'Respondiendo…', lista: 'Listo', error: 'Algo falló' };
   let estado = 'reposo', timer = null;
@@ -12896,7 +12898,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       const cb = norm3([EJE[0] + (rnd(i, 4) - .5) * .12, EJE[1] + (rnd(i, 5) - .5) * .12, EJE[2] + (rnd(i, 6) - .5) * .12]);
       const ab = Math.PI * (.14 + .72 * Math.floor(rnd(i, 7) * 5) / 4 + (rnd(i, 13) - .5) * .05);
       const co = [0, 1, 0], ao = Math.PI * (.06 + .88 * ((i + .5) / n));
-      out.push({ c0, a0, cb, ab, co, ao, c: c0.slice(), a: a0, f0: rnd(i, 8) * Math.PI * 2, span: Math.PI * (1.15 + .85 * rnd(i, 9)), s: rnd(i, 10) * 10, k: 2 + Math.floor(rnd(i, 12) * 4) });
+      out.push({ c0, a0, cb, ab, co, ao, c: c0.slice(), a: a0, f0: rnd(i, 8) * Math.PI * 2, span: Math.PI * (1.15 + .85 * rnd(i, 9)), hh: (rnd(i, 14) - .5) * 110, s: rnd(i, 10) * 10, k: 2 + Math.floor(rnd(i, 12) * 4) });
     }
     return out;
   }
@@ -12907,15 +12909,15 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     const dpr = Math.min(2, window.devicePixelRatio || 1), cv = o.cv;
     cv.width = Math.round(tam * dpr); cv.height = Math.round(tam * dpr);
     cv.style.width = tam + 'px'; cv.style.height = tam + 'px';
-    const n = tam >= 260 ? 150 : tam >= 90 ? 110 : tam >= 30 ? 36 : 24;
+    const n = tam >= 260 ? 320 : tam >= 90 ? 200 : tam >= 30 ? 36 : 24;
     if (!o.fib || o.fib.length !== n) o.fib = fibras(n);
-    Object.assign(o, { tam, dpr, pasos: tam >= 260 ? 36 : tam >= 90 ? 30 : 14 });
+    Object.assign(o, { tam, dpr, pasos: tam >= 260 ? 34 : tam >= 90 ? 28 : 14 });
     if (sinMov() && o.vis) dibujar(o, performance.now(), 0);
   }
   function crear(cv) {
     if (cv._mdj) return cv._mdj;
     const auto = cv.dataset.tam === 'auto';
-    const o = { cv, ctx: cv.getContext('2d'), tam: 0, rot: rnd(auto ? 7 : +cv.dataset.tam || 32, 11) * 6, color: '', colorT: 0 };
+    const o = { cv, ctx: cv.getContext('2d'), tam: 0, q: 1, ms: 0, spin: 0, lean: 0, incl: 0, ptr: auto ? { f: 0, fs: 0, ux: 0, uy: 0, sx: 0, sy: 0, sz: 0, pulse: 0, lx: 0 } : null, rot: rnd(auto ? 7 : +cv.dataset.tam || 32, 11) * 6, color: '', colorT: 0 };
     medir(o, auto ? 200 : (+cv.dataset.tam || 32));
     cv._mdj = o; inst.add(o);
     if (io) io.observe(cv); else o.vis = true;
@@ -12933,24 +12935,64 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       const ley = hero.querySelector('.mh-t');
       medir(o, Math.min(620, w * .94, (h - (ley ? ley.offsetHeight + 6 : 0)) * .96));
     };
+    window.addEventListener('resize', () => hero._ajMdj && hero._ajMdj());
     if (window.ResizeObserver) { ro = ro || new ResizeObserver(es => es.forEach(e => e.target._ajMdj && e.target._ajMdj())); hero._ajMdj = ajustar; ro.observe(hero); }
     ajustar();
+    puntero(o, hero.parentElement);
+  }
+  // Cursor (escritorio) o dedo (móvil) sobre el escenario: las fibras se abultan y cambian de matiz bajo el puntero, la
+  // esfera se inclina hacia él, gira al arrastrar y ondea al tocar.
+  function puntero(o, stage) {
+    if (!stage || stage._mdjPtr || sinMov()) return;
+    stage._mdjPtr = true;
+    const pt = o.ptr;
+    const mover = e => {
+      const r = o.cv.getBoundingClientRect(), Rc = Math.max(1, o.tam * .42);
+      pt.ux = (e.clientX - r.left - r.width / 2) / Rc; pt.uy = -(e.clientY - r.top - r.height / 2) / Rc;
+      if (!pt.f) { pt.sx = pt.ux; pt.sy = pt.uy; pt.lx = e.clientX; }
+      pt.f = 1;
+      const arrastra = e.pointerType !== 'mouse' || (e.buttons & 1);
+      o.spin = Math.max(-6, Math.min(6, o.spin + (e.clientX - pt.lx) * (arrastra ? .012 : .004)));
+      pt.lx = e.clientX;
+    };
+    stage.addEventListener('pointermove', mover, { passive: true });
+    stage.addEventListener('pointerdown', e => { if (e.target.closest('button,a,input,textarea')) return; mover(e); pt.pulse = 1; }, { passive: true });
+    const soltar = e => { if (e.type !== 'pointerup' || e.pointerType !== 'mouse') pt.f = 0; };
+    stage.addEventListener('pointerup', soltar, { passive: true });
+    stage.addEventListener('pointercancel', soltar, { passive: true });
+    stage.addEventListener('pointerleave', () => { pt.f = 0; }, { passive: true });
   }
   function dibujar(o, t, dt) {
+    const t0 = performance.now();
+    if (o.ptr && t - (o.ajT || 0) > 700) { o.ajT = t; const hh = o.cv.parentElement; if (hh && hh._ajMdj) hh._ajMdj(); }   // red de seguridad: si el escenario cambió de tamaño y nadie avisó
     const { ctx, cv } = o, W = cv.width, R = W * .42, cx = W / 2, cy = W / 2;
     if (!o.color || t - o.colorT > 1500) {
       o.color = getComputedStyle(cv).color || '#fff'; o.colorT = t;
       const m = o.color.match(/\d+(\.\d+)?/g) || [255, 255, 255];
       o.claro = (+m[0] * .299 + +m[1] * .587 + +m[2] * .114) > 128;   // fibras claras (tema oscuro): lleva brillo al centro
+      const lig = o.claro ? 72 : 41;   // los matices se aclaran en tema oscuro y se oscurecen en tema claro
+      o.pal = Array.from({ length: 12 }, (_, b) => `hsl(${b * 30 + 15},78%,${lig}%)`);
     }
+    const col = o.tam >= 90, pt = o.ptr, pe = !!pt;
+    if (pe) {   // el puntero (cursor o dedo) se suaviza; la esfera se inclina hacia él y gira al arrastrar
+      const kp = 1 - Math.exp(-dt * 7);
+      pt.fs += (pt.f - pt.fs) * kp; pt.sx += (pt.ux - pt.sx) * kp; pt.sy += (pt.uy - pt.sy) * kp;
+      pt.sz = (pt.sx * pt.sx + pt.sy * pt.sy) < 1 ? Math.sqrt(1 - pt.sx * pt.sx - pt.sy * pt.sy) : 0;
+      pt.pulse = Math.max(0, pt.pulse - dt * 1.3);
+      o.spin *= Math.exp(-dt * 2.2);
+      o.lean += ((pt.f ? pt.ux * .45 : 0) - o.lean) * kp;
+      o.incl += ((pt.f ? -pt.uy * .3 : 0) - o.incl) * kp;
+    }
+    const act = pe && (pt.fs > .01 || pt.pulse > .02);
     ctx.clearRect(0, 0, W, W);
-    o.rot += cur.vel * dt;
-    const ry = o.rot, rx = .42 + Math.sin(t * .00023) * .12;
+    o.rot += (cur.vel + o.spin) * dt;
+    const ry = o.rot + o.lean, rx = .42 + Math.sin(t * .00023) * .12 + o.incl;
     const cY = Math.cos(ry), sY = Math.sin(ry), cX = Math.cos(rx), sX = Math.sin(rx);
     const k = 1 - Math.exp(-dt * 3.2);   // qué tan rápido cambian de forma las fibras
-    const cubos = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+    const cubos = new Array(48).fill(null);
     const tt = t / 1000, late = cur.pulso * (.05 * Math.sin(tt * 8.5) + .03 * Math.sin(tt * 13.1));
-    const nVis = Math.round(o.fib.length * cur.dens);
+    const nVis = Math.round(o.fib.length * cur.dens * o.q);
+    const sig2 = .1 + .06 * pt?.pulse, fs = pe ? pt.fs : 0;
     for (let i = 0; i < nVis; i++) {
       const f = o.fib[i];
       const wb = cur.banda, wo = cur.orden, w0 = Math.max(0, 1 - wb - wo);
@@ -12963,6 +13005,8 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       const v = [c[1] * u[2] - c[2] * u[1], c[2] * u[0] - c[0] * u[2], c[0] * u[1] - c[1] * u[0]];
       const ond = .2 * (1 - wo);   // cada fibra serpentea un poco (madeja), salvo cuando se peina
       const span = f.span * (1 - .6 * cur.deshila) * (wo > .5 ? 1.35 : 1), n = o.pasos;
+      // Matiz de la fibra: el del estado + un desfase propio + gradiente por altura, que fluctúa con el tiempo
+      const fh = cur.hue + f.hh + 26 * Math.sin(tt * .33 + f.s) + f.c0[1] * 34;
       let px = 0, py = 0, pz = 0;
       for (let j = 0; j <= n; j++) {
         const th = f.f0 + tt * (.25 + .2 * wb) + span * j / n;
@@ -12974,10 +13018,19 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
         x *= r; y *= r; z *= r;
         const x1 = x * cY + z * sY, z1 = -x * sY + z * cY;
         const y2 = y * cX - z1 * sX, z2 = y * sX + z1 * cX;
-        const X = cx + x1 * R, Y = cy - y2 * R;
+        let g = 1, hs = 0;
+        if (act) {   // cerca del puntero las fibras se abultan, ondean al tocar y cambian de matiz
+          const dx = x1 - pt.sx, dy = y2 - pt.sy, dz = z2 - pt.sz, d2 = dx * dx + dy * dy + dz * dz;
+          const inf = Math.exp(-d2 / sig2) * fs;
+          g += inf * .2;
+          if (pt.pulse > .02) g += pt.pulse * .07 * Math.sin(Math.sqrt(d2) * 15 - (1 - pt.pulse) * 14) * Math.exp(-d2 * 1.6);
+          hs = inf * 60;
+        }
+        const X = cx + x1 * R * g, Y = cy - y2 * R * g;
         if (j) {
           const b = Math.max(0, Math.min(3, Math.floor((((pz + z2) / 2) + 1) * 2)));
-          cubos[b].moveTo(px, py); cubos[b].lineTo(X, Y);
+          const q = col ? b * 12 + Math.floor((((fh + hs) % 360 + 360) % 360) / 30) : b * 12;
+          (cubos[q] || (cubos[q] = new Path2D())).moveTo(px, py); cubos[q].lineTo(X, Y);
         }
         px = X; py = Y; pz = z2;
       }
@@ -12988,11 +13041,27 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       ctx.globalAlpha = .1 * cur.alfa; g.addColorStop(0, o.color); g.addColorStop(1, 'transparent');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.strokeStyle = o.color; ctx.lineCap = 'round';
+    ctx.lineCap = 'round';
     ctx.lineWidth = (o.tam >= 90 ? Math.min(.9, .55 + (o.tam - 90) / 900) : .6) * o.dpr;
-    const AL = [.05, .11, .24, .46];
-    for (let b = 0; b < 4; b++) { ctx.globalAlpha = Math.min(1, AL[b] * cur.alfa * (o.tam < 40 ? 1.35 : 1)); ctx.stroke(cubos[b]); }
+    const AL = [.05, .11, .24, .46], esc = (o.tam < 40 ? 1.35 : 1) * (o.tam >= 260 ? .82 : 1) * (col ? 1.25 : 1);
+    for (let q = 0; q < 48; q++) {
+      if (!cubos[q]) continue;
+      ctx.strokeStyle = col ? o.pal[q % 12] : o.color;
+      ctx.globalAlpha = Math.min(1, AL[(q / 12) | 0] * cur.alfa * esc);
+      ctx.stroke(cubos[q]);
+    }
+    // Destello suave bajo el cursor o el dedo
+    if (act && fs > .03) {
+      const gx = cx + pt.sx * R, gy = cy - pt.sy * R, h = Math.round(cur.hue + 40), l = o.claro ? 70 : 45;
+      const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, R * .5);
+      g.addColorStop(0, `hsla(${h},70%,${l}%,${(.22 * fs).toFixed(3)})`); g.addColorStop(1, `hsla(${h},70%,${l}%,0)`);
+      ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(gx, gy, R * .5, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.globalAlpha = 1;
+    if (col) {   // si el equipo no da abasto, baja la cantidad de fibras; si sobra, la sube
+      o.ms = o.ms * .9 + (performance.now() - t0) * .1;
+      if (o.ms > 13) o.q = Math.max(.5, o.q - .03); else if (o.ms < 7) o.q = Math.min(1, o.q + .01);
+    }
   }
   let ult = 0, vivo = false;
   // Qué madejas se ven: lo dice el navegador (sin medir cada cuadro). Si ninguna se ve, el bucle se detiene.
@@ -13011,7 +13080,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     if (ult && t - ult < 30) { vivo = true; requestAnimationFrame(bucle); return; }   // ~30 cuadros por segundo bastan
     const dt = Math.min(.06, ult ? (t - ult) / 1000 : .033); ult = t;
     const k = 1 - Math.exp(-dt * 2.6), obj = P[estado];
-    Object.keys(cur).forEach(x => { cur[x] += (obj[x] - cur[x]) * k; });
+    Object.keys(cur).forEach(x => { cur[x] += (x === 'hue' ? ((obj.hue - cur.hue + 540) % 360) - 180 : obj[x] - cur[x]) * k; });
     let alguna = false;
     inst.forEach(o => { if (visible(o)) { alguna = true; dibujar(o, t, dt); } });
     if (alguna) { vivo = true; requestAnimationFrame(bucle); } else ult = 0;
@@ -13026,7 +13095,7 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
     const orb = document.getElementById('ia-orb'); if (orb) orb.title = 'Asistente: ' + TXT[estado].toLowerCase().replace('…', '');
   }
   window.madeja = {
-    montar(raiz) { (raiz || document).querySelectorAll('canvas.madeja').forEach(crear); rotular(); arrancar(); },
+    montar(raiz) { (raiz || document).querySelectorAll('canvas.madeja').forEach(c => { crear(c); const h = c.parentElement; if (h && h._ajMdj) h._ajMdj(); }); rotular(); arrancar(); },   // _ajMdj: vuelve a medir el escenario (al mostrar el chat)
     estado(e, dur, despues) {
       if (!P[e]) return;
       clearTimeout(timer); estado = e; rotular(); arrancar();
