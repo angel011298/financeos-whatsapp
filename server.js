@@ -4973,6 +4973,43 @@ app.get('/api/chat-history/:phone', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── ATAJO DE IPHONE ──────────────────────────────────────────────────────────
+// El atajo «Registrar Gasto» (triple toque atrás) pregunta «¿Qué gastaste?» y manda el texto aquí; US lo registra igual
+// que el chat IA (mismas reglas de categoría, medio de pago, «Mamá», etc.) y responde en texto plano para la notificación.
+// La URL lleva un token firmado por persona (no el teléfono). Acepta el texto como JSON {texto}, formulario o texto plano.
+const firmarAtajo = phone => crypto.createHmac('sha256', SHARE_SECRET).update('atajo:' + String(phone)).digest('base64url').slice(0, 32);
+let _atajoTels = { t: 0, mapa: new Map() };
+async function telDeAtajo(token) {
+  const busca = () => _atajoTels.mapa.get(String(token || ''));
+  if (busca()) return busca();
+  if (Date.now() - _atajoTels.t > 60000) {   // usuarios nuevos: se recalcula como mucho una vez por minuto
+    const { data } = await sb.from('usuarios').select('telefono');
+    _atajoTels = { t: Date.now(), mapa: new Map((data || []).map(u => [firmarAtajo(u.telefono), u.telefono])) };
+  }
+  return busca() || null;
+}
+app.post('/api/atajo-token', (req, res) => {
+  if (_esGhost(req)) return res.status(403).json({ success: false, error: 'Modo fantasma: solo lectura' });
+  const phone = req.body?.user_phone;
+  if (!phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+  res.json({ success: true, url: `${req.protocol === 'http' && !/localhost/.test(req.get('host')) ? 'https' : req.protocol}://${req.get('host')}/api/atajo/${firmarAtajo(phone)}` });
+});
+app.post('/api/atajo/:token', express.text({ type: ['text/*', 'application/octet-stream'], limit: '20kb' }), async (req, res) => {
+  const plano = (txt, st = 200) => res.status(st).type('text/plain; charset=utf-8').send(txt);
+  try {
+    const phone = await telDeAtajo(req.params.token);
+    if (!phone) return plano('⚠️ El atajo no está vinculado a US. Copia la URL de nuevo desde US → Chat IA → 📱.', 401);
+    const b = req.body;
+    let texto = String((typeof b === 'string' ? b : (b && (b.texto || b.text || b.gasto || b.mensaje))) || req.query.texto || '').trim().slice(0, 2000);
+    if (!texto) return plano('⚠️ No escribiste nada. Ejemplo: «80 tacos efectivo».', 400);
+    if (/^\$?\s*\d/.test(texto)) texto = 'gasté ' + texto;   // «80 tacos» → «gasté 80 tacos»
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/chat-web`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, message: texto }) }).then(x => x.json());
+    const reply = String(r.reply || r.error || '...').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').trim();
+    plano(reply);
+  } catch (e) { console.error('atajo:', e.message); plano('⚠️ US no pudo registrar el gasto: ' + String(e.message || e).slice(0, 80), 500); }
+});
+
 // ── INSIGHTS IA — consejos financieros personalizados (Dashboard) ─────────────
 app.post('/api/insights', async (req, res) => {
   try {

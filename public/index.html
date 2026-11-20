@@ -1939,6 +1939,9 @@ body.sheet-locked{overflow:hidden}
 .cm-setup{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:14px;display:flex;flex-direction:column;gap:10px}
 .cm-setup ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--text-2);line-height:1.5}
 .cm-setup a{color:var(--text-1);font-weight:700}
+.at-setup .at-ej{font-size:13px;color:var(--text-2);line-height:1.5}
+.at-setup .at-nota{font-size:11.5px;color:var(--text-3);line-height:1.45;margin-top:4px}
+.at-setup code{font-size:12px;background:var(--bg-surface-2);padding:1px 5px;border-radius:5px}
 .cm-ctas{display:flex;flex-direction:column;gap:6px}
 .cm-ctas > div{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-1);min-width:0}
 .cm-ctas .ti{color:var(--color-income);flex-shrink:0}
@@ -11299,7 +11302,7 @@ function rChat() {
       <button role="tab" id="seg-par" onclick="chatVista('par')"><span aria-hidden="true">💬</span> <span id="seg-par-n">${_parNombreGuess()}</span><span class="chat-badge" id="par-badge" hidden></span></button>
       <button role="tab" id="seg-ia" onclick="chatVista('ia')"><span aria-hidden="true">✨</span> Asistente IA</button>
     </div>
-    <div class="ia-orb" id="ia-orb" aria-hidden="true"></div>
+    <button type="button" class="round-btn ia-orb" id="ia-orb" onclick="atajoAbrir()" title="Atajo de iPhone" aria-label="Atajo de iPhone para registrar gastos" style="background:var(--bg-surface-2)"><i class="ti ti-device-mobile"></i></button>
   </div>
   <div class="chat-pane" id="pane-ia">
     <div class="chat-stage">
@@ -12064,6 +12067,33 @@ async function tkAbrir(id) {
     const c = _cmC(id);
     abrirHoja(`🧾 Ticket · ${c?.comercio || ''}`, '<div id="cm-root" class="cm-root"></div>', () => cmRender(), { size: 'md', key: 'ticket' });
   } catch (e) { toast('No se pudo abrir el ticket: ' + e.message, 'error'); }
+}
+
+// ── ATAJO DE IPHONE: triple toque atrás → «¿Qué gastaste?» → US lo registra como el chat IA y avisa con una notificación
+async function atajoAbrir() {
+  abrirHoja('📱 Atajo de iPhone', `<div class="cm-setup at-setup">
+    <div class="wl-panel-t">Registra un gasto sin abrir US</div>
+    <div class="at-ej">Toca 3 veces la parte de atrás del iPhone, escribe o dicta <b>«80 tacos efectivo»</b> y listo: US lo registra con sus reglas de categoría y medio de pago, y te avisa con una notificación.</div>
+    <ol>
+      <li><button class="btn btn-accent btn-sm" id="at-copiar" onclick="atajoCopiar()" disabled><i class="ti ti-copy"></i> Copiar URL del atajo</button>
+        <div class="at-nota">Es tu enlace personal: no lo compartas.</div></li>
+      <li>Abre <b>Atajos</b>, mantén presionado <b>Registrar Gasto</b> → <b>Editar</b> y borra todas sus acciones (toca la <b>ⓧ</b> de cada una).</li>
+      <li>Agrega <b>Solicitar entrada</b>. En la pregunta escribe <i>¿Qué gastaste?</i></li>
+      <li>Agrega <b>Obtener contenido de URL</b>, pega la URL y toca <b>⌄</b>:
+        Método <b>POST</b> · Cuerpo de la solicitud <b>JSON</b> · <b>Agregar campo nuevo → Texto</b>: clave <code>texto</code> y en el valor elige la variable <b>Entrada proporcionada</b>.</li>
+      <li>Agrega <b>Mostrar notificación</b> (deja «Contenido de URL»). Toca <b>Listo</b>.</li>
+    </ol>
+    <div class="at-nota">El triple toque ya está ligado a «Registrar Gasto» (Ajustes → Accesibilidad → Tocar → Tocar atrás), no hay que moverle. La respuesta también queda como último mensaje del Chat IA.</div>
+  </div>`, null, { size: 'md', key: 'atajo' });
+  try {
+    const r = await api('POST', '/api/atajo-token', { user_phone: S.phone });
+    S._atajoUrl = r.url; const b = $('at-copiar'); if (b) b.disabled = false;
+  } catch (e) { toast('No se pudo preparar el atajo: ' + e.message, 'error'); }
+}
+async function atajoCopiar() {
+  if (!S._atajoUrl) return;
+  try { await navigator.clipboard.writeText(S._atajoUrl); toast('📋 URL copiada'); window.iosHaptic && iosHaptic('light'); }
+  catch { prompt('Copia la URL del atajo:', S._atajoUrl); }
 }
 
 async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = null, imageMime = null) {
