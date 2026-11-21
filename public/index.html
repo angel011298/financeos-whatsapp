@@ -14,7 +14,7 @@
 <meta name="theme-color" content="#0ABFBC">
 <!-- Libs -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.49.0/dist/tabler-icons.min.css">
 <!-- Anti-FOWT: aplicar tema antes del primer render -->
 <script>try{var t=localStorage.getItem('fos_theme');if(t==='light')document.documentElement.classList.add('light');}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -6094,7 +6094,7 @@ function _ingCardHTML(ing, qi, recibidos) {
   if (rec) sub = `Recibido el ${_wlFechaCorta(rec.fecha + 'T12:00:00')}${Math.abs((rec.monto || 0) - (ing.monto || 0)) >= 0.005 ? ` · llegaron ${fmt(rec.monto)}` : ''}`;
   const puedeDeshacer = rec && String(rec.comentarios || '').includes(MARCA_ING_RECIBIDO);
   const ok = rec
-    ? `<button type="button" class="q-ing-ok on" ${puedeDeshacer ? `onclick="desconfirmarIngresoQ('${rec.id}','${dq}')"` : 'disabled'} title="${puedeDeshacer ? 'Recibido · toca para deshacer' : 'Ya está registrado en Movimientos'}" aria-label="${puedeDeshacer ? 'Recibido, toca para deshacer' : 'Ya registrado'}"><i class="ti ti-circle-check-filled"></i></button>`
+    ? `<button type="button" class="q-ing-ok on" ${puedeDeshacer ? `onclick="desconfirmarIngresoQ('${rec.id}','${dq}')"` : 'disabled'} title="${puedeDeshacer ? 'Recibido · toca para deshacer' : 'Ya está registrado en Movimientos'}" aria-label="${puedeDeshacer ? 'Recibido, toca para deshacer' : 'Ya registrado'}"><i class="ti ti-circle-check"></i></button>`
     : `<button type="button" class="q-ing-ok" onclick="confirmarIngresoQ('${kq}')" title="Confirmar que llegó ${_ndEsc(ing.descripcion)} (${fmt(ing.monto)})${cta ? ' a ' + _ndEsc((cuentasDef().find(x => x.key === cta) || {}).label || '') : ''}" aria-label="Confirmar que se recibió ${_ndEsc(ing.descripcion)}"><i class="ti ti-check"></i></button>`;
   const destino = rec
     ? (() => {
@@ -6549,7 +6549,7 @@ function rQuincenaPanel(ctx) {
           <span class="qt-val green">${fmt(balIng)}</span>
         </div>
         <div class="q-total-widget" title="Total de gastos presupuestados (incluye Despensa, Dinerito de novios y Transporte)">
-          <span class="qt-lbl"><i class="ti ti-sigma"></i> Egresos</span>
+          <span class="qt-lbl"><i class="ti ti-sum"></i> Egresos</span>
           <span class="qt-val red">${fmt(totalGasEsp)}</span>
         </div>
         <div class="q-total-widget q-bal-widget" title="Ingresos esperados menos egresos presupuestados">
@@ -9232,7 +9232,7 @@ function metaIconClass(nombre, tipo) {
   if (/boda|matrimoni|bautizo/.test(n)) return 'ti-heart';
   if (/retiro|jubilaci/.test(n)) return 'ti-chart-line';
   if (/laptop|compu|celular|electr/.test(n)) return 'ti-device-laptop';
-  return 'ti-piggy-bank';
+  return 'ti-pig-money';
 }
 
 // ── MOVIMIENTOS — FILTER HELPERS ─────────────────────────────────────────────
@@ -12410,7 +12410,7 @@ async function _recFallback() {
     _recording   = true;
     window.madeja?.estado('escuchando');
     $('mic-btn').classList.add('recording');
-    $('mic-icon').className = 'ti ti-player-stop-filled';
+    $('mic-icon').className = 'ti ti-player-stop';
     _appendMsg('bot', '🔴 Grabando... toca para detener', null, false);
 
     _mediaRec.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
