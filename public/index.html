@@ -9,14 +9,20 @@
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Barra de estado OPACA («black»), nunca «black-translucent»: en iOS 26/27 una app de la
+     pantalla de inicio instalada con black-translucent + viewport-fit=cover termina un alto de
+     barra de estado antes del borde inferior (62 pt en el 18 Pro Max, WebKit bug 301108) y esa
+     franja la pinta el sistema: nada de la página la alcanza. Con la barra opaca la vista empieza
+     bajo la barra de estado y llega al borde real. iOS solo lee este meta al AGREGAR la app a
+     inicio: una instalación vieja sigue igual hasta quitarla y volver a agregarla. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Us">
-<meta name="theme-color" content="#0ABFBC">
+<meta name="theme-color" content="#0a0a0a">
 <!-- Libs -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.49.0/dist/tabler-icons.min.css">
 <!-- Anti-FOWT: aplicar tema antes del primer render -->
-<script>try{var t=localStorage.getItem('fos_theme');if(t==='light')document.documentElement.classList.add('light');}catch(e){}</script>
+<script>try{var t=localStorage.getItem('fos_theme');if(t==='light'){document.documentElement.classList.add('light');document.querySelector('meta[name=theme-color]').setAttribute('content','#f6f6f6');}}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -25,6 +31,10 @@
    DESIGN TOKENS — OnlyUs Fintech Design System
    ═══════════════════════════════════════════════════════ */
 :root {
+  /* Zona segura inferior. html.vp-corto la anula (ver el meta de la barra de estado y _vpCorto):
+     en la instalación vieja con black-translucent el indicador de inicio queda en la franja que
+     pinta el sistema, así que ese relleno solo empujaba la barra del chat y el menú hacia arriba. */
+  --sab:env(safe-area-inset-bottom,0px);
   /* Surfaces — Modo noche (default). Minimalista monocromo: casi-negro + grises. */
   --bg-app:#0a0a0a; --bg-surface:#161616; --bg-surface-2:#202020;
   --bg-surface-3:#2a2a2a; --border-default:#232323;
@@ -108,7 +118,7 @@ body{
 .snap-val,.cost-val,.nd-din-sign,.nd-din-inp,.nd-asig-inp,.tbl-count,.chart-legend,.ie-inp.num,.nd-meta-chip .val{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" on}
 
 /* ═══════════════════════════════════════════════════════ AUTH */
-.auth-wrap{display:flex;align-items:center;justify-content:center;min-height:100dvh;background:var(--bg-app);padding:env(safe-area-inset-top,0px) 16px env(safe-area-inset-bottom,0px);box-sizing:border-box}
+.auth-wrap{display:flex;align-items:center;justify-content:center;min-height:100dvh;background:var(--bg-app);padding:env(safe-area-inset-top,0px) 16px var(--sab);box-sizing:border-box}
 .auth-box{
   background:var(--bg-surface);padding:40px 36px;border-radius:var(--radius-xl);
   width:360px;max-width:calc(100vw - 32px);text-align:center;border:1px solid var(--border-default);
@@ -120,7 +130,7 @@ body{
 .auth-box p{color:var(--text-2);margin-bottom:20px;font-size:var(--text-sm)}
 
 /* ═══════════════════════════════════════════════════════ CANDADO (PIN) */
-#pin-lock{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;background:var(--bg-app);padding:env(safe-area-inset-top,0px) 16px env(safe-area-inset-bottom,0px);box-sizing:border-box;overflow-y:auto}
+#pin-lock{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;background:var(--bg-app);padding:env(safe-area-inset-top,0px) 16px var(--sab);box-sizing:border-box;overflow-y:auto}
 #pin-lock.on{display:flex}
 .pin-box{width:300px;max-width:100%;text-align:center;margin:auto}
 .pin-logo{width:64px;height:64px;border-radius:16px;display:block;margin:0 auto 12px}
@@ -160,6 +170,7 @@ body{
 .welcome-box .w-sig{font-size:var(--text-xs);color:var(--text-3);font-style:italic}
 
 /* ═══════════════════════════════════════════════════════ LAYOUT */
+html.vp-corto{--sab:0px}   /* instalación vieja con la franja muerta de iOS 26/27 abajo (ver _vpCorto) */
 #app{display:none;height:100dvh;overflow:hidden}
 @supports not (height:100dvh){#app{height:100vh}}
 .layout{display:grid;grid-template-columns:252px minmax(0,1fr);height:100dvh;transition:grid-template-columns .22s ease}
@@ -991,7 +1002,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .mobile-nav{
   display:none;position:fixed;bottom:0;left:0;right:0;z-index:80;
   background:var(--bg-surface);border-top:1px solid var(--border-default);
-  padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-bottom:var(--sab);
 }
 .mobile-nav a{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -1009,7 +1020,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
 .sheet-inner{
   background:var(--bg-surface);border-radius:var(--radius-xl) var(--radius-xl) 0 0;
   padding:16px 20px;width:100%;border-top:1px solid var(--border-default);
-  padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  padding-bottom:calc(20px + var(--sab));
   transform:translateY(100%);transition:transform .25s cubic-bezier(.32,1,.56,1);
 }
 #mobile-sheet.open .sheet-inner{transform:translateY(0)}
@@ -1039,7 +1050,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
    msg-bot) — antes msg-user lo fijaba a blanco, incorrecto ahora que el acento
    se invierte por tema (en modo día el texto de esa burbuja es oscuro). */
 .msg-time{font-size:var(--text-xs);opacity:.55;margin-top:4px;text-align:right}
-.chat-bar{display:flex;align-items:center;gap:10px;padding:12px 0 0;padding-bottom:max(12px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--border-default);flex-shrink:0}
+.chat-bar{display:flex;align-items:center;gap:10px;padding:12px 0 0;padding-bottom:max(12px,var(--sab));border-top:1px solid var(--border-default);flex-shrink:0}
 .chat-bar input{flex:1;border-radius:var(--radius-pill);padding:12px 18px;font-size:16px}
 .round-btn{width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;transition:.15s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .send-btn{background:var(--accent-primary);color:var(--on-accent)}.send-btn:hover{opacity:.9}
@@ -1073,7 +1084,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   main{grid-column:1}
   aside{display:none}
   #sb-float{display:none!important}
-  main{padding:calc(16px + env(safe-area-inset-top,0px)) 14px calc(82px + env(safe-area-inset-bottom,0px))}
+  main{padding:calc(16px + env(safe-area-inset-top,0px)) 14px calc(82px + var(--sab))}
   .mobile-nav{display:flex}
   /* ── Charts */
   .charts-grid{grid-template-columns:minmax(0,1fr)}
@@ -1102,7 +1113,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .q-item-row{flex-wrap:wrap;gap:6px;padding:8px 10px}
   /* ── Modal → bottom sheet */
   .ovl{align-items:flex-end}
-  .modal{border-radius:var(--radius-xl) var(--radius-xl) 0 0;max-height:90vh;width:100%;max-width:100%;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+  .modal{border-radius:var(--radius-xl) var(--radius-xl) 0 0;max-height:90vh;width:100%;max-width:100%;padding:20px 16px calc(20px + var(--sab))}
   /* ── Forms */
   .f2{grid-template-columns:minmax(0,1fr)}
   /* ── Chat */
@@ -1134,7 +1145,7 @@ td.editable:hover{text-decoration:underline dotted var(--text-2)}
   .chat-mode .chat-nav-back{display:flex}
   /* ── Calendar day panel: bottom sheet on mobile */
   .cal-wrap{flex-direction:column}
-  .cal-day-panel{display:block;position:fixed;bottom:0;left:0;right:0;width:auto!important;border-radius:var(--radius-xl) var(--radius-xl) 0 0;border-bottom:none;z-index:200;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));max-height:72svh;overflow-y:auto;transform:translateY(110%);transition:transform .28s cubic-bezier(.32,1,.56,1)}
+  .cal-day-panel{display:block;position:fixed;bottom:0;left:0;right:0;width:auto!important;border-radius:var(--radius-xl) var(--radius-xl) 0 0;border-bottom:none;z-index:200;padding-bottom:calc(20px + var(--sab));max-height:72svh;overflow-y:auto;transform:translateY(110%);transition:transform .28s cubic-bezier(.32,1,.56,1)}
   .cal-day-panel:not(.open){transform:translateY(110%)}
   .cal-day-panel.open{position:fixed;transform:translateY(0);box-shadow:0 -12px 40px rgba(0,0,0,.4)}
 }
@@ -1485,7 +1496,7 @@ tr.tbl-filters input,tr.tbl-filters select{padding:5px 8px;font-size:var(--text-
   /* Todo el Inicio queda centrado en la pantalla (vertical): los separadores ::before/::after crecen
      igual arriba y abajo y se encogen a 0 cuando el contenido (p. ej. Gastos esta quincena) no cabe. */
   display:flex; flex-direction:column;
-  min-height:calc(100dvh - 98px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+  min-height:calc(100dvh - 98px - env(safe-area-inset-top,0px) - var(--sab));
 }
 #tab-dashboard.mini::before,#tab-dashboard.mini::after{content:"";flex:1 1 0}
 #tab-dashboard.mini:not(.active){display:none}
@@ -1571,7 +1582,7 @@ html.light #tab-dashboard.mini{
   /* Márgenes iguales arriba y abajo, libres de la barra de estado (hora/batería) y del indicador
      de inicio: la ventana queda centrada respecto a la pantalla. El alto sale del propio
      contenedor (100%), no de svh, que en la PWA de iOS no coincide con la pantalla real. */
-  #dash-sheet{--ds-gap:calc(max(env(safe-area-inset-top,0px),env(safe-area-inset-bottom,0px)) + 12px);
+  #dash-sheet{--ds-gap:calc(max(env(safe-area-inset-top,0px),var(--sab)) + 12px);
     padding:var(--ds-gap) 10px}
   .ds-panel{max-height:100%}
   .ds-head{padding:14px 16px 8px}.ds-body{padding:0 14px 16px}
@@ -1681,7 +1692,7 @@ body.sheet-locked{overflow:hidden}
 .ico-search input{flex:1;min-width:0;border:none;background:transparent;padding:10px 0;font-size:var(--text-sm);color:var(--text-1);outline:none}
 /* Pop-up central ligero (sobre las ventanas de módulos, debajo de los formularios) */
 .pop{display:none;position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.62);align-items:center;justify-content:center;
-  padding:calc(max(env(safe-area-inset-top,0px),env(safe-area-inset-bottom,0px)) + 12px) 10px}
+  padding:calc(max(env(safe-area-inset-top,0px),var(--sab)) + 12px) 10px}
 .pop.open{display:flex}
 .pop-panel{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:22px;width:100%;max-width:560px;
   max-height:100%;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.45);animation:pop-in .22s cubic-bezier(.32,1,.56,1)}
@@ -3000,6 +3011,7 @@ function toggleTheme() {
   if (rli) rli.className = isLight ? 'ti ti-sun' : 'ti ti-moon';
   if (rlb) rlb.setAttribute('data-tip', isLight ? 'Modo noche' : 'Modo día');
   localStorage.setItem('fos_theme', isLight ? 'light' : 'dark');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isLight ? '#f6f6f6' : '#0a0a0a');   // color de la barra del navegador = fondo de la app
   renderTab(S.tab); // redibujar charts con colores del nuevo tema
 }
 
@@ -10508,7 +10520,7 @@ function toast(msg, type='success') {
   const icon = type==='error' ? 'ti-x'    : type==='warn' ? 'ti-alert-triangle' : 'ti-check';
   t.style.border = `1px solid ${clr}`;
   t.style.color  = clr;
-  t.style.bottom = (matchMedia('(max-width:899px)').matches && !document.body.classList.contains('chat-mode')) ? 'calc(76px + env(safe-area-inset-bottom,0px))' : '24px';   // en el teléfono, sobre la barra inferior
+  t.style.bottom = (matchMedia('(max-width:899px)').matches && !document.body.classList.contains('chat-mode')) ? 'calc(76px + var(--sab))' : '24px';   // en el teléfono, sobre la barra inferior
   window.iosHaptic?.(type === 'error' ? 'error' : type === 'warn' ? 'medium' : 'light');
   t.innerHTML = `<i class="ti ${icon}"></i><span>${msg}</span>`;
   requestAnimationFrame(() => { t.style.opacity='1'; t.style.transform='translateX(-50%) translateY(0)'; });
@@ -12077,6 +12089,40 @@ function _scrollChat() {
   document.addEventListener('focusin', e => {
     if (e.target?.id === 'chat-input') { _syncVV(); setTimeout(_scrollChat, 300); }
   }, { passive: true });
+})();
+
+// iOS 26/27, app de la pantalla de inicio instalada con la barra «black-translucent» (antes de
+// que el <meta> pasara a «black»): WebKit termina la vista un alto de barra de estado antes del
+// borde inferior (WebKit 301108). Esa franja la pinta el sistema y nada de la página la alcanza:
+// estirar o bajar elementos solo los recorta. Lo que sí se puede: el indicador de inicio queda
+// dentro de esa franja, así que el relleno de zona segura inferior sobra → html.vp-corto (--sab:0)
+// y la barra del chat y el menú bajan ~34 pt. Con la barra opaca (instalación nueva) la zona
+// segura superior es 0 y esto no se activa; tampoco en Safari ni si Apple corrige el error.
+// Firma del error: zona segura superior > 20 y a la vista le falta ≈ esa misma altura.
+function _vpEsCorto({ sat, alto, innerH, innerW }) {
+  if (!(innerH > innerW) || !(sat > 20)) return false;   // solo vertical y con la vista bajo la barra de estado
+  const falta = alto - innerH;
+  return falta >= sat - 8 && falta <= sat + 40;
+}
+(function _vpCorto() {
+  const sa = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  if (!sa) return;
+  const sonda = document.createElement('div');
+  sonda.setAttribute('aria-hidden', 'true');
+  sonda.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';
+  document.body.appendChild(sonda);
+  function medir() {
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;   // con el teclado abierto la altura no dice nada
+    const corto = _vpEsCorto({ sat: sonda.offsetHeight, alto: Math.max(screen.width, screen.height), innerH: innerHeight, innerW: innerWidth });
+    document.documentElement.classList.toggle('vp-corto', corto);
+  }
+  medir();
+  addEventListener('resize', medir, { passive: true });
+  addEventListener('orientationchange', () => setTimeout(medir, 350), { passive: true });
+  addEventListener('pageshow', medir, { passive: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(medir, 250); });
+  document.addEventListener('focusout', () => setTimeout(medir, 450), { passive: true });
 })();
 
 function _showTyping() {
