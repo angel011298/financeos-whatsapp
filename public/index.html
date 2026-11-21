@@ -1888,6 +1888,10 @@ body.sheet-locked{overflow:hidden}
 .cm-st{flex:1;min-width:0;font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .cm-st .ti-circle-check{color:var(--color-income)}
 .cm-st span{overflow:hidden;text-overflow:ellipsis}
+.cm-rev{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0}
+.cm-rev[disabled]{opacity:.75;cursor:default}
+.cm-gira{display:inline-block;animation:cmGira 1s linear infinite}
+@keyframes cmGira{to{transform:rotate(360deg)}}
 .cm-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:12px 14px;display:flex;flex-direction:column;gap:10px;
   transition:opacity .25s,transform .25s}
 .cm-card.busy{opacity:.55;pointer-events:none}
@@ -5270,7 +5274,7 @@ function _cmCardHTML(c) {
   const chips = [
     c.pedido ? `<span class="wl-chip">Pedido ${E(c.pedido)}</span>` : '',
     c.tipo === 'reembolso' ? '<span class="wl-chip ok">↩️ Reembolso · entra como ingreso</span>' : '',
-    c.tipo === 'ingreso' ? '<span class="wl-chip ok">💰 Depósito · entra como ingreso</span>' : '',
+    c.tipo === 'ingreso' ? (c.parser === 'nomina' ? '<span class="wl-chip ok">💼 Nómina · confirma el Sueldo de tu Presupuesto</span>' : '<span class="wl-chip ok">💰 Dinero recibido · entra como ingreso</span>') : '',
     c.parser === 'total' ? '<span class="wl-chip warn">No pude separar los productos: revisa el monto</span>' : '',
     c.parser === 'aprox' ? '<span class="wl-chip warn">Revisa los montos</span>' : '',
     c.parser === 'gemini' ? '<span class="wl-chip">✨ Leído con IA</span>' : '',
@@ -5322,6 +5326,16 @@ function _cmCardHTML(c) {
 function _cmSetupHTML() {
   const st = _cmSt(), ctas = (st.cuentas || []).filter(x => x.cuenta);
   const lista = ctas.length ? `<div class="cm-ctas">${ctas.map(x => `<div><i class="ti ti-circle-check"></i><span>${_ndEsc(x.cuenta)}</span><small>revisado ${_cmHace(x.ultimo_sync)}</small></div>`).join('')}</div>` : '';
+  if (st.actualizar && ctas.length) return `<div class="cm-setup">
+    <div class="wl-panel-t">🔄 Actualiza el código una vez para revisar al instante</div>
+    <div class="at-nota" style="font-size:12px;color:var(--text-2)">Pendiente en: ${ctas.filter(x => !_cmVivo(x)).map(x => '<b>' + _ndEsc(x.cuenta) + '</b>').join(', ') || 'tus cuentas'}</div>
+    <ol>
+      <li><button class="btn btn-accent btn-sm" onclick="cmCopiarScript()"><i class="ti ti-copy"></i> Copiar código</button></li>
+      <li>En <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a>, con esa cuenta, abre tu proyecto de US, reemplaza todo el código y guarda (💾).</li>
+      <li>Elige <b>instalar</b> y presiona <b>▶ Ejecutar</b> (si pide permiso, «Permitir»). Repite en cada cuenta de la lista.</li>
+    </ol>
+    <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="cmSetupTog()">Cerrar</button>
+  </div>`;
   return `<div class="cm-setup">
     <div class="wl-panel-t">${ctas.length ? '📨 Cuentas conectadas' : '📨 Conectar Gmail · una sola vez, unos 3 minutos'}</div>
     ${lista}
@@ -5333,7 +5347,7 @@ function _cmSetupHTML() {
       <li>Arriba, en la lista de funciones, elige <b>instalar</b> y presiona <b>▶ Ejecutar</b>.</li>
       <li>Google pide permiso: “Revisar permisos” → tu cuenta → “Configuración avanzada” → “Ir a… (no seguro)” → “Permitir”.
         Es tu propio script: solo lee tus correos de compras y los manda a US.</li>
-      <li>Listo. Revisa tu correo cada 10 minutos (desde el inicio de la quincena) y le pone la etiqueta <b>US-importado</b> a lo que ya mandó.</li>
+      <li>Listo. Revisa tu correo cada 10 minutos (o al instante con «Revisar ahora») y le pone la etiqueta <b>US-importado</b> a lo que ya mandó.</li>
     </ol>
     <details><summary>Ver el código</summary><textarea readonly id="cm-code" aria-label="Código del script">${st.token ? _ndEsc(_cmScript()) : 'Cargando…'}</textarea></details>
   </div>`;
@@ -5352,8 +5366,8 @@ function cmRender() {
         ? `Gmail conectado · ${st.cuentas.length} cuentas`
         : 'Gmail conectado' + (s2.cuenta ? ' · ' + _ndEsc(s2.cuenta) : '')} · revisado ${_cmHace(s2.ultimo_sync)}</span>`
       : '<i class="ti ti-plug-connected-x"></i><span>Gmail aún sin conectar</span>'}</div>
-    <button class="wl-act ico" onclick="cmSetupTog()" title="Cómo conectar Gmail" aria-label="Cómo conectar Gmail"><i class="ti ti-settings"></i></button>
-    <button class="wl-act ico" onclick="cmRefrescar(this)" title="Buscar de nuevo" aria-label="Buscar de nuevo"><i class="ti ti-refresh"></i></button>
+    ${s2 ? `<button class="wl-act cm-rev" onclick="cmRevisarAhora()" ${st.revisando ? 'disabled' : ''} title="Revisar tus cuentas de Gmail en este momento">
+      <i class="ti ti-${st.revisando ? 'loader-2 cm-gira' : 'mail-search'}"></i> ${st.revisando ? 'Revisando…' : 'Revisar ahora'}</button>` : ''}
   </div>`;
   const setup = !s2 || st.setup ? _cmSetupHTML() : '';
   const vacio = st.lista.length ? '' : `<div class="wl-empty">📭 No hay compras por revisar.<br>${s2 ? 'Cuando llegue un recibo a tu Gmail aparecerá aquí.' : 'Conecta tu Gmail para que US las encuentre solo.'}</div>`;
@@ -5369,20 +5383,42 @@ async function _cmToken() {
 function _cmScript() {
   const st = _cmSt(), desde = (getQuincenaInfo(0).from || toISO(new Date())).replace(/-/g, '/');
   return `// US · Compras desde Gmail. Pega esto en script.google.com, guarda y ejecuta "instalar" una vez.
-// Cada 10 minutos busca correos de compras, recibos, cargos y reembolsos y los manda a tu US para que los revises.
+// Cada 10 minutos (o al instante con «Revisar ahora» en US) busca compras, recibos, cargos, reembolsos y dinero recibido
+// y los manda a tu US para que los revises. Versión 2: late cada minuto para saber si pediste revisar.
 var US_URL = '${location.origin}/api/correo/ingest';
+var US_LATIDO = '${location.origin}/api/correo/latido';
 var US_TEL = '${S.phone}';
 var US_TOKEN = '${st.token}';
 var DESDE = '${desde}';
 var ETIQUETA = 'US-importado';
 var BUSQUEDA = '{from:amazon from:mercadolibre from:mercadopago from:uber from:didi from:rappi from:banamex from:citibanamex from:revolut from:pluxee ' +
   'subject:pedido subject:compra subject:compraste subject:recibo subject:factura subject:pagaste subject:cargo subject:"tu pago" ' +
-  'subject:order subject:receipt subject:reembolso subject:devolución subject:comprobante}';
+  'subject:order subject:receipt subject:reembolso subject:devolución subject:comprobante ' +
+  'subject:recibiste subject:depósito subject:transferencia subject:nómina}';
 
 function instalar() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('sincronizar').timeBased().everyMinutes(10).create();
+  ScriptApp.newTrigger('latido').timeBased().everyMinutes(1).create();
+  revisar();
+}
+
+// Cada minuto: pregunta a US si pediste «Revisar ahora»; si no, revisa solo cada 10 minutos
+function latido() {
+  var p = PropertiesService.getScriptProperties();
+  var pedir = false;
+  try { pedir = JSON.parse(avisar(false).getContentText()).revisar === true; } catch (e) {}
+  if (pedir || Date.now() - Number(p.getProperty('ultima') || 0) >= 9.5 * 60000) revisar();
+}
+
+function revisar() {
   sincronizar();
+  PropertiesService.getScriptProperties().setProperty('ultima', String(Date.now()));
+  try { avisar(true); } catch (e) {}
+}
+
+function avisar(hecho) {
+  return UrlFetchApp.fetch(US_LATIDO, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify({ phone: US_TEL, token: US_TOKEN, cuenta: Session.getEffectiveUser().getEmail(), hecho: hecho, v: 2 }) });
 }
 
 function sincronizar() {
@@ -5422,7 +5458,34 @@ async function cmCopiarScript() {
   try { await navigator.clipboard.writeText(_cmScript()); toast('📋 Código copiado'); }
   catch { const t = $('cm-code'); if (t) { t.closest('details').open = true; t.select(); } toast('Selecciona el código y cópialo', 'info'); }
 }
-function cmSetupTog() { const st = _cmSt(); st.setup = !st.setup; cmRender(); }
+function cmSetupTog() { const st = _cmSt(); st.setup = !st.setup; if (!st.setup) st.actualizar = false; cmRender(); }
+// ¿El script de esa cuenta ya es la versión con latido y está vivo? (late cada minuto)
+const _cmVivo = c => (c.version || 1) >= 2 && c.latido_at && Date.now() - new Date(c.latido_at).getTime() < 3 * 60e3;
+// «Revisar ahora»: US marca la petición, cada script la ve en su siguiente latido (≤ 1 min) y revisa Gmail en ese momento
+async function cmRevisarAhora() {
+  const st = _cmSt(); if (st.revisando) return;
+  let r;
+  try { r = await api('POST', '/api/correo/revisar', { user_phone: S.phone }); }
+  catch (e) { toast('No se pudo pedir la revisión: ' + e.message, 'error'); return; }
+  const vivas = (r.cuentas || []).filter(_cmVivo);
+  if (!vivas.length) { st.setup = true; st.actualizar = true; if (!st.token) _cmToken(); cmRender(); return; }
+  st.revisando = true; cmRender();
+  window.iosHaptic && iosHaptic('light');
+  const t0 = new Date(r.pedido).getTime(), lim = Date.now() + 100e3, antes = st.lista.length;
+  while (Date.now() < lim) {
+    await new Promise(res => setTimeout(res, 4000));
+    await cmPrefetch(false);
+    const mias = (st.cuentas || []).filter(c => vivas.some(v => v.cuenta === c.cuenta));
+    if (mias.length && mias.every(c => c.ultimo_sync && new Date(c.ultimo_sync).getTime() >= t0 - 1000)) break;
+  }
+  await new Promise(res => setTimeout(res, 3000)); await cmPrefetch(false);   // deja terminar la lectura de lo que llegó
+  st.revisando = false;
+  const viejas = (r.cuentas || []).filter(c => !_cmVivo(c));
+  if (viejas.length) { st.setup = true; st.actualizar = true; if (!st.token) _cmToken(); }
+  cmRender();
+  const nuevos = Math.max(0, st.lista.length - antes);
+  toast(nuevos ? `📨 ${nuevos} ${nuevos === 1 ? 'movimiento nuevo' : 'movimientos nuevos'} por revisar` : '✓ Revisé tus correos: no hay nada nuevo', nuevos ? 'success' : 'info');
+}
 async function cmRefrescar(btn) { btn?.classList.add('spin'); await cmPrefetch(false); cmRender(); btn?.classList.remove('spin'); }
 const _cmC = id => _cmSt().lista.find(x => x.id === id);
 function _cmPintar(id) { const c = _cmC(id), el = $('cm-card-' + id); if (c && el) el.outerHTML = _cmCardHTML(c); }
@@ -11319,7 +11382,6 @@ function rChat() {
       <button role="tab" id="seg-par" onclick="chatVista('par')"><span aria-hidden="true">💬</span> <span id="seg-par-n">${_parNombreGuess()}</span><span class="chat-badge" id="par-badge" hidden></span></button>
       <button role="tab" id="seg-ia" onclick="chatVista('ia')"><span aria-hidden="true">✨</span> Asistente IA</button>
     </div>
-    <button type="button" class="round-btn ia-orb" id="ia-orb" onclick="atajoAbrir()" title="Atajo de iPhone" aria-label="Atajo de iPhone para registrar gastos" style="background:var(--bg-surface-2)"><i class="ti ti-device-mobile"></i></button>
   </div>
   <div class="chat-pane" id="pane-ia">
     <div class="chat-stage">

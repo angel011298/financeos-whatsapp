@@ -84,6 +84,32 @@ const RE_SENAL = /pedido|compra|compraste|order|recibo|receipt|factura|pago|paga
 const RE_CANCELA = /se cancel(o|aron)|cancelamos|(pedido|compra|orden) cancelad|cancelacion de (tu |la )?(pedido|compra|orden)/;
 const RE_REEMBOLSO = /reembolso|reintegro|refund|te devolvimos|devolvimos tu dinero|devolucion (de tu dinero|aprobada|procesada)/;
 const ES_APP = f => /^(rappi|ubereats|didifood|uber|didi)$/.test(f);
+// Dinero que entra. En bancos basta «depósito/abono/recibiste…»; en otros remitentes tiene que decir que recibiste dinero.
+const RE_INGRESO = /deposito a (tu )?(cuenta|tarjeta)|deposito (recibido|a cuenta|de nomina|spei)|deposito en (tu )?cuenta|abono (a|en) (tu )?(cuenta|tarjeta)|recibiste (un pago|una transferencia|un deposito|dinero|\$|mxn|\d)|te (enviaron|depositaron|transfirieron)|transferencia recibida|recepcion de (una )?transferencia|pago de (tu )?nomina/;
+const RE_INGRESO_OTRO = /recibiste (un pago|una transferencia|un deposito|dinero|\$\s?\d)|te (enviaron|depositaron|transfirieron) (dinero|\$)|dinero recibido|transferencia recibida/;
+// Quién manda el dinero («Recibiste $500 de Juan Pérez», «Ordenante: JUAN PEREZ», «Enviado por …»)
+function remitenteIngreso(lineas) {
+  const txt = lineas.slice(0, 40).join('\n');
+  const m = txt.match(/(?:recibiste|te (?:enviaron|depositaron|transfirieron))[^\n]{0,40}?\bde(?:\s+parte\s+de)?\s+([\p{L}][\p{L}.'-]*(?:\s+[\p{L}][\p{L}.'-]*){0,5})/iu)
+    || txt.match(/(?:ordenante|remitente|enviado por|nombre del ordenante|de parte de)\s*:?\s*│?\s*([\p{L}][\p{L}.'-]*(?:\s+[\p{L}][\p{L}.'-]*){0,5})/iu);
+  if (!m) return null;
+  const n = m[1].replace(/\s+(el|con|por|a las|en|desde|referencia|concepto|mediante|via)\b.*$/i, '').replace(/[.'-]+$/, '').trim();
+  return n.length >= 3 && !/^(tu|su|la|el|una?|cuenta|tarjeta|banco|revolut|banamex)$/i.test(n) ? n.slice(0, 60) : null;
+}
+// ¿Lo manda la misma persona (traspaso entre sus cuentas)? Al menos dos palabras de su nombre completo, o todo su nombre si solo tiene uno
+function esMismaPersona(nombre, dueno) {
+  const a = norm(nombre).split(/[^a-z]+/).filter(w => w.length >= 3), d = norm(dueno).split(/[^a-z]+/).filter(w => w.length >= 3);
+  if (!a.length || !d.length) return false;
+  const comunes = d.filter(w => a.includes(w)).length;
+  return comunes >= Math.min(2, d.length);
+}
+// Nómina: depósito grande a la cuenta de débito alrededor del 10 o el 25 (si cae en fin de semana o feriado se paga el
+// día hábil más cercano: se acepta de 4 días antes a 2 después).
+function esNomina(fechaISO, total) {
+  if (!(Number(total) >= 5000)) return false;
+  const d = +String(fechaISO).slice(8, 10);
+  return (d >= 6 && d <= 12) || (d >= 21 && d <= 27);
+}
 function remitenteLocal(from) { const m = String(from || '').match(/<?([^<>\s"]+)@/); return norm(m ? m[1] : ''); }
 function clasificar(asunto, lineas, fuente, remitente) {
   const a = norm(asunto), ini = norm(lineas.slice(0, 14).join(' ')).slice(0, 1200), loc = remitenteLocal(remitente);
@@ -101,10 +127,13 @@ function clasificar(asunto, lineas, fuente, remitente) {
   }
   if (ES_BANCO(fuente)) {
     const t = a + ' ' + ini;
-    if (/deposito|abono|recibiste|te enviaron|transferencia recibida|nomina|te depositaron/.test(t)) return 'ignorar';
-    if (/dis\.?\s?efe|disposicion de efectivo|retiro (en|de) cajero|cajero automatico|\batm\b/.test(t)) return 'ignorar';
+    if (/marketing|promo|newsletter|ofertas|noticias|novedades/.test(loc) || RE_PROMO.test(a) && !/retiro\/compra|deposito|transferencia|cargo|compra con/.test(a)) return 'ignorar';
     if (/estatus (rechazad|declinad|fallid|no exitos|cancelad)|operacion (rechazada|declinada|no exitosa)/.test(t)) return 'ignorar';
-    if (/estado de cuenta|alta de cuenta|activacion|acceso|beneficiario|cambia tus datos|netkey|seguridad|codigo|contrasena|bienvenid/.test(a)) return 'ignorar';
+    if (/estado de cuenta|alta de cuenta|activacion|acceso|beneficiario|cambia tus datos|netkey|seguridad|codigo|contrasena|bienvenid|limite de/.test(a)) return 'ignorar';
+    // Dinero que ENTRA (depósito, abono, transferencia recibida, nómina): es ingreso. Los traspasos desde tus propias
+    // cuentas se descartan después (leerCorreo por el nombre de quien envía; conciliar por el envío de la otra cuenta).
+    if (RE_INGRESO.test(t)) return 'ingreso';
+    if (/dis\.?\s?efe|disposicion de efectivo|retiro (en|de) cajero|cajero automatico|\batm\b/.test(t)) return 'ignorar';
     // Traspasos entre cuentas propias (Banamex ⇄ Revolut, ahorro…)
     if (/traspaso|cuentas? propias?|entre (mis|tus|sus) cuentas|misma cuenta|a tu cuenta revolut|a revolut|desde revolut|de revolut|revolut bank|recarga (de|a) (tu )?cuenta|ahorro propio/.test(norm(lineas.join(' ')))) return 'ignorar';
     // "Enviaste $X a <tu mismo nombre>" = transferencia a ti mismo
@@ -114,6 +143,8 @@ function clasificar(asunto, lineas, fuente, remitente) {
     return 'ignorar';
   }
   if (/rechazad|declinad|no se pudo (procesar|completar)|pago fallido|intenta de nuevo/.test(a)) return 'ignorar';
+  // Mercado Pago, PayPal y otros: «Recibiste un pago / dinero / una transferencia» = ingreso
+  if (RE_INGRESO_OTRO.test(a) && !RE_PROMO.test(a)) return 'ingreso';
   // Apps de comida y viajes: su recibo llega como "Tu pedido de X fue entregado" o "Tu viaje …"
   if (ES_APP(fuente) && /(total pagado|total|cargo neto|pagaste|cobramos)/.test(ini) && /pedido|orden|viaje|recibo|entregado|gracias/.test(a + ' ' + ini) && !/oferta|promo|cupon|descuento de|% /.test(a)) return 'compra';
   if (RE_PROMO.test(a) && !/(confirmacion|recibo|factura|comprobante) de (tu )?(pedido|compra|pago)|gracias por tu (compra|pedido)|compraste/.test(a)) return 'ignorar';
@@ -461,6 +492,22 @@ async function leerCorreo(deps, phone, msg) {
   const medio_hint = medioHintDe(texto, fuente);
   let items = [], total = null, envio = 0, descuento = 0, parser = 'exacto';
 
+  // ── Dinero que entra: transferencia de un tercero, depósito o nómina (Banamex, 10 y 25) ──
+  if (tipo === 'ingreso') {
+    const tot = lectorBanco(lineas, fuente).total;
+    if (!tot) return { ...fila, tipo, estado: 'ignorado', parser: 'sin-monto', comercio, pedido: null };
+    const quien = remitenteIngreso(lineas);
+    const dueno = deps.nombreDueno ? await deps.nombreDueno(phone).catch(() => '') : '';
+    if (quien && dueno && esMismaPersona(quien, dueno))   // te lo mandaste tú desde otra cuenta: traspaso, no ingreso
+      return { ...fila, tipo, estado: 'ignorado', parser: 'traspaso', comercio: quien, pedido: null, items: [], total: r2(tot) };
+    const titulo = s => String(s).toLowerCase().replace(/(^|\s)\p{L}/gu, m => m.toUpperCase());
+    const nomina = fuente === 'banamex' && !quien && esNomina(fechaMX(fila.fecha_correo), tot);
+    const nombre = nomina ? 'Sueldo' : quien ? `Transferencia de ${titulo(quien)}` : `Depósito ${COMERCIO[fuente] || comercio}`;
+    return { ...fila, tipo, comercio: nomina ? 'Nómina' : quien ? titulo(quien) : (COMERCIO[fuente] || comercio), pedido: null, pedidos: [],
+      items: [{ nombre, cantidad: 1, precio: r2(tot), categoria: 'OTROS', ...(nomina ? { nota: 'Recibido (Presupuesto)' } : {}) }],
+      total: r2(tot), envio: 0, descuento: 0, medio_hint, parser: nomina ? 'nomina' : 'exacto', estado: 'pendiente' };
+  }
+
   const amz = fuente === 'amazon' && (tipo === 'compra' || tipo === 'envio') ? lectorAmazon(lineas) : null;
   if (tipo === 'envio') {
     // En reserva (estado 'envio'): conciliar() lo propone solo si ninguna confirmación completa cubre ese pedido
@@ -515,6 +562,15 @@ async function leerCorreo(deps, phone, msg) {
 module.exports = function montarCorreo(app, deps) {
   const { sb, SHARE_SECRET, pushA, medioCanonDe, canonCategoria, aplicarImpactoCuentas, conReintentos, learnPattern, esGhost } = deps;
   const firmar = phone => crypto.createHmac('sha256', SHARE_SECRET).update('correo:' + String(phone)).digest('base64url');
+  // Nombre completo de la persona (para reconocer traspasos entre sus propias cuentas): external_refs.nombre_completo o nombre
+  const _duenos = new Map();
+  deps.nombreDueno = async phone => {
+    const c = _duenos.get(phone); if (c && Date.now() - c.t < 600e3) return c.n;
+    const { data: u } = await sb.from('usuarios').select('nombre, external_refs').eq('telefono', phone).maybeSingle();
+    const n = String((u?.external_refs || {}).nombre_completo || u?.nombre || '');
+    _duenos.set(phone, { n, t: Date.now() });
+    return n;
+  };
   const tokenOk = (phone, tok) => { const a = Buffer.from(String(tok || '')), b = Buffer.from(firmar(phone)); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 
   app.use('/api/correo', (req, res, next) => (esGhost(req) && req.method !== 'GET')
@@ -530,6 +586,17 @@ module.exports = function montarCorreo(app, deps) {
   // Lee en segundo plano los correos recibidos (estado 'procesando'): así el script de Gmail recibe respuesta al
   // instante aunque haya que consultar a Gemini. Si el servidor se reinicia a la mitad, GET /pendientes lo retoma.
   const _cola = new Set();
+  // ¿Ese ingreso ya está en Movimientos? Mismo monto (±$1) en ±3 días; la nómina, cualquier «Sueldo/Nómina» en ±5 días
+  // (a veces se capturó con el monto esperado y no con el depositado).
+  async function ingresoYaRegistrado(phone, f) {
+    const d = fechaMX(f.fecha_correo), dia = 864e5, base = new Date(d + 'T12:00:00Z').getTime();
+    const { data } = await sb.from('movimientos').select('concepto, monto, fecha').eq('user_phone', phone).eq('tipo', 'INGRESO').is('deleted_at', null)
+      .gte('fecha', new Date(base - 5 * dia).toISOString().slice(0, 10)).lte('fecha', new Date(base + 5 * dia).toISOString().slice(0, 10));
+    return (data || []).some(m => {
+      const cerca = Math.abs(new Date(m.fecha + 'T12:00:00Z').getTime() - base) <= 3 * dia;
+      return (cerca && Math.abs(Number(m.monto) - Number(f.total)) <= 1) || (f.parser === 'nomina' && /sueldo|n[oó]mina|salario/i.test(m.concepto || ''));
+    });
+  }
   async function procesarCola(phone) {
     if (_cola.has(phone)) return;
     _cola.add(phone);
@@ -556,6 +623,7 @@ module.exports = function montarCorreo(app, deps) {
               .in('estado', ['pendiente', 'registrado', 'omitido']).neq('id', r.id).limit(1);
             if ((dup || []).length) f.estado = 'duplicado';
           }
+          if (f.estado === 'pendiente' && f.tipo === 'ingreso' && await ingresoYaRegistrado(phone, f)) f.estado = 'duplicado';
           const { user_phone: _p, msg_id: _m, texto: _t, ...upd } = f;
           await sb.from('correo_compras').update(upd).eq('id', r.id);
           if (f.estado === 'pendiente') listos.push({ ...f, id: r.id });
@@ -610,6 +678,15 @@ module.exports = function montarCorreo(app, deps) {
       for (const r of todas.filter(x => x.estado === 'pendiente' && ES_BANCO(x.fuente) && x.tipo === 'compra' && /sin comercio/.test(String(((x.items || [])[0] || {}).nombre)))) {
         const t = new Date(r.fecha_correo).getTime(), v = Number(r.total);
         const par = recibos.find(o => o.id !== r.id && Math.abs(new Date(o.fecha_correo).getTime() - t) <= 2 * 864e5
+          && montosDe(String(o.texto).slice(0, 3000)).some(m => Math.abs(m.v - v) <= 0.5));
+        if (par) traspasos.push(r.id);
+      }
+      // 2b) Depósitos que son traspasos tuyos: otra de tus cuentas avisó que ENVIASTE ese mismo monto (±1 día)
+      //     («Enviaste $917.30 a Ángel Ortiz» de Revolut, o un «Retiro/Compra» sin comercio de Banamex).
+      const envios = todas.filter(r => ES_BANCO(r.fuente) && /enviaste|transferencia (enviada|realizada)|retiro\/compra|traspaso|cuentas propias/i.test(norm(r.asunto) + ' ' + norm(String(r.texto).slice(0, 800))));
+      for (const r of todas.filter(x => x.estado === 'pendiente' && x.tipo === 'ingreso')) {
+        const t = new Date(r.fecha_correo).getTime(), v = Number(r.total);
+        const par = envios.find(o => o.id !== r.id && o.fuente !== r.fuente && Math.abs(new Date(o.fecha_correo).getTime() - t) <= 864e5
           && montosDe(String(o.texto).slice(0, 3000)).some(m => Math.abs(m.v - v) <= 0.5));
         if (par) traspasos.push(r.id);
       }
@@ -708,6 +785,34 @@ module.exports = function montarCorreo(app, deps) {
     } catch (e) { console.error('[correo] ingest:', e.message); res.status(500).json({ success: false, error: e.message }); }
   });
 
+  // Latido del script de Gmail (v2, cada minuto): avisa que sigue vivo y pregunta si la persona pidió «Revisar ahora».
+  // Con `hecho` reporta que acaba de revisar el correo (aunque no hubiera nada nuevo): eso es «revisado hace…».
+  app.post('/api/correo/latido', async (req, res) => {
+    try {
+      const { phone, token, cuenta, hecho, v } = req.body || {};
+      if (!phone || !tokenOk(phone, token)) return res.status(401).json({ success: false, error: 'Token inválido' });
+      const cta = String(cuenta || '').trim().toLowerCase().slice(0, 120), ahora = new Date().toISOString();
+      const { data: s0 } = await sb.from('correo_sync').select('revisar_at').eq('user_phone', phone).eq('cuenta', cta).maybeSingle();
+      const upd = { latido_at: ahora, version: Number(v) || 1, ...(hecho ? { ultimo_sync: ahora, revisar_at: null } : {}) };
+      if (s0) await sb.from('correo_sync').update(upd).eq('user_phone', phone).eq('cuenta', cta);
+      else await sb.from('correo_sync').insert({ user_phone: phone, cuenta: cta, recibidos: 0, ...upd });
+      res.json({ success: true, revisar: !hecho && !!s0?.revisar_at });
+      if (hecho) setImmediate(() => procesarCola(phone));
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+  // «Revisar ahora» desde la app: marca la petición; cada script la ve en su siguiente latido (≤ 1 min) y revisa Gmail
+  app.post('/api/correo/revisar', async (req, res) => {
+    try {
+      const phone = req.body?.user_phone;
+      if (!phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
+      const pedido = new Date().toISOString();
+      await sb.from('correo_sync').update({ revisar_at: pedido }).eq('user_phone', phone);
+      const { data } = await sb.from('correo_sync').select('cuenta, ultimo_sync, latido_at, version').eq('user_phone', phone);
+      res.json({ success: true, pedido, cuentas: data || [] });
+      setImmediate(() => procesarCola(phone));
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+
   // Pendientes de revisar (+ posibles duplicados contra Movimientos y entre correos) y estado de la conexión
   app.get('/api/correo/pendientes', async (req, res) => {
     try {
@@ -716,7 +821,7 @@ module.exports = function montarCorreo(app, deps) {
       const [{ data: rows }, { data: sync }, { data: u }] = await Promise.all([
         sb.from('correo_compras').select('id, cuenta, remitente, asunto, fecha_correo, fuente, tipo, pedido, comercio, items, total, envio, descuento, medio_hint, parser')
           .eq('user_phone', phone).eq('estado', 'pendiente').order('fecha_correo', { ascending: false }).limit(60),
-        sb.from('correo_sync').select('cuenta, ultimo_sync, recibidos').eq('user_phone', phone).order('ultimo_sync', { ascending: false }),
+        sb.from('correo_sync').select('cuenta, ultimo_sync, recibidos, latido_at, revisar_at, version').eq('user_phone', phone).order('ultimo_sync', { ascending: false, nullsFirst: false }),
         sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle()]);
       const lista = rows || [];
       sb.from('correo_compras').select('id', { count: 'exact', head: true }).eq('user_phone', phone).eq('estado', 'procesando')
