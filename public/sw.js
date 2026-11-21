@@ -55,8 +55,14 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // HTML: siempre desde la red, NUNCA almacenar en caché SW.
-  // El servidor inyecta _BUILD_TS y headers Surrogate-Control: no-store.
+  // HTML: siempre desde la red (el servidor inyecta _BUILD_TS). La última copia buena se guarda SOLO como respaldo para
+  // abrir US sin conexión (el chat IA guarda lo que escribas y lo manda al volver la red); con red nunca se usa.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(fetch(e.request, { cache: 'no-store' })
+      .then(r => { if (r.ok && r.type === 'basic') { const c = r.clone(); caches.open(CACHE).then(ca => ca.put('/', c)).catch(() => {}); } return r; })
+      .catch(() => caches.match('/')));
+    return;
+  }
   e.respondWith(fetch(e.request, { cache: 'no-store' }).catch(() => caches.match('/')));
 });
 

@@ -4744,9 +4744,25 @@ const _chatInFlight = new Map(); // phone -> { text, ts, promise }
 const CHAT_DEDUP_WINDOW_MS = 5 * 60 * 1000; // 5 min — cubre el peor caso observado
 let CORREO = null;   // { ticketDesdeFoto } — lo llena el montaje de correo.js al final del archivo
 
+const _colaHechos = new Map();   // cola_id → respuesta: un mensaje guardado sin conexión se procesa una sola vez
+const _MESES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 app.post('/api/chat-web', async (req, res) => {
-  const { phone, message, audio_b64, audio_mime, image_b64, image_mime } = req.body;
+  const { phone, message, audio_b64, audio_mime, image_b64, image_mime, cola_id, cola_at } = req.body;
   if (!phone) return res.status(400).json({ error: 'Missing phone' });
+  // Mensaje escrito sin conexión y enviado al volver la red: si ya se procesó, se devuelve la misma respuesta
+  if (cola_id) {
+    const k = phone + ':' + String(cola_id).slice(0, 40);
+    const ya = _colaHechos.get(k);
+    if (ya) return res.json({ reply: ya.r, deduped: true });
+    const json0 = res.json.bind(res);
+    res.json = o => {
+      if (o && o.reply && !o.error) {
+        _colaHechos.set(k, { r: o.reply, t: Date.now() });
+        if (_colaHechos.size > 500) for (const [kk, v] of _colaHechos) if (Date.now() - v.t > 864e5 * 3) _colaHechos.delete(kk);
+      }
+      return json0(o);
+    };
+  }
 
   // El dedup solo aplica a texto (el audio no siempre serializa idéntico y su
   // transcripción ya es no-determinista, así que no hay riesgo real de duplicar ahí).
@@ -4771,6 +4787,16 @@ app.post('/api/chat-web', async (req, res) => {
 
     let text    = (message || '').trim();
     let isAudio = false;
+    // Escrito sin conexión otro día: se registra con la fecha en que se escribió, no la de hoy
+    let fechaCola = null;
+    if (text && cola_at) {
+      const dCola = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date(Number(cola_at) || Date.now()));
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dCola) && dCola < hoy()) {
+        fechaCola = dCola;
+        const [y, m, d] = dCola.split('-');
+        text += ` (lo escribí sin conexión el ${+d} de ${_MESES_ES[+m - 1]} de ${y}: usa esa fecha)`;
+      }
+    }
 
     // Transcribir audio si viene en base64 (desde grabación web)
     if (audio_b64) {
@@ -4918,6 +4944,8 @@ No expliques nada, devuelve solo esa línea.`
             if (/\balicia\b/i.test(blobItem)) {
               item.datos = { ...item.datos, comentarios: 'Alicia' };
             }
+            // Escrito sin conexión otro día: la fecha es la del día en que se escribió (no se deja a la IA)
+            if (fechaCola && (!item.datos?.fecha || item.datos.fecha >= hoy())) item.datos = { ...item.datos, fecha: fechaCola };
           }
           const result = await executeDbAction(phone, item, 'web');
           execs.push({ item, result });
@@ -4994,18 +5022,147 @@ app.post('/api/atajo-token', (req, res) => {
   if (!phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
   res.json({ success: true, url: `${req.protocol === 'http' && !/localhost/.test(req.get('host')) ? 'https' : req.protocol}://${req.get('host')}/api/atajo/${firmarAtajo(phone)}` });
 });
-app.post('/api/atajo/:token', express.text({ type: ['text/*', 'application/octet-stream'], limit: '20kb' }), async (req, res) => {
+// ── Registro directo (sin IA): el atajo manda «monto | concepto | categoría | medio» — o la cola guardada sin conexión,
+// una línea por gasto con la fecha/hora en que se capturó: «2026-11-21 12:45:03|200|Tacos|Alicia|Efectivo». Cada línea
+// con fecha se registra UNA sola vez (aunque el atajo reenvíe la cola completa): se busca en audit_log por su texto exacto.
+const _atajoLock = new Map();   // phone → promesa: una descarga de cola a la vez por persona
+function _lev(a, b) {
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let p = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) { const c = [i]; for (let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; }
+  return p[n];
+}
+// Categoría escrita a mano → una de las oficiales (tolera acentos, mayúsculas, abreviaturas y errores de dedo)
+function catAtajo(txt) {
+  const k = _catKeySrv(txt);
+  if (!k) return { cat: '' };
+  if (/^mam[a]$/.test(k)) return { cat: '', mama: true };
+  if (/^pasajes?$/.test(k)) return { cat: 'Transporte' };
+  if (/^otros?$/.test(k)) return { cat: 'OTROS' };
+  const exacta = CATEGORIAS.find(c => _catKeySrv(c) === k); if (exacta) return { cat: exacta };
+  const pref = k.length >= 3 && CATEGORIAS.find(c => _catKeySrv(c).startsWith(k)); if (pref) return { cat: pref };
+  let mejor = null, dist = 9;
+  CATEGORIAS.forEach(c => { const d = _lev(k, _catKeySrv(c)); if (d < dist) { dist = d; mejor = c; } });
+  if (mejor && dist <= (k.length >= 6 ? 2 : 1)) return { cat: mejor };
+  return { cat: 'OTROS', desconocida: String(txt).trim() };
+}
+function _montoAtajo(s) {
+  let t = String(s || '').replace(/[$\s]/g, '').replace(/mxn|pesos?/ig, '');
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');          // 1,200.50
+  else if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t = t.replace(/\./g, '').replace(',', '.');   // 1.200,50
+  else t = t.replace(',', '.');                                               // 200,5
+  return /^\d+(\.\d+)?$/.test(t) ? Math.round(parseFloat(t) * 100) / 100 : NaN;
+}
+function _fechaAtajo(s) {
+  let m = String(s || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
+// Una línea → { fecha, monto, concepto, categoria, medio } o null si no tiene la forma estructurada (va al chat IA)
+function lineaAtajo(linea) {
+  let partes = linea.includes('|') ? linea.split('|') : linea.split(/\.\s+|\s+·\s+|;\s*/);
+  partes = partes.map(x => x.trim());
+  let fecha = null;
+  if (partes.length > 1 && _fechaAtajo(partes[0])) fecha = _fechaAtajo(partes.shift());
+  while (partes.length && partes[partes.length - 1] === '') partes.pop();
+  if (partes.length < 2) return null;
+  const monto = _montoAtajo(partes[0].replace(/\.$/, ''));
+  if (!(monto > 0)) return null;
+  return { fecha, monto, concepto: partes[1].replace(/\.$/, ''), categoria: (partes[2] || '').replace(/\.$/, ''), medio: (partes[3] || '').replace(/\.$/, ''), conFecha: !!fecha };
+}
+const _atajoVistos = new Map();   // phone|línea → hora: segundo candado por si la auditoría no se pudo escribir
+async function registrarLineaAtajo(phone, linea, p) {
+  if (p.conFecha) {   // ¿ya llegó antes? (la cola se reenvía completa hasta que el atajo la borra)
+    if (_atajoVistos.has(phone + '|' + linea)) return { ok: true, repetido: true };
+    const { data: ya } = await sb.from('audit_log').select('registro_id').eq('user_phone', phone).eq('origen', 'atajo').eq('texto_original', linea).limit(1);
+    if (ya && ya.length) return { ok: true, repetido: true };
+  }
+  const hoyMx = hoy();
+  const fecha = p.fecha && p.fecha <= hoyMx ? p.fecha : hoyMx;   // nunca a futuro: eso sería un gasto programado
+  const concepto = p.concepto ? p.concepto.charAt(0).toUpperCase() + p.concepto.slice(1) : 'Gasto';
+  const c = catAtajo(p.categoria);
+  let categoria = c.cat, medio = p.medio;
+  if (!categoria || !medio) {   // lo que no escribiste se toma de cómo registras ese concepto normalmente
+    const { data: pat } = await sb.from('patrones_ia').select('categoria, medio_pago_usual').eq('user_phone', phone).eq('concepto_clave', concepto.toLowerCase().trim()).maybeSingle();
+    if (!categoria) categoria = pat?.categoria || 'OTROS';
+    if (!medio) medio = pat?.medio_pago_usual || 'efectivo';
+  }
+  const datos = { tipo: 'GASTO', monto: p.monto, concepto, categoria, medio_pago: medio, fecha };
+  if (c.mama) datos.comentarios = 'Mamá';
+  const r = await executeDbAction(phone, { tabla: 'movimientos', accion: 'crear', datos, texto_original: linea }, 'atajo');
+  if (String(r).startsWith('❌')) return { ok: false, error: String(r).replace(/^❌\s*/, '') };
+  if (p.conFecha) {
+    _atajoVistos.set(phone + '|' + linea, Date.now());
+    if (_atajoVistos.size > 2000) for (const [k, t] of _atajoVistos) if (Date.now() - t > 864e5 * 30) _atajoVistos.delete(k);
+  }
+  return { ok: true, datos, desconocida: c.desconocida };
+}
+const _fmtCorto = n => '$' + Number(n).toLocaleString('es-MX', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+function _resumenAtajo(d) {
+  const [, m, dd] = d.fecha.split('-');
+  const medio = String(d.medio_pago || '');
+  return `${_fmtCorto(d.monto)} · ${d.concepto} · ${d.categoria} · ${medio.charAt(0).toUpperCase() + medio.slice(1)}${d.fecha !== hoy() ? ` (${dd}/${m})` : ''}`;
+}
+async function procesarAtajo(phone, texto) {
+  const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const estruct = lineas.map(l => ({ l, p: lineaAtajo(l) }));
+  if (estruct.every(x => !x.p)) return null;   // texto libre: lo resuelve el chat IA
+  const hechos = [], repetidos = [], fallas = [], avisos = [];
+  for (const { l, p } of estruct) {
+    if (!p) { avisos.push(`no entendí «${l.slice(0, 40)}»`); continue; }   // se descarta para no atorar la cola
+    const r = await registrarLineaAtajo(phone, l, p);
+    if (!r.ok) fallas.push(r.error);
+    else if (r.repetido) repetidos.push(l);
+    else { hechos.push(r.datos); if (r.desconocida) avisos.push(`«${r.desconocida}» no es una categoría, quedó en OTROS`); }
+  }
+  let txt;
+  if (hechos.length === 1) txt = `✅ ${_resumenAtajo(hechos[0])}`;
+  else if (hechos.length > 1) txt = `✅ ${hechos.length} gastos registrados (${_fmtCorto(hechos.reduce((a, d) => a + d.monto, 0))})\n` + hechos.map(d => '• ' + _resumenAtajo(d)).join('\n');
+  else if (!fallas.length) txt = repetidos.length ? '✅ Nada nuevo: esos gastos ya estaban registrados.' : '✅';
+  if (fallas.length) txt = (txt && hechos.length ? txt.replace(/^✅/, '⚠️') + '\n' : '') + `⚠️ No se pudo registrar ${fallas.length === 1 ? 'un gasto' : fallas.length + ' gastos'}: ${fallas[0]}. Quedan guardados en el iPhone y se reintentan la próxima vez.`;
+  if (avisos.length) txt += '\n' + avisos.map(a => '⚠️ ' + a[0].toUpperCase() + a.slice(1)).join('\n');
+  return { txt, ok: !fallas.length, hechos };
+}
+// Aviso con el logo de US (push de la app instalada) en lugar de la notificación de Atajos. true si llegó a algún equipo.
+async function pushAtajo(phone, body) {
+  if (!webpush || !VAPID) return false;
+  const { data: subs } = await sb.from('push_subs').select('*').eq('phone', phone);
+  const rs = await Promise.all((subs || []).map(s => webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys },
+      JSON.stringify({ title: 'US', body, tag: 'atajo', url: '/?ir=movimientos' }), { TTL: 3600, urgency: 'high' })
+    .then(() => true)
+    .catch(async err => { if (err.statusCode === 404 || err.statusCode === 410) await sb.from('push_subs').delete().eq('endpoint', s.endpoint); return false; })));
+  return rs.some(Boolean);
+}
+app.post('/api/atajo/:token', express.text({ type: ['text/*', 'application/octet-stream'], limit: '50kb' }), async (req, res) => {
   const plano = (txt, st = 200) => res.status(st).type('text/plain; charset=utf-8').send(txt);
   try {
     const phone = await telDeAtajo(req.params.token);
     if (!phone) return plano('⚠️ El atajo no está vinculado a US. Copia la URL de nuevo desde US → Chat IA → 📱.', 401);
     const b = req.body;
-    let texto = String((typeof b === 'string' ? b : (b && (b.texto || b.text || b.gasto || b.mensaje))) || req.query.texto || '').trim().slice(0, 2000);
-    if (!texto) return plano('⚠️ No escribiste nada. Ejemplo: «80 tacos efectivo».', 400);
+    let texto = String((typeof b === 'string' ? b : (b && (b.texto || b.text || b.gasto || b.mensaje))) || req.query.texto || '').trim().slice(0, 20000);
+    if (!texto) return plano('⚠️ No escribiste nada. Ejemplo: «200 · Tacos · Alicia · Efectivo».', 400);
+    // 1) Forma estructurada (monto | concepto | categoría | medio, o la cola sin conexión): directo a la base, sin IA
+    const previa = _atajoLock.get(phone) || Promise.resolve();
+    const tarea = previa.catch(() => {}).then(() => procesarAtajo(phone, texto));
+    _atajoLock.set(phone, tarea);
+    const r = await tarea.finally(() => { if (_atajoLock.get(phone) === tarea) _atajoLock.delete(phone); });
+    if (r) {
+      const conPush = /^(push|1|si|sí)$/i.test(String(req.query.aviso || ''));
+      const avisado = conPush && (r.hechos.length || !r.ok) ? await pushAtajo(phone, r.txt).catch(() => false) : false;
+      if (r.hechos.length) {   // también queda como último intercambio del Chat IA
+        guardarMensaje(phone, 'user', '📱 ' + r.hechos.map(d => `${_fmtCorto(d.monto)} · ${d.concepto} · ${d.categoria} · ${d.medio_pago}`).join('\n'))
+          .then(() => guardarMensaje(phone, 'assistant', r.txt)).catch(() => {});
+      }
+      // Con ?aviso=push y el aviso ya entregado por US, el atajo recibe solo «✅» (no muestra su propia notificación)
+      return plano(conPush && r.ok && (avisado || !r.hechos.length) ? '✅' : r.txt);
+    }
+    // 2) Texto libre o dictado («80 tacos efectivo»): lo interpreta el chat IA
     if (/^\$?\s*\d/.test(texto)) texto = 'gasté ' + texto;   // «80 tacos» → «gasté 80 tacos»
-    const r = await fetch(`http://127.0.0.1:${PORT}/api/chat-web`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const rc = await fetch(`http://127.0.0.1:${PORT}/api/chat-web`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, message: texto }) }).then(x => x.json());
-    const reply = String(r.reply || r.error || '...').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').trim();
+    const reply = String(rc.reply || rc.error || '...').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').trim();
     plano(reply);
   } catch (e) { console.error('atajo:', e.message); plano('⚠️ US no pudo registrar el gasto: ' + String(e.message || e).slice(0, 80), 500); }
 });

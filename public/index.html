@@ -3193,6 +3193,7 @@ function _startLivePoll() {
   setTimeout(parNoLeidos, 3000);
   setInterval(parNoLeidos, 15000);   // contador de mensajes nuevos de la pareja
   setTimeout(() => cmPrefetch(true), 3200);   // compras del correo: insignia 📨 y pop-up si hay nuevas
+  setTimeout(() => { colaEnviar(); _colaVigilar(); }, 1500);   // mensajes del chat IA escritos sin conexión
   setInterval(() => { if (document.visibilityState === 'visible') cmPrefetch(true); }, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(() => cmPrefetch(true), 800); });
   const _ir = new URLSearchParams(location.search).get('ir');
@@ -12002,8 +12003,54 @@ async function sendChat() {
   input.value = '';
   input.style.height = 'auto';   // vuelve a una sola línea tras enviar
   _appendMsg('user', text);
+  if (navigator.onLine === false && !S.ghostMode) return _colaEncolar(text);   // sin red: se guarda y se manda al volver
   await _askBot(text);
 }
+
+// ── COLA SIN CONEXIÓN DEL CHAT IA ─────────────────────────────────────────────
+// Lo que escribes sin red se guarda en este equipo y se manda solo en cuanto vuelve la conexión (con la fecha en que lo
+// escribiste). Cada mensaje lleva un id: si el envío se corta a medias, el servidor no lo registra dos veces.
+const _colaK = () => 'us_cola_chat_' + (S.phone || '');
+function _colaLeer() { try { return JSON.parse(localStorage.getItem(_colaK()) || '[]'); } catch { return []; } }
+function _colaGuardar(l) { try { l.length ? localStorage.setItem(_colaK(), JSON.stringify(l)) : localStorage.removeItem(_colaK()); } catch {} }
+function _colaEncolar(text) {
+  const l = _colaLeer();
+  l.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), text, at: Date.now() });
+  _colaGuardar(l.slice(-50));
+  _appendMsg('bot', `📴 Sin conexión: lo guardé en este equipo y lo registro en cuanto vuelva la red${l.length > 1 ? ` (${l.length} pendientes)` : ''}.`);
+  window.madeja?.estado('lista', 2200);
+  _colaVigilar();
+}
+let _colaCorre = false, _colaTimer = null;
+function _colaVigilar() {
+  if (_colaTimer || !_colaLeer().length) return;
+  _colaTimer = setInterval(() => { if (!_colaLeer().length) { clearInterval(_colaTimer); _colaTimer = null; return; } colaEnviar(); }, 20000);
+}
+async function colaEnviar() {
+  if (_colaCorre || !S.phone || S.ghostMode || navigator.onLine === false) return;
+  const l = _colaLeer(); if (!l.length) return;
+  _colaCorre = true;
+  const hechos = [];
+  try {
+    for (const it of l) {
+      let reply;
+      try { reply = (await api('POST', '/api/chat-web', { phone: S.phone, message: it.text, cola_id: it.id, cola_at: it.at }, { timeout: 90000 })).reply || '...'; }
+      catch (e) {
+        if (e instanceof TypeError || /Sin respuesta/.test(e.message || '')) break;   // sigue sin red: se reintenta después
+        reply = '❌ ' + (e.message || 'Error');                                         // el servidor lo rechazó: no se reintenta
+      }
+      hechos.push(reply);
+      _colaGuardar(_colaLeer().filter(x => x.id !== it.id));
+    }
+  } finally { _colaCorre = false; }
+  if (hechos.length) {
+    _appendMsg('bot', `📶 Volvió la conexión. ${hechos.length === 1 ? 'Envié lo que tenías pendiente' : `Envié ${hechos.length} mensajes pendientes`}:\n${hechos.join('\n')}`);
+    toast(`📶 ${hechos.length === 1 ? 'Pendiente enviado' : hechos.length + ' pendientes enviados'}`, 'success');
+    load().catch(() => {});
+  }
+}
+window.addEventListener('online', () => setTimeout(colaEnviar, 800));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) colaEnviar(); });
 
 // Foto de un ticket → se reduce en el teléfono (legible, ~0.5 MB) y el servidor la desglosa producto por producto;
 // después se abre el menú para revisarla y registrarla en Movimientos.
@@ -12069,31 +12116,92 @@ async function tkAbrir(id) {
   } catch (e) { toast('No se pudo abrir el ticket: ' + e.message, 'error'); }
 }
 
-// ── ATAJO DE IPHONE: triple toque atrás → «¿Qué gastaste?» → US lo registra como el chat IA y avisa con una notificación
+// ── ATAJO DE IPHONE: triple toque atrás → $ monto (teclado numérico) · concepto · categoría · medio → US lo registra
+// directo (sin IA) y avisa con el logo de US. Sin red, el atajo lo guarda en el iPhone y lo manda la siguiente vez.
+function _atajoPrompt(url) {
+  return `Rebuild the shortcut "Registrar Gasto" with exactly these actions, in this order, and nothing else:
+1. Ask for Input. Input Type: Number. Prompt: "$".
+2. Ask for Input. Input Type: Text. Prompt: "Concepto".
+3. Ask for Input. Input Type: Text. Prompt: "Categoría".
+4. Ask for Input. Input Type: Text. Prompt: "Medio de pago".
+5. Format Date: Current Date, Date Format Custom "yyyy-MM-dd HH:mm:ss".
+6. Text: [Formatted Date]|[Provided Input from step 1]|[Provided Input from step 2]|[Provided Input from step 3]|[Provided Input from step 4]  (no spaces around the | characters).
+7. Append to Text File: append the Text from step 6 to the file "US/pendientes.txt" in the Shortcuts folder, Make New Line ON.
+8. Get Network Details: Wi-Fi, Network Name.
+9. If Network Details has no value:
+   10. Get Network Details: Cellular, Number of Signal Bars.
+   11. If Number of Signal Bars is 0: Show Notification "📴 Sin conexión: guardado. Se registra en US al volver la red." then Stop This Shortcut. End If.
+   End If.
+12. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF.
+13. Get Text from Input (the File from step 12).
+14. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = Text from step 13.
+15. If Contents of URL contains "✅": Delete Files (the File from step 12), Confirm Before Deleting OFF. End If.
+16. If Contents of URL is not "✅": Show Notification with Contents of URL. End If.`;
+}
+function _atajoPromptPend(url) {
+  return `Create a new shortcut named "US Pendientes" with exactly these actions:
+1. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF.
+2. If File has any value:
+   3. Get Text from Input (the File).
+   4. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = Text from step 3.
+   5. If Contents of URL contains "✅": Delete Files (the File from step 1), Confirm Before Deleting OFF. End If.
+   End If.
+Then create a Personal Automation: When Airplane Mode is turned off → Run Immediately → run "US Pendientes". And another one: When my iPhone joins any Wi-Fi → Run Immediately → run "US Pendientes".`;
+}
 async function atajoAbrir() {
   abrirHoja('📱 Atajo de iPhone', `<div class="cm-setup at-setup">
-    <div class="wl-panel-t">Registra un gasto sin abrir US</div>
-    <div class="at-ej">Toca 3 veces la parte de atrás del iPhone, escribe o dicta <b>«80 tacos efectivo»</b> y listo: US lo registra con sus reglas de categoría y medio de pago, y te avisa con una notificación.</div>
+    <div class="wl-panel-t">Registra un gasto en segundos sin abrir US</div>
+    <div class="at-ej">Toca 3 veces la parte de atrás del iPhone y contesta 4 preguntas: <b>$ monto</b> (teclado numérico) · <b>concepto</b> · <b>categoría</b> · <b>medio de pago</b>.
+      Ejemplo: <b>$200 · Tacos · Alicia · Efectivo</b>. Se registra directo, sin IA, en menos de un segundo. Si dejas en blanco la categoría o el medio, US usa los de la última vez que registraste ese concepto.</div>
     <ol>
-      <li><button class="btn btn-accent btn-sm" id="at-copiar" onclick="atajoCopiar()" disabled><i class="ti ti-copy"></i> Copiar URL del atajo</button>
-        <div class="at-nota">Es tu enlace personal: no lo compartas.</div></li>
-      <li>Abre <b>Atajos</b>, mantén presionado <b>Registrar Gasto</b> → <b>Editar</b> y borra todas sus acciones (toca la <b>ⓧ</b> de cada una).</li>
-      <li>Agrega <b>Solicitar entrada</b>. En la pregunta escribe <i>¿Qué gastaste?</i></li>
-      <li>Agrega <b>Obtener contenido de URL</b>, pega la URL y toca <b>⌄</b>:
-        Método <b>POST</b> · Cuerpo de la solicitud <b>JSON</b> · <b>Agregar campo nuevo → Texto</b>: clave <code>texto</code> y en el valor elige la variable <b>Entrada proporcionada</b>.</li>
-      <li>Agrega <b>Mostrar notificación</b> (deja «Contenido de URL»). Toca <b>Listo</b>.</li>
+      <li><b>Avisos con el logo de US</b> (en lugar del de Atajos): <button class="btn btn-sm" id="at-push" onclick="atajoAvisos()">🔔 Activar avisos de US</button>
+        <div class="at-nota">Hazlo desde la app de US instalada en tu pantalla de inicio. Si no están activos, el atajo muestra su propia notificación.</div></li>
+      <li><button class="btn btn-accent btn-sm at-c" onclick="atajoCopiar('prompt')" disabled><i class="ti ti-copy"></i> Copiar instrucciones del atajo</button>
+        <div class="at-nota">Ya traen tu URL personal (no la compartas). En <b>Atajos</b>, abre <b>Registrar Gasto</b>, pégalas en <b>Describe a change</b> y acepta.</div></li>
+      <li><b>Sin conexión</b>: el atajo guarda el gasto en el iPhone (Archivos → iCloud Drive → Shortcuts → US) y lo manda solo la siguiente vez que lo uses con red, con la fecha y hora en que lo capturaste; nunca se registra dos veces.
+        <div class="at-nota">Opcional, para que se mande en cuanto vuelva la red sin esperar al siguiente gasto:</div>
+        <button class="btn btn-sm at-c" onclick="atajoCopiar('pend')" disabled style="margin-top:6px"><i class="ti ti-copy"></i> Copiar instrucciones «US Pendientes»</button></li>
     </ol>
-    <div class="at-nota">El triple toque ya está ligado a «Registrar Gasto» (Ajustes → Accesibilidad → Tocar → Tocar atrás), no hay que moverle. La respuesta también queda como último mensaje del Chat IA.</div>
+    <div class="at-nota">El atajo está en el <b>triple</b> toque (el doble es la linterna): Ajustes → Accesibilidad → Tocar → Tocar atrás. Si escribes todo en una línea («80 tacos efectivo») también funciona, pero pasa por la IA y tarda más.
+      Las preguntas del atajo siempre se ven con el ícono de Atajos (iOS no deja cambiarlo); el aviso final sí sale con el de US.</div>
+    <button class="btn btn-sm at-c" onclick="atajoCopiar('url')" disabled style="align-self:flex-start"><i class="ti ti-link"></i> Copiar solo la URL</button>
   </div>`, null, { size: 'md', key: 'atajo' });
+  _atajoPushEstado();
   try {
     const r = await api('POST', '/api/atajo-token', { user_phone: S.phone });
-    S._atajoUrl = r.url; const b = $('at-copiar'); if (b) b.disabled = false;
+    S._atajoUrl = r.url + '?aviso=push';
+    document.querySelectorAll('.at-c').forEach(b => b.disabled = false);
   } catch (e) { toast('No se pudo preparar el atajo: ' + e.message, 'error'); }
 }
-async function atajoCopiar() {
+async function atajoCopiar(que) {
   if (!S._atajoUrl) return;
-  try { await navigator.clipboard.writeText(S._atajoUrl); toast('📋 URL copiada'); window.iosHaptic && iosHaptic('light'); }
-  catch { prompt('Copia la URL del atajo:', S._atajoUrl); }
+  const txt = que === 'prompt' ? _atajoPrompt(S._atajoUrl) : que === 'pend' ? _atajoPromptPend(S._atajoUrl) : S._atajoUrl;
+  try { await navigator.clipboard.writeText(txt); toast(que === 'url' ? '📋 URL copiada' : '📋 Instrucciones copiadas: pégalas en Atajos'); window.iosHaptic && iosHaptic('light'); }
+  catch { prompt('Copia esto:', txt); }
+}
+async function _atajoPushEstado() {
+  const b = $('at-push'); if (!b) return;
+  let sub = null;
+  try { if ('serviceWorker' in navigator && 'PushManager' in window && Notification.permission === 'granted') sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); } catch {}
+  if (sub) { api('POST', '/api/push/suscribir', { phone: S.phone, sub: sub.toJSON() }).catch(() => {}); b.textContent = '✅ Avisos de US activos en este equipo'; b.disabled = true; }
+}
+async function atajoAvisos() {
+  if (S.ghostMode) { toast('Modo fantasma: solo lectura', 'warn'); return; }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+    toast('Abre US desde el ícono de tu pantalla de inicio (Compartir → Agregar a inicio) para activar los avisos', 'warn'); return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      if (await Notification.requestPermission() !== 'granted') { toast('Sin permiso para avisos: actívalo en Ajustes → Notificaciones → US', 'warn'); return; }
+      const { key } = await api('GET', '/api/push/vapid');
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _b64u(key) });
+    }
+    await api('POST', '/api/push/suscribir', { phone: S.phone, sub: sub.toJSON() });
+    toast('🔔 Avisos de US activados');
+  } catch (e) { toast('No se pudieron activar los avisos: ' + e.message, 'error'); }
+  _atajoPushEstado(); _parPushEstado();
 }
 
 async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = null, imageMime = null) {
@@ -12120,6 +12228,8 @@ async function _askBot(message, audioB64 = null, audioMime = null, imageB64 = nu
     load().catch(() => {});
   } catch (e) {
     _hideTyping();
+    // Se cayó la red al mandar un texto: se guarda en la cola en lugar de perderse
+    if (e instanceof TypeError && message && !audioB64 && !imageB64 && !S.ghostMode) { _colaEncolar(message); return; }
     const msg = e.message?.includes('demasiado') ? `❌ ${e.message}`
               : e.message?.includes('Failed to fetch') ? '❌ Sin conexión. Revisa tu red e intenta de nuevo.'
               : `❌ Error: ${e.message || 'Intenta de nuevo.'}`;
