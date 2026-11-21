@@ -5016,11 +5016,38 @@ async function telDeAtajo(token) {
   }
   return busca() || null;
 }
-app.post('/api/atajo-token', (req, res) => {
+// Además de la URL, las listas de un toque del atajo ordenadas por lo que más usa la persona: conceptos frecuentes,
+// categorías y medios de pago (los oficiales de sus cuentas).
+app.post('/api/atajo-token', async (req, res) => {
   if (_esGhost(req)) return res.status(403).json({ success: false, error: 'Modo fantasma: solo lectura' });
   const phone = req.body?.user_phone;
   if (!phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
-  res.json({ success: true, url: `${req.protocol === 'http' && !/localhost/.test(req.get('host')) ? 'https' : req.protocol}://${req.get('host')}/api/atajo/${firmarAtajo(phone)}` });
+  const url = `${req.protocol === 'http' && !/localhost/.test(req.get('host')) ? 'https' : req.protocol}://${req.get('host')}/api/atajo/${firmarAtajo(phone)}`;
+  try {
+    const desde = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
+    const [{ data: pats }, { data: movs }, defs] = await Promise.all([
+      sb.from('patrones_ia').select('concepto_clave, contador').eq('user_phone', phone).order('contador', { ascending: false }).limit(80),
+      sb.from('movimientos').select('categoria, medio_pago').eq('user_phone', phone).eq('tipo', 'GASTO').is('deleted_at', null).gte('fecha', desde).limit(5000),
+      cuentasDefPorTelefono(phone),
+    ]);
+    // Conceptos: se juntan variantes («camion»/«camión») y se prefiere la que lleva acento
+    const grupos = new Map();
+    (pats || []).forEach(p => {
+      const c = String(p.concepto_clave || '').trim();
+      if (!c || c.startsWith('[') || c.length > 28) return;
+      const k = _catKeySrv(c), g = grupos.get(k) || { n: 0, txt: c };
+      g.n += p.contador || 1;
+      if (/[^\x00-\x7f]/.test(c) && !/[^\x00-\x7f]/.test(g.txt)) g.txt = c;
+      grupos.set(k, g);
+    });
+    const conceptos = [...grupos.values()].sort((a, b) => b.n - a.n).slice(0, 12).map(g => g.txt.charAt(0).toUpperCase() + g.txt.slice(1));
+    const cuenta = (arr, f) => { const m = new Map(); arr.forEach(x => { const k = f(x); m.set(k, (m.get(k) || 0) + 1); }); return m; };
+    const nCat = cuenta(movs || [], m => canonCategoria(m.categoria));
+    const categorias = CATEGORIAS.map((c, i) => [c, nCat.get(c) || 0, i]).sort((a, b) => b[1] - a[1] || a[2] - b[2]).map(x => x[0]);
+    const nMed = cuenta(movs || [], m => medioCanon(m.medio_pago, defs));
+    const medios = mediosDe(defs).map((m, i) => [m, nMed.get(m) || 0, i]).sort((a, b) => b[1] - a[1] || a[2] - b[2]).map(x => x[0].charAt(0).toUpperCase() + x[0].slice(1));
+    res.json({ success: true, url, conceptos, categorias, medios });
+  } catch (e) { res.json({ success: true, url, conceptos: [], categorias: CATEGORIAS, medios: ['Efectivo', 'Otros'] }); }
 });
 // ── Registro directo (sin IA): el atajo manda «monto | concepto | categoría | medio» — o la cola guardada sin conexión,
 // una línea por gasto con la fecha/hora en que se capturó: «2026-11-21 12:45:03|200|Tacos|Alicia|Efectivo». Cada línea
@@ -5106,7 +5133,8 @@ function _resumenAtajo(d) {
   return `${_fmtCorto(d.monto)} · ${d.concepto} · ${d.categoria} · ${medio.charAt(0).toUpperCase() + medio.slice(1)}${d.fecha !== hoy() ? ` (${dd}/${m})` : ''}`;
 }
 async function procesarAtajo(phone, texto) {
-  const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));   // «#» = cola vaciada por el atajo
+  if (!lineas.length) return { txt: '✅', ok: true, hechos: [] };
   const estruct = lineas.map(l => ({ l, p: lineaAtajo(l) }));
   if (estruct.every(x => !x.p)) return null;   // texto libre: lo resuelve el chat IA
   const hechos = [], repetidos = [], fallas = [], avisos = [];

@@ -1941,6 +1941,10 @@ body.sheet-locked{overflow:hidden}
 .cm-setup a{color:var(--text-1);font-weight:700}
 .at-setup .at-ej{font-size:13px;color:var(--text-2);line-height:1.5}
 .at-setup .at-nota{font-size:11.5px;color:var(--text-3);line-height:1.45;margin-top:4px}
+.at-setup .at-prev{display:flex;flex-direction:column;gap:6px}
+.at-setup .at-fila{display:grid;grid-template-columns:minmax(0,74px) minmax(0,1fr);gap:8px;align-items:start;font-size:11.5px;color:var(--text-3)}
+.at-setup .at-fila>div{display:flex;flex-wrap:wrap;gap:4px}
+.at-setup .at-fila i{font-style:normal;font-size:11.5px;color:var(--text-1);background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:999px;padding:2px 8px}
 .at-setup code{font-size:12px;background:var(--bg-surface-2);padding:1px 5px;border-radius:5px}
 .cm-ctas{display:flex;flex-direction:column;gap:6px}
 .cm-ctas > div{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-1);min-width:0}
@@ -12116,53 +12120,64 @@ async function tkAbrir(id) {
   } catch (e) { toast('No se pudo abrir el ticket: ' + e.message, 'error'); }
 }
 
-// ── ATAJO DE IPHONE: triple toque atrás → $ monto (teclado numérico) · concepto · categoría · medio → US lo registra
-// directo (sin IA) y avisa con el logo de US. Sin red, el atajo lo guarda en el iPhone y lo manda la siguiente vez.
+// ── ATAJO DE IPHONE: triple toque atrás → $ monto (teclado numérico) y 3 toques en listas (concepto · categoría · medio)
+// → US lo registra directo (sin IA) y avisa con el logo de US. Sin red lo guarda en el iPhone, en silencio, y lo manda después.
+// Las listas vienen ordenadas por lo que más usa la persona (/api/atajo-token).
+const _ATAJO_OTRO = '✏️ Otro';
+function _atajoListas() {
+  const L = S._atajoL || {};
+  return {
+    con: [...(L.conceptos || []), _ATAJO_OTRO].join(', '),
+    cat: (L.categorias || []).join(', '),
+    med: (L.medios || []).join(', '),
+  };
+}
+const _ATAJO_VACIAR = 'Text: "#". Then Save File: save that Text to the Shortcuts folder with Destination Path "US/pendientes.txt", Ask Where to Save OFF, Overwrite If File Exists ON. (Do NOT use Delete Files.)';
 function _atajoPrompt(url) {
-  return `Rebuild the shortcut "Registrar Gasto" with exactly these actions, in this order, and nothing else:
+  const l = _atajoListas();
+  return `Rebuild the shortcut "Registrar Gasto" with exactly these actions, in this order, and nothing else. Do not add any alerts, confirmations or notifications other than the one in the last step.
 1. Ask for Input. Input Type: Number. Prompt: "$".
-2. Ask for Input. Input Type: Text. Prompt: "Concepto".
-3. Ask for Input. Input Type: Text. Prompt: "Categoría".
-4. Ask for Input. Input Type: Text. Prompt: "Medio de pago".
-5. Format Date: Current Date, Date Format Custom "yyyy-MM-dd HH:mm:ss".
-6. Text: [Formatted Date]|[Provided Input from step 1]|[Provided Input from step 2]|[Provided Input from step 3]|[Provided Input from step 4]  (no spaces around the | characters).
-7. Append to Text File: append the Text from step 6 to the file "US/pendientes.txt" in the Shortcuts folder, Make New Line ON.
-8. Get Network Details: Wi-Fi, Network Name.
-9. If Network Details has no value:
-   10. Get Network Details: Cellular, Number of Signal Bars.
-   11. If Number of Signal Bars is 0: Show Notification "📴 Sin conexión: guardado. Se registra en US al volver la red." then Stop This Shortcut. End If.
-   End If.
-12. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF.
-13. Get Text from Input (the File from step 12).
-14. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = Text from step 13.
-15. If Contents of URL contains "✅": Delete Files (the File from step 12), Confirm Before Deleting OFF. End If.
+2. List with these items: ${l.con}
+3. Choose from List (the List from step 2). Prompt: "Concepto".
+4. If Chosen Item is "${_ATAJO_OTRO}": Ask for Input (Input Type: Text, Prompt: "Concepto"), then Set Variable "Concepto" to Provided Input. Otherwise: Set Variable "Concepto" to Chosen Item. End If.
+5. List with these items: ${l.cat}
+6. Choose from List (the List from step 5). Prompt: "Categoría".
+7. List with these items: ${l.med}
+8. Choose from List (the List from step 7). Prompt: "Medio de pago".
+9. Format Date: Current Date, Date Format Custom "yyyy-MM-dd HH:mm:ss".
+10. Text: [Formatted Date]|[Provided Input from step 1]|[Concepto]|[Chosen Item from step 6]|[Chosen Item from step 8]  (no spaces around the | characters).
+11. Append to Text File: append the Text from step 10 to "US/pendientes.txt" in the Shortcuts folder, Make New Line ON.
+12. Get Network Details: Wi-Fi, Network Name. If it has no value: Get Network Details: Cellular, Number of Signal Bars; If Number of Signal Bars is 0: Stop This Shortcut (silently, no notification). End If. End If.
+13. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF. Then Get Text from Input (that File).
+14. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = the Text from step 13.
+15. If Contents of URL contains "✅": ${_ATAJO_VACIAR} End If.
 16. If Contents of URL is not "✅": Show Notification with Contents of URL. End If.`;
 }
 function _atajoPromptPend(url) {
-  return `Create a new shortcut named "US Pendientes" with exactly these actions:
-1. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF.
-2. If File has any value:
-   3. Get Text from Input (the File).
-   4. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = Text from step 3.
-   5. If Contents of URL contains "✅": Delete Files (the File from step 1), Confirm Before Deleting OFF. End If.
+  return `Create a new shortcut named "US Pendientes" with exactly these actions and no alerts or notifications:
+1. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF. Then Get Text from Input (that File).
+2. If Text contains "|":
+   3. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = the Text from step 1.
+   4. If Contents of URL contains "✅": ${_ATAJO_VACIAR} End If.
    End If.
-Then create a Personal Automation: When Airplane Mode is turned off → Run Immediately → run "US Pendientes". And another one: When my iPhone joins any Wi-Fi → Run Immediately → run "US Pendientes".`;
+Then create two Personal Automations, both with "Run Immediately" ON and "Notify When Run" OFF, that run "US Pendientes": one When Airplane Mode is turned off, and one When my iPhone joins any Wi-Fi network.`;
 }
 async function atajoAbrir() {
   abrirHoja('📱 Atajo de iPhone', `<div class="cm-setup at-setup">
     <div class="wl-panel-t">Registra un gasto en segundos sin abrir US</div>
-    <div class="at-ej">Toca 3 veces la parte de atrás del iPhone y contesta 4 preguntas: <b>$ monto</b> (teclado numérico) · <b>concepto</b> · <b>categoría</b> · <b>medio de pago</b>.
-      Ejemplo: <b>$200 · Tacos · Alicia · Efectivo</b>. Se registra directo, sin IA, en menos de un segundo. Si dejas en blanco la categoría o el medio, US usa los de la última vez que registraste ese concepto.</div>
+    <div class="at-ej">Toca 3 veces la parte de atrás del iPhone: escribe el <b>$ monto</b> (teclado numérico) y elige con <b>un toque</b> el <b>concepto</b>, la <b>categoría</b> y el <b>medio de pago</b>.
+      Las listas vienen ordenadas por lo que más usas; si el concepto no está, toca <b>${_ATAJO_OTRO}</b> y escríbelo. Solo te llega un aviso: el de registro exitoso.</div>
+    <div class="at-prev" id="at-prev"></div>
     <ol>
       <li><b>Avisos con el logo de US</b> (en lugar del de Atajos): <button class="btn btn-sm" id="at-push" onclick="atajoAvisos()">🔔 Activar avisos de US</button>
         <div class="at-nota">Hazlo desde la app de US instalada en tu pantalla de inicio. Si no están activos, el atajo muestra su propia notificación.</div></li>
       <li><button class="btn btn-accent btn-sm at-c" onclick="atajoCopiar('prompt')" disabled><i class="ti ti-copy"></i> Copiar instrucciones del atajo</button>
-        <div class="at-nota">Ya traen tu URL personal (no la compartas). En <b>Atajos</b>, abre <b>Registrar Gasto</b>, pégalas en <b>Describe a change</b> y acepta.</div></li>
-      <li><b>Sin conexión</b>: el atajo guarda el gasto en el iPhone (Archivos → iCloud Drive → Shortcuts → US) y lo manda solo la siguiente vez que lo uses con red, con la fecha y hora en que lo capturaste; nunca se registra dos veces.
-        <div class="at-nota">Opcional, para que se mande en cuanto vuelva la red sin esperar al siguiente gasto:</div>
+        <div class="at-nota">Ya traen tu URL personal (no la compartas) y tus listas. En <b>Atajos</b>, abre <b>Registrar Gasto</b>, pégalas en <b>Describe a change</b> y acepta. Si iOS pregunta por permiso para guardar el archivo, toca <b>Permitir siempre</b> (solo la primera vez).</div></li>
+      <li><b>Sin conexión</b>: el atajo guarda el gasto en el iPhone sin avisarte y lo manda la siguiente vez que lo uses con red, con la fecha y hora en que lo capturaste; nunca se registra dos veces y no te pide confirmar nada.
+        <div class="at-nota">Opcional, para que se mande solo en cuanto vuelva la red (sin esperar al siguiente gasto ni avisos de la automatización):</div>
         <button class="btn btn-sm at-c" onclick="atajoCopiar('pend')" disabled style="margin-top:6px"><i class="ti ti-copy"></i> Copiar instrucciones «US Pendientes»</button></li>
     </ol>
-    <div class="at-nota">El atajo está en el <b>triple</b> toque (el doble es la linterna): Ajustes → Accesibilidad → Tocar → Tocar atrás. Si escribes todo en una línea («80 tacos efectivo») también funciona, pero pasa por la IA y tarda más.
+    <div class="at-nota">El atajo está en el <b>triple</b> toque (el doble es la linterna): Ajustes → Accesibilidad → Tocar → Tocar atrás. Si tus conceptos frecuentes cambian, vuelve a copiar las instrucciones para actualizar las listas.
       Las preguntas del atajo siempre se ven con el ícono de Atajos (iOS no deja cambiarlo); el aviso final sí sale con el de US.</div>
     <button class="btn btn-sm at-c" onclick="atajoCopiar('url')" disabled style="align-self:flex-start"><i class="ti ti-link"></i> Copiar solo la URL</button>
   </div>`, null, { size: 'md', key: 'atajo' });
@@ -12170,6 +12185,10 @@ async function atajoAbrir() {
   try {
     const r = await api('POST', '/api/atajo-token', { user_phone: S.phone });
     S._atajoUrl = r.url + '?aviso=push';
+    S._atajoL = { conceptos: r.conceptos || [], categorias: r.categorias || [], medios: r.medios || [] };
+    const p = $('at-prev');
+    if (p) p.innerHTML = [['Concepto', [...S._atajoL.conceptos, _ATAJO_OTRO]], ['Categoría', S._atajoL.categorias], ['Medio', S._atajoL.medios]]
+      .map(([t, xs]) => `<div class="at-fila"><span>${t}</span><div>${xs.map(x => `<i>${String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])}</i>`).join('')}</div></div>`).join('');
     document.querySelectorAll('.at-c').forEach(b => b.disabled = false);
   } catch (e) { toast('No se pudo preparar el atajo: ' + e.message, 'error'); }
 }
