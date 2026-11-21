@@ -1890,6 +1890,11 @@ body.sheet-locked{overflow:hidden}
 .cm-st span{overflow:hidden;text-overflow:ellipsis}
 .cm-rev{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0}
 .cm-rev[disabled]{opacity:.75;cursor:default}
+.cm-head-w{display:flex;flex-direction:column;gap:8px}
+.cm-prog{display:flex;flex-direction:column;gap:5px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:9px 11px;font-size:12.5px;color:var(--text-2)}
+.cm-prog span{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-prog span.ok{color:var(--color-income)}
+.cm-prog small{font-size:11px;color:var(--text-3);line-height:1.4}
 .cm-gira{display:inline-block;animation:cmGira 1s linear infinite}
 @keyframes cmGira{to{transform:rotate(360deg)}}
 .cm-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:12px 14px;display:flex;flex-direction:column;gap:10px;
@@ -5168,6 +5173,7 @@ function _cmSt() { return S._cm || (S._cm = { lista: [], sync: null, draft: {}, 
 const _cmN = () => (S._cm?.lista || []).length;
 const _cmFecha = iso => { if (!iso) return ''; const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); return d.getDate() + ' ' + _MES_L[d.getMonth()].slice(0, 3); };
 function _cmHace(ts) {
+  if (!ts || isNaN(new Date(ts))) return 'nunca';
   const m = Math.max(0, Math.round((Date.now() - new Date(ts)) / 60000));
   return m < 1 ? 'hace un momento' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
 }
@@ -5361,14 +5367,7 @@ function cmRender() {
     root.dataset.listo = '1';
     return;
   }
-  const head = `<div class="cm-head">
-    <div class="cm-st">${s2 ? `<i class="ti ti-circle-check"></i><span title="${_ndEsc((st.cuentas || []).map(x => x.cuenta).filter(Boolean).join(', '))}">${(st.cuentas || []).length > 1
-        ? `Gmail conectado · ${st.cuentas.length} cuentas`
-        : 'Gmail conectado' + (s2.cuenta ? ' · ' + _ndEsc(s2.cuenta) : '')} · revisado ${_cmHace(s2.ultimo_sync)}</span>`
-      : '<i class="ti ti-plug-connected-x"></i><span>Gmail aún sin conectar</span>'}</div>
-    ${s2 ? `<button class="wl-act cm-rev" onclick="cmRevisarAhora()" ${st.revisando ? 'disabled' : ''} title="Revisar tus cuentas de Gmail en este momento">
-      <i class="ti ti-${st.revisando ? 'loader-2 cm-gira' : 'mail-search'}"></i> ${st.revisando ? 'Revisando…' : 'Revisar ahora'}</button>` : ''}
-  </div>`;
+  const head = _cmHeadHTML();
   const setup = !s2 || st.setup ? _cmSetupHTML() : '';
   const vacio = st.lista.length ? '' : `<div class="wl-empty">📭 No hay compras por revisar.<br>${s2 ? 'Cuando llegue un recibo a tu Gmail aparecerá aquí.' : 'Conecta tu Gmail para que US las encuentre solo.'}</div>`;
   root.innerHTML = head + setup + vacio + st.lista.map(_cmCardHTML).join('');
@@ -5459,32 +5458,78 @@ async function cmCopiarScript() {
   catch { const t = $('cm-code'); if (t) { t.closest('details').open = true; t.select(); } toast('Selecciona el código y cópialo', 'info'); }
 }
 function cmSetupTog() { const st = _cmSt(); st.setup = !st.setup; if (!st.setup) st.actualizar = false; cmRender(); }
-// ¿El script de esa cuenta ya es la versión con latido y está vivo? (late cada minuto)
-const _cmVivo = c => (c.version || 1) >= 2 && c.latido_at && Date.now() - new Date(c.latido_at).getTime() < 3 * 60e3;
-// «Revisar ahora»: US marca la petición, cada script la ve en su siguiente latido (≤ 1 min) y revisa Gmail en ese momento
+// ¿El script de esa cuenta ya es la versión con latido y está vivo? (late cada minuto). `ahora` = reloj del servidor.
+const _cmVivo = (c, ahora) => (c.version || 1) >= 2 && c.latido_at && (ahora || Date.now()) - new Date(c.latido_at).getTime() < 3 * 60e3;
+// Cabecera de Compras del correo: estado de la conexión, «Revisar ahora» y, mientras revisa, el avance por cuenta
+function _cmHeadHTML() {
+  const st = _cmSt(), s2 = st.sync, rv = st.revisando;
+  return `<div class="cm-head-w" id="cm-head-w"><div class="cm-head">
+    <div class="cm-st">${s2 ? `<i class="ti ti-circle-check"></i><span title="${_ndEsc((st.cuentas || []).map(x => x.cuenta).filter(Boolean).join(', '))}">${(st.cuentas || []).length > 1
+        ? `Gmail conectado · ${st.cuentas.length} cuentas`
+        : 'Gmail conectado' + (s2.cuenta ? ' · ' + _ndEsc(s2.cuenta) : '')} · ${s2.ultimo_sync ? 'revisado ' + _cmHace(s2.ultimo_sync) : 'aún sin revisar'}</span>`
+      : '<i class="ti ti-plug-connected-x"></i><span>Gmail aún sin conectar</span>'}</div>
+    ${s2 ? `<button class="wl-act cm-rev" onclick="cmRevisarAhora()" ${rv ? 'disabled' : ''} title="Revisar tus cuentas de Gmail en este momento">
+      <i class="ti ti-${rv ? 'loader-2 cm-gira' : 'mail-search'}"></i> ${rv ? 'Revisando…' : 'Revisar ahora'}</button>` : ''}
+  </div>${rv ? `<div class="cm-prog" id="cm-prog" role="status" aria-live="polite">${_cmProgTxt()}</div>` : ''}</div>`;
+}
+function _cmProgTxt() {
+  const rv = _cmSt().revisando; if (!rv) return '';
+  const ahora = Date.now() + rv.skew;
+  return rv.cuentas.map(c => {
+    const nom = _ndEsc(String(c.cuenta).split('@')[0]);
+    if (c.listo) return `<span class="ok"><i class="ti ti-circle-check"></i>${nom} · revisado</span>`;
+    if (c.leyendo) return `<span><i class="ti ti-loader-2 cm-gira"></i>${nom} · revisando tu correo…</span>`;
+    const s = Math.max(0, Math.round((c.siguiente - ahora) / 1000));
+    return `<span><i class="ti ti-clock"></i>${nom} · ${s > 2 ? `empieza en ≈ ${s} s` : 'empieza en un momento'}</span>`;
+  }).join('') + (rv.leyendo ? '<span><i class="ti ti-loader-2 cm-gira"></i>Leyendo lo que llegó…</span>' : '')
+    + '<small>Google despierta tu script de Gmail una vez por minuto. Puedes cerrar esta ventana: te aviso al terminar.</small>';
+}
+// Repinta solo la cabecera (no toca las tarjetas: no se pierde lo que estés editando)
+function _cmHeadPintar() { const h = $('cm-head-w'); if (h) h.outerHTML = _cmHeadHTML(); }
+// «Revisar ahora»: US marca la petición, cada script la ve en su siguiente latido (Google lo despierta una vez por minuto)
+// y revisa Gmail en ese momento (~3 s). Se sigue con un estado ligero cada 1.5 s y se termina en cuanto todas las
+// cuentas reportan, sin esperas fijas.
 async function cmRevisarAhora() {
   const st = _cmSt(); if (st.revisando) return;
   let r;
-  try { r = await api('POST', '/api/correo/revisar', { user_phone: S.phone }); }
+  try { r = await api('POST', '/api/correo/revisar', { user_phone: S.phone }, { timeout: 15000 }); }
   catch (e) { toast('No se pudo pedir la revisión: ' + e.message, 'error'); return; }
-  const vivas = (r.cuentas || []).filter(_cmVivo);
+  const ahoraS = r.ahora || Date.now(), skew = ahoraS - Date.now();   // reloj del servidor − reloj de este equipo
+  const vivas = (r.cuentas || []).filter(c => _cmVivo(c, ahoraS));
   if (!vivas.length) { st.setup = true; st.actualizar = true; if (!st.token) _cmToken(); cmRender(); return; }
-  st.revisando = true; cmRender();
+  const t0 = new Date(r.pedido).getTime(), antes = new Set(st.lista.map(x => x.id));
+  const rv = st.revisando = { skew, leyendo: 0, cuentas: vivas.map(c => ({ cuenta: c.cuenta, listo: false, leyendo: false, siguiente: ahoraS + (c.en_seg ?? 60) * 1000 })) };
+  _cmHeadPintar();
   window.iosHaptic && iosHaptic('light');
-  const t0 = new Date(r.pedido).getTime(), lim = Date.now() + 100e3, antes = st.lista.length;
-  while (Date.now() < lim) {
-    await new Promise(res => setTimeout(res, 4000));
-    await cmPrefetch(false);
-    const mias = (st.cuentas || []).filter(c => vivas.some(v => v.cuenta === c.cuenta));
-    if (mias.length && mias.every(c => c.ultimo_sync && new Date(c.ultimo_sync).getTime() >= t0 - 1000)) break;
-  }
-  await new Promise(res => setTimeout(res, 3000)); await cmPrefetch(false);   // deja terminar la lectura de lo que llegó
-  st.revisando = false;
-  const viejas = (r.cuentas || []).filter(c => !_cmVivo(c));
-  if (viejas.length) { st.setup = true; st.actualizar = true; if (!st.token) _cmToken(); }
-  cmRender();
-  const nuevos = Math.max(0, st.lista.length - antes);
-  toast(nuevos ? `📨 ${nuevos} ${nuevos === 1 ? 'movimiento nuevo' : 'movimientos nuevos'} por revisar` : '✓ Revisé tus correos: no hay nada nuevo', nuevos ? 'success' : 'info');
+  const tic = setInterval(() => { const el = $('cm-prog'); if (el) el.innerHTML = _cmProgTxt(); }, 1000);
+  const lim = Date.now() + 95e3;
+  try {
+    while (Date.now() < lim) {
+      await new Promise(res => setTimeout(res, 1500));
+      let e;
+      try { e = await api('GET', `/api/correo/estado?phone=${encodeURIComponent(S.phone)}`, null, { timeout: 8000 }); } catch { continue; }
+      const ah = e.ahora || Date.now() + skew;
+      rv.skew = ah - Date.now();
+      for (const c of rv.cuentas) {
+        const s = (e.cuentas || []).find(x => x.cuenta === c.cuenta); if (!s) continue;
+        if (s.hecho_at && new Date(s.hecho_at).getTime() >= t0 - 1000) { c.listo = true; c.leyendo = false; continue; }
+        if (s.latido_at && new Date(s.latido_at).getTime() >= t0) c.leyendo = true;   // ya vio la petición: está revisando
+        else c.siguiente = ah + (s.en_seg ?? 60) * 1000;
+      }
+      rv.leyendo = rv.cuentas.every(c => c.listo) ? (e.leyendo || 0) : 0;
+      const el = $('cm-prog'); if (el) el.innerHTML = _cmProgTxt();
+      if (rv.cuentas.every(c => c.listo) && !e.leyendo) break;
+    }
+  } finally { clearInterval(tic); }
+  const sinResp = rv.cuentas.filter(c => !c.listo).map(c => String(c.cuenta).split('@')[0]);
+  st.revisando = null;
+  await cmPrefetch(false);
+  const viejas = (r.cuentas || []).filter(c => !_cmVivo(c, ahoraS));
+  if (viejas.length) { st.setup = true; st.actualizar = true; if (!st.token) _cmToken(); cmRender(); }
+  else _cmHeadPintar();
+  const nuevos = st.lista.filter(x => !antes.has(x.id)).length;
+  if (sinResp.length) toast(`⏳ ${sinResp.join(', ')} no respondió a tiempo; se revisa sola en unos minutos`, 'warn');
+  else toast(nuevos ? `📨 ${nuevos} ${nuevos === 1 ? 'movimiento nuevo' : 'movimientos nuevos'} por revisar` : '✓ Revisé tus correos: no hay nada nuevo', nuevos ? 'success' : 'info');
 }
 async function cmRefrescar(btn) { btn?.classList.add('spin'); await cmPrefetch(false); cmRender(); btn?.classList.remove('spin'); }
 const _cmC = id => _cmSt().lista.find(x => x.id === id);

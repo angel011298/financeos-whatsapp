@@ -792,24 +792,42 @@ module.exports = function montarCorreo(app, deps) {
       const { phone, token, cuenta, hecho, v } = req.body || {};
       if (!phone || !tokenOk(phone, token)) return res.status(401).json({ success: false, error: 'Token inválido' });
       const cta = String(cuenta || '').trim().toLowerCase().slice(0, 120), ahora = new Date().toISOString();
+      // Se responde ANTES de escribir: el script queda libre al instante (cada latido gasta de su cuota diaria de Google)
       const { data: s0 } = await sb.from('correo_sync').select('revisar_at').eq('user_phone', phone).eq('cuenta', cta).maybeSingle();
-      const upd = { latido_at: ahora, version: Number(v) || 1, ...(hecho ? { ultimo_sync: ahora, revisar_at: null } : {}) };
+      // Una petición de más de 5 min sin atender ya no cuenta (si una revisión falló, no se queda revisando en bucle)
+      const pedida = !hecho && !!s0?.revisar_at && Date.now() - new Date(s0.revisar_at).getTime() < 5 * 60e3;
+      res.json({ success: true, revisar: pedida });
+      const upd = { latido_at: ahora, version: Number(v) || 1, ...(hecho ? { ultimo_sync: ahora, hecho_at: ahora, revisar_at: null } : {}) };
       if (s0) await sb.from('correo_sync').update(upd).eq('user_phone', phone).eq('cuenta', cta);
       else await sb.from('correo_sync').insert({ user_phone: phone, cuenta: cta, recibidos: 0, ...upd });
-      res.json({ success: true, revisar: !hecho && !!s0?.revisar_at });
       if (hecho) setImmediate(() => procesarCola(phone));
-    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+    } catch (e) { if (!res.headersSent) res.status(500).json({ success: false, error: e.message }); }
   });
-  // «Revisar ahora» desde la app: marca la petición; cada script la ve en su siguiente latido (≤ 1 min) y revisa Gmail
+  const _segHasta = (latido, ahora) => latido ? Math.max(0, Math.round(60 - (ahora - new Date(latido).getTime()) / 1000)) : null;
+  // «Revisar ahora» desde la app: marca la petición; cada script la ve en su siguiente latido (Google lo despierta una vez
+  // por minuto) y revisa Gmail en ese momento. Devuelve, por cuenta, en cuántos segundos le toca su siguiente latido.
   app.post('/api/correo/revisar', async (req, res) => {
     try {
       const phone = req.body?.user_phone;
       if (!phone) return res.status(400).json({ success: false, error: 'Falta user_phone' });
-      const pedido = new Date().toISOString();
+      const pedido = new Date().toISOString(), ahora = Date.now();
       await sb.from('correo_sync').update({ revisar_at: pedido }).eq('user_phone', phone);
-      const { data } = await sb.from('correo_sync').select('cuenta, ultimo_sync, latido_at, version').eq('user_phone', phone);
-      res.json({ success: true, pedido, cuentas: data || [] });
-      setImmediate(() => procesarCola(phone));
+      const { data } = await sb.from('correo_sync').select('cuenta, ultimo_sync, hecho_at, latido_at, version').eq('user_phone', phone);
+      res.json({ success: true, pedido, ahora, cuentas: (data || []).map(c => ({ ...c, en_seg: _segHasta(c.latido_at, ahora) })) });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+  // Estado ligero para seguir una revisión en curso (sin leer pendientes): cuentas + correos que aún se están leyendo
+  app.get('/api/correo/estado', async (req, res) => {
+    try {
+      const phone = req.query.phone;
+      if (!phone) return res.status(400).json({ success: false, error: 'Falta phone' });
+      const ahora = Date.now();
+      const [{ data }, { count }] = await Promise.all([
+        sb.from('correo_sync').select('cuenta, ultimo_sync, hecho_at, latido_at, revisar_at, version').eq('user_phone', phone),
+        sb.from('correo_compras').select('id', { count: 'exact', head: true }).eq('user_phone', phone).eq('estado', 'procesando')]);
+      if (count) procesarCola(phone);
+      res.json({ success: true, ahora, leyendo: (count || 0) + (_cola.has(phone) ? 1 : 0),
+        cuentas: (data || []).map(c => ({ ...c, en_seg: _segHasta(c.latido_at, ahora) })) });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
 
