@@ -4979,6 +4979,13 @@ function diasHabilesQ(qi) {
   for (; d <= fin; d.setDate(d.getDate() + 1)) if (!esInhabil(toISO(d))) n++;
   return n;
 }
+// Días hábiles de la quincena que aún faltan, contando hoy (el día no termina hasta que acaba). Pasada: 0; futura: todos.
+function diasHabilesRestantesQ(qi) {
+  const hoyS = toISO(new Date()); let n = 0;
+  const d = new Date(qi.from + 'T12:00:00'), fin = new Date(qi.to + 'T12:00:00');
+  for (; d <= fin; d.setDate(d.getDate() + 1)) { const x = toISO(d); if (x >= hoyS && !esInhabil(x)) n++; }
+  return n;
+}
 const transporteActivo = () => { const r = (((S.data || {}).user || {}).external_refs) || {}; return r.transporte_auto === true || !!r.transporte_diario; };
 function transporteItem(qi) {
   if (!transporteActivo()) return null;
@@ -6320,15 +6327,20 @@ function rQuincenaPanel(ctx) {
         // Transporte: igual que el Dinerito de novios — barra con lo gastado en la categoría contra lo presupuestado y, al tocarla, el detalle.
         let trMid = '', trExp = '';
         if (esTr) {
-          const movsT = getTransporteMovs(qi.from, qi.to), gastado = movsT.reduce((a, m) => a + (m.monto || 0), 0), rest = g.monto - gastado;
-          const pct = g.monto > 0 ? Math.min(100, Math.round(gastado / g.monto * 100)) : 0;
-          const abierto = !!S._qTrOpen, dh = g._dias === 1 ? '1 día hábil' : g._dias + ' días hábiles';
+          const movsT = getTransporteMovs(qi.from, qi.to), gastado = movsT.reduce((a, m) => a + (m.monto || 0), 0);
+          // La barra avanza con los días hábiles de la quincena (no con lo gastado): lo pendiente es lo que falta por gastar
+          // en los días que quedan (días restantes × tarifa diaria), sin pasar de lo que sobra del presupuesto.
+          const restD = Math.min(g._dias, diasHabilesRestantesQ(qi)), pasados = g._dias - restD;
+          const pend = Math.max(0, Math.min(restD * g._diario, g.monto - gastado));
+          const pct = g._dias > 0 ? Math.round(pasados / g._dias * 100) : 0;
+          const over = gastado > g.monto;
+          const abierto = !!S._qTrOpen, dh = restD === 1 ? '1 día hábil restante' : restD + ' días hábiles restantes';
           trMid = `<div class="mov-card-mid q-card-tap" onclick="toggleQTr()" role="button" tabindex="0" aria-expanded="${abierto}" title="${abierto ? 'Ocultar gastos de transporte' : 'Ver gastos de transporte'}"
             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div class="mov-card-title">${g.descripcion}<i class="ti ti-chevron-${abierto ? 'up' : 'down'}"></i></div>
-            <div class="mov-card-sub">${dh} · ${rest >= 0 ? 'restan ' + fmt(rest) : 'excedido ' + fmt(-rest)}</div>
-            <div class="mov-card-sub">Gastado en transporte: ${fmt(gastado)}</div>
-            <div class="q-din-bar${rest < 0 ? ' over' : ''}"><span style="width:${pct}%"></span></div>
+            <div class="mov-card-sub">${dh} · ${over ? 'excedido ' + fmt(gastado - g.monto) : 'pendiente ' + fmt(pend)}</div>
+            <div class="mov-card-sub">Gastado en transporte: ${fmt(gastado)} de ${fmt(g.monto)}</div>
+            <div class="q-din-bar${over ? ' over' : ''}"><span style="width:${pct}%"></span></div>
           </div>`;
           if (abierto) trExp = `<div class="q-desp-exp" onclick="event.stopPropagation()">
               <div class="q-din-sec"><span>🚌 Gastado en transporte</span><b class="red">${fmt(gastado)}</b></div>
