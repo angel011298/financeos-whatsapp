@@ -12120,7 +12120,7 @@ async function tkAbrir(id) {
   } catch (e) { toast('No se pudo abrir el ticket: ' + e.message, 'error'); }
 }
 
-// ── ATAJO DE IPHONE: triple toque atrás → $ monto (teclado numérico) y 3 toques en listas (concepto · categoría · medio)
+// ── ATAJO DE IPHONE (un solo atajo, «Registrar Gasto»): doble toque atrás → $ monto (teclado numérico) y 3 toques en listas (concepto · categoría · medio)
 // → US lo registra directo (sin IA) y avisa con el logo de US. Sin red lo guarda en el iPhone, en silencio, y lo manda después.
 // Las listas vienen ordenadas por lo que más usa la persona (/api/atajo-token).
 const _ATAJO_OTRO = '✏️ Otro';
@@ -12135,7 +12135,7 @@ function _atajoListas() {
 const _ATAJO_VACIAR = 'Text: "#". Then Save File: save that Text to the Shortcuts folder with Destination Path "US/pendientes.txt", Ask Where to Save OFF, Overwrite If File Exists ON. (Do NOT use Delete Files.)';
 function _atajoPrompt(url) {
   const l = _atajoListas();
-  return `Rebuild the shortcut "Registrar Gasto" with exactly these actions, in this order, and nothing else. Do not add any alerts, confirmations or notifications other than the one in the last step.
+  return `Edit THIS shortcut (do not create a new one): rename it to "Registrar Gasto", delete ALL of its current actions, and replace them with exactly these actions, in this order, and nothing else. Do not add any alerts, confirmations or notifications other than the one in the last step. Do not create automations or other shortcuts.
 1. Ask for Input. Input Type: Number. Prompt: "$".
 2. List with these items: ${l.con}
 3. Choose from List (the List from step 2). Prompt: "Concepto".
@@ -12153,31 +12153,20 @@ function _atajoPrompt(url) {
 15. If Contents of URL contains "✅": ${_ATAJO_VACIAR} End If.
 16. If Contents of URL is not "✅": Show Notification with Contents of URL. End If.`;
 }
-function _atajoPromptPend(url) {
-  return `Create a new shortcut named "US Pendientes" with exactly these actions and no alerts or notifications:
-1. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF. Then Get Text from Input (that File).
-2. If Text contains "|":
-   3. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = the Text from step 1.
-   4. If Contents of URL contains "✅": ${_ATAJO_VACIAR} End If.
-   End If.
-Then create two Personal Automations, both with "Run Immediately" ON and "Notify When Run" OFF, that run "US Pendientes": one When Airplane Mode is turned off, and one When my iPhone joins any Wi-Fi network.`;
-}
 async function atajoAbrir() {
   abrirHoja('📱 Atajo de iPhone', `<div class="cm-setup at-setup">
     <div class="wl-panel-t">Registra un gasto en segundos sin abrir US</div>
-    <div class="at-ej">Toca 3 veces la parte de atrás del iPhone: escribe el <b>$ monto</b> (teclado numérico) y elige con <b>un toque</b> el <b>concepto</b>, la <b>categoría</b> y el <b>medio de pago</b>.
+    <div class="at-ej">Toca 2 veces la parte de atrás del iPhone: escribe el <b>$ monto</b> (teclado numérico) y elige con <b>un toque</b> el <b>concepto</b>, la <b>categoría</b> y el <b>medio de pago</b>.
       Las listas vienen ordenadas por lo que más usas; si el concepto no está, toca <b>${_ATAJO_OTRO}</b> y escríbelo. Solo te llega un aviso: el de registro exitoso.</div>
     <div class="at-prev" id="at-prev"></div>
     <ol>
       <li><b>Avisos con el logo de US</b> (en lugar del de Atajos): <button class="btn btn-sm" id="at-push" onclick="atajoAvisos()">🔔 Activar avisos de US</button>
         <div class="at-nota">Hazlo desde la app de US instalada en tu pantalla de inicio. Si no están activos, el atajo muestra su propia notificación.</div></li>
       <li><button class="btn btn-accent btn-sm at-c" onclick="atajoCopiar('prompt')" disabled><i class="ti ti-copy"></i> Copiar instrucciones del atajo</button>
-        <div class="at-nota">Ya traen tu URL personal (no la compartas) y tus listas. En <b>Atajos</b>, abre <b>Registrar Gasto</b>, pégalas en <b>Describe a change</b> y acepta. Si iOS pregunta por permiso para guardar el archivo, toca <b>Permitir siempre</b> (solo la primera vez).</div></li>
-      <li><b>Sin conexión</b>: el atajo guarda el gasto en el iPhone sin avisarte y lo manda la siguiente vez que lo uses con red, con la fecha y hora en que lo capturaste; nunca se registra dos veces y no te pide confirmar nada.
-        <div class="at-nota">Opcional, para que se mande solo en cuanto vuelva la red (sin esperar al siguiente gasto ni avisos de la automatización):</div>
-        <button class="btn btn-sm at-c" onclick="atajoCopiar('pend')" disabled style="margin-top:6px"><i class="ti ti-copy"></i> Copiar instrucciones «US Pendientes»</button></li>
+        <div class="at-nota">Ya traen tu URL personal (no la compartas) y tus listas. Es <b>un solo atajo</b>: en <b>Atajos</b>, abre el que usa el doble toque, pégalas en <b>Describe a change</b> y acepta (reemplazan todo lo que tenga y lo renombran «Registrar Gasto»). Si iOS pregunta por permiso para guardar el archivo, toca <b>Permitir siempre</b> (solo la primera vez).</div></li>
+      <li><b>Sin conexión</b>: el atajo guarda el gasto en el iPhone sin avisarte y lo manda la siguiente vez que lo uses con red, con la fecha y hora en que lo capturaste; nunca se registra dos veces y no te pide confirmar nada.</li>
     </ol>
-    <div class="at-nota">El atajo está en el <b>triple</b> toque (el doble es la linterna): Ajustes → Accesibilidad → Tocar → Tocar atrás. Si tus conceptos frecuentes cambian, vuelve a copiar las instrucciones para actualizar las listas.
+    <div class="at-nota">El atajo va en el <b>doble</b> toque: Ajustes → Accesibilidad → Tocar → Tocar atrás → Doble toque → Registrar Gasto. Si tus conceptos frecuentes cambian, vuelve a copiar las instrucciones para actualizar las listas.
       Las preguntas del atajo siempre se ven con el ícono de Atajos (iOS no deja cambiarlo); el aviso final sí sale con el de US.</div>
     <button class="btn btn-sm at-c" onclick="atajoCopiar('url')" disabled style="align-self:flex-start"><i class="ti ti-link"></i> Copiar solo la URL</button>
   </div>`, null, { size: 'md', key: 'atajo' });
@@ -12194,7 +12183,7 @@ async function atajoAbrir() {
 }
 async function atajoCopiar(que) {
   if (!S._atajoUrl) return;
-  const txt = que === 'prompt' ? _atajoPrompt(S._atajoUrl) : que === 'pend' ? _atajoPromptPend(S._atajoUrl) : S._atajoUrl;
+  const txt = que === 'prompt' ? _atajoPrompt(S._atajoUrl) : S._atajoUrl;
   try { await navigator.clipboard.writeText(txt); toast(que === 'url' ? '📋 URL copiada' : '📋 Instrucciones copiadas: pégalas en Atajos'); window.iosHaptic && iosHaptic('light'); }
   catch { prompt('Copia esto:', txt); }
 }
