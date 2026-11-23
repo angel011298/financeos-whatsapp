@@ -1963,6 +1963,12 @@ body.sheet-locked{overflow:hidden}
 .at-setup .at-nota{font-size:11.5px;color:var(--text-3);line-height:1.45;margin-top:4px}
 .at-setup .at-prev{display:flex;flex-direction:column;gap:6px}
 .at-setup .at-btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}
+/* Presupuesto: tarjetas de gastos que se ordenan arrastrando (ver «ordenar los gastos arrastrando») */
+.q-ord-list > .q-card{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+@media (hover:hover){.q-ord-list > .q-card{cursor:grab}}
+.q-ord-list.q-dragging,.q-ord-list.q-dragging *{cursor:grabbing!important}
+.q-ord-list > .q-card.q-drag{position:relative;z-index:30;box-shadow:0 16px 36px rgba(0,0,0,.45),0 0 0 1px var(--border-default);transition:box-shadow .2s ease;will-change:transform}
+.q-ord-list.q-dragging > .q-card:not(.q-drag){opacity:.9}
 .at-setup .at-btns .btn{max-width:100%;white-space:normal;text-align:left}
 .at-setup .at-fila{display:grid;grid-template-columns:minmax(0,74px) minmax(0,1fr);gap:8px;align-items:start;font-size:11.5px;color:var(--text-3)}
 .at-setup .at-fila>div{display:flex;flex-wrap:wrap;gap:4px}
@@ -2020,6 +2026,13 @@ body.sheet-locked{overflow:hidden}
 .cal-info-ic{font-size:20px;line-height:1.2}
 .cal-info b{display:block;font-size:13px;color:var(--text-1)}
 .cal-info small{display:block;font-size:11px;color:var(--text-2);margin-top:2px;line-height:1.4}
+/* pagos de servicios (HBO, Google, IPSY…): barra con borde punteado del color de gasto; verde si ya se pagó ese mes */
+.cev-bar.cev-serv{background:transparent;color:var(--text-1);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-expense) 55%,transparent)}
+.cev-bar.cev-serv.ok{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-income) 55%,transparent);opacity:.75}
+.cal-info.serv{background:color-mix(in srgb,var(--color-expense) 10%,var(--bg-surface-2))}
+.cal-info.serv.ok{background:color-mix(in srgb,var(--color-income) 10%,var(--bg-surface-2))}
+.cal-leg .lg-serv{border-radius:3px;width:12px;height:8px;box-shadow:inset 0 0 0 1px var(--color-expense)}
+.cal-chip.serv{cursor:help}
 
 /* ═══════════════════════════════════════════════════════ v17 — Calendario: título, desplegables, eventos */
 .cal-hero{text-align:center;margin:4px 0 12px}
@@ -6071,6 +6084,23 @@ async function notaSave(tab) {
 
 // La Despensa se oculta o se muestra POR quincena (refs.hide_despensa_q = { '2026-10-B': true }): lo que hagas en una no toca las demás.
 const despOculta = (refs, qKey) => !!(refs.hide_despensa_q || {})[qKey];
+// La lista de la Despensa es una sola, así que su tarjeta en Presupuesto vive en UNA quincena/semana: la que estaba en
+// curso la última vez que palomeaste o agregaste un artículo (refs.despensa_q, la pone el servidor). Las siguientes
+// ya no la muestran hasta que vuelvas a palomear algo. Sin dato todavía: la quincena en curso.
+function despensaQActiva(refs) {
+  if (refs.despensa_q) return refs.despensa_q;
+  const q = getQKey(getQuincenaInfo(0));
+  if (!S._despQSembrada && !S.ghostMode && S.phone) {   // cuentas de antes: se fija una vez en la quincena en curso
+    S._despQSembrada = true;
+    api('POST', '/api/update-refs', { phone: S.phone, field: 'despensa_q', qKey: q }).then(() => _despensaQLocal(q)).catch(() => { S._despQSembrada = false; });
+  }
+  return q;
+}
+function _despensaQLocal(q) {   // reflejo inmediato (el servidor guarda lo mismo al palomear/agregar)
+  const u = S.data.user; if (!u) return;
+  u.external_refs = u.external_refs || {};
+  u.external_refs.despensa_q = q || getQKey(getQuincenaInfo(0));
+}
 
 // ── INGRESOS ESPERADOS: tarjetas con "confirmar que llegó" ──────────────────
 // Confirmar un ingreso lo registra en Movimientos con su concepto y monto, y lo suma a la cuenta donde llega
@@ -6178,20 +6208,20 @@ function _presupuestoQ(qOff) {
 
   // Inject DESPENSA entry — si hay una guardada en budget_q la usa (editable); si no, inyecta sintética
   if (!despOculta(refs, qKey)) {   // ocultar/mostrar la Despensa vale solo para ESTA quincena
-    const _despPend  = (S.data.despensa || []).filter(x => !x.comprado && x.compra_quincena !== false);
-    const _despTotal = _despPend.reduce((a, x) => {
-      const bW = typeof x.precio_walmart === 'number' ? x.precio_walmart : Infinity;
-      const bA = typeof x.precio_amazon  === 'number' ? x.precio_amazon  : Infinity;
-      const b  = Math.min(bW, bA);
-      return a + (isFinite(b) ? b : (x.precio_est || 0));
-    }, 0);
     const storedDesp = hasQBudget
       ? ((refs.budget_q || {})[qKey]?.gastos || []).find(g => /^despensa$/i.test((g.descripcion || '').trim()))
       : null;
     if (storedDesp) {
-      gasEsp.push({ ...storedDesp, _fromQ: true }); // real, editable
-    } else if (_despTotal > 0) {
-      gasEsp.push({ _id: '_despensa_', descripcion: 'Despensa', monto: _despTotal, _isDespensa: true }); // sintética
+      gasEsp.push({ ...storedDesp, _fromQ: true }); // real, editable (agregada a mano a ESTA quincena)
+    } else if (qKey === despensaQActiva(refs)) {   // la sintética, solo en la quincena donde se palomeó la lista
+      const _despPend  = (S.data.despensa || []).filter(x => !x.comprado && x.compra_quincena !== false);
+      const _despTotal = _despPend.reduce((a, x) => {
+        const bW = typeof x.precio_walmart === 'number' ? x.precio_walmart : Infinity;
+        const bA = typeof x.precio_amazon  === 'number' ? x.precio_amazon  : Infinity;
+        const b  = Math.min(bW, bA);
+        return a + (isFinite(b) ? b : (x.precio_est || 0));
+      }, 0);
+      if (_despTotal > 0) gasEsp.push({ _id: '_despensa_', descripcion: 'Despensa', monto: _despTotal, _isDespensa: true }); // sintética
     }
   }
 
@@ -6216,7 +6246,37 @@ function _presupuestoQ(qOff) {
   const remanente    = getRemanente(qOff);
   // Balance planeado: ingresos (lo recibido o, si falta, lo esperado, + remanente) − el TOTAL de gastos planeados
   const balPlan = Math.max(totalIngEsp, totalIngReal) + remanente - totalGasEsp;
+  _ordenarGastosQ(gasEsp, refs, qKey);   // prioridad que el usuario fijó arrastrando las tarjetas
   return { refs, qi, qKey, qMovs, hasQBudget, allIngEsp, gasEsp, ingEspQ, totalIngEsp, totalGasEsp, totalIngReal, remanente, balPlan };
+}
+
+// Prioridad de los gastos planeados: el usuario ordena las tarjetas de Presupuesto arrastrándolas (mantener presionado
+// y arrastrar, con el dedo o el mouse) y se guarda refs.orden_q[qKey] = [claves]. Una quincena/semana sin orden propio
+// hereda el de la anterior más cercana que tenga uno (los gastos fijos y automáticos conservan su clave entre quincenas);
+// lo que no está en la lista va al final, en su orden de siempre.
+const _ordKey = g => String(g._id || g.id || g.descripcion || '');
+function _ordenQ(refs, qKey) {
+  const m = refs.orden_q || {};
+  if (Array.isArray(m[qKey])) return m[qKey];
+  const prev = Object.keys(m).filter(k => k < qKey && k.length === qKey.length && Array.isArray(m[k])).sort().pop();
+  return prev ? m[prev] : null;
+}
+function _ordenarGastosQ(lista, refs, qKey) {
+  const ord = _ordenQ(refs, qKey);
+  if (!ord || !ord.length) return lista;
+  const pos = new Map(ord.map((k, i) => [k, i])), base = new Map(lista.map((g, i) => [g, i]));
+  const p = g => pos.has(_ordKey(g)) ? pos.get(_ordKey(g)) : 1e6 + base.get(g);
+  return lista.sort((a, b) => p(a) - p(b));
+}
+async function guardarOrdenQ(qKey, claves) {
+  const u = S.data.user; if (!u || !qKey) return;
+  u.external_refs = u.external_refs || {};
+  u.external_refs.orden_q = { ...(u.external_refs.orden_q || {}), [qKey]: claves };
+  S._qSort = '';   // el orden manual reemplaza al orden por monto
+  refreshQuincenaPanel();
+  if (S.ghostMode) return;
+  try { await api('POST', '/api/update-refs', { phone: S.phone, field: 'orden_q', qKey, value: claves }); }
+  catch (e) { toast('No se pudo guardar el orden: ' + e.message, 'error'); }
 }
 
 // ── QUINCENAL PANEL ──────────────────────────────────────────────────────────
@@ -6577,8 +6637,8 @@ function rQuincenaPanel(ctx) {
     </div>
     ${gasEsp.length ? `
     ${tglBtn('tbl-gastos-q-'+ctx, "exportGastosQuincena('"+ctx+"')", { centrado: true, antes: sortBtn + (_hayPareja() ? `<button class="ico-btn" onclick="gastosDePareja()" title="Gastos que compartió ${_ndEsc(_parNom())}" aria-label="Gastos que compartió ${_ndEsc(_parNom())}"><i class="ti ti-heart-handshake"></i></button>` : '') })}
-    <div class="mov-cards" id="tbl-gastos-q-${ctx}-body">
-      ${gasVista.map(cardHTML).join('')}
+    <div class="mov-cards q-ord-list" id="tbl-gastos-q-${ctx}-body" data-qkey="${qKey}">
+      ${gasVista.map(g => cardHTML(g).replace('<div class="mov-card q-card', `<div data-ord="${_ndEsc(_ordKey(g))}" class="mov-card q-card`)).join('')}
     </div>` : `<div style="color:var(--muted);font-size:13px;padding:10px 12px;background:var(--card2);border-radius:7px">Aún no hay gastos registrados esta ${_uTxt()}. Usa el botón <strong>Registrar Próximo Gasto</strong> de arriba.</div>`}
     <div class="mov-cbox${S._qChartCollapsed ? ' collapsed' : ''}" id="q-cbox-${ctx}">
       <div class="mov-cbox-hdr">
@@ -10041,6 +10101,90 @@ function _calPanelsPaint() {
 }
 function calHoy() { const d = new Date(); S.cy = d.getFullYear(); S.cm = d.getMonth(); closeCalDay(); }
 
+// ── PAGOS DE SERVICIOS EN EL CALENDARIO ─────────────────────────────────────────────────────────────────────────────
+// Cada servicio que pagas cada mes aparece en su día:
+//  1) los gastos fijos de Presupuesto que tienen día de cobro (plantilla gastos_esperados y los «gf-» de cada quincena);
+//  2) los que se reconocen en tus movimientos: un servicio conocido (HBO, Google, Claude, Netflix, IPSY…) o cualquier
+//     cargo que se repite 3+ meses el mismo día (±3) por el mismo monto (±10 %), una vez al mes.
+// Un servicio detectado que dejó de cobrarse hace más de 2 meses ya no se proyecta a futuro.
+const _SERV = [
+  [/\b(hbo|max)\b/, 'HBO Max', '📺'], [/netflix/, 'Netflix', '📺'], [/disney/, 'Disney+', '🏰'], [/spotify/, 'Spotify', '🎵'],
+  [/apple\s*music/, 'Apple Music', '🎵'], [/apple\s*tv/, 'Apple TV', '📺'], [/icloud|apple\s*one/, 'iCloud', '☁️'], [/youtube/, 'YouTube', '▶️'],
+  [/\bgoogle\b|\bgemini\b/, 'Google', '☁️'], [/claude|anthropic/, 'Claude', '🤖'], [/chat\s*gpt|openai/, 'ChatGPT', '🤖'], [/vercel/, 'Vercel', '▲'],
+  [/\bipsy\b/, 'IPSY', '💄'], [/prime\s*video|amazon\s*prime/, 'Amazon Prime', '📦'], [/xbox|game\s*pass/, 'Xbox', '🎮'],
+  [/playstation|\bpsn\b|ps\s*plus/, 'PlayStation', '🎮'], [/\bcanva\b/, 'Canva', '🎨'], [/\bnotion\b/, 'Notion', '📝'], [/adobe/, 'Adobe', '🎨'],
+  [/duolingo/, 'Duolingo', '🦉'], [/crunchyroll/, 'Crunchyroll', '📺'], [/paramount/, 'Paramount+', '📺'], [/\bvix\b/, 'ViX', '📺'],
+  [/\bmubi\b/, 'MUBI', '📺'], [/deezer/, 'Deezer', '🎵'], [/uber\s*one/, 'Uber One', '🚗'], [/rappi\s*(pro|prime)/, 'Rappi Pro', '🛵'],
+  [/\b(internet|izzi|totalplay|megacable|telmex|infinitum)\b/, 'Internet', '🌐'], [/smart\s*fit|gimnasio|\bgym\b/, 'Gimnasio', '🏋️'],
+];
+const _servNorm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/^\[ppto\]\s*/, '').replace(/\s+/g, ' ').trim();
+function _servConocido(txt) { const t = _servNorm(txt); for (const [re, nom, emo] of _SERV) if (re.test(t)) return { nom, emo }; return null; }
+const _servMes = qKey => {   // quincena «2026-10-A» o semana ISO «2026-W40» → mes «2026-10»
+  const k = String(qKey || ''), w = k.match(/^(\d{4})-W(\d{2})$/);
+  if (w) { const j4 = new Date(Date.UTC(+w[1], 0, 4)); j4.setUTCDate(j4.getUTCDate() - (j4.getUTCDay() + 6) % 7 + (+w[2] - 1) * 7); return j4.toISOString().slice(0, 7); }
+  const m = k.match(/^(\d{4})-(\d{2})/); return m ? `${m[1]}-${m[2]}` : null;
+};
+const _mesesEntre = (a, b) => { const [y1, m1] = a.split('-').map(Number), [y2, m2] = b.split('-').map(Number); return (y2 - y1) * 12 + (m2 - m1); };
+function serviciosMensuales() {
+  const refs = (S.data.user || {}).external_refs || {}, movs = S.data.movs || [];
+  if (S._servCache && S._servCache.refs === refs && S._servCache.movs === movs) return S._servCache.l;
+  const out = new Map(), pagos = new Map();   // clave → servicio · clave → [{fecha, monto}]
+  const poner = (nombre, emo, dia, monto, desde, fuente) => {
+    const clave = _servNorm(nombre); if (!clave || !(dia >= 1 && dia <= 31)) return;
+    const prev = out.get(clave);
+    if (prev && (prev.fuente === 'fijo' || fuente !== 'fijo')) { if (desde && (!prev.desde || desde < prev.desde)) prev.desde = desde; return; }
+    out.set(clave, { clave, nombre, emo, dia, monto, desde, fuente });
+  };
+  // 1) Gastos fijos con día de cobro: la plantilla manda; los «gf-» guardados por quincena cubren los que ya no están en ella
+  (Array.isArray(refs.gastos_esperados) ? refs.gastos_esperados : []).forEach(g => {
+    const dia = +(g.dias || [])[0]; if (!dia) return;
+    const k = _servConocido(g.descripcion);
+    poner(k?.nom || g.descripcion, k?.emo || CAT_EMOJI[g.categoria] || '💳', dia, +g.monto || 0, _servMes(g.desde), 'fijo');
+  });
+  Object.keys(refs.budget_q || {}).sort().reverse().forEach(qk => (refs.budget_q[qk]?.gastos || []).forEach(g => {
+    const dia = +(g.dias || [])[0], k = _servConocido(g.descripcion);
+    if (!dia || !(/^gf-/.test(String(g._id || '')) || k)) return;
+    poner(k?.nom || g.descripcion, k?.emo || CAT_EMOJI[g.categoria] || '💳', dia, +g.monto || 0, _servMes(qk), 'fijo');
+  }));
+  // 2) Movimientos de los últimos 8 meses
+  const d0 = new Date(); d0.setMonth(d0.getMonth() - 8); const desde = toISO(d0);
+  const grupos = new Map();
+  movs.forEach(m => {
+    if (m.tipo !== 'GASTO' || m.deleted_at || !m.fecha || fd(m.fecha) < desde) return;
+    const k = _servConocido(m.concepto), clave = _servNorm(k ? k.nom : m.concepto);
+    if (!clave) return;
+    if (!grupos.has(clave)) grupos.set(clave, { k, nombre: k ? k.nom : String(m.concepto || '').replace(/^\[ppto\]\s*/i, '').trim(), ms: [] });
+    grupos.get(clave).ms.push(m);
+  });
+  const hoyM = toISO(new Date()).slice(0, 7);
+  grupos.forEach((g, clave) => {
+    const ms = g.ms.sort((a, b) => fd(a.fecha).localeCompare(fd(b.fecha)));
+    const meses = new Set(ms.map(m => fd(m.fecha).slice(0, 7))), dias = ms.map(m => +fd(m.fecha).slice(8, 10)), montos = ms.map(m => +m.monto || 0);
+    if (!g.k) {   // cargo sin nombre de servicio: solo si el patrón mensual es clarísimo
+      if (meses.size < 3 || ms.length > meses.size + 1 || Math.max(...dias) - Math.min(...dias) > 3) return;
+      const prom = montos.reduce((a, b) => a + b, 0) / montos.length;
+      if (montos.some(x => Math.abs(x - prom) > prom * 0.1)) return;
+    }
+    pagos.set(clave, ms.map(m => ({ fecha: fd(m.fecha), monto: +m.monto || 0 })));
+    const ult = ms[ms.length - 1], ultM = fd(ult.fecha).slice(0, 7);
+    if (out.has(clave)) return;   // ya es gasto fijo: solo se anotan sus pagos
+    const s = { clave, nombre: g.nombre.charAt(0).toUpperCase() + g.nombre.slice(1), emo: g.k?.emo || '💳', dia: +fd(ult.fecha).slice(8, 10),
+      monto: +ult.monto || 0, desde: fd(ms[0].fecha).slice(0, 7), fuente: 'mov' };
+    if (_mesesEntre(ultM, hoyM) > 2) s.hasta = ultM;   // dejó de cobrarse: no se proyecta
+    out.set(clave, s);
+  });
+  const l = [...out.values()].sort((a, b) => a.dia - b.dia || a.nombre.localeCompare(b.nombre));
+  l.forEach(s => { s.pagos = pagos.get(s.clave) || []; });
+  S._servCache = { refs, movs, l };
+  return l;
+}
+// Servicios que tocan en un mes (y, mo 0-11): [{ ...servicio, dia (ajustado al fin de mes), pagado }]
+function serviciosDelMes(y, mo) {
+  const ym = `${y}-${String(mo + 1).padStart(2, '0')}`, ult = new Date(y, mo + 1, 0).getDate();
+  return serviciosMensuales().filter(s => (!s.desde || ym >= s.desde) && (!s.hasta || ym <= s.hasta))
+    .map(s => ({ ...s, dia: Math.min(s.dia, ult), pagado: s.pagos.find(p => p.fecha.slice(0, 7) === ym) || null }));
+}
+
 // ── RENDER: CALENDARIO ───────────────────────────────────────────────────────
 function _calGridHTML(evts, y, mo, refs, niditoItems) {
   const MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -10064,6 +10208,8 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
       (evtMap[day]||(evtMap[day]=[])).push({...it,_type:'nidito',_df:f});
     }
   }
+  const servs=serviciosDelMes(y,mo);   // pagos de servicios del mes (gastos fijos con día + detectados en movimientos)
+  for(const s of servs) (evtMap[s.dia]||(evtMap[s.dia]=[])).push({...s,_type:'serv',titulo:`${s.emo} ${s.nombre}`});
   const DAYS=['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
   let cells=DAYS.map(d=>`<div class="ch">${d}</div>`).join('');
   for(let i=0;i<first.getDay();i++) cells+=`<div class="cd oth"></div>`;
@@ -10074,6 +10220,10 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
     const dow=(first.getDay()+d-1)%7, finde=dow===0||dow===6, fer=FER[ds]||null;
     const MAX=fer?1:2;   // celdas de alto fijo: [feriado en escritorio] + eventos + "+N"
     const bars=de.slice(0,MAX).map(e=>{
+      if(e._type==='serv'){
+        const t=`${e.nombre} · ${fmt(e.monto)}${e.pagado?' · pagado':''}`.replace(/"/g,'&quot;');
+        return `<span class="cev-bar cev-serv${e.pagado?' ok':''}" onclick="event.stopPropagation();calDay('${ds}')" title="${t}">${_wlEsc(e.titulo)}</span>`;
+      }
       const cls=e._type==='nidito'?'cev-nidito':'cev-event';
       const lbl=(e.titulo||'').replace(/"/g,'&quot;');
       const act=e._type==='nidito'?`calDay('${ds}')`:`eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})`;
@@ -10101,12 +10251,12 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
   <button class="p-arrow" onclick="calN(-1)" title="Mes anterior" aria-label="Mes anterior"><i class="ti ti-chevron-left"></i></button>
   <div class="cal-ttl">
     ${esMesActual?`<div class="cal-mes">${MN[mo]} ${y}</div>`:`<button class="cal-mes cal-mes-btn" onclick="calHoy()" title="Volver al mes actual"><i class="ti ti-home-2"></i> ${MN[mo]} ${y}</button>`}
-    <div class="cal-chips">${payDays.size?`<span class="cal-chip">💰 cobro: ${payList}</span>`:''}${nFer?`<span class="cal-chip fer">🏖️ ${nFer} feriado${nFer!==1?'s':''}</span>`:''}</div>
+    <div class="cal-chips">${payDays.size?`<span class="cal-chip">💰 cobro: ${payList}</span>`:''}${servs.length?`<span class="cal-chip serv" title="${_wlEsc(servs.map(s=>`${s.dia}: ${s.nombre} ${fmt(s.monto)}`).join(' · '))}">💳 ${servs.length} servicio${servs.length!==1?'s':''}: ${fmt(servs.reduce((a,s)=>a+(s.monto||0),0))}</span>`:''}${nFer?`<span class="cal-chip fer">🏖️ ${nFer} feriado${nFer!==1?'s':''}</span>`:''}</div>
   </div>
   <button class="p-arrow" onclick="calN(1)" title="Mes siguiente" aria-label="Mes siguiente"><i class="ti ti-chevron-right"></i></button>
 </div>
 <div id="cal-grid">${cells}</div>
-<div class="cal-leg"><span>🏖️ Feriado</span><span><i class="lg-fin"></i>Fin de semana</span><span><i class="lg-pay"></i>Cobro</span><span><i class="lg-pay warn"></i>Cobro en inhábil</span></div>`;
+<div class="cal-leg"><span>🏖️ Feriado</span><span><i class="lg-fin"></i>Fin de semana</span><span><i class="lg-pay"></i>Cobro</span><span><i class="lg-pay warn"></i>Cobro en inhábil</span><span><i class="lg-serv"></i>Pago de servicio</span></div>`;
 }
 
 async function rCal() {
@@ -10161,7 +10311,12 @@ function calDay(ds) {
   if(_fin&&_fer) html+=`<div class="cal-info"><span class="cal-info-ic">🛋️</span><div><b>Además cae en ${_calDow(ds)===0?'domingo':'sábado'}</b><small>Fin de semana · día inhábil</small></div></div>`;
   if(payDays.has(d)&&_calInfo) html+=`<div class="cal-info warn"><span class="cal-info-ic">⚠️</span><div><b>Tu cobro cae en día inhábil</b><small>Suele depositarse el ${_calFechaLarga(diaHabilAnterior(ds)).toLowerCase()}. Planea tus pagos con eso en mente.</small></div></div>`;
   if(payDays.has(d)) html+=`<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--green);margin-bottom:10px"><i class="ti ti-coin" style="font-size:14px"></i> Día de cobro / ingreso</div>`;
-  if(!dayEvts.length&&!dayNd.length&&!payDays.has(d)&&!_calInfo){
+  const servD=serviciosDelMes(y,m-1).filter(s=>s.dia===d);
+  servD.forEach(s=>{
+    const pg=s.pagado?` · ✅ pagado el ${+s.pagado.fecha.slice(8,10)}/${s.pagado.fecha.slice(5,7)}${Math.abs(s.pagado.monto-s.monto)>0.5?' ('+fmt(s.pagado.monto)+')':''}`:'';
+    html+=`<div class="cal-info serv${s.pagado?' ok':''}"><span class="cal-info-ic">${s.emo}</span><div><b>${_wlEsc(s.nombre)} · ${fmt(s.monto)}</b><small>Pago de servicio · ${s.fuente==='fijo'?'gasto fijo de Presupuesto':'detectado en tus movimientos (cada mes el '+s.dia+')'}${pg}</small></div></div>`;
+  });
+  if(!dayEvts.length&&!dayNd.length&&!payDays.has(d)&&!_calInfo&&!servD.length){
     html+=`<p style="color:var(--text-3);font-size:12px;margin:0 0 14px">Sin eventos este día.</p>`;
   }
   dayEvts.forEach(e=>{
@@ -10433,7 +10588,7 @@ async function saveM() {
     try {
       const r = await api('POST', '/api/despensa', { user_phone: S.phone, nombre, nombre_oficial: nombre_oficial || null, cantidad, precio_est });
       if (r?.success === false) { alert('Error: ' + (r.error || '')); return; }
-      if (r.data) { if (!S.data.despensa) S.data.despensa = []; S.data.despensa.unshift(r.data); }
+      if (r.data) { if (!S.data.despensa) S.data.despensa = []; S.data.despensa.unshift(r.data); _despensaQLocal(r.despensa_q); }
       closeM(); _despRefresh(); toast(`"${nombre}" agregado a la despensa`);
     } catch(e) { alert('Error: ' + e.message); }
     return;
@@ -10763,10 +10918,12 @@ async function toggleCompraQ(id, val) {
   // Actualizar estado local primero para UX fluida
   const item = (S.data.despensa || []).find(x => x.id === id);
   if (item) item.compra_quincena = val;
+  if (val) _despensaQLocal();   // palomear = la Despensa vuelve a la quincena en curso
   rDespensa();
   refreshQuincenaPanel();
   try {
-    await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, compra_quincena: val });
+    const r = await api('PUT', `/api/despensa/${id}`, { user_phone: S.phone, compra_quincena: val });
+    if (val && r?.despensa_q) _despensaQLocal(r.despensa_q);
   } catch(e) {
     if (/compra_quincena/i.test(e.message || '')) {
       toast('Ejecuta migration_v9.sql en Supabase para persistir este cambio', 'error');
@@ -12320,13 +12477,12 @@ function _atajoPrompt(url) {
 11. Text: [Formatted Date]|[Provided Input from step 2]|[Concepto]|[Chosen Item from step 7]|[Chosen Item from step 9]  (no spaces around the | characters).
 12. Append to Text File: append the Text from step 11 to "US/pendientes.txt" in the Shortcuts folder, Make New Line ON.
 13. End If (the one from step 1). Everything below runs every time.
-14. Get Network Details: Wi-Fi, Network Name. If it has no value: Get Network Details: Cellular, Number of Signal Bars; If Number of Signal Bars is 0: Stop This Shortcut (silently, no notification). End If. End If.
-15. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF. Then Get Text from Input (that File).
-16. If the Text from step 15 contains "|":
-17. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = the Text from step 15.
+14. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF. Then Get Text from Input (that File).
+15. If the Text from step 14 does not contain "|", OR the Text from step 14 ends with "#" (that means everything was already sent and nothing is pending): Stop This Shortcut (silently, no notification, no network request). End If.
+16. Get Network Details: Wi-Fi, Network Name. If it has no value: Get Network Details: Cellular, Number of Signal Bars; If Number of Signal Bars is 0: Stop This Shortcut (silently, no notification). End If. End If.
+17. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = the Text from step 14.
 18. If Contents of URL contains "✅": ${_ATAJO_VACIAR} End If.
-19. If Contents of URL is not "✅": Show Notification with Contents of URL. End If.
-20. End If (the one from step 16).`;
+19. If Contents of URL is not "✅": Show Notification with Contents of URL. End If.`;
 }
 async function atajoAbrir() {
   abrirHoja('📱 Atajo de iPhone', `<div class="cm-setup at-setup">
@@ -12340,11 +12496,10 @@ async function atajoAbrir() {
       <li><button class="btn btn-accent btn-sm at-c" onclick="atajoCopiar('prompt')" disabled><i class="ti ti-copy"></i> Copiar instrucciones del atajo</button>
         <div class="at-nota">Ya traen tu URL personal (no la compartas) y tus listas. Es <b>un solo atajo</b>: en <b>Atajos</b>, abre el que usa el doble toque, pégalas en <b>Describe a change</b> y acepta (reemplazan todo lo que tenga y lo renombran «Registrar Gasto»). Si iOS pregunta por permiso para guardar el archivo, toca <b>Permitir siempre</b> (solo la primera vez).</div></li>
       <li><b>Sin conexión</b>: el gasto se guarda primero en el iPhone y se manda con la fecha y hora en que lo capturaste; nunca se registra dos veces. Si iOS muestra «The Internet connection appears to be offline», el gasto <b>no se perdió</b>: sigue guardado.</li>
-      <li><b>Envío automático al volver la red</b> (una sola vez, DESPUÉS del paso 2; iOS no avisa a los atajos cuando regresa la conexión, así que lo pendiente se manda en cuanto abres una app o te conectas a un Wi-Fi). Son dos atajos nuevos con disparador, cada uno con su prompt:
-        <div class="at-btns"><button class="btn btn-sm" onclick="atajoCopiar('autoA')"><i class="ti ti-copy"></i> Copiar prompt A · al abrir apps</button>
-          <button class="btn btn-sm" onclick="atajoCopiar('autoB')"><i class="ti ti-copy"></i> Copiar prompt B · al conectarte a Wi-Fi</button></div>
-        <div class="at-nota">En <b>Shortcuts</b> toca <b>+</b> (pantalla <b>New Shortcut</b>, nunca dentro de «Registrar Gasto»), pega el prompt en <b>Describe a shortcut</b> y acepta; luego lo mismo con el otro. Revisa que cada uno diga «Run Registrar Gasto with Text» y que no pida confirmación (si al abrir WhatsApp te pregunta si lo ejecutas, en ese atajo activa que corra sin preguntar).
-          Con la cola vacía no hacen nada ni muestran nada; si hay algo guardado, te llega el aviso de US con el gasto y su fecha.</div></li>
+      <li><b>Envío automático al volver la red</b> (una sola vez, DESPUÉS del paso 2). iOS no avisa a los atajos cuando regresa la conexión; lo más seguro es el primer aviso de WhatsApp que te llegue, porque si llegó un aviso hay internet:
+        <div class="at-btns"><button class="btn btn-sm" onclick="atajoCopiar('auto')"><i class="ti ti-copy"></i> Copiar prompt · enviar al llegar un aviso de WhatsApp</button></div>
+        <div class="at-nota">Si antes creaste «US Enviar al abrir apps» o «US Enviar con Wi-Fi», <b>bórralos</b> (eran los que te mandaban «appears to be offline»). Luego en <b>Shortcuts</b> toca <b>+</b> (pantalla <b>New Shortcut</b>, nunca dentro de «Registrar Gasto»), pega el prompt en <b>Describe a shortcut</b> y acepta. Revisa que diga «Run Registrar Gasto with Text» y que no pida confirmación ni muestre «Running…» (si lo hace, toca el disparador al inicio del atajo y apaga el aviso / la confirmación).
+          Con nada pendiente no se conecta ni muestra nada; si hay algo guardado, solo te llega el aviso de US con el gasto y su fecha.</div></li>
     </ol>
     <div class="at-nota">El atajo va en el <b>doble</b> toque: Ajustes → Accesibilidad → Tocar → Tocar atrás → Doble toque → Registrar Gasto. Si tus conceptos frecuentes cambian, vuelve a copiar las instrucciones para actualizar las listas.
       Las preguntas del atajo siempre se ven con el ícono de Atajos (iOS no deja cambiarlo); el aviso final sí sale con el de US.</div>
@@ -12361,15 +12516,16 @@ async function atajoAbrir() {
     document.querySelectorAll('.at-c').forEach(b => b.disabled = false);
   } catch (e) { toast('No se pudo preparar el atajo: ' + e.message, 'error'); }
 }
-// iOS 27: «Describe a shortcut» arma atajos con disparador. Cada disparador es un atajo NUEVO que solo corre
-// «Registrar Gasto» con el texto «enviar» (su modo enviar); la lógica de envío vive en un solo lugar.
+// iOS 27: «Describe a shortcut» arma atajos con disparador. UN atajo nuevo que solo corre «Registrar Gasto» con el
+// texto «enviar» (su modo enviar). Disparador: llega un aviso de WhatsApp — si llegó un aviso, HAY internet, así que
+// nunca falla por falta de red (abrir apps o unirse a un Wi-Fi del metro sin internet daba «appears to be offline»).
+// Y «Registrar Gasto» no toca la red si la cola termina en «#» (nada pendiente): con la cola vacía no pasa nada.
 const _atajoAuto = (cuando, nombre) => `Create a NEW shortcut named "${nombre}". Do not edit or change any other shortcut, especially "Registrar Gasto". Trigger: ${cuando}. It must run immediately, without asking me for confirmation and without notifying me when it runs. Actions, exactly these two and nothing else:
 1. Text: enviar
 2. Run Shortcut "Registrar Gasto", with the Text from step 1 as its input.
 Do not add any alerts, notifications, waits or other actions.`;
 const _ATAJO_AUTO = {
-  autoA: _atajoAuto('when I open WhatsApp, Instagram, TikTok or Safari', 'US Enviar al abrir apps'),
-  autoB: _atajoAuto('when my iPhone joins any Wi-Fi network', 'US Enviar con Wi-Fi'),
+  auto: _atajoAuto('when I receive any notification from WhatsApp (no filters on title, subtitle or message)', 'US Enviar pendientes'),
 };
 async function atajoCopiar(que) {
   if (!S._atajoUrl && !_ATAJO_AUTO[que]) return;
@@ -12906,6 +13062,114 @@ document.addEventListener('click', () => setTimeout(() => { _mSel.dragging = fal
       }, 4000);
     }
   } catch (e) { /* sin almacenamiento: no se muestra la pista */ }
+})();
+
+// ── PRESUPUESTO: ordenar los gastos arrastrando ─────────────────────────────────────────────────────────────────────
+// Con el dedo: mantén presionada una tarjeta (~0.35 s, vibra) y arrástrala arriba o abajo. Con el mouse: presiona y
+// muévela. Las demás se acomodan solas (FLIP) y al soltar se guarda la prioridad de ESA quincena (guardarOrdenQ).
+// Mientras arrastras, ningún otro gesto reacciona (deslizar la tarjeta, cerrar la hoja, tirar para actualizar: los
+// listeners van en captura sobre window y detienen el evento) y la lista se desplaza sola cerca de los bordes.
+(function () {
+  const CARD = '.q-ord-list > .q-card[data-ord]', NO = 'button,a,input,select,textarea,label,[contenteditable="true"],.sw-panel,.q-desp-exp';
+  let p = null, sinClick = false, ultToque = 0;
+  const cartas = l => [...l.children].filter(c => c.matches('.q-card[data-ord]'));
+  const esCarta = n => !!(n && n.matches && n.matches('.q-card[data-ord]'));
+  function scrollPadre(n) {
+    for (; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return n;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+  function preparar(t, x, y, tactil) {
+    if (p || !t || !t.closest) return;
+    const card = t.closest(CARD);
+    if (!card || t.closest(NO) || card._sw) return;
+    if (cartas(card.parentElement).length < 2) return;
+    p = { card, list: card.parentElement, x0: x, y0: y, y, tactil, on: false };
+    if (tactil) p.timer = setTimeout(empezar, 350);   // con el mouse empieza al mover (un clic lento no arrastra)
+  }
+  function empezar() {
+    if (!p || p.on) return;
+    p.on = true; p.desfase = 0; p.sc = scrollPadre(p.list); p.sc0 = p.sc.scrollTop;
+    p.orden0 = cartas(p.list).map(c => c.dataset.ord).join('\n');
+    p.card.classList.add('q-drag'); p.list.classList.add('q-dragging');
+    try { window.getSelection()?.removeAllRanges(); } catch (e) {}
+    window.iosHaptic?.('medium');
+    p.raf = requestAnimationFrame(bordes);
+  }
+  const dyDe = () => p.y - p.y0 + (p.sc.scrollTop - p.sc0) - p.desfase;
+  function pintar() {   // si el dedo va rápido puede pasar varias tarjetas de un jalón: se intercambia hasta quedar estable
+    for (let i = 0; i < 30 && p && pasoPintar(); i++);
+  }
+  function pasoPintar() {
+    p.card.style.transform = `translateY(${dyDe()}px) scale(1.02)`;
+    const r = p.card.getBoundingClientRect(), mid = r.top + r.height / 2;
+    const sig = esCarta(p.card.nextElementSibling) ? p.card.nextElementSibling : null;
+    const ant = esCarta(p.card.previousElementSibling) ? p.card.previousElementSibling : null;
+    let vecina = null, mover = null;
+    if (sig) { const s = sig.getBoundingClientRect(); if (mid > s.top + s.height / 2) { vecina = sig; mover = () => p.list.insertBefore(sig, p.card); } }
+    if (!vecina && ant) { const a = ant.getBoundingClientRect(); if (mid < a.top + a.height / 2) { vecina = ant; mover = () => p.list.insertBefore(p.card, ant); } }
+    if (!vecina) return false;
+    const top0 = p.card.offsetTop, v0 = vecina.getBoundingClientRect().top;
+    mover();
+    p.desfase += p.card.offsetTop - top0;
+    const v1 = vecina.getBoundingClientRect().top;
+    vecina.style.transition = 'none'; vecina.style.transform = `translateY(${v0 - v1}px)`;
+    void vecina.offsetWidth;
+    vecina.style.transition = 'transform .22s cubic-bezier(.32,.72,0,1)'; vecina.style.transform = '';
+    p.card.style.transform = `translateY(${dyDe()}px) scale(1.02)`;
+    window.iosHaptic?.('light');
+    return true;
+  }
+  function bordes() {
+    if (!p || !p.on) return;
+    const sc = p.sc, doc = sc === document.scrollingElement || sc === document.documentElement;
+    const r = doc ? { top: 0, bottom: innerHeight } : sc.getBoundingClientRect(), z = 70;
+    let v = 0;
+    if (p.y < r.top + z) v = -Math.ceil((r.top + z - p.y) / 6);
+    else if (p.y > r.bottom - z) v = Math.ceil((p.y - (r.bottom - z)) / 6);
+    if (v) { const a = sc.scrollTop; sc.scrollTop += v; if (sc.scrollTop !== a) pintar(); }
+    p.raf = requestAnimationFrame(bordes);
+  }
+  function soltar(cancelado) {
+    if (!p) return;
+    clearTimeout(p.timer); cancelAnimationFrame(p.raf);
+    const g = p; p = null;
+    if (!g.on) return;
+    if (Math.abs(g.y - g.y0) > 4) { sinClick = true; setTimeout(() => { sinClick = false; }, 450); }
+    g.card.classList.remove('q-drag'); g.list.classList.remove('q-dragging');
+    g.card.style.transition = 'transform .2s cubic-bezier(.32,.72,0,1)'; g.card.style.transform = '';
+    setTimeout(() => cartas(g.list).forEach(c => { c.style.transition = ''; c.style.transform = ''; }), 230);
+    const claves = cartas(g.list).map(c => c.dataset.ord);
+    if (cancelado) { setTimeout(refreshQuincenaPanel, 230); return; }
+    if (claves.join('\n') !== g.orden0) { window.iosHaptic?.('success'); setTimeout(() => guardarOrdenQ(g.list.dataset.qkey, claves), 210); }
+  }
+  // Dedo
+  addEventListener('touchstart', e => {
+    ultToque = Date.now();
+    if (e.touches.length === 1) preparar(e.target, e.touches[0].clientX, e.touches[0].clientY, true); else soltar(true);
+  }, { passive: true, capture: true });
+  addEventListener('touchmove', e => {
+    if (!p) return;
+    const t = e.touches[0];
+    if (!p.on) { if (Math.abs(t.clientX - p.x0) > 8 || Math.abs(t.clientY - p.y0) > 8) { clearTimeout(p.timer); p = null; } return; }   // se movió antes: era desplazar o deslizar
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    p.y = t.clientY; pintar();
+  }, { passive: false, capture: true });
+  addEventListener('touchend', e => { if (p && p.on) e.stopPropagation(); soltar(false); }, { capture: true });
+  addEventListener('touchcancel', () => soltar(true), { capture: true });
+  // Mouse
+  addEventListener('mousedown', e => { if (e.button === 0 && Date.now() - ultToque > 800) preparar(e.target, e.clientX, e.clientY, false); }, true);
+  addEventListener('mousemove', e => {
+    if (!p || p.tactil) return;
+    if (!p.on) { if (Math.abs(e.clientX - p.x0) < 6 && Math.abs(e.clientY - p.y0) < 6) return; empezar(); }
+    e.preventDefault(); p.y = e.clientY; pintar();
+  }, true);
+  addEventListener('mouseup', () => { if (p && !p.tactil) soltar(false); }, true);
+  // El clic que llega al soltar no debe abrir lo que hay bajo la tarjeta
+  addEventListener('click', e => { if (sinClick) { e.preventDefault(); e.stopPropagation(); sinClick = false; } }, true);
 })();
 
 // ── iOS FEEL: microanimaciones y gestos nativos (móvil) ─────────────────────────────────────────────────────────

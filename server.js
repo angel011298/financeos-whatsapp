@@ -1690,12 +1690,14 @@ async function executeDbAction(phone, arg, origen = 'whatsapp') {
         const { data, error } = await sb.from('despensa').insert({ ...datos, user_phone: phone }).select().single();
         if (error) return `❌ Error: ${error.message}`;
         await writeAuditLog(phone, tabla, accion, data?.id, null, data, origen, texto_original);
+        if (data?.compra_quincena !== false) await marcarDespensaQ(phone);   // la Despensa vuelve a la quincena en curso
         return `✅ Agregado a la despensa ✓ ID: ${data?.id}`;
       }
       if (accion === 'editar') {
         const { data, error } = await sb.from('despensa').update(datos).eq('id', id).eq('user_phone', phone).select().single();
         if (error) return `❌ Error: ${error.message}`;
         await writeAuditLog(phone, tabla, accion, id, snapshotBefore, data, origen, texto_original);
+        if (datos?.compra_quincena === true) await marcarDespensaQ(phone);
         return `✅ Despensa #${id} actualizado.`;
       }
       if (accion === 'eliminar') {
@@ -3825,13 +3827,27 @@ app.get('/api/despensa/:phone', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// La tarjeta «Despensa» de Presupuesto vive en UNA quincena (semana para USER_B): la que estaba en curso la última vez
+// que se palomeó o agregó un artículo para comprar (refs.despensa_q). Las siguientes ya no la muestran hasta que se
+// vuelva a palomear algo; antes la lista (que es una sola) aparecía repetida en todas las quincenas futuras.
+async function marcarDespensaQ(phone) {
+  try {
+    const q = await claveUnidad(phone, hoy());
+    const { data: u } = await sb.from('usuarios').select('external_refs').eq('telefono', phone).maybeSingle();
+    if (!u) return null;
+    const refs = u.external_refs || {};
+    if (refs.despensa_q !== q) await sb.from('usuarios').update({ external_refs: { ...refs, despensa_q: q } }).eq('telefono', phone);
+    return q;
+  } catch { return null; }
+}
+
 app.post('/api/despensa', async (req, res) => {
   try {
     const { user_phone, nombre, nombre_oficial, cantidad, precio_est, prioridad } = req.body;
     if (!user_phone || !nombre) return res.status(400).json({ success: false, error: 'Faltan campos' });
     const { data, error } = await sb.from('despensa').insert({ user_phone, nombre, nombre_oficial: nombre_oficial || null, cantidad: cantidad || '', precio_est: parseFloat(precio_est) || 0, prioridad: parseInt(prioridad) || 0, comprado: false, compra_quincena: true }).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, data });
+    res.json({ success: true, data, despensa_q: await marcarDespensaQ(user_phone) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -3840,7 +3856,7 @@ app.put('/api/despensa/:id', async (req, res) => {
     const { user_phone, ...d } = req.body;
     const { data, error } = await sb.from('despensa').update({ ...d, updated_at: new Date().toISOString() }).eq('id', req.params.id).eq('user_phone', user_phone).select().single();
     if (error) return res.status(400).json({ success: false, error: error.message });
-    res.json({ success: true, data });
+    res.json({ success: true, data, despensa_q: d.compra_quincena === true ? await marcarDespensaQ(user_phone) : undefined });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -6606,6 +6622,20 @@ app.post('/api/update-refs', async (req, res) => {
       refs.transporte_diario = { combi: num(v.combi), camion: num(v.camion), metro: num(v.metro) };
     } else if (field === 'hide_despensa_gastos') {
       refs.hide_despensa_gastos = req.body.value === true;   // antiguo (valía para todas las quincenas): el cliente nuevo ya no lo usa
+    } else if (field === 'orden_q') {
+      // Prioridad de los gastos planeados de UNA quincena/semana (el usuario los ordena arrastrando las tarjetas)
+      const q = String(req.body.qKey || '').trim().slice(0, 20);
+      if (!q) return res.status(400).json({ success: false, error: 'qKey requerida' });
+      const v = Array.isArray(req.body.value) ? req.body.value : [];
+      const claves = [...new Set(v.map(x => String(x || '').slice(0, 120)).filter(Boolean))].slice(0, 300);
+      const mapa = { ...(refs.orden_q || {}) };
+      if (claves.length) mapa[q] = claves; else delete mapa[q];
+      refs.orden_q = mapa;
+    } else if (field === 'despensa_q') {
+      // Quincena/semana donde vive la Despensa (la en curso al palomear artículos); el cliente la pasa al activarla a mano
+      const q = String(req.body.qKey || '').trim().slice(0, 20);
+      if (!q) return res.status(400).json({ success: false, error: 'qKey requerida' });
+      refs.despensa_q = q;
     } else if (field === 'hide_despensa_q') {
       // Despensa oculta en UNA quincena/semana (qKey); value:true la oculta, false la vuelve a mostrar
       const q = String(req.body.qKey || '').trim().slice(0, 20);
