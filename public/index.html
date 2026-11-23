@@ -12171,6 +12171,7 @@ async function sendChat() {
   if (!text) return;
   input.value = '';
   input.style.height = 'auto';   // vuelve a una sola línea tras enviar
+  if (/^(📱\s*)?atajos?$/i.test(text)) { input.blur(); return atajoAbrir(); }   // «atajo»: abre las instrucciones del atajo de iPhone (sin botón visible por ahora)
   _appendMsg('user', text);
   if (navigator.onLine === false && !S.ghostMode) return _colaEncolar(text);   // sin red: se guarda y se manda al volver
   await _askBot(text);
@@ -12297,26 +12298,33 @@ function _atajoListas() {
     med: (L.medios || []).join(', '),
   };
 }
-const _ATAJO_VACIAR = 'Text: "#". Then Save File: save that Text to the Shortcuts folder with Destination Path "US/pendientes.txt", Ask Where to Save OFF, Overwrite If File Exists ON. (Do NOT use Delete Files.)';
+const _ATAJO_VACIAR = 'Text: "#". Then the action named "Save File" (NOT "Append to Text File"): save that Text to the Shortcuts folder with Destination Path "US/pendientes.txt", Ask Where to Save OFF, Overwrite If File Exists ON, so the file ends up containing only "#". (Do NOT use Delete Files.)';
+// v5: el MISMO atajo tiene un «modo enviar». Con el doble toque no recibe nada y pide el gasto; las automatizaciones
+// (abrir WhatsApp, conectarse a un Wi-Fi) lo corren con el texto «enviar» y solo mandan lo que quedó guardado sin red.
+// iOS no avisa a los atajos cuando vuelve la conexión: esas automatizaciones son lo más cercano.
 function _atajoPrompt(url) {
   const l = _atajoListas();
-  return `Edit THIS shortcut (do not create a new one): rename it to "Registrar Gasto", delete ALL of its current actions, and replace them with exactly these actions, in this order, and nothing else. Do not add any alerts, confirmations or notifications other than the one in the last step. Do not create automations or other shortcuts.
-1. Ask for Input. Input Type: Number. Prompt: "$".
-2. List with these items: ${l.con}
-3. Choose from List (the List from step 2). Prompt: "Concepto".
-4. If Chosen Item is "${_ATAJO_OTRO}": Ask for Input (Input Type: Text, Prompt: "Concepto"), then Set Variable "Concepto" to Provided Input. Otherwise: Set Variable "Concepto" to Chosen Item. End If.
-5. List with these items: ${l.cat}
-6. Choose from List (the List from step 5). Prompt: "Categoría".
-7. List with these items: ${l.med}
-8. Choose from List (the List from step 7). Prompt: "Medio de pago".
-9. Format Date: Current Date, Date Format Custom "yyyy-MM-dd HH:mm:ss".
-10. Text: [Formatted Date]|[Provided Input from step 1]|[Concepto]|[Chosen Item from step 6]|[Chosen Item from step 8]  (no spaces around the | characters).
-11. Append to Text File: append the Text from step 10 to "US/pendientes.txt" in the Shortcuts folder, Make New Line ON.
-12. Get Network Details: Wi-Fi, Network Name. If it has no value: Get Network Details: Cellular, Number of Signal Bars; If Number of Signal Bars is 0: Stop This Shortcut (silently, no notification). End If. End If.
-13. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF. Then Get Text from Input (that File).
-14. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = the Text from step 13.
-15. If Contents of URL contains "✅": ${_ATAJO_VACIAR} End If.
-16. If Contents of URL is not "✅": Show Notification with Contents of URL. End If.`;
+  return `Edit THIS shortcut (do not create a new one): rename it to "Registrar Gasto", delete ALL of its current actions, and replace them with exactly these actions, in this order, and nothing else. Do not add any alerts, confirmations or notifications other than the one in step 19. Do not create automations or other shortcuts. In this shortcut's settings, let it receive Text input, and If There's No Input: Continue.
+1. If Shortcut Input does not have any value (the shortcut was started with the back tap; my automations run it with the text "enviar" only to send what is pending): do steps 2 to 12 inside this If.
+2. Ask for Input. Input Type: Number. Prompt: "$".
+3. List with these items: ${l.con}
+4. Choose from List (the List from step 3). Prompt: "Concepto".
+5. If Chosen Item is "${_ATAJO_OTRO}": Ask for Input (Input Type: Text, Prompt: "Concepto"), then Set Variable "Concepto" to Provided Input. Otherwise: Set Variable "Concepto" to Chosen Item. End If.
+6. List with these items: ${l.cat}
+7. Choose from List (the List from step 6). Prompt: "Categoría".
+8. List with these items: ${l.med}
+9. Choose from List (the List from step 8). Prompt: "Medio de pago".
+10. Format Date: Current Date, Date Format Custom "yyyy-MM-dd HH:mm:ss".
+11. Text: [Formatted Date]|[Provided Input from step 2]|[Concepto]|[Chosen Item from step 7]|[Chosen Item from step 9]  (no spaces around the | characters).
+12. Append to Text File: append the Text from step 11 to "US/pendientes.txt" in the Shortcuts folder, Make New Line ON.
+13. End If (the one from step 1). Everything below runs every time.
+14. Get Network Details: Wi-Fi, Network Name. If it has no value: Get Network Details: Cellular, Number of Signal Bars; If Number of Signal Bars is 0: Stop This Shortcut (silently, no notification). End If. End If.
+15. Get File "US/pendientes.txt" from the Shortcuts folder, Error If Not Found OFF. Then Get Text from Input (that File).
+16. If the Text from step 15 contains "|":
+17. Get Contents of URL: ${url}  Method POST, Request Body JSON with one Text field, key "texto", value = the Text from step 15.
+18. If Contents of URL contains "✅": ${_ATAJO_VACIAR} End If.
+19. If Contents of URL is not "✅": Show Notification with Contents of URL. End If.
+20. End If (the one from step 16).`;
 }
 async function atajoAbrir() {
   abrirHoja('📱 Atajo de iPhone', `<div class="cm-setup at-setup">
@@ -12329,7 +12337,11 @@ async function atajoAbrir() {
         <div class="at-nota">Hazlo desde la app de US instalada en tu pantalla de inicio. Si no están activos, el atajo muestra su propia notificación.</div></li>
       <li><button class="btn btn-accent btn-sm at-c" onclick="atajoCopiar('prompt')" disabled><i class="ti ti-copy"></i> Copiar instrucciones del atajo</button>
         <div class="at-nota">Ya traen tu URL personal (no la compartas) y tus listas. Es <b>un solo atajo</b>: en <b>Atajos</b>, abre el que usa el doble toque, pégalas en <b>Describe a change</b> y acepta (reemplazan todo lo que tenga y lo renombran «Registrar Gasto»). Si iOS pregunta por permiso para guardar el archivo, toca <b>Permitir siempre</b> (solo la primera vez).</div></li>
-      <li><b>Sin conexión</b>: el atajo guarda el gasto en el iPhone sin avisarte y lo manda la siguiente vez que lo uses con red, con la fecha y hora en que lo capturaste; nunca se registra dos veces y no te pide confirmar nada.</li>
+      <li><b>Sin conexión</b>: el gasto se guarda primero en el iPhone y se manda con la fecha y hora en que lo capturaste; nunca se registra dos veces. Si iOS muestra «The Internet connection appears to be offline», el gasto <b>no se perdió</b>: sigue guardado.</li>
+      <li><b>Envío automático al volver la red</b> (una sola vez; iOS no avisa a los atajos cuando regresa la conexión, así que se manda en cuanto abres una app o te conectas a un Wi-Fi). En <b>Shortcuts → Automation → +</b> crea estas dos:
+        <div class="at-nota"><b>A.</b> <b>App</b> → elige WhatsApp y las apps que abres a diario → <b>Is Opened</b> → <b>Run Immediately</b> (apaga <b>Notify When Run</b>) → <b>Next</b> → <b>New Blank Automation</b> → agrega la acción <b>Text</b> y escribe <b>enviar</b> → agrega <b>Run Shortcut</b> → <b>Registrar Gasto</b> (debe decir «Run Registrar Gasto with Text»).<br>
+        <b>B.</b> <b>Wi-Fi</b> → <b>Any Network</b> → <b>Run Immediately</b> → las mismas dos acciones.<br>
+        Con la cola vacía no hacen nada ni muestran nada; si hay algo guardado, te llega el aviso de US con el gasto y su fecha.</div></li>
     </ol>
     <div class="at-nota">El atajo va en el <b>doble</b> toque: Ajustes → Accesibilidad → Tocar → Tocar atrás → Doble toque → Registrar Gasto. Si tus conceptos frecuentes cambian, vuelve a copiar las instrucciones para actualizar las listas.
       Las preguntas del atajo siempre se ven con el ícono de Atajos (iOS no deja cambiarlo); el aviso final sí sale con el de US.</div>

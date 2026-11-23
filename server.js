@@ -5091,21 +5091,43 @@ function _fechaAtajo(s) {
 function lineaAtajo(linea) {
   let partes = linea.includes('|') ? linea.split('|') : linea.split(/\.\s+|\s+·\s+|;\s*/);
   partes = partes.map(x => x.trim());
-  let fecha = null;
-  if (partes.length > 1 && _fechaAtajo(partes[0])) fecha = _fechaAtajo(partes.shift());
+  let fecha = null, sello = null;
+  if (partes.length > 1 && _fechaAtajo(partes[0])) { sello = partes[0].replace(/\s+/g, ' '); fecha = _fechaAtajo(partes.shift()); }
   while (partes.length && partes[partes.length - 1] === '') partes.pop();
   if (partes.length < 2) return null;
   const monto = _montoAtajo(partes[0].replace(/\.$/, ''));
   if (!(monto > 0)) return null;
-  return { fecha, monto, concepto: partes[1].replace(/\.$/, ''), categoria: (partes[2] || '').replace(/\.$/, ''), medio: (partes[3] || '').replace(/\.$/, ''), conFecha: !!fecha };
+  return { fecha, sello, monto, concepto: partes[1].replace(/\.$/, ''), categoria: (partes[2] || '').replace(/\.$/, ''), medio: (partes[3] || '').replace(/\.$/, ''), conFecha: !!fecha };
 }
-const _atajoVistos = new Map();   // phone|línea → hora: segundo candado por si la auditoría no se pudo escribir
-async function registrarLineaAtajo(phone, linea, p) {
-  if (p.conFecha) {   // ¿ya llegó antes? (la cola se reenvía completa hasta que el atajo la borra)
-    if (_atajoVistos.has(phone + '|' + linea)) return { ok: true, repetido: true };
-    const { data: ya } = await sb.from('audit_log').select('registro_id').eq('user_phone', phone).eq('origen', 'atajo').eq('texto_original', linea).limit(1);
-    if (ya && ya.length) return { ok: true, repetido: true };
+// La cola del iPhone es un archivo al que el atajo solo AGREGA renglones; «vaciarla» es escribir «#». Atajos (o su
+// asistente al armar el atajo) a veces pega ese «#» al final del último renglón («…|Efectivo#») en lugar de reescribir
+// el archivo, y entonces la cola llega completa una y otra vez. Por eso: todo «#» seguido de fecha o de fin de renglón
+// cuenta como salto de renglón, y un gasto ya registrado se reconoce por su SELLO (fecha y hora de captura, al segundo)
+// + monto, no por el texto exacto (el 21-nov «…|Efectivo» y «…|Efectivo#» entraron como dos gastos).
+function _lineasAtajo(texto) {
+  return String(texto || '').replace(/\r/g, '').replace(/#+(?=[ \t]*(?:\d{4}-\d{1,2}-\d{1,2}|$))/gm, '\n')
+    .split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+}
+// Clave de «ya llegó»: sello con hora + monto; sin hora (solo fecha) se compara el renglón exacto
+const _claveAtajo = (p, linea) => !p?.conFecha ? null : /\d{1,2}:\d{2}/.test(p.sello || '') ? `K|${p.sello}|${p.monto}` : `L|${linea}`;
+// Todo lo que el atajo ya registró desde (fecha de captura más vieja − 2 días): cualquier registro de un renglón es
+// posterior a su captura. Si no se puede leer, falla (el atajo reintenta) antes que arriesgar un duplicado.
+async function _atajoYaRegistrados(phone, fechaMin) {
+  const vistos = new Set();
+  const desde = new Date(Date.parse(fechaMin + 'T00:00:00Z') - 2 * 864e5).toISOString();
+  for (let off = 0; ; off += 1000) {
+    const { data, error } = await sb.from('audit_log').select('texto_original').eq('user_phone', phone).eq('origen', 'atajo')
+      .gte('created_at', desde).order('id', { ascending: true }).range(off, off + 999);
+    if (error) throw new Error('no pude revisar qué gastos ya estaban registrados');
+    (data || []).forEach(r => _lineasAtajo(r.texto_original).forEach(l => { const k = _claveAtajo(lineaAtajo(l), l); if (k) vistos.add(k); }));
+    if (!data || data.length < 1000) break;
   }
+  return vistos;
+}
+const _atajoVistos = new Map();   // phone|clave → hora: segundo candado por si la auditoría no se pudo escribir
+async function registrarLineaAtajo(phone, linea, p, vistos = new Set()) {
+  const clave = _claveAtajo(p, linea);
+  if (clave && (vistos.has(clave) || _atajoVistos.has(phone + '|' + clave))) return { ok: true, repetido: true };
   const hoyMx = hoy();
   const fecha = p.fecha && p.fecha <= hoyMx ? p.fecha : hoyMx;   // nunca a futuro: eso sería un gasto programado
   const concepto = p.concepto ? p.concepto.charAt(0).toUpperCase() + p.concepto.slice(1) : 'Gasto';
@@ -5120,8 +5142,9 @@ async function registrarLineaAtajo(phone, linea, p) {
   if (c.mama) datos.comentarios = 'Mamá';
   const r = await executeDbAction(phone, { tabla: 'movimientos', accion: 'crear', datos, texto_original: linea }, 'atajo');
   if (String(r).startsWith('❌')) return { ok: false, error: String(r).replace(/^❌\s*/, '') };
-  if (p.conFecha) {
-    _atajoVistos.set(phone + '|' + linea, Date.now());
+  if (clave) {   // el mismo gasto dos veces en la misma cola («…|Efectivo» y «…|Efectivo#») cuenta una vez
+    vistos.add(clave);
+    _atajoVistos.set(phone + '|' + clave, Date.now());
     if (_atajoVistos.size > 2000) for (const [k, t] of _atajoVistos) if (Date.now() - t > 864e5 * 30) _atajoVistos.delete(k);
   }
   return { ok: true, datos, desconocida: c.desconocida };
@@ -5133,14 +5156,16 @@ function _resumenAtajo(d) {
   return `${_fmtCorto(d.monto)} · ${d.concepto} · ${d.categoria} · ${medio.charAt(0).toUpperCase() + medio.slice(1)}${d.fecha !== hoy() ? ` (${dd}/${m})` : ''}`;
 }
 async function procesarAtajo(phone, texto) {
-  const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));   // «#» = cola vaciada por el atajo
+  const lineas = _lineasAtajo(texto);   // «#» = cola vaciada por el atajo
   if (!lineas.length) return { txt: '✅', ok: true, hechos: [] };
   const estruct = lineas.map(l => ({ l, p: lineaAtajo(l) }));
   if (estruct.every(x => !x.p)) return null;   // texto libre: lo resuelve el chat IA
+  const fechas = estruct.filter(x => x.p?.conFecha).map(x => x.p.fecha).sort();
+  const vistos = fechas.length ? await _atajoYaRegistrados(phone, fechas[0]) : new Set();
   const hechos = [], repetidos = [], fallas = [], avisos = [];
   for (const { l, p } of estruct) {
     if (!p) { avisos.push(`no entendí «${l.slice(0, 40)}»`); continue; }   // se descarta para no atorar la cola
-    const r = await registrarLineaAtajo(phone, l, p);
+    const r = await registrarLineaAtajo(phone, l, p, vistos);
     if (!r.ok) fallas.push(r.error);
     else if (r.repetido) repetidos.push(l);
     else { hechos.push(r.datos); if (r.desconocida) avisos.push(`«${r.desconocida}» no es una categoría, quedó en OTROS`); }
@@ -5167,7 +5192,7 @@ app.post('/api/atajo/:token', express.text({ type: ['text/*', 'application/octet
   const plano = (txt, st = 200) => res.status(st).type('text/plain; charset=utf-8').send(txt);
   try {
     const phone = await telDeAtajo(req.params.token);
-    if (!phone) return plano('⚠️ El atajo no está vinculado a US. Copia la URL de nuevo desde US → Chat IA → 📱.', 401);
+    if (!phone) return plano('⚠️ El atajo no está vinculado a US. En US escribe «atajo» en el Chat IA y copia las instrucciones de nuevo.', 401);
     const b = req.body;
     let texto = String((typeof b === 'string' ? b : (b && (b.texto || b.text || b.gasto || b.mensaje))) || req.query.texto || '').trim().slice(0, 20000);
     if (!texto) return plano('⚠️ No escribiste nada. Ejemplo: «200 · Tacos · Alicia · Efectivo».', 400);
