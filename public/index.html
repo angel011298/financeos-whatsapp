@@ -1962,6 +1962,8 @@ body.sheet-locked{overflow:hidden}
 .at-setup .at-ej{font-size:13px;color:var(--text-2);line-height:1.5}
 .at-setup .at-nota{font-size:11.5px;color:var(--text-3);line-height:1.45;margin-top:4px}
 .at-setup .at-prev{display:flex;flex-direction:column;gap:6px}
+.at-setup .at-btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}
+.at-setup .at-btns .btn{max-width:100%;white-space:normal;text-align:left}
 .at-setup .at-fila{display:grid;grid-template-columns:minmax(0,74px) minmax(0,1fr);gap:8px;align-items:start;font-size:11.5px;color:var(--text-3)}
 .at-setup .at-fila>div{display:flex;flex-wrap:wrap;gap:4px}
 .at-setup .at-fila i{font-style:normal;font-size:11.5px;color:var(--text-1);background:var(--bg-surface-2);border:1px solid var(--border-default);border-radius:999px;padding:2px 8px}
@@ -12338,10 +12340,11 @@ async function atajoAbrir() {
       <li><button class="btn btn-accent btn-sm at-c" onclick="atajoCopiar('prompt')" disabled><i class="ti ti-copy"></i> Copiar instrucciones del atajo</button>
         <div class="at-nota">Ya traen tu URL personal (no la compartas) y tus listas. Es <b>un solo atajo</b>: en <b>Atajos</b>, abre el que usa el doble toque, pégalas en <b>Describe a change</b> y acepta (reemplazan todo lo que tenga y lo renombran «Registrar Gasto»). Si iOS pregunta por permiso para guardar el archivo, toca <b>Permitir siempre</b> (solo la primera vez).</div></li>
       <li><b>Sin conexión</b>: el gasto se guarda primero en el iPhone y se manda con la fecha y hora en que lo capturaste; nunca se registra dos veces. Si iOS muestra «The Internet connection appears to be offline», el gasto <b>no se perdió</b>: sigue guardado.</li>
-      <li><b>Envío automático al volver la red</b> (una sola vez; iOS no avisa a los atajos cuando regresa la conexión, así que se manda en cuanto abres una app o te conectas a un Wi-Fi). En <b>Shortcuts → Automation → +</b> crea estas dos:
-        <div class="at-nota"><b>A.</b> <b>App</b> → elige WhatsApp y las apps que abres a diario → <b>Is Opened</b> → <b>Run Immediately</b> (apaga <b>Notify When Run</b>) → <b>Next</b> → <b>New Blank Automation</b> → agrega la acción <b>Text</b> y escribe <b>enviar</b> → agrega <b>Run Shortcut</b> → <b>Registrar Gasto</b> (debe decir «Run Registrar Gasto with Text»).<br>
-        <b>B.</b> <b>Wi-Fi</b> → <b>Any Network</b> → <b>Run Immediately</b> → las mismas dos acciones.<br>
-        Con la cola vacía no hacen nada ni muestran nada; si hay algo guardado, te llega el aviso de US con el gasto y su fecha.</div></li>
+      <li><b>Envío automático al volver la red</b> (una sola vez, DESPUÉS del paso 2; iOS no avisa a los atajos cuando regresa la conexión, así que lo pendiente se manda en cuanto abres una app o te conectas a un Wi-Fi). Son dos atajos nuevos con disparador, cada uno con su prompt:
+        <div class="at-btns"><button class="btn btn-sm" onclick="atajoCopiar('autoA')"><i class="ti ti-copy"></i> Copiar prompt A · al abrir apps</button>
+          <button class="btn btn-sm" onclick="atajoCopiar('autoB')"><i class="ti ti-copy"></i> Copiar prompt B · al conectarte a Wi-Fi</button></div>
+        <div class="at-nota">En <b>Shortcuts</b> toca <b>+</b> (pantalla <b>New Shortcut</b>, nunca dentro de «Registrar Gasto»), pega el prompt en <b>Describe a shortcut</b> y acepta; luego lo mismo con el otro. Revisa que cada uno diga «Run Registrar Gasto with Text» y que no pida confirmación (si al abrir WhatsApp te pregunta si lo ejecutas, en ese atajo activa que corra sin preguntar).
+          Con la cola vacía no hacen nada ni muestran nada; si hay algo guardado, te llega el aviso de US con el gasto y su fecha.</div></li>
     </ol>
     <div class="at-nota">El atajo va en el <b>doble</b> toque: Ajustes → Accesibilidad → Tocar → Tocar atrás → Doble toque → Registrar Gasto. Si tus conceptos frecuentes cambian, vuelve a copiar las instrucciones para actualizar las listas.
       Las preguntas del atajo siempre se ven con el ícono de Atajos (iOS no deja cambiarlo); el aviso final sí sale con el de US.</div>
@@ -12358,10 +12361,20 @@ async function atajoAbrir() {
     document.querySelectorAll('.at-c').forEach(b => b.disabled = false);
   } catch (e) { toast('No se pudo preparar el atajo: ' + e.message, 'error'); }
 }
+// iOS 27: «Describe a shortcut» arma atajos con disparador. Cada disparador es un atajo NUEVO que solo corre
+// «Registrar Gasto» con el texto «enviar» (su modo enviar); la lógica de envío vive en un solo lugar.
+const _atajoAuto = (cuando, nombre) => `Create a NEW shortcut named "${nombre}". Do not edit or change any other shortcut, especially "Registrar Gasto". Trigger: ${cuando}. It must run immediately, without asking me for confirmation and without notifying me when it runs. Actions, exactly these two and nothing else:
+1. Text: enviar
+2. Run Shortcut "Registrar Gasto", with the Text from step 1 as its input.
+Do not add any alerts, notifications, waits or other actions.`;
+const _ATAJO_AUTO = {
+  autoA: _atajoAuto('when I open WhatsApp, Instagram, TikTok or Safari', 'US Enviar al abrir apps'),
+  autoB: _atajoAuto('when my iPhone joins any Wi-Fi network', 'US Enviar con Wi-Fi'),
+};
 async function atajoCopiar(que) {
-  if (!S._atajoUrl) return;
-  const txt = que === 'prompt' ? _atajoPrompt(S._atajoUrl) : S._atajoUrl;
-  try { await navigator.clipboard.writeText(txt); toast(que === 'url' ? '📋 URL copiada' : '📋 Instrucciones copiadas: pégalas en Atajos'); window.iosHaptic && iosHaptic('light'); }
+  if (!S._atajoUrl && !_ATAJO_AUTO[que]) return;
+  const txt = _ATAJO_AUTO[que] || (que === 'prompt' ? _atajoPrompt(S._atajoUrl) : S._atajoUrl);
+  try { await navigator.clipboard.writeText(txt); toast(que === 'url' ? '📋 URL copiada' : _ATAJO_AUTO[que] ? '📋 Prompt copiado: pégalo en Shortcuts → + → Describe a shortcut' : '📋 Instrucciones copiadas: pégalas en Atajos'); window.iosHaptic && iosHaptic('light'); }
   catch { prompt('Copia esto:', txt); }
 }
 async function _atajoPushEstado() {
