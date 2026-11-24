@@ -796,7 +796,9 @@ module.exports = function montarCorreo(app, deps) {
       const { data: s0 } = await sb.from('correo_sync').select('revisar_at').eq('user_phone', phone).eq('cuenta', cta).maybeSingle();
       // Una petición de más de 5 min sin atender ya no cuenta (si una revisión falló, no se queda revisando en bucle)
       const pedida = !hecho && !!s0?.revisar_at && Date.now() - new Date(s0.revisar_at).getTime() < 5 * 60e3;
-      res.json({ success: true, revisar: pedida });
+      // v3: ¿hay cambios de US que copiar a Google Calendar? → el script sincroniza el calendario en este mismo minuto
+      const cal = !hecho && Number(v) >= 3 && deps.calPendiente ? await deps.calPendiente(phone, cta).catch(() => false) : false;
+      res.json({ success: true, revisar: pedida, cal });
       const upd = { latido_at: ahora, version: Number(v) || 1, ...(hecho ? { ultimo_sync: ahora, hecho_at: ahora, revisar_at: null } : {}) };
       if (s0) await sb.from('correo_sync').update(upd).eq('user_phone', phone).eq('cuenta', cta);
       else await sb.from('correo_sync').insert({ user_phone: phone, cuenta: cta, recibidos: 0, ...upd });
@@ -974,6 +976,6 @@ module.exports = function montarCorreo(app, deps) {
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
 
-  return { ticketDesdeFoto };
+  return { ticketDesdeFoto, tokenOk };
 };
 module.exports._test = { leerTicket, normTicket, htmlATexto, leerCorreo,lectorExacto, elegirItems, clasificar, fuenteDe, medioHintDe, catSugerida, montosDe };

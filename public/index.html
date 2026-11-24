@@ -1963,6 +1963,13 @@ body.sheet-locked{overflow:hidden}
 .at-setup .at-nota{font-size:11.5px;color:var(--text-3);line-height:1.45;margin-top:4px}
 .at-setup .at-prev{display:flex;flex-direction:column;gap:6px}
 .at-setup .at-btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}
+/* Compras del correo: aviso para actualizar el script a v3 (Calendar + índice de correos) */
+.cm-v3{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;padding:10px 12px;border-radius:var(--radius-md);background:color-mix(in srgb,var(--accent-primary) 8%,var(--bg-surface-2));font-size:12.5px;color:var(--text-2);line-height:1.4}
+.cm-v3 span{flex:1 1 220px;min-width:0}
+/* Calendario: estado de Google Calendar y eventos que vienen de Google */
+.cal-g{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--text-2);margin:-4px 0 10px;text-align:center}
+.cal-g button{font-size:12px}
+.cev-g{font-size:9px;font-weight:800;opacity:.75;margin-right:3px}
 /* Presupuesto: tarjetas de gastos que se ordenan arrastrando (ver «ordenar los gastos arrastrando») */
 .q-ord-list > .q-card{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 @media (hover:hover){.q-ord-list > .q-card{cursor:grab}}
@@ -5360,12 +5367,13 @@ function _cmSetupHTML() {
   const st = _cmSt(), ctas = (st.cuentas || []).filter(x => x.cuenta);
   const lista = ctas.length ? `<div class="cm-ctas">${ctas.map(x => `<div><i class="ti ti-circle-check"></i><span>${_ndEsc(x.cuenta)}</span><small>revisado ${_cmHace(x.ultimo_sync)}</small></div>`).join('')}</div>` : '';
   if (st.actualizar && ctas.length) return `<div class="cm-setup">
-    <div class="wl-panel-t">🔄 Actualiza el código una vez para revisar al instante</div>
-    <div class="at-nota" style="font-size:12px;color:var(--text-2)">Pendiente en: ${ctas.filter(x => !_cmVivo(x)).map(x => '<b>' + _ndEsc(x.cuenta) + '</b>').join(', ') || 'tus cuentas'}</div>
+    <div class="wl-panel-t">🔄 Actualiza el código una vez (versión 3)</div>
+    <div class="at-nota" style="font-size:12px;color:var(--text-2)">Revisa tu correo al instante, sincroniza tu <b>Google Calendar</b> con el de US en ambos sentidos y guarda tus recibos de suscripciones, promociones y códigos para que el chat te conteste. Pendiente en: ${ctas.filter(x => (x.version || 1) < 3 || !_cmVivo(x)).map(x => '<b>' + _ndEsc(x.cuenta) + '</b>').join(', ') || 'tus cuentas'}</div>
     <ol>
       <li><button class="btn btn-accent btn-sm" onclick="cmCopiarScript()"><i class="ti ti-copy"></i> Copiar código</button></li>
       <li>En <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a>, con esa cuenta, abre tu proyecto de US, reemplaza todo el código y guarda (💾).</li>
-      <li>Elige <b>instalar</b> y presiona <b>▶ Ejecutar</b> (si pide permiso, «Permitir»). Repite en cada cuenta de la lista.</li>
+      <li>Elige <b>instalar</b> y presiona <b>▶ Ejecutar</b>. Google pedirá permiso otra vez, ahora también para tu <b>Calendario</b>: «Revisar permisos» → tu cuenta → «Configuración avanzada» → «Ir a… (no seguro)» → «Permitir». Repite en cada cuenta de la lista.</li>
+      <li>Listo: tus eventos de Google aparecen en el calendario de US en unos 5 minutos, y lo que agregues en US llega a Google en ≈1 minuto (a la cuenta principal).</li>
     </ol>
     <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="cmSetupTog()">Cerrar</button>
   </div>`;
@@ -5408,11 +5416,17 @@ async function _cmToken() {
 }
 function _cmScript() {
   const st = _cmSt(), desde = (getQuincenaInfo(0).from || toISO(new Date())).replace(/-/g, '/');
-  return `// US · Compras desde Gmail. Pega esto en script.google.com, guarda y ejecuta "instalar" una vez.
+  return `// US · Gmail y Google Calendar. Pega esto en script.google.com, guarda y ejecuta "instalar" una vez (en cada cuenta).
 // Cada 10 minutos (o al instante con «Revisar ahora» en US) busca compras, recibos, cargos, reembolsos y dinero recibido
-// y los manda a tu US para que los revises. Versión 2: late cada minuto para saber si pediste revisar.
+// y los manda a tu US para que los revises. Versión 3: además
+//  · guarda en US tus recibos de suscripciones, promociones y códigos de descuento (para que el chat te conteste sobre ellos);
+//  · sincroniza tu Google Calendar con el calendario de US en ambos sentidos (cada 5 minutos, o en 1 minuto si cambias algo en US).
+// Late cada minuto para saber si pediste revisar o si hay algo que copiar a tu calendario.
 var US_URL = '${location.origin}/api/correo/ingest';
 var US_LATIDO = '${location.origin}/api/correo/latido';
+var US_INDICE = '${location.origin}/api/correo/indice';
+var US_CAL = '${location.origin}/api/cal/sync';
+var US_CAL_HECHOS = '${location.origin}/api/cal/hechos';
 var US_TEL = '${S.phone}';
 var US_TOKEN = '${st.token}';
 var DESDE = '${desde}';
@@ -5422,29 +5436,137 @@ var BUSQUEDA = '{from:amazon from:mercadolibre from:mercadopago from:uber from:d
   'subject:order subject:receipt subject:reembolso subject:devolución subject:comprobante ' +
   'subject:recibiste subject:depósito subject:transferencia subject:nómina}';
 
+var INDICE = '{subject:recibo subject:receipt subject:factura subject:invoice subject:suscripción subject:subscription subject:membresía subject:membership ' +
+  'subject:renovación subject:renewal subject:"tu pago" subject:"your payment" subject:cargo subject:cobro subject:código subject:cupón subject:descuento ' +
+  'subject:promoción subject:oferta subject:"% off"}';
+
 function instalar() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('latido').timeBased().everyMinutes(1).create();
   revisar();
+  try { calendario(); } catch (e) { console.log('Calendario: ' + e); }
 }
 
-// Cada minuto: pregunta a US si pediste «Revisar ahora»; si no, revisa solo cada 10 minutos
+// Cada minuto: pregunta a US si pediste «Revisar ahora» o si cambiaste algo del calendario; si no, revisa el correo
+// cada 10 minutos y el calendario cada 5
 function latido() {
   var p = PropertiesService.getScriptProperties();
-  var pedir = false;
-  try { pedir = JSON.parse(avisar(false).getContentText()).revisar === true; } catch (e) {}
-  if (pedir || Date.now() - Number(p.getProperty('ultima') || 0) >= 9.5 * 60000) revisar();
+  var r = {};
+  try { r = JSON.parse(avisar(false).getContentText()) || {}; } catch (e) {}
+  if (r.revisar === true || Date.now() - Number(p.getProperty('ultima') || 0) >= 9.5 * 60000) revisar();
+  if (r.cal === true || Date.now() - Number(p.getProperty('cal') || 0) >= 4.5 * 60000) {
+    try { calendario(); } catch (e) { console.log('Calendario: ' + e); }
+    p.setProperty('cal', String(Date.now()));
+  }
 }
 
 function revisar() {
   sincronizar();
+  try { indexar(); } catch (e) { console.log('Índice: ' + e); }
   PropertiesService.getScriptProperties().setProperty('ultima', String(Date.now()));
   try { avisar(true); } catch (e) {}
 }
 
 function avisar(hecho) {
   return UrlFetchApp.fetch(US_LATIDO, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    payload: JSON.stringify({ phone: US_TEL, token: US_TOKEN, cuenta: Session.getEffectiveUser().getEmail(), hecho: hecho, v: 2 }) });
+    payload: JSON.stringify({ phone: US_TEL, token: US_TOKEN, cuenta: Session.getEffectiveUser().getEmail(), hecho: hecho, v: 3 }) });
+}
+
+// Recibos de suscripciones, promociones y códigos: por ventanas de tiempo (empieza 120 días atrás), máximo 20 s por vuelta
+function indexar() {
+  var p = PropertiesService.getScriptProperties(), t0 = Date.now(), cuenta = Session.getEffectiveUser().getEmail();
+  var desde = Number(p.getProperty('idx_desde') || 0) || (Date.now() - 120 * 864e5);
+  var paso = Number(p.getProperty('idx_paso') || 3) * 864e5;
+  while (Date.now() - t0 < 20000) {
+    var hasta = Math.min(Date.now(), desde + paso), rango = ' after:' + Math.floor(desde / 1000) + ' before:' + Math.ceil(hasta / 1000);
+    var busquedas = [{ q: 'category:promotions' + rango, promo: true }, { q: '-category:promotions ' + INDICE + rango, promo: false }];
+    var lote = [], lleno = false;
+    busquedas.forEach(function (b) {
+      var hilos = GmailApp.search('in:anywhere -in:spam -in:trash ' + b.q, 0, 100);
+      if (hilos.length >= 100) lleno = true;
+      hilos.forEach(function (h) {
+        h.getMessages().forEach(function (m) {
+          var d = m.getDate().getTime(); if (d < desde || d >= hasta) return;
+          lote.push({ id: m.getId(), from: m.getFrom(), subject: m.getSubject(), date: m.getDate().toISOString(), text: m.getPlainBody().slice(0, 6000), promo: b.promo });
+        });
+      });
+    });
+    if (lleno && paso > 864e5 / 4) { paso = paso / 2; continue; }   // demasiados correos: ventana más chica
+    for (var i = 0; i < lote.length; i += 25) {
+      var r = UrlFetchApp.fetch(US_INDICE, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        payload: JSON.stringify({ phone: US_TEL, token: US_TOKEN, cuenta: cuenta, mensajes: lote.slice(i, i + 25) }) });
+      if (r.getResponseCode() !== 200) { console.log('US respondió ' + r.getResponseCode()); return; }
+    }
+    var alDia = hasta >= Date.now() - 60000;
+    desde = alDia ? hasta - 2 * 3600000 : hasta;
+    paso = Math.min(7 * 864e5, paso * 1.5);
+    p.setProperty('idx_desde', String(desde)); p.setProperty('idx_paso', String(paso / 864e5));
+    if (alDia) break;
+  }
+}
+
+// Google Calendar ⇄ US: manda tus eventos (solo si cambiaron) y aplica en Google lo que creaste, cambiaste o borraste en US
+function calendario() {
+  var cal = CalendarApp.getDefaultCalendar(), tz = cal.getTimeZone(), cuenta = Session.getEffectiveUser().getEmail();
+  var p = PropertiesService.getScriptProperties(), ahora = new Date();
+  var desde = new Date(ahora.getTime() - 30 * 864e5), hasta = new Date(ahora.getTime() + 365 * 864e5);
+  var evs = cal.getEvents(desde, hasta).slice(0, 2500).map(function (e) {
+    var todo = e.isAllDayEvent(), ini = todo ? e.getAllDayStartDate() : e.getStartTime();
+    return { id: e.getId(), serie: e.isRecurringEvent(), titulo: e.getTitle(), desc: (e.getDescription() || '').slice(0, 1000), allDay: todo,
+      fecha: Utilities.formatDate(ini, tz, 'yyyy-MM-dd'), hora: todo ? null : Utilities.formatDate(ini, tz, 'HH:mm'), updated: e.getLastUpdated().toISOString() };
+  });
+  var firma = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(evs)));
+  var cambio = firma !== p.getProperty('cal_firma');
+  var r = UrlFetchApp.fetch(US_CAL, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify({ phone: US_TEL, token: US_TOKEN, cuenta: cuenta, tz: tz, v: 3, eventos: cambio ? evs : null,
+      desde: Utilities.formatDate(desde, tz, 'yyyy-MM-dd'), hasta: Utilities.formatDate(hasta, tz, 'yyyy-MM-dd') }) });
+  if (r.getResponseCode() !== 200) { console.log('US respondió ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200)); return; }
+  if (cambio) p.setProperty('cal_firma', firma);
+  var o = JSON.parse(r.getContentText()), hechos = [], borrados = [];
+  (o.crear || []).forEach(function (x) {
+    try { var ev = crearEvento(cal, tz, x); hechos.push({ us_id: x.us_id, google_id: ev.getId(), updated: ev.getLastUpdated().toISOString() }); }
+    catch (e) { hechos.push({ us_id: x.us_id, error: String(e).slice(0, 200) }); }
+  });
+  (o.actualizar || []).forEach(function (x) {
+    try {
+      var ev = x.serie ? cal.getEventSeriesById(x.google_id) : cal.getEventById(x.google_id);
+      if (!ev) { hechos.push({ us_id: x.us_id, falta: true }); return; }
+      ev.setTitle(x.titulo); ev.setDescription(x.descripcion || '');
+      if (!x.serie) fijarFecha(ev, tz, x);
+      hechos.push({ us_id: x.us_id, google_id: x.google_id, updated: ev.getLastUpdated().toISOString() });
+    } catch (e) { hechos.push({ us_id: x.us_id, error: String(e).slice(0, 200) }); }
+  });
+  (o.borrar || []).forEach(function (x) {
+    try {
+      if (x.serie) { var s = cal.getEventSeriesById(x.google_id); if (s) s.deleteEventSeries(); }
+      else { var ev = cal.getEventById(x.google_id); if (ev) ev.deleteEvent(); }
+      borrados.push({ us_id: x.us_id, tumba: x.tumba, ok: true });
+    } catch (e) { borrados.push({ us_id: x.us_id, tumba: x.tumba, ok: false, error: String(e).slice(0, 200) }); }
+  });
+  if (hechos.length || borrados.length) {
+    UrlFetchApp.fetch(US_CAL_HECHOS, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      payload: JSON.stringify({ phone: US_TEL, token: US_TOKEN, cuenta: cuenta, hechos: hechos, borrados: borrados }) });
+    p.deleteProperty('cal_firma');   // la siguiente vuelta manda la lista con lo nuevo
+  }
+}
+
+function crearEvento(cal, tz, x) {
+  var opc = { description: x.descripcion || '' };
+  var regla = { diario: 'addDailyRule', semanal: 'addWeeklyRule', mensual: 'addMonthlyRule', anual: 'addYearlyRule' }[x.recurrente];
+  if (x.hora) {
+    var ini = Utilities.parseDate(x.fecha + ' ' + x.hora, tz, 'yyyy-MM-dd HH:mm'), fin = new Date(ini.getTime() + 3600000);
+    return regla ? cal.createEventSeries(x.titulo, ini, fin, CalendarApp.newRecurrence()[regla](), opc) : cal.createEvent(x.titulo, ini, fin, opc);
+  }
+  var dia = Utilities.parseDate(x.fecha, tz, 'yyyy-MM-dd');
+  return regla ? cal.createAllDayEventSeries(x.titulo, dia, CalendarApp.newRecurrence()[regla](), opc) : cal.createAllDayEvent(x.titulo, dia, opc);
+}
+
+function fijarFecha(ev, tz, x) {
+  if (x.hora) {
+    var ini = Utilities.parseDate(x.fecha + ' ' + x.hora, tz, 'yyyy-MM-dd HH:mm');
+    var dur = ev.isAllDayEvent() ? 3600000 : (ev.getEndTime().getTime() - ev.getStartTime().getTime());
+    ev.setTime(ini, new Date(ini.getTime() + dur));
+  } else ev.setAllDayDate(Utilities.parseDate(x.fecha, tz, 'yyyy-MM-dd'));
 }
 
 function sincronizar() {
@@ -5497,8 +5619,17 @@ function _cmHeadHTML() {
       : '<i class="ti ti-plug-connected-x"></i><span>Gmail aún sin conectar</span>'}</div>
     ${s2 ? `<button class="wl-act cm-rev" onclick="cmRevisarAhora()" ${rv ? 'disabled' : ''} title="Revisar tus cuentas de Gmail en este momento">
       <i class="ti ti-${rv ? 'loader-2 cm-gira' : 'mail-search'}"></i> ${rv ? 'Revisando…' : 'Revisar ahora'}</button>` : ''}
-  </div>${rv ? `<div class="cm-prog" id="cm-prog" role="status" aria-live="polite">${_cmProgTxt()}</div>` : ''}</div>`;
+  </div>${rv ? `<div class="cm-prog" id="cm-prog" role="status" aria-live="polite">${_cmProgTxt()}</div>` : ''}${_cmV3Aviso()}</div>`;
 }
+// Versión 3 del script (Google Calendar en ambos sentidos + recibos, promociones y códigos para el chat): aviso hasta actualizar
+const _cmViejas3 = () => (_cmSt().cuentas || []).filter(x => x.cuenta && (x.version || 1) < 3);
+function _cmV3Aviso() {
+  const v = _cmViejas3(), st = _cmSt();
+  if (!v.length || st.actualizar) return '';
+  return `<div class="cm-v3"><span>🔄 Actualiza el código en ${v.map(x => '<b>' + _ndEsc(String(x.cuenta).split('@')[0]) + '</b>').join(' y ')} para conectar <b>Google Calendar</b> y que el chat lea tus promociones, códigos y cobros de suscripciones.</span>
+    <button class="btn btn-accent btn-sm" onclick="cmActualizarV3()"><i class="ti ti-refresh"></i> Actualizar</button></div>`;
+}
+function cmActualizarV3() { const st = _cmSt(); st.setup = true; st.actualizar = true; if (!st.token) _cmToken(); cmRender(); }
 function _cmProgTxt() {
   const rv = _cmSt().revisando; if (!rv) return '';
   const ahora = Date.now() + rv.skew;
@@ -10225,9 +10356,9 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
         return `<span class="cev-bar cev-serv${e.pagado?' ok':''}" onclick="event.stopPropagation();calDay('${ds}')" title="${t}">${_wlEsc(e.titulo)}</span>`;
       }
       const cls=e._type==='nidito'?'cev-nidito':'cev-event';
-      const lbl=(e.titulo||'').replace(/"/g,'&quot;');
+      const lbl=((e.titulo||'')+(e.origen==='google'?' · Google Calendar':'')).replace(/"/g,'&quot;');
       const act=e._type==='nidito'?`calDay('${ds}')`:`eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})`;
-      return `<span class="cev-bar ${cls}" onclick="event.stopPropagation();${act}" title="${lbl}">${_calEtq(e)?'💞 ':''}${e.titulo||''}</span>`;
+      return `<span class="cev-bar ${cls}" onclick="event.stopPropagation();${act}" title="${lbl}">${e.origen==='google'?'<span class="cev-g">G</span>':''}${_calEtq(e)?'💞 ':''}${e.titulo||''}</span>`;
     }).join('');
     const more=de.length>MAX?`<span class="cev-more">+${de.length-MAX}</span>`:'';
     // Cobro en día inhábil (fin de semana o feriado): el depósito suele adelantarse al día hábil anterior
@@ -10259,7 +10390,25 @@ function _calGridHTML(evts, y, mo, refs, niditoItems) {
 <div class="cal-leg"><span>🏖️ Feriado</span><span><i class="lg-fin"></i>Fin de semana</span><span><i class="lg-pay"></i>Cobro</span><span><i class="lg-pay warn"></i>Cobro en inhábil</span><span><i class="lg-serv"></i>Pago de servicio</span></div>`;
 }
 
+// Estado de Google Calendar (script v3 de cada cuenta de Gmail): sincronizado hace…, o cómo conectarlo
+function _calGHTML() {
+  const g = S._gEst;
+  if (!g || S.ghostMode) return '';
+  const ctas = (g.cuentas || []).filter(c => c.cuenta), v3 = ctas.filter(c => (c.version || 1) >= 3);
+  if (!ctas.length) return '';
+  if (!v3.length) return `<span><i class="ti ti-brand-google"></i> Conecta tu Google Calendar para verlo aquí y que lo de US llegue allá</span><button class="btn btn-ghost btn-sm" onclick="cmAbrir();setTimeout(cmActualizarV3,350)">Conectar</button>`;
+  const ult = v3.map(c => c.cal_at).filter(Boolean).sort().pop();
+  return `<span><i class="ti ti-brand-google"></i> Google Calendar · ${v3.length} cuenta${v3.length !== 1 ? 's' : ''} · ${ult ? 'sincronizado ' + _cmHace(ult) : 'sincronizando…'}</span>`
+    + (v3.length < ctas.length ? `<button class="btn btn-ghost btn-sm" onclick="cmAbrir();setTimeout(cmActualizarV3,350)">Conectar la otra</button>` : '');
+}
+async function _calGEstado() {
+  if (S.ghostMode || (S._gEstT && Date.now() - S._gEstT < 60e3)) return;
+  S._gEstT = Date.now();
+  try { S._gEst = await api('GET', `/api/google/estado?phone=${encodeURIComponent(S.phone)}`); const w = $('cal-g'); if (w) w.innerHTML = _calGHTML(); }
+  catch (e) { S._gEstT = 0; }
+}
 async function rCal() {
+  _calGEstado();
   const evts=S.data.calendario||[];
   S._calData={}; evts.forEach(e=>{S._calData[e.id]=e;});
   const refs=(S.data.user||{}).external_refs||{};
@@ -10271,6 +10420,7 @@ async function rCal() {
 <div class="cal-hero">
   <div class="cal-hero-ttl"><span aria-hidden="true">📅</span> Calendario</div>
 </div>
+<div id="cal-g" class="cal-g">${_calGHTML()}</div>
 <div class="ico-bar ico-bar-c">
   <button class="ico-btn acc${p==='new'?' on':''}" id="cal-new-btn" onclick="calPanel('new')" title="Nuevo evento" aria-label="Nuevo evento" aria-expanded="${p==='new'}"><i class="ti ti-plus"></i></button>
   <button class="ico-btn${p==='up'?' on':''}" id="cal-up-btn" onclick="calPanel('up')" title="Próximos eventos" aria-label="Próximos eventos" aria-expanded="${p==='up'}">⏰</button>
@@ -10324,12 +10474,13 @@ function calDay(ds) {
   <div style="font-weight:600;font-size:13px">${e.titulo}</div>
   ${_calEtq(e)?`<div style="font-size:11px;font-weight:700;margin-top:3px">💞 ${e.user_phone===S.phone?'Con ':'De '}${_wlEsc(_parNom())}</div>`:''}
   ${e.hora?`<div style="opacity:.75;font-size:11px;margin-top:2px"><i class="ti ti-clock" style="font-size:10px"></i> ${e.hora}</div>`:''}
-  ${e.descripcion?`<div style="opacity:.8;font-size:11px;margin-top:3px">${e.descripcion}</div>`:''}
-  <div style="margin-top:8px;display:flex;gap:5px">
+  ${e.descripcion?`<div style="opacity:.8;font-size:11px;margin-top:3px">${_wlEsc(e.descripcion)}</div>`:''}
+  ${e.origen==='google'||e.google_id?`<div style="opacity:.75;font-size:10.5px;margin-top:4px"><i class="ti ti-brand-google" style="font-size:10px"></i> ${e.origen==='google'?'De':'Copiado a'} Google Calendar${e.google_cuenta?' · '+_wlEsc(String(e.google_cuenta).split('@')[0]):''}${e.google_serie?' · serie (se edita en Google)':''}</div>`:''}
+  ${e.google_serie?'':`<div style="margin-top:8px;display:flex;gap:5px">
     <button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-accent) 20%,transparent);color:var(--on-accent);border:none;padding:4px 10px;font-size:11px" onclick="closeCalDay();eEvt(${JSON.stringify(e).replace(/'/g,'&#39;')})"><i class="ti ti-pencil"></i> Editar</button>
     ${e.user_phone === S.phone && _hayPareja() ? `<button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-accent) 15%,transparent);color:var(--on-accent);border:none;padding:4px 8px;font-size:11px" onclick="calCompartir(${e.id})" title="${_ndEsc(_shTit(_calEtq(e), 'este evento'))}"><i class="ti ti-heart-handshake"></i></button>` : ''}
     <button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-accent) 15%,transparent);color:var(--on-accent);border:none;padding:4px 8px;font-size:11px" onclick="dEvt(${e.id})"><i class="ti ti-trash"></i></button>
-  </div>
+  </div>`}
 </div>`;
   });
   dayNd.forEach(it=>{
@@ -10492,7 +10643,10 @@ ${!S.data?.pareja ? '' : (!rec || rec.user_phone===S.phone)
   : `<div class="cal-etq">💞 Evento de ${_wlEsc(_parNom())}: lo editan juntos</div>`}`;
   $('ovl').classList.add('open');
 }
-function eEvt(rec) { oEvt(rec); }
+function eEvt(rec) {
+  if (rec && rec.google_serie) { toast('Es parte de una serie de Google Calendar: edítala allá y aquí se actualiza sola', 'info'); return; }
+  oEvt(rec);
+}
 
 function closeM() { $('ovl').classList.remove('open'); }
 
@@ -11108,7 +11262,13 @@ async function marcarGastoQ(itemId, pagadoId) {
     _optFin();
   }
 }
-async function dEvt(id)  { const _ev=(S._calData||{})[id]; if(!confirm(_ev && _calEtq(_ev) ? '¿Eliminar este evento para los dos?' : '¿Eliminar evento?'))return; await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load(); }
+async function dEvt(id)  {
+  const _ev=(S._calData||{})[id];
+  if(_ev && _ev.google_serie){ toast('Es parte de una serie de Google Calendar: bórrala allá y aquí desaparece sola','info'); return; }
+  const g=_ev && _ev.google_id ? ' También se borra de tu Google Calendar.' : '';
+  if(!confirm((_ev && _calEtq(_ev) ? '¿Eliminar este evento para los dos?' : '¿Eliminar evento?')+g))return;
+  await api('DELETE',`/api/calendario/${id}`,{user_phone:S.phone}); await load();
+}
 async function dMeta(id) { if(!confirm('¿Eliminar meta?'))return; await api('DELETE',`/api/metas/${id}`,{user_phone:S.phone}); await load(); }
 
 // ── NEGOCIOS Y PROYECTOS (fase 3) ─────────────────────────────────────────────

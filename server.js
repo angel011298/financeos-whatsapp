@@ -385,7 +385,8 @@ async function ejecutarBorradoDatos(phone) {
   await Promise.all([
     sb.from('movimientos').update({ deleted_at: now }).eq('user_phone', phone).is('deleted_at', null),
     sb.from('metas').update({ deleted_at: now }).eq('user_phone', phone).is('deleted_at', null),
-    sb.from('calendario').update({ deleted_at: now }).eq('user_phone', phone).is('deleted_at', null),
+    // google_id:null + google_updated: borrar los datos de US NO borra tus eventos de Google Calendar (el trigger lo ve como sincronización)
+    sb.from('calendario').update({ deleted_at: now, google_id: null, google_sync: 'ok', google_updated: now }).eq('user_phone', phone).is('deleted_at', null),
     sb.from('nidito').update({ deleted_at: now }).eq('created_by', phone).is('deleted_at', null),
   ]);
   // Hard-delete tablas sin soft-delete
@@ -4709,7 +4710,8 @@ app.post('/webhook', async (req, res) => {
           // Preguntas frecuentes: respuesta exacta de la base, sin IA (solo lectura)
           // Gastos fijos: se reconocen sin IA y se confirman con el menú 1/2/3 como cualquier registro
           const gfWA = await gastosFijosLocal(From, Body || '').catch(() => null);
-          const faqWA = typeof gfWA === 'string' ? gfWA : (gfWA ? null : await faqFinanciero(From, Body || '').catch(() => null));
+          const faqWA = typeof gfWA === 'string' ? gfWA : (gfWA ? null
+            : (GOOGLE ? await GOOGLE.faqCorreo(From, Body || '').catch(() => null) : null) || await faqFinanciero(From, Body || '').catch(() => null));
           // extractIntent → REGISTRO/EDICION/ELIMINACION → proposeDbAction directo (sin Sonnet/Gemini)
           const { intent, toolArgs } = gfWA && gfWA.arg ? { intent: gfWA.arg.accion === 'eliminar' ? 'ELIMINACION' : 'REGISTRO', toolArgs: gfWA.arg }
             : (faqWA ? { intent: 'CONSULTA', toolArgs: null } : await extractIntent(Body || '', From));
@@ -4759,6 +4761,7 @@ app.post('/webhook', async (req, res) => {
 const _chatInFlight = new Map(); // phone -> { text, ts, promise }
 const CHAT_DEDUP_WINDOW_MS = 5 * 60 * 1000; // 5 min — cubre el peor caso observado
 let CORREO = null;   // { ticketDesdeFoto } — lo llena el montaje de correo.js al final del archivo
+let GOOGLE = null;   // { faqCorreo, cuentaPrincipal } — google.js (índice de correos y Google Calendar)
 
 const _colaHechos = new Map();   // cola_id → respuesta: un mensaje guardado sin conexión se procesa una sola vez
 const _MESES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -4933,8 +4936,10 @@ No expliques nada, devuelve solo esa línea.`
         return res.json({ reply, transcription: isAudio ? text : undefined });
       }
 
-      // Preguntas frecuentes: respuesta exacta calculada de la base, sin IA (más rápida y sin inventar)
-      const faq = await faqFinanciero(phone, text).catch(e => { console.error('faq:', e.message); return null; });
+      // Preguntas frecuentes: respuesta exacta calculada de la base, sin IA (más rápida y sin inventar). Primero las de
+      // tu correo (cobros de suscripciones, promociones, códigos de descuento), luego las financieras.
+      const faq = (GOOGLE ? await GOOGLE.faqCorreo(phone, text).catch(e => { console.error('faq correo:', e.message); return null; }) : null)
+        || await faqFinanciero(phone, text).catch(e => { console.error('faq:', e.message); return null; });
       if (faq) {
         reply = faq;
         await guardarMensaje(phone, 'assistant', reply);
@@ -7249,8 +7254,12 @@ async function seedAdminOnStartup() {
 }
 
 // ── Compras desde Gmail (Apps Script → /api/correo/ingest → pop-up en la app) ──
-CORREO = require('./correo')(app, { sb, genAI, geminiWithRetry, logUsage, SHARE_SECRET, pushA, medioCanonDe, canonCategoria,
-  aplicarImpactoCuentas, conReintentos, learnPattern, esGhost: _esGhost });
+const _correoDeps = { sb, genAI, geminiWithRetry, logUsage, SHARE_SECRET, pushA, medioCanonDe, canonCategoria,
+  aplicarImpactoCuentas, conReintentos, learnPattern, esGhost: _esGhost };
+CORREO = require('./correo')(app, _correoDeps);
+// Gmail (índice de recibos/promociones/códigos) y Google Calendar en ambos sentidos, por el mismo script v3 de cada cuenta.
+// Comparte deps con correo.js: google.js deja ahí calPendiente, que el latido usa para pedir la sincronización del calendario.
+GOOGLE = require('./google')(app, Object.assign(_correoDeps, { tokenOk: CORREO.tokenOk, hoy, fmt }));
 
 const PORT   = process.env.PORT || 3000;
 const server = app.listen(PORT, async () => {
